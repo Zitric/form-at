@@ -1,13 +1,36 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
+import { getEvent } from "vinxi/http";
 import { Header } from "~/components/Header";
 import { usePlayer } from "~/contexts/player-context";
 import { sets } from "~/data/sets";
 
+const fetchPlayCounts = createServerFn({ method: "GET" }).handler(async () => {
+  try {
+    const event = getEvent();
+    const cf = (event.context as Record<string, unknown>).cloudflare as
+      | { env: { DB: D1Database } }
+      | undefined;
+    const db = cf?.env?.DB;
+    if (!db) return {} as Record<string, number>;
+
+    const { results } = await db
+      .prepare("SELECT set_id, COUNT(*) AS count FROM plays GROUP BY set_id")
+      .all<{ set_id: string; count: number }>();
+
+    return Object.fromEntries(results.map((r) => [r.set_id, r.count]));
+  } catch {
+    return {} as Record<string, number>;
+  }
+});
+
 export const Route = createFileRoute("/sets/")({
+  loader: () => fetchPlayCounts(),
   component: Sets,
 });
 
 function Sets() {
+  const playCounts = Route.useLoaderData();
   const { nowPlaying, loadTrack } = usePlayer();
 
   return (
@@ -25,6 +48,7 @@ function Sets() {
         <ul className="space-y-px">
           {sets.map((set, i) => {
             const isPlaying = nowPlaying?.id === set.id;
+            const plays = playCounts[set.id] ?? 0;
             return (
               <li key={set.id}>
                 <button
@@ -56,6 +80,11 @@ function Sets() {
                     <div className="text-[10px] text-white/25">{set.date}</div>
                     {set.duration && (
                       <div className="text-[10px] text-white/20 mt-0.5">{set.duration}</div>
+                    )}
+                    {plays > 0 && (
+                      <div className="text-[10px] text-gold/50 mt-0.5">
+                        › {plays} play{plays !== 1 ? "s" : ""}
+                      </div>
                     )}
                   </div>
 

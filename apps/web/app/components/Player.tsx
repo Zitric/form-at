@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { usePlayer } from "~/contexts/player-context";
+import type { Set as MusicSet } from "~/data/sets";
 
 export function Player() {
   const { nowPlaying } = usePlayer();
@@ -9,6 +10,35 @@ export function Player() {
   const [error, setError] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+
+  const playStartRef = useRef<number | null>(null);
+  const nowPlayingRef = useRef<MusicSet | null>(nowPlaying);
+  useEffect(() => {
+    nowPlayingRef.current = nowPlaying;
+  }, [nowPlaying]);
+
+  function sendPlay(track: MusicSet | null) {
+    if (!track || !playStartRef.current) return;
+    const seconds = Math.floor((Date.now() - playStartRef.current) / 1000);
+    playStartRef.current = null;
+    if (seconds < 3) return;
+    navigator.sendBeacon(
+      "/api/track",
+      new Blob(
+        [JSON.stringify({ setId: track.id, setTitle: track.title, setArtist: track.artist, listenedSeconds: seconds })],
+        { type: "application/json" },
+      ),
+    );
+  }
+
+  // Flush on tab close
+  useEffect(() => {
+    function handleUnload() {
+      sendPlay(nowPlayingRef.current);
+    }
+    window.addEventListener("beforeunload", handleUnload);
+    return () => window.removeEventListener("beforeunload", handleUnload);
+  }, []);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -45,6 +75,7 @@ export function Player() {
     return () => {
       cancelled = true;
       audio.removeEventListener("canplay", playWhenReady);
+      sendPlay(nowPlaying); // flush when switching tracks
     };
   }, [nowPlaying]);
 
@@ -109,10 +140,14 @@ export function Player() {
       <audio
         ref={audioRef}
         onPlay={() => {
+          playStartRef.current ??= Date.now();
           setPlaying(true);
           setLoading(false);
         }}
-        onPause={() => setPlaying(false)}
+        onPause={() => {
+          sendPlay(nowPlaying);
+          setPlaying(false);
+        }}
         onLoadStart={() => setLoading(true)}
         onCanPlay={() => setLoading(false)}
         onError={() => {
@@ -125,6 +160,7 @@ export function Player() {
           setDuration(e.currentTarget.duration || 0);
         }}
         onEnded={() => {
+          sendPlay(nowPlaying);
           setPlaying(false);
           setCurrentTime(0);
         }}

@@ -47,6 +47,10 @@ export const Route = createRootRoute({
       { rel: "preload", href: "/fonts/space-mono-700.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
       { rel: "manifest", href: "/manifest.json" },
     ],
+    scripts: [
+      // Cloudflare Web Analytics — replace token after adding site in CF dashboard → Web Analytics
+      // { src: "https://static.cloudflareinsights.com/beacon.min.js", defer: true, "data-cf-beacon": '{"token":"REPLACE_WITH_YOUR_TOKEN"}' },
+    ],
   }),
   component: Root,
 });
