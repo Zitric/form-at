@@ -1,0 +1,29 @@
+{
+  "name": "@form-at/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "start": "vite preview",
+    "lint": "biome check app",
+    "tsc": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/react-router": "^1.114.0",
+    "@tanstack/react-start": "^1.114.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@form-at/tsconfig": "workspace:*",
+    "@tailwindcss/vite": "^4.1.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.8.0",
+    "vite": "^7.0.0",
+    "vite-tsconfig-paths": "^5.1.0"
+  }
+}

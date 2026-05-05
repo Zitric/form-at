@@ -1,0 +1,14 @@
+node_modules/
+.output/
+.turbo/
+dist/
+*.local
+.env
+.env.local
+.env.*.local
+
+# TanStack Router — auto-generated, regenerated on every dev start
+apps/*/app/routeTree.gen.ts
+
+# TanStack Start transpiled config artifacts
+apps/*/app.config.timestamp_*.js

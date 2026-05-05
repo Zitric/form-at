@@ -1,0 +1,10 @@
+{
+  "extends": "../../packages/tsconfig/tsconfig.web.json",
+  "compilerOptions": {
+    "paths": {
+      "~/*": ["./app/*"]
+    }
+  },
+  "include": ["app/**/*", "app.config.ts"],
+  "exclude": ["node_modules", ".output"]
+}

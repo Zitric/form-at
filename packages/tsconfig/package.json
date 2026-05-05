@@ -1,0 +1,10 @@
+{
+  "name": "@form-at/tsconfig",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig.base.json",
+    "./tsconfig.web.json": "./tsconfig.web.json"
+  }
+}
