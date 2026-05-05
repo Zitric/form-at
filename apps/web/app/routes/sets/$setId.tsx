@@ -30,16 +30,24 @@ function SetDetail() {
         </Link>
 
         <div className="space-y-1 text-xs text-white/30 mb-8">
-          {set.date && <p><span className="text-gold mr-2">›</span>date: {set.date}</p>}
-          {set.venue && <p><span className="text-gold mr-2">›</span>loc: {set.venue}</p>}
-          {set.duration && <p><span className="text-gold mr-2">›</span>duration: {set.duration}</p>}
+          {set.date && (
+            <p>
+              <span className="text-gold mr-2">›</span>date: {set.date}
+            </p>
+          )}
+          {set.venue && (
+            <p>
+              <span className="text-gold mr-2">›</span>loc: {set.venue}
+            </p>
+          )}
+          {set.duration && (
+            <p>
+              <span className="text-gold mr-2">›</span>duration: {set.duration}
+            </p>
+          )}
           <p>
             <span className="text-gold mr-2">›</span>status:{" "}
-            {isPlaying ? (
-              <span className="text-gold">[ live ]</span>
-            ) : (
-              <span>[ ready ]</span>
-            )}
+            {isPlaying ? <span className="text-gold">[ live ]</span> : <span>[ ready ]</span>}
           </p>
         </div>
 
@@ -64,9 +72,7 @@ function SetDetail() {
         </button>
       </div>
 
-      <footer className="mt-12 text-xs text-white/20">
-        [ end_of_transmission ] █
-      </footer>
+      <footer className="mt-12 text-xs text-white/20">[ end_of_transmission ] █</footer>
     </main>
   );
 }

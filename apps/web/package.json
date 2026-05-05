@@ -8,7 +8,8 @@
     "build": "vite build",
     "start": "vite preview",
     "lint": "biome check app",
-    "tsc": "tsc --noEmit"
+    "tsc": "tsc --noEmit",
+    "deploy": "vite build && npx esbuild dist/server/server.js --bundle --format=esm --platform=browser --conditions=workerd --define:process.env.NODE_ENV='\"production\"' --outfile=dist/client/_worker.js --external:node:async_hooks --external:node:stream --external:node:stream/web && npx wrangler pages deploy dist/client --project-name=form-at-web --commit-dirty=true"
   },
   "dependencies": {
     "@tanstack/react-router": "^1.114.0",

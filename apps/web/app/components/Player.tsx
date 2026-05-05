@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePlayer } from "~/contexts/player-context";
 import type { Set as MusicSet } from "~/data/sets";
 
@@ -17,7 +17,7 @@ export function Player() {
     nowPlayingRef.current = nowPlaying;
   }, [nowPlaying]);
 
-  function sendPlay(track: MusicSet | null) {
+  const sendPlay = useCallback((track: MusicSet | null) => {
     if (!track || !playStartRef.current) return;
     const seconds = Math.floor((Date.now() - playStartRef.current) / 1000);
     playStartRef.current = null;
@@ -25,11 +25,18 @@ export function Player() {
     navigator.sendBeacon(
       "/api/track",
       new Blob(
-        [JSON.stringify({ setId: track.id, setTitle: track.title, setArtist: track.artist, listenedSeconds: seconds })],
+        [
+          JSON.stringify({
+            setId: track.id,
+            setTitle: track.title,
+            setArtist: track.artist,
+            listenedSeconds: seconds,
+          }),
+        ],
         { type: "application/json" },
       ),
     );
-  }
+  }, []);
 
   // Flush on tab close
   useEffect(() => {
@@ -38,7 +45,7 @@ export function Player() {
     }
     window.addEventListener("beforeunload", handleUnload);
     return () => window.removeEventListener("beforeunload", handleUnload);
-  }, []);
+  }, [sendPlay]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -77,7 +84,7 @@ export function Player() {
       audio.removeEventListener("canplay", playWhenReady);
       sendPlay(nowPlaying); // flush when switching tracks
     };
-  }, [nowPlaying]);
+  }, [nowPlaying, sendPlay]);
 
   // Media Session API — keeps playback alive on a locked phone
   useEffect(() => {
@@ -168,7 +175,6 @@ export function Player() {
 
       <div className="fixed bottom-0 inset-x-0 bg-navy border-t border-white/10 px-4 py-3 font-mono">
         <div className="flex items-center gap-4 max-w-2xl mx-auto w-full">
-
           {/* Play / pause */}
           <button
             type="button"
@@ -215,7 +221,6 @@ export function Player() {
               {fmt(duration)}
             </span>
           </div>
-
         </div>
       </div>
     </>

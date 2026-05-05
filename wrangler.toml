@@ -1,6 +1,7 @@
 name = "form-at-web"
 compatibility_date = "2024-09-23"
-pages_build_output_dir = "apps/web/.output/public"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "apps/web/dist/client"
 
 [[d1_databases]]
 binding = "DB"

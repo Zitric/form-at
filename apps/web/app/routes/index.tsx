@@ -40,9 +40,7 @@ function Home() {
         </Link>
       </div>
 
-      <footer className="text-xs text-white/20">
-        [ disconnect_to_reconnect ] █
-      </footer>
+      <footer className="text-xs text-white/20">[ disconnect_to_reconnect ] █</footer>
     </main>
   );
 }

@@ -5,5 +5,10 @@ import { defineConfig } from "vite";
 import tsConfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
-  plugins: [tanstackStart({ srcDirectory: "app" }), react(), tailwindcss(), tsConfigPaths()],
+  plugins: [
+    tanstackStart({ srcDirectory: "app", server: { entry: "server.ts" } }),
+    react(),
+    tailwindcss(),
+    tsConfigPaths(),
+  ],
 });

@@ -1,14 +1,12 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { getEvent } from "vinxi/http";
 import { Header } from "~/components/Header";
 import { usePlayer } from "~/contexts/player-context";
 import { sets } from "~/data/sets";
 
-const fetchPlayCounts = createServerFn({ method: "GET" }).handler(async () => {
+const fetchPlayCounts = createServerFn({ method: "GET" }).handler(async ({ context }) => {
   try {
-    const event = getEvent();
-    const cf = (event.context as Record<string, unknown>).cloudflare as
+    const cf = (context as unknown as Record<string, unknown>).cloudflare as
       | { env: { DB: D1Database } }
       | undefined;
     const db = cf?.env?.DB;
@@ -25,7 +23,13 @@ const fetchPlayCounts = createServerFn({ method: "GET" }).handler(async () => {
 });
 
 export const Route = createFileRoute("/sets/")({
-  loader: () => fetchPlayCounts(),
+  loader: async () => {
+    try {
+      return await fetchPlayCounts();
+    } catch {
+      return {} as Record<string, number>;
+    }
+  },
   component: Sets,
 });
 
@@ -70,9 +74,7 @@ function Sets() {
                     </div>
                     <div className="text-xs text-white/40 truncate mt-0.5">
                       {set.artist}
-                      {set.venue && (
-                        <span className="text-white/20"> › {set.venue}</span>
-                      )}
+                      {set.venue && <span className="text-white/20"> › {set.venue}</span>}
                     </div>
                   </div>
 
@@ -103,9 +105,7 @@ function Sets() {
         </ul>
       </div>
 
-      <footer className="mt-12 text-xs text-white/20">
-        [ end_of_archive ] █
-      </footer>
+      <footer className="mt-12 text-xs text-white/20">[ end_of_archive ] █</footer>
     </main>
   );
 }

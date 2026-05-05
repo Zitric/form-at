@@ -1,4 +1,4 @@
-import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
+import { HeadContent, Link, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
 import { Header } from "~/components/Header";
 import { Player } from "~/components/Player";
 import { PlayerProvider } from "~/contexts/player-context";
@@ -43,8 +43,20 @@ export const Route = createRootRoute({
       { title: "Form:at" },
     ],
     links: [
-      { rel: "preload", href: "/fonts/space-mono-400.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
-      { rel: "preload", href: "/fonts/space-mono-700.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
+      {
+        rel: "preload",
+        href: "/fonts/space-mono-400.woff2",
+        as: "font",
+        type: "font/woff2",
+        crossOrigin: "anonymous",
+      },
+      {
+        rel: "preload",
+        href: "/fonts/space-mono-700.woff2",
+        as: "font",
+        type: "font/woff2",
+        crossOrigin: "anonymous",
+      },
       { rel: "manifest", href: "/manifest.json" },
     ],
     scripts: [

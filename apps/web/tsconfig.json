@@ -1,6 +1,7 @@
 {
   "extends": "../../packages/tsconfig/tsconfig.web.json",
   "compilerOptions": {
+    "types": ["@cloudflare/workers-types"],
     "paths": {
       "~/*": ["./app/*"]
     }
