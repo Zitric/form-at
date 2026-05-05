@@ -1,4 +1,4 @@
-export type Set = {
+export type MusicSet = {
   id: string;
   title: string;
   artist: string;
@@ -11,7 +11,7 @@ export type Set = {
 };
 
 // Add your sets here. src should be the public Cloudflare R2 URL for the MP3.
-export const sets: Set[] = [
+export const sets: MusicSet[] = [
   {
     id: "set-002-til",
     title: "FORM:AT 002",
@@ -28,6 +28,6 @@ export const sets: Set[] = [
   },
 ];
 
-export function getSet(id: string): Set | undefined {
+export function getSet(id: string): MusicSet | undefined {
   return sets.find((s) => s.id === id);
 }

@@ -1,6 +1,13 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { Header } from "~/components/Header";
 
+const taglines = [
+  "system: glasgow techno initiative",
+  "source: analog soul in a digital world",
+  "mission: disconnect to reconnect",
+  "focus: community / music / respect",
+];
+
 export const Route = createFileRoute("/")({
   component: Home,
 });
@@ -16,18 +23,12 @@ function Home() {
         </h1>
 
         <div className="space-y-2 text-sm text-white/40 mb-12">
-          <p>
-            <span className="text-gold mr-2">›</span>system: glasgow techno initiative
-          </p>
-          <p>
-            <span className="text-gold mr-2">›</span>source: analog soul in a digital world
-          </p>
-          <p>
-            <span className="text-gold mr-2">›</span>mission: disconnect to reconnect
-          </p>
-          <p>
-            <span className="text-gold mr-2">›</span>focus: community / music / respect
-          </p>
+          {taglines.map((line) => (
+            <p key={line}>
+              <span className="text-gold mr-2">›</span>
+              {line}
+            </p>
+          ))}
         </div>
 
         <Link

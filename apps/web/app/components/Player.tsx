@@ -1,6 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePlayer } from "~/contexts/player-context";
-import type { Set as MusicSet } from "~/data/sets";
+import type { MusicSet } from "~/data/sets";
+
+const fmt = (s: number) => {
+  if (!Number.isFinite(s)) return "0:00";
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+};
 
 export function Player() {
   const { nowPlaying } = usePlayer();
@@ -17,7 +24,7 @@ export function Player() {
     nowPlayingRef.current = nowPlaying;
   }, [nowPlaying]);
 
-  const sendPlay = useCallback((track: MusicSet | null) => {
+  const sendPlay = (track: MusicSet | null) => {
     if (!track || !playStartRef.current) return;
     const seconds = Math.floor((Date.now() - playStartRef.current) / 1000);
     playStartRef.current = null;
@@ -36,7 +43,7 @@ export function Player() {
         { type: "application/json" },
       ),
     );
-  }, []);
+  };
 
   // Flush on tab close
   useEffect(() => {
@@ -45,6 +52,7 @@ export function Player() {
     }
     window.addEventListener("beforeunload", handleUnload);
     return () => window.removeEventListener("beforeunload", handleUnload);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: React Compiler memoizes sendPlay
   }, [sendPlay]);
 
   useEffect(() => {
@@ -84,6 +92,7 @@ export function Player() {
       audio.removeEventListener("canplay", playWhenReady);
       sendPlay(nowPlaying); // flush when switching tracks
     };
+    // biome-ignore lint/correctness/useExhaustiveDependencies: React Compiler memoizes sendPlay
   }, [nowPlaying, sendPlay]);
 
   // Media Session API — keeps playback alive on a locked phone
@@ -114,7 +123,7 @@ export function Player() {
     });
   }, [nowPlaying]);
 
-  function togglePlay() {
+  const togglePlay = () => {
     const audio = audioRef.current;
     if (!audio || loading) return;
     if (playing) {
@@ -122,22 +131,15 @@ export function Player() {
     } else {
       audio.play().catch(() => {});
     }
-  }
+  };
 
-  function seek(e: React.ChangeEvent<HTMLInputElement>) {
+  const seek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const audio = audioRef.current;
     if (!audio) return;
     const time = Number(e.target.value);
     audio.currentTime = time;
     setCurrentTime(time);
-  }
-
-  function fmt(s: number) {
-    if (!Number.isFinite(s)) return "0:00";
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${m}:${sec.toString().padStart(2, "0")}`;
-  }
+  };
 
   if (!nowPlaying) return null;
 

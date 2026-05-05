@@ -66,6 +66,30 @@ Community features will be gated behind **Better Auth** (self-hosted, open sourc
 - **Biome only** — no Prettier, no ESLint. Run `pnpm check` to lint and format everything.
 - **Shared config in `packages/`** — each app extends `@form-at/tsconfig` via `workspace:*`.
 
+## Code standards
+
+### Reusable components
+- Extract a component when the same UI or behaviour appears in more than one place, or when a single file is getting hard to scan.
+- Components live in `apps/web/app/components/`. Name them after what they *are*, not where they're used (`TrackRow`, not `SetsPageTrackRow`).
+- Keep props minimal and typed. Prefer explicit prop interfaces over spreading unknown objects.
+
+### Modern patterns
+- **TypeScript strict mode** — no `any` unless there is a documented reason (e.g. CF env casting). Use `unknown` + narrowing instead.
+- **`const` over `let`**, arrow functions for callbacks, destructuring over repeated property access.
+- **Server functions** via `createServerFn` for all data fetching — no raw `fetch` calls to internal API routes from client code.
+- **`useCallback` / `useMemo`** only when there is a measurable performance reason or a dependency array requires a stable reference. Don't add them pre-emptively.
+- Prefer native Web APIs (`fetch`, `URL`, `Request`, `Response`) over wrapper libraries for simple cases.
+
+### File and naming conventions
+- File names: `kebab-case` for routes and utilities, `PascalCase` for component files (`Player.tsx`, `Header.tsx`).
+- One component or one logical unit per file. Co-locate the types it needs unless they're shared.
+- Route files own their loader, server functions, and page component. Only extract when a file exceeds ~150 lines or a piece is reused elsewhere.
+
+### Styling
+- Tailwind utility classes only — no inline `style` props, no CSS modules, no extra CSS files beyond `global.css`.
+- Stick to the design tokens: `bg-navy` (`#080812`), `text-gold` (`#c8921a`), `font-mono` (Space Mono). Don't introduce new colours or fonts without agreement.
+- No rounded corners — the brand aesthetic is sharp edges throughout.
+
 ## Commands
 
 ```bash

@@ -17,6 +17,14 @@ function SetDetail() {
   const { nowPlaying, loadTrack } = usePlayer();
   const isPlaying = nowPlaying?.id === set.id;
 
+  const metaRows = (
+    [
+      set.date && ["date", set.date],
+      set.venue && ["loc", set.venue],
+      set.duration && ["duration", set.duration],
+    ] as Array<[string, string] | false>
+  ).filter((row): row is [string, string] => Boolean(row));
+
   return (
     <main className="min-h-dvh flex flex-col px-6 py-10 font-mono max-w-2xl mx-auto w-full">
       <Header />
@@ -30,21 +38,12 @@ function SetDetail() {
         </Link>
 
         <div className="space-y-1 text-xs text-white/30 mb-8">
-          {set.date && (
-            <p>
-              <span className="text-gold mr-2">›</span>date: {set.date}
+          {metaRows.map(([label, value]) => (
+            <p key={label}>
+              <span className="text-gold mr-2">›</span>
+              {label}: {value}
             </p>
-          )}
-          {set.venue && (
-            <p>
-              <span className="text-gold mr-2">›</span>loc: {set.venue}
-            </p>
-          )}
-          {set.duration && (
-            <p>
-              <span className="text-gold mr-2">›</span>duration: {set.duration}
-            </p>
-          )}
+          ))}
           <p>
             <span className="text-gold mr-2">›</span>status:{" "}
             {isPlaying ? <span className="text-gold">[ live ]</span> : <span>[ ready ]</span>}
