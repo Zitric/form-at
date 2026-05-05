@@ -131,7 +131,7 @@ export function Player() {
       />
 
       <div className="fixed bottom-0 inset-x-0 bg-navy border-t border-white/10 px-4 py-3 font-mono">
-        <div className="flex items-center gap-4 max-w-5xl mx-auto">
+        <div className="flex items-center gap-4 max-w-2xl mx-auto w-full">
 
           {/* Play / pause */}
           <button

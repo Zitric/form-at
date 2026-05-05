@@ -1,9 +1,40 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
+import { Header } from "~/components/Header";
 import { Player } from "~/components/Player";
 import { PlayerProvider } from "~/contexts/player-context";
 import "~/styles/global.css";
 
+function RootNotFound() {
+  return (
+    <main className="min-h-dvh flex flex-col px-6 py-10 font-mono max-w-2xl mx-auto w-full">
+      <Header />
+
+      <div className="flex-1 flex flex-col justify-center">
+        <p className="text-xs text-white/30 mb-4">
+          <span className="text-gold mr-2">›</span>status: [ 404 ]
+        </p>
+        <h1 className="text-5xl sm:text-7xl font-bold leading-none tracking-tighter mb-6">
+          SIGNAL_LOST
+        </h1>
+        <p className="text-sm text-white/40 mb-10 border-l border-white/10 pl-4 max-w-sm">
+          transmission not found — this frequency doesn't exist
+        </p>
+        <Link
+          to="/"
+          className="inline-flex items-center gap-4 self-start border border-white/20 px-5 py-3 text-sm text-white/60 hover:border-gold hover:text-gold transition-colors"
+        >
+          <span className="text-gold">›</span>
+          return_to_base
+        </Link>
+      </div>
+
+      <footer className="mt-12 text-xs text-white/20">[ end_of_transmission ] █</footer>
+    </main>
+  );
+}
+
 export const Route = createRootRoute({
+  notFoundComponent: RootNotFound,
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -12,22 +43,35 @@ export const Route = createRootRoute({
       { title: "Form:at" },
     ],
     links: [
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap",
-      },
+      { rel: "preload", href: "/fonts/space-mono-400.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
+      { rel: "preload", href: "/fonts/space-mono-700.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
       { rel: "manifest", href: "/manifest.json" },
     ],
   }),
   component: Root,
 });
 
+const fontCSS = `
+@font-face{font-family:"Space Mono";font-style:normal;font-weight:400;font-display:block;src:url("/fonts/space-mono-400.woff2") format("woff2")}
+@font-face{font-family:"Space Mono";font-style:normal;font-weight:700;font-display:block;src:url("/fonts/space-mono-700.woff2") format("woff2")}
+@font-face{font-family:"Space Mono";font-style:italic;font-weight:400;font-display:block;src:url("/fonts/space-mono-400-italic.woff2") format("woff2")}
+*,*::before,*::after{box-sizing:border-box}
+html{line-height:1.5;-webkit-text-size-adjust:100%}
+body{margin:0;font-family:"Space Mono",ui-monospace,monospace;background:#080812;color:#fff}
+h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit;margin:0}
+p{margin:0}
+ul,ol{list-style:none;margin:0;padding:0}
+li{margin:0}
+button,input{font-family:inherit;font-size:inherit}
+img{display:block;max-width:100%}
+`.trim();
+
 function Root() {
   return (
     <html lang="en">
       <head>
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: font CSS must be inlined to block FOUT; suppressHydrationWarning prevents React from touching it during hydration */}
+        <style dangerouslySetInnerHTML={{ __html: fontCSS }} suppressHydrationWarning />
         <HeadContent />
       </head>
       <body className="bg-navy text-white font-mono antialiased">

@@ -1,4 +1,5 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { Header } from "~/components/Header";
 
 export const Route = createFileRoute("/")({
   component: Home,
@@ -6,11 +7,8 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   return (
-    <main className="min-h-dvh flex flex-col px-6 py-10">
-      <header className="flex items-center gap-3">
-        <img src="/logo.png" alt="Form:at" className="w-7 h-7 mix-blend-screen" />
-        <span className="text-xs tracking-[0.3em] text-white/30 uppercase">Form:at</span>
-      </header>
+    <main className="min-h-dvh flex flex-col px-6 py-10 max-w-2xl mx-auto w-full">
+      <Header />
 
       <div className="flex-1 flex flex-col justify-center py-16">
         <h1 className="text-[clamp(3.5rem,14vw,11rem)] font-bold leading-none tracking-tighter mb-10">

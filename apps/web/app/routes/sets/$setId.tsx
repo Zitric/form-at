@@ -1,4 +1,5 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
+import { Header } from "~/components/Header";
 import { usePlayer } from "~/contexts/player-context";
 import { getSet } from "~/data/sets";
 
@@ -17,17 +18,10 @@ function SetDetail() {
   const isPlaying = nowPlaying?.id === set.id;
 
   return (
-    <main className="min-h-dvh flex flex-col px-6 py-10 font-mono">
-      <header className="flex items-center gap-3 mb-12">
-        <Link to="/" className="flex items-center gap-3 group">
-          <img src="/logo.png" alt="Form:at" className="w-7 h-7 mix-blend-screen" />
-          <span className="text-xs tracking-[0.3em] text-white/30 group-hover:text-white/60 uppercase transition-colors">
-            Form:at
-          </span>
-        </Link>
-      </header>
+    <main className="min-h-dvh flex flex-col px-6 py-10 font-mono max-w-2xl mx-auto w-full">
+      <Header />
 
-      <div className="flex-1 max-w-lg">
+      <div className="flex-1">
         <Link
           to="/sets"
           className="inline-flex items-center gap-2 text-xs text-white/30 hover:text-gold transition-colors mb-10"

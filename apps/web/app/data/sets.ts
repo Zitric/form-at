@@ -13,11 +13,18 @@ export type Set = {
 // Add your sets here. src should be the public Cloudflare R2 URL for the MP3.
 export const sets: Set[] = [
   {
-    id: "set-001",
-    title: "Breathwork (Original Mix)",
-    artist: "Alkem, Biereda",
-    date: "2026-05-05",
-    src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/2-5.%20Alkem%2C%20Biereda%20-%20Breathwork%20(Original%20Mix).mp3",
+    id: "set-002-til",
+    title: "FORM:AT 002",
+    artist: "t.i.l.",
+    date: "2026-04-24",
+    src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20t.i.l.mp3",
+  },
+  {
+    id: "set-002-hubey",
+    title: "FORM:AT 002",
+    artist: "Hubey",
+    date: "2026-04-24",
+    src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20hubey.mp3",
   },
 ];
 
