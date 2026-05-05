@@ -3,20 +3,21 @@ export type Set = {
   title: string;
   artist: string;
   date: string;
+  venue?: string;
+  description?: string;
   duration?: string;
   src: string;
   artwork?: string;
 };
 
-// Replace src URLs with your actual Cloudflare R2 bucket URLs
+// Add your sets here. src should be the public Cloudflare R2 URL for the MP3.
 export const sets: Set[] = [
   {
     id: "set-001",
-    title: "Form:at 001",
-    artist: "TBA",
-    date: "2024-01-01",
-    duration: "1:00:00",
-    src: "https://your-bucket.r2.dev/set-001.mp3",
+    title: "Breathwork (Original Mix)",
+    artist: "Alkem, Biereda",
+    date: "2026-05-05",
+    src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/2-5.%20Alkem%2C%20Biereda%20-%20Breathwork%20(Original%20Mix).mp3",
   },
 ];
 

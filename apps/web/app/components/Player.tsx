@@ -5,25 +5,36 @@ export function Player() {
   const { nowPlaying } = usePlayer();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
-  // Load and auto-play when a new track is selected
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !nowPlaying) return;
 
     let cancelled = false;
+
+    setLoading(true);
+    setError(false);
+    setPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+
+    audio.src = nowPlaying.src;
+    audio.load();
+
     const playWhenReady = () => {
       if (cancelled) return;
       audio
         .play()
-        .then(() => setPlaying(true))
-        .catch(() => {});
+        .then(() => {
+          setPlaying(true);
+          setLoading(false);
+        })
+        .catch(() => setLoading(false));
     };
-
-    audio.src = nowPlaying.src;
-    audio.load();
 
     if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
       playWhenReady();
@@ -37,7 +48,7 @@ export function Player() {
     };
   }, [nowPlaying]);
 
-  // Register Media Session API handlers so the player keeps working on a locked phone
+  // Media Session API — keeps playback alive on a locked phone
   useEffect(() => {
     if (!nowPlaying || !("mediaSession" in navigator)) return;
 
@@ -67,15 +78,11 @@ export function Player() {
 
   function togglePlay() {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || loading) return;
     if (playing) {
       audio.pause();
-      setPlaying(false);
     } else {
-      audio
-        .play()
-        .then(() => setPlaying(true))
-        .catch(() => {});
+      audio.play().catch(() => {});
     }
   }
 
@@ -98,47 +105,81 @@ export function Player() {
 
   return (
     <>
-      {/* biome-ignore lint/a11y/useMediaCaption: This player is for music-only content with no spoken dialogue. */}
+      {/* biome-ignore lint/a11y/useMediaCaption: music-only content, no spoken dialogue */}
       <audio
         ref={audioRef}
+        onPlay={() => {
+          setPlaying(true);
+          setLoading(false);
+        }}
+        onPause={() => setPlaying(false)}
+        onLoadStart={() => setLoading(true)}
+        onCanPlay={() => setLoading(false)}
+        onError={() => {
+          setLoading(false);
+          setError(true);
+          setPlaying(false);
+        }}
         onTimeUpdate={(e) => {
           setCurrentTime(e.currentTarget.currentTime);
           setDuration(e.currentTarget.duration || 0);
         }}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
         onEnded={() => {
           setPlaying(false);
           setCurrentTime(0);
         }}
       />
-      <div className="fixed bottom-0 inset-x-0 bg-[#111111] border-t border-white/10 px-4 py-3 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={togglePlay}
-          aria-label={playing ? "Pause" : "Play"}
-          className="shrink-0 border border-white/80 text-white px-3 py-1.5 text-sm cursor-pointer bg-transparent hover:bg-white hover:text-[#111] transition-colors"
-        >
-          {playing ? "⏸" : "▶"}
-        </button>
 
-        <div className="shrink-0 min-w-0 hidden sm:block">
-          <div className="text-sm font-semibold truncate">{nowPlaying.title}</div>
-          <div className="text-xs text-white/60 truncate">{nowPlaying.artist}</div>
-        </div>
+      <div className="fixed bottom-0 inset-x-0 bg-navy border-t border-white/10 px-4 py-3 font-mono">
+        <div className="flex items-center gap-4 max-w-5xl mx-auto">
 
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span className="text-xs shrink-0 tabular-nums text-white/60">{fmt(currentTime)}</span>
-          <input
-            type="range"
-            min={0}
-            max={duration || 0}
-            value={currentTime}
-            onChange={seek}
-            className="flex-1 accent-white cursor-pointer"
-            aria-label="Seek"
-          />
-          <span className="text-xs shrink-0 tabular-nums text-white/60">{fmt(duration)}</span>
+          {/* Play / pause */}
+          <button
+            type="button"
+            onClick={togglePlay}
+            disabled={loading || error}
+            aria-label={playing ? "Pause" : "Play"}
+            className="shrink-0 w-5 text-gold disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer text-sm"
+          >
+            {loading ? <span className="animate-pulse opacity-60">…</span> : playing ? "⏸" : "▶"}
+          </button>
+
+          {/* Track info */}
+          <div className="shrink-0 hidden sm:block w-52 min-w-0">
+            <div className="text-[10px] text-white/25 mb-0.5">
+              › signal:{" "}
+              {error ? (
+                <span className="text-red-400">[ error ]</span>
+              ) : playing ? (
+                <span className="text-gold">[ live ]</span>
+              ) : (
+                <span>[ standby ]</span>
+              )}
+            </div>
+            <div className="text-xs font-bold truncate leading-tight">{nowPlaying.title}</div>
+            <div className="text-[10px] text-white/40 truncate">{nowPlaying.artist}</div>
+          </div>
+
+          {/* Progress */}
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <span className="text-[10px] text-white/30 tabular-nums shrink-0 w-8 text-right">
+              {fmt(currentTime)}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={duration || 0}
+              value={currentTime}
+              onChange={seek}
+              disabled={loading || error}
+              className="flex-1 accent-gold cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              aria-label="Seek"
+            />
+            <span className="text-[10px] text-white/30 tabular-nums shrink-0 w-8">
+              {fmt(duration)}
+            </span>
+          </div>
+
         </div>
       </div>
     </>

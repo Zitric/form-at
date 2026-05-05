@@ -1,1 +1,7 @@
 @import "tailwindcss";
+
+@theme {
+  --color-gold: #c8921a;
+  --color-navy: #080812;
+  --font-mono: "Space Mono", ui-monospace, monospace;
+}

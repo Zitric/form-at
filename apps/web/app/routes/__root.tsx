@@ -8,10 +8,18 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { name: "theme-color", content: "#0a0a0a" },
+      { name: "theme-color", content: "#080812" },
       { title: "Form:at" },
     ],
-    links: [{ rel: "manifest", href: "/manifest.json" }],
+    links: [
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap",
+      },
+      { rel: "manifest", href: "/manifest.json" },
+    ],
   }),
   component: Root,
 });
@@ -22,9 +30,9 @@ function Root() {
       <head>
         <HeadContent />
       </head>
-      <body className="bg-[#0a0a0a] text-white antialiased">
+      <body className="bg-navy text-white font-mono antialiased">
         <PlayerProvider>
-          <div className="pb-24">
+          <div className="pb-20">
             <Outlet />
           </div>
           <Player />
