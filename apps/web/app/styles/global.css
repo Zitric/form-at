@@ -26,7 +26,7 @@
 @utility t-label {
   font-size: 0.75rem; /* 12px */
   line-height: 1rem;
-  color: rgb(255 255 255 / 0.3);
+  color: #cbcbcb;
 }
 
 @utility t-label-md {
@@ -37,7 +37,7 @@
 @utility t-body {
   font-size: 0.875rem; /* 14px */
   line-height: 1.5rem;
-  color: rgb(255 255 255 / 0.4);
+  color: #cbcbcb;
 }
 
 @utility t-body-md {
@@ -48,7 +48,7 @@
 @utility t-muted {
   font-size: 0.625rem; /* 10px */
   line-height: 0.875rem;
-  color: rgb(255 255 255 / 0.2);
+  color: #6b6b6b; /* intentionally dim — decorative/footer text */
 }
 
 @utility t-muted-md {

@@ -15,12 +15,12 @@ function RootNotFound() {
         <h1 className="text-5xl sm:text-7xl font-bold leading-none tracking-tighter mb-6">
           SIGNAL_LOST
         </h1>
-        <Body className="mb-10 border-l border-white/10 pl-4 max-w-sm">
+        <Body className="mb-10 border-l border-grey/10 pl-4 max-w-sm">
           transmission not found — this frequency doesn't exist
         </Body>
         <Link
           to="/"
-          className="inline-flex items-center gap-4 self-start border border-white/20 px-5 py-3 text-sm text-white/60 hover:border-gold hover:text-gold transition-colors"
+          className="inline-flex items-center gap-4 self-start border border-grey/20 px-5 py-3 text-sm text-grey hover:border-purple hover:text-white transition-colors"
         >
           <span className="text-gold">›</span>
           return_to_base

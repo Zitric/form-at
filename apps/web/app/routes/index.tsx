@@ -28,11 +28,11 @@ function Home() {
 
         <Link
           to="/sets"
-          className="inline-flex items-center gap-4 self-start border border-white/20 px-5 py-3 text-sm sm:text-base text-white/60 hover:border-gold hover:text-gold transition-colors"
+          className="inline-flex items-center gap-4 self-start border border-grey/20 px-5 py-3 text-sm sm:text-base text-grey hover:border-purple hover:text-white transition-colors"
         >
           <span className="text-gold">›</span>
           sets_archive
-          <span className="text-white/30">[ enter ]</span>
+          <span className="text-grey">[ enter ]</span>
         </Link>
       </div>
     </PageLayout>

@@ -54,7 +54,7 @@ function SetDetail() {
       <div className="flex-1">
         <Link
           to="/sets"
-          className="inline-flex items-center gap-2 text-xs sm:text-sm text-white/30 hover:text-gold transition-colors mb-10"
+          className="inline-flex items-center gap-2 text-xs sm:text-sm text-grey hover:text-purple transition-colors mb-10"
         >
           ‹ sets_archive
         </Link>
@@ -70,7 +70,7 @@ function SetDetail() {
 
           {statsRows.length > 0 && (
             <>
-              <Label className="pt-3 text-white/10">· · ·</Label>
+              <Label className="pt-3 text-grey">· · ·</Label>
               {statsRows.map(([label, value]) => (
                 <TerminalRow key={label} label={label} value={value} dimValue />
               ))}
@@ -84,7 +84,7 @@ function SetDetail() {
         <Body className="mb-10">{set.artist}</Body>
 
         {set.description && (
-          <Body className="leading-relaxed mb-10 border-l border-white/10 pl-4">
+          <Body className="leading-relaxed mb-10 border-l border-grey/10 pl-4">
             {set.description}
           </Body>
         )}
@@ -92,7 +92,7 @@ function SetDetail() {
         <button
           type="button"
           onClick={() => loadTrack(set)}
-          className="inline-flex items-center gap-4 border border-white/20 px-6 py-3 text-sm sm:text-base hover:border-gold hover:text-gold transition-colors"
+          className="inline-flex items-center gap-4 border border-grey/20 px-6 py-3 text-sm sm:text-base hover:border-purple hover:text-white transition-colors"
         >
           <span className="text-gold">{isPlaying ? "⏸" : "▶"}</span>
           {isPlaying ? "now_playing" : "play_set"}

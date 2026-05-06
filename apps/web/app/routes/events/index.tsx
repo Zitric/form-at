@@ -1,7 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { BrandTitle } from "~/components/BrandTitle";
 import { PageLayout } from "~/components/PageLayout";
-import { Body, Label } from "~/components/Text";
+import { Label } from "~/components/Text";
 import { getDJ } from "~/data/djs";
 import { getPastEvents, getUpcomingEvents } from "~/data/events";
 
@@ -25,9 +25,7 @@ function Events() {
 
         {upcoming.length > 0 && (
           <section className="mb-12">
-            <Label className="mb-6 text-white/20 tracking-widest uppercase">
-              — incoming signals
-            </Label>
+            <Label className="mb-6 text-grey tracking-widest uppercase">— incoming signals</Label>
             <ul className="space-y-px">
               {upcoming.map((event) => (
                 <li key={event.id}>
@@ -38,20 +36,16 @@ function Events() {
           </section>
         )}
 
-        {upcoming.length === 0 && (
-          <section className="mb-12">
-            <Label className="mb-6 text-white/20 tracking-widest uppercase">
-              — incoming signals
-            </Label>
-            <p className="px-4 py-5 border border-white/10 t-body sm:t-body-md text-white/20">
-              no transmissions scheduled — stay tuned
-            </p>
-          </section>
-        )}
+        <section className="mb-12">
+          <Label className="mb-6 text-grey tracking-widest uppercase">— incoming signals</Label>
+          {upcoming.length === 0 && (
+            <p className="t-body sm:t-body-md text-grey">no transmissions scheduled — stay tuned</p>
+          )}
+        </section>
 
         {past.length > 0 && (
           <section>
-            <Label className="mb-6 text-white/20 tracking-widest uppercase">— archive</Label>
+            <Label className="mb-6 text-grey tracking-widest uppercase">— archive</Label>
             <ul className="space-y-px">
               {past.map((event) => (
                 <li key={event.id}>
@@ -73,12 +67,12 @@ function EventCard({
   const lineup = event.lineupIds.map((id) => getDJ(id)).filter(Boolean);
 
   return (
-    <div className={`px-4 py-5 border border-white/10 ${past ? "opacity-70" : ""}`}>
+    <div className={`px-4 py-5 border border-grey/10 ${past ? "opacity-60" : ""}`}>
       <div className="flex items-start justify-between gap-4 mb-3">
         <h2 className="font-display text-2xl sm:text-3xl tracking-tight">
           <BrandTitle>{event.title}</BrandTitle>
         </h2>
-        <Label className="shrink-0 text-white/20 pt-1">{past ? "[ past ]" : "[ upcoming ]"}</Label>
+        <Label className="shrink-0 text-grey pt-1">{past ? "[ past ]" : "[ upcoming ]"}</Label>
       </div>
 
       <div className="space-y-1 mb-4">
@@ -86,7 +80,7 @@ function EventCard({
           {event.date} · {event.venue}
         </Label>
         <Label>{event.runtime}</Label>
-        <Label className="text-white/20">{event.audio}</Label>
+        <Label className="text-grey">{event.audio}</Label>
       </div>
 
       {lineup.length > 0 && (
@@ -98,7 +92,7 @@ function EventCard({
                 key={dj.id}
                 to="/djs/$djId"
                 params={{ djId: dj.id }}
-                className="text-xs border border-white/20 px-3 py-1 text-white/50 hover:border-gold hover:text-gold transition-colors"
+                className="text-xs border border-grey/20 px-3 py-1 text-grey hover:border-purple hover:text-purple transition-colors"
               >
                 {dj.name}
               </Link>

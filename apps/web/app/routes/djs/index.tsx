@@ -24,18 +24,16 @@ function DJs() {
 
         {/* Guests */}
         <section className="mb-12">
-          <Label className="mb-6 text-white/20 tracking-widest uppercase">
-            — guest transmissions
-          </Label>
+          <Label className="mb-6 text-grey tracking-widest uppercase">— guest transmissions</Label>
           <ul className="space-y-px">
             {guests.map((dj) => (
               <li key={dj.id}>
                 <Link
                   to="/djs/$djId"
                   params={{ djId: dj.id }}
-                  className="block px-4 py-5 border border-white/10 hover:border-white/30 transition-colors group"
+                  className="block px-4 py-5 border border-grey/10 hover:border-purple transition-colors group"
                 >
-                  <h2 className="font-display text-2xl sm:text-3xl tracking-tight group-hover:text-gold transition-colors mb-1">
+                  <h2 className="font-display text-2xl sm:text-3xl tracking-tight group-hover:text-white transition-colors mb-1">
                     {dj.name}
                   </h2>
                   {dj.bio && <Body className="line-clamp-1">{dj.bio}</Body>}
@@ -47,22 +45,24 @@ function DJs() {
 
         {/* Residents */}
         <section>
-          <Label className="mb-6 text-white/20 tracking-widest uppercase">— residents</Label>
+          <Label className="mb-6 text-grey tracking-widest uppercase">— residents</Label>
           <ul className="space-y-px">
             {residents.map((dj) => (
               <li key={dj.id}>
                 <Link
                   to="/djs/$djId"
                   params={{ djId: dj.id }}
-                  className="flex items-center justify-between px-4 py-4 border border-white/10 hover:border-white/30 transition-colors group"
+                  className="flex items-center justify-between px-4 py-4 border border-grey/10 hover:border-purple transition-colors group"
                 >
                   <div>
-                    <h2 className="font-display text-xl sm:text-2xl tracking-tight group-hover:text-gold transition-colors">
+                    <h2 className="font-display text-xl sm:text-2xl tracking-tight group-hover:text-white transition-colors">
                       {dj.name}
                     </h2>
                     {dj.bio && <Body className="line-clamp-1 mt-0.5">{dj.bio}</Body>}
                   </div>
-                  <Label className="shrink-0 ml-4 text-white/20">[ info ]</Label>
+                  <Label className="shrink-0 ml-4 text-grey group-hover:text-purple transition-colors">
+                    [ info ]
+                  </Label>
                 </Link>
               </li>
             ))}

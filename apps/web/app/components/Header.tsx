@@ -16,7 +16,7 @@ export function Header() {
 
       <NavLinks
         className="hidden sm:flex items-center gap-6"
-        itemClassName="text-xs text-white/30 hover:text-white/70 transition-colors tracking-widest uppercase"
+        itemClassName="text-xs text-grey hover:text-white transition-colors tracking-widest uppercase"
         activeClassName="text-gold"
       />
     </header>

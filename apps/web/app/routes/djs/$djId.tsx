@@ -28,7 +28,7 @@ function DJDetail() {
       <div className="flex-1">
         <Link
           to="/djs"
-          className="inline-flex items-center gap-2 text-xs sm:text-sm text-white/30 hover:text-gold transition-colors mb-10"
+          className="inline-flex items-center gap-2 text-xs sm:text-sm text-grey hover:text-purple transition-colors mb-10"
         >
           ‹ djs_collective
         </Link>
@@ -50,11 +50,11 @@ function DJDetail() {
           <BrandTitle>{dj.name}</BrandTitle>
         </h1>
 
-        {dj.bio && <Body className="mb-10 border-l border-white/10 pl-4 max-w-sm">{dj.bio}</Body>}
+        {dj.bio && <Body className="mb-10 border-l border-grey/10 pl-4 max-w-sm">{dj.bio}</Body>}
 
         {sets.length > 0 && (
           <section className="mb-12">
-            <Label className="mb-4 text-white/20 tracking-widest uppercase">
+            <Label className="mb-4 text-grey tracking-widest uppercase">
               — recorded transmissions
             </Label>
             <ul className="space-y-px">
@@ -63,9 +63,9 @@ function DJDetail() {
                 const isPlaying = nowPlaying?.id === set.id;
                 return (
                   <li key={set.id}>
-                    <div className="flex items-center justify-between px-4 py-4 border border-white/10 group">
+                    <div className="flex items-center justify-between px-4 py-4 border border-grey/10 group">
                       <div>
-                        <p className="font-display text-lg sm:text-xl tracking-tight group-hover:text-gold transition-colors">
+                        <p className="font-display text-lg sm:text-xl tracking-tight transition-colors">
                           {set.title}
                         </p>
                         {set.date && <Label>{set.date}</Label>}
@@ -74,14 +74,14 @@ function DJDetail() {
                         <Link
                           to="/sets/$setId"
                           params={{ setId: set.id }}
-                          className="text-xs text-white/20 hover:text-white/60 transition-colors"
+                          className="text-xs text-grey hover:text-purple transition-colors"
                         >
                           [ info ]
                         </Link>
                         <button
                           type="button"
                           onClick={() => loadTrack(set)}
-                          className="text-xs text-gold hover:text-white transition-colors cursor-pointer"
+                          className={`text-xs transition-colors cursor-pointer ${isPlaying ? "text-gold" : "text-grey hover:text-gold"}`}
                         >
                           {isPlaying ? "⏸" : "▶"}
                         </button>
@@ -96,23 +96,23 @@ function DJDetail() {
 
         {djEvents.length > 0 && (
           <section>
-            <Label className="mb-4 text-white/20 tracking-widest uppercase">— events</Label>
+            <Label className="mb-4 text-grey tracking-widest uppercase">— events</Label>
             <ul className="space-y-px">
               {djEvents.map((event) => (
                 <li key={event.id}>
                   <Link
                     to="/events"
-                    className="flex items-center justify-between px-4 py-4 border border-white/10 hover:border-white/30 transition-colors group"
+                    className="flex items-center justify-between px-4 py-4 border border-grey/10 hover:border-purple transition-colors group"
                   >
                     <div>
-                      <p className="font-display text-lg sm:text-xl tracking-tight group-hover:text-gold transition-colors">
+                      <p className="font-display text-lg sm:text-xl tracking-tight group-hover:text-white transition-colors">
                         {event.title}
                       </p>
                       <Label>
                         {event.date} · {event.venue}
                       </Label>
                     </div>
-                    <Label className="shrink-0 ml-4 text-white/20">
+                    <Label className="shrink-0 ml-4 text-grey group-hover:text-purple transition-colors">
                       {event.status === "upcoming" ? "[ soon ]" : "[ past ]"}
                     </Label>
                   </Link>

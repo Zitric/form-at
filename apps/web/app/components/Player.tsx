@@ -199,16 +199,32 @@ export function Player() {
         style={{ transition: "grid-template-rows 300ms ease-in-out" }}
       >
         <div className="overflow-hidden">
-          <div className="h-12 border-t border-white/10 px-4 flex items-center gap-4 font-mono">
+          <div className="h-12 border-t border-white/10 px-4 flex items-center gap-3 font-mono">
             {playBtn}
-            <div className="flex-1 min-w-0">
-              {nowPlaying && (
-                <p className="text-sm font-bold truncate leading-tight">
-                  <BrandTitle>{nowPlaying.title}</BrandTitle>
-                </p>
-              )}
-            </div>
-            <span className="text-xs text-white/30 tabular-nums shrink-0">{fmt(currentTime)}</span>
+            <span className="text-xs text-grey tabular-nums shrink-0 w-8 text-right">
+              {fmt(currentTime)}
+            </span>
+            {peaks.length > 0 ? (
+              <Waveform
+                peaks={peaks}
+                currentTime={currentTime}
+                duration={duration}
+                onSeek={seek}
+                disabled={loading || error}
+              />
+            ) : (
+              <input
+                type="range"
+                min={0}
+                max={duration || 0}
+                value={currentTime}
+                onChange={(e) => seek(Number(e.target.value))}
+                disabled={loading || error}
+                className="flex-1 accent-gold cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Seek"
+              />
+            )}
+            <span className="text-xs text-grey tabular-nums shrink-0 w-8">{fmt(duration)}</span>
           </div>
         </div>
       </div>
@@ -220,7 +236,7 @@ export function Player() {
             {playBtn}
 
             <div className="shrink-0 w-52 min-w-0">
-              <div className="text-xs text-white/25 mb-0.5">
+              <div className="text-xs text-grey mb-0.5">
                 › signal:{" "}
                 {error ? (
                   <span className="text-red-400">[ error ]</span>
@@ -233,11 +249,11 @@ export function Player() {
               <div className="text-sm font-bold truncate leading-tight">
                 <BrandTitle>{nowPlaying.title}</BrandTitle>
               </div>
-              <div className="text-xs text-white/40 truncate">{nowPlaying.artist}</div>
+              <div className="text-xs text-grey truncate">{nowPlaying.artist}</div>
             </div>
 
             <div className="flex items-center gap-3 flex-1 min-w-0">
-              <span className="text-xs text-white/30 tabular-nums shrink-0 w-8 text-right">
+              <span className="text-xs text-grey tabular-nums shrink-0 w-8 text-right">
                 {fmt(currentTime)}
               </span>
 
@@ -262,9 +278,7 @@ export function Player() {
                 />
               )}
 
-              <span className="text-xs text-white/30 tabular-nums shrink-0 w-8">
-                {fmt(duration)}
-              </span>
+              <span className="text-xs text-grey tabular-nums shrink-0 w-8">{fmt(duration)}</span>
             </div>
           </div>
         </div>
