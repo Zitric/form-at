@@ -17,3 +17,38 @@
     color: #080812;
   }
 }
+
+/* ── Typography utilities ─────────────────────────────────────────────────── */
+
+@utility t-label {
+  font-size: 0.75rem; /* 12px */
+  line-height: 1rem;
+  color: rgb(255 255 255 / 0.3);
+}
+
+@utility t-label-md {
+  font-size: 0.875rem; /* 14px */
+  line-height: 1.25rem;
+}
+
+@utility t-body {
+  font-size: 0.875rem; /* 14px */
+  line-height: 1.5rem;
+  color: rgb(255 255 255 / 0.4);
+}
+
+@utility t-body-md {
+  font-size: 1rem; /* 16px */
+  line-height: 1.75rem;
+}
+
+@utility t-muted {
+  font-size: 0.625rem; /* 10px */
+  line-height: 0.875rem;
+  color: rgb(255 255 255 / 0.2);
+}
+
+@utility t-muted-md {
+  font-size: 0.75rem; /* 12px */
+  line-height: 1rem;
+}

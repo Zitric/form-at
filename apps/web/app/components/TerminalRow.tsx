@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { cn } from "~/utils/cn";
 
 interface TerminalRowProps {
   label: string;
@@ -9,9 +10,9 @@ interface TerminalRowProps {
 
 export function TerminalRow({ label, value, dimValue, className }: TerminalRowProps) {
   return (
-    <p className={["text-xs sm:text-sm text-white/30", className].filter(Boolean).join(" ")}>
+    <p className={cn("t-label sm:t-label-md", className)}>
       <span className="text-gold mr-2">›</span>
-      {label}: {dimValue ? <span className="text-white/50">{value}</span> : value}
+      {label}: {dimValue ? <span className="opacity-50">{value}</span> : value}
     </p>
   );
 }
