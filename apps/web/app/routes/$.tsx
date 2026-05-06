@@ -1,5 +1,5 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { Header } from "~/components/Header";
+import { PageLayout } from "~/components/PageLayout";
 
 export const Route = createFileRoute("/$")({
   component: NotFound,
@@ -7,9 +7,7 @@ export const Route = createFileRoute("/$")({
 
 function NotFound() {
   return (
-    <main className="min-h-dvh flex flex-col px-6 py-10 font-mono max-w-2xl mx-auto w-full">
-      <Header />
-
+    <PageLayout footer="[ end_of_transmission ]">
       <div className="flex-1 flex flex-col justify-center">
         <p className="text-xs text-white/30 mb-4">
           <span className="text-gold mr-2">›</span>status: [ 404 ]
@@ -28,8 +26,6 @@ function NotFound() {
           return_to_base
         </Link>
       </div>
-
-      <footer className="mt-12 text-xs text-white/20">[ end_of_transmission ] █</footer>
-    </main>
+    </PageLayout>
   );
 }

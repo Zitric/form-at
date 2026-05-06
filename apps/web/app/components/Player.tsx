@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { BrandTitle } from "~/components/BrandTitle";
 import { Waveform } from "~/components/Waveform";
 import { usePlayer } from "~/contexts/player-context";
 import type { MusicSet } from "~/data/sets";
@@ -210,7 +211,9 @@ export function Player() {
                 <span>[ standby ]</span>
               )}
             </div>
-            <div className="text-xs font-bold truncate leading-tight">{nowPlaying.title}</div>
+            <div className="text-xs font-bold truncate leading-tight">
+              <BrandTitle>{nowPlaying.title}</BrandTitle>
+            </div>
             <div className="text-[10px] text-white/40 truncate">{nowPlaying.artist}</div>
           </div>
 

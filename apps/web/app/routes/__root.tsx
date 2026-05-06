@@ -1,14 +1,12 @@
 import { HeadContent, Link, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
-import { Header } from "~/components/Header";
+import { PageLayout } from "~/components/PageLayout";
 import { Player } from "~/components/Player";
 import { PlayerProvider } from "~/contexts/player-context";
 import "~/styles/global.css";
 
 function RootNotFound() {
   return (
-    <main className="min-h-dvh flex flex-col px-6 py-10 font-mono max-w-2xl mx-auto w-full">
-      <Header />
-
+    <PageLayout footer="[ end_of_transmission ]">
       <div className="flex-1 flex flex-col justify-center">
         <p className="text-xs text-white/30 mb-4">
           <span className="text-gold mr-2">›</span>status: [ 404 ]
@@ -27,9 +25,7 @@ function RootNotFound() {
           return_to_base
         </Link>
       </div>
-
-      <footer className="mt-12 text-xs text-white/20">[ end_of_transmission ] █</footer>
-    </main>
+    </PageLayout>
   );
 }
 
@@ -137,9 +133,7 @@ function Root() {
       </head>
       <body className="bg-navy text-white font-mono antialiased">
         <PlayerProvider>
-          <div className="pb-20">
-            <Outlet />
-          </div>
+          <Outlet />
           <Player />
         </PlayerProvider>
         <Scripts />

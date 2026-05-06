@@ -14,20 +14,37 @@ export type MusicSet = {
 // Add your sets here. src should be the public Cloudflare R2 URL for the MP3.
 export const sets: MusicSet[] = [
   {
-    id: "set-002-til",
+    id: "signal-002-til",
     title: "FORM:AT 002",
     artist: "t.i.l.",
     date: "2026-04-24",
+    venue: "Find the red door, Glasgow",
+    description: "t.i.l. is a Glasgow-based techno artist who has been making music for over 20 years. He is known for his unique style of techno that blends elements of acid, house, and techno.",
+    duration: "1:00:00",
     src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20t.i.l.mp3",
     peaks: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20t.i.l.json",
   },
   {
-    id: "set-002-hubey",
+    id: "signal-002-hubey",
     title: "FORM:AT 002",
     artist: "Hubey",
     date: "2026-04-24",
+    venue: "Find the red door, Glasgow",
+    description: "Hubey is a Glasgow-based techno artist who has been making music for over 20 years. He is known for his unique style of techno that blends elements of acid, house, and techno.",
+    duration: "1:00:00",
     src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20hubey.mp3",
     peaks: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20hubey.json",
+  },
+  {
+    id: "signal-002-julz-lever",
+    title: "FORM:AT 002",
+    artist: "Julz Lever",
+    date: "2026-04-24",
+    venue: "Find the red door, Glasgow",
+    description: "Hubey is a Glasgow-based techno artist who has been making music for over 20 years. He is known for his unique style of techno that blends elements of acid, house, and techno.",
+    duration: "1:00:00",
+    src: "hhttps://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20Julz%20Lever.mp3",
+    peaks: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20Julz%20Lever.json",
   },
 ];
 

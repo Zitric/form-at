@@ -1,5 +1,6 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
-import { Header } from "~/components/Header";
+import { BrandTitle } from "~/components/BrandTitle";
+import { PageLayout } from "~/components/PageLayout";
 import { usePlayer } from "~/contexts/player-context";
 import { getSet } from "~/data/sets";
 
@@ -26,9 +27,7 @@ function SetDetail() {
   ).filter((row): row is [string, string] => Boolean(row));
 
   return (
-    <main className="min-h-dvh flex flex-col px-6 py-10 font-mono max-w-2xl mx-auto w-full">
-      <Header />
-
+    <PageLayout footer="[ end_of_transmission ]">
       <div className="flex-1">
         <Link
           to="/sets"
@@ -51,7 +50,7 @@ function SetDetail() {
         </div>
 
         <h1 className="text-3xl sm:text-4xl font-bold leading-tight tracking-tight mb-2">
-          {set.title}
+          <BrandTitle>{set.title}</BrandTitle>
         </h1>
         <p className="text-sm text-white/40 mb-10">{set.artist}</p>
 
@@ -70,8 +69,6 @@ function SetDetail() {
           {isPlaying ? "now_playing" : "play_set"}
         </button>
       </div>
-
-      <footer className="mt-12 text-xs text-white/20">[ end_of_transmission ] █</footer>
-    </main>
+    </PageLayout>
   );
 }

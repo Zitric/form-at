@@ -1,6 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { Header } from "~/components/Header";
+import { BrandTitle } from "~/components/BrandTitle";
+import { PageLayout } from "~/components/PageLayout";
 import { usePlayer } from "~/contexts/player-context";
 import { sets } from "~/data/sets";
 
@@ -38,9 +39,7 @@ function Sets() {
   const { nowPlaying, loadTrack } = usePlayer();
 
   return (
-    <main className="min-h-dvh flex flex-col px-6 py-10 font-mono max-w-2xl mx-auto w-full">
-      <Header />
-
+    <PageLayout footer="[ end_of_archive ]">
       <div className="flex-1">
         <div className="mb-8">
           <h1 className="text-2xl font-bold tracking-tight mb-1">SETS_ARCHIVE</h1>
@@ -70,7 +69,7 @@ function Sets() {
 
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold truncate group-hover:text-gold transition-colors">
-                      {set.title}
+                      <BrandTitle>{set.title}</BrandTitle>
                     </div>
                     <div className="text-xs text-white/40 truncate mt-0.5">
                       {set.artist}
@@ -104,8 +103,6 @@ function Sets() {
           })}
         </ul>
       </div>
-
-      <footer className="mt-12 text-xs text-white/20">[ end_of_archive ] █</footer>
-    </main>
+    </PageLayout>
   );
 }

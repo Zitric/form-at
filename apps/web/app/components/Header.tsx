@@ -2,12 +2,15 @@ import { Link } from "@tanstack/react-router";
 
 export function Header() {
   return (
-    <header className="flex items-center gap-3 mb-12">
-      <Link to="/" className="flex items-center gap-3 group">
-        <img src="/logo.png" alt="Form:at" className="w-7 h-7 mix-blend-screen" />
-        <span className="text-xs tracking-[0.3em] text-white/30 group-hover:text-white/60 uppercase transition-colors">
-          Form:at
-        </span>
+    <header className="mb-12">
+      <Link to="/" className="inline-block opacity-60 hover:opacity-100 transition-opacity">
+        <div className="overflow-hidden w-[310px] h-[44px]">
+          <img
+            src="/wordmark.png"
+            alt="Form:at"
+            className="w-[475px] -translate-x-[17.32%] -translate-y-[45.6%] mix-blend-screen"
+          />
+        </div>
       </Link>
     </header>
   );
