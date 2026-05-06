@@ -201,7 +201,7 @@ export function Player() {
 
           {/* Track info */}
           <div className="shrink-0 hidden sm:block w-52 min-w-0">
-            <div className="text-[10px] text-white/25 mb-0.5">
+            <div className="text-xs text-white/25 mb-0.5">
               › signal:{" "}
               {error ? (
                 <span className="text-red-400">[ error ]</span>
@@ -211,15 +211,15 @@ export function Player() {
                 <span>[ standby ]</span>
               )}
             </div>
-            <div className="text-xs font-bold truncate leading-tight">
+            <div className="text-sm font-bold truncate leading-tight">
               <BrandTitle>{nowPlaying.title}</BrandTitle>
             </div>
-            <div className="text-[10px] text-white/40 truncate">{nowPlaying.artist}</div>
+            <div className="text-xs text-white/40 truncate">{nowPlaying.artist}</div>
           </div>
 
           {/* Progress */}
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <span className="text-[10px] text-white/30 tabular-nums shrink-0 w-8 text-right">
+            <span className="text-xs text-white/30 tabular-nums shrink-0 w-8 text-right">
               {fmt(currentTime)}
             </span>
 
@@ -244,9 +244,7 @@ export function Player() {
               />
             )}
 
-            <span className="text-[10px] text-white/30 tabular-nums shrink-0 w-8">
-              {fmt(duration)}
-            </span>
+            <span className="text-xs text-white/30 tabular-nums shrink-0 w-8">{fmt(duration)}</span>
           </div>
         </div>
       </div>

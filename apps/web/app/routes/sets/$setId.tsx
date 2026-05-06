@@ -1,6 +1,8 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { BrandTitle } from "~/components/BrandTitle";
 import { PageLayout } from "~/components/PageLayout";
+import { TerminalRow } from "~/components/TerminalRow";
+import { Body, Label } from "~/components/Text";
 import { usePlayer } from "~/contexts/player-context";
 import { fetchSetStats } from "~/data/set-stats";
 import type { SetStats } from "~/data/set-stats";
@@ -52,31 +54,25 @@ function SetDetail() {
       <div className="flex-1">
         <Link
           to="/sets"
-          className="inline-flex items-center gap-2 text-xs text-white/30 hover:text-gold transition-colors mb-10"
+          className="inline-flex items-center gap-2 text-xs sm:text-sm text-white/30 hover:text-gold transition-colors mb-10"
         >
           ‹ sets_archive
         </Link>
 
-        <div className="space-y-1 text-xs text-white/30 mb-8">
+        <div className="space-y-1 mb-8">
           {metaRows.map(([label, value]) => (
-            <p key={label}>
-              <span className="text-gold mr-2">›</span>
-              {label}: {value}
-            </p>
+            <TerminalRow key={label} label={label} value={value} />
           ))}
-          <p>
-            <span className="text-gold mr-2">›</span>status:{" "}
-            {isPlaying ? <span className="text-gold">[ live ]</span> : <span>[ ready ]</span>}
-          </p>
+          <TerminalRow
+            label="status"
+            value={isPlaying ? <span className="text-gold">[ live ]</span> : <span>[ ready ]</span>}
+          />
 
           {statsRows.length > 0 && (
             <>
-              <p className="pt-3 text-white/10">· · ·</p>
+              <Label className="pt-3 text-white/10">· · ·</Label>
               {statsRows.map(([label, value]) => (
-                <p key={label}>
-                  <span className="text-gold mr-2">›</span>
-                  {label}: <span className="text-white/50">{value}</span>
-                </p>
+                <TerminalRow key={label} label={label} value={value} dimValue />
               ))}
             </>
           )}
@@ -85,18 +81,18 @@ function SetDetail() {
         <h1 className="text-3xl sm:text-4xl font-bold leading-tight tracking-tight mb-2">
           <BrandTitle>{set.title}</BrandTitle>
         </h1>
-        <p className="text-sm text-white/40 mb-10">{set.artist}</p>
+        <Body className="mb-10">{set.artist}</Body>
 
         {set.description && (
-          <p className="text-sm text-white/40 leading-relaxed mb-10 border-l border-white/10 pl-4">
+          <Body className="leading-relaxed mb-10 border-l border-white/10 pl-4">
             {set.description}
-          </p>
+          </Body>
         )}
 
         <button
           type="button"
           onClick={() => loadTrack(set)}
-          className="inline-flex items-center gap-4 border border-white/20 px-6 py-3 text-sm hover:border-gold hover:text-gold transition-colors"
+          className="inline-flex items-center gap-4 border border-white/20 px-6 py-3 text-sm sm:text-base hover:border-gold hover:text-gold transition-colors"
         >
           <span className="text-gold">{isPlaying ? "⏸" : "▶"}</span>
           {isPlaying ? "now_playing" : "play_set"}
