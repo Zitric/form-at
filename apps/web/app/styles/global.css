@@ -1,9 +1,12 @@
 @import "tailwindcss";
 
 @theme {
-  --color-gold: #c8921a;
-  --color-navy: #080812;
+  --color-gold: #c58538;
+  --color-navy: #161615;
+  --color-purple: #43437a;
+  --color-grey: #cbcbcb;
   --font-mono: "Space Mono", ui-monospace, monospace;
+  --font-display: "Bedstead Condensed", "Bedstead", sans-serif;
   --animate-blink: blink 1s step-start infinite;
 }
 
@@ -14,7 +17,7 @@
   }
   50%,
   100% {
-    color: #080812;
+    color: #161615;
   }
 }
 

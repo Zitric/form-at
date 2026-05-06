@@ -9,12 +9,12 @@ interface PageLayoutProps {
 
 export function PageLayout({ children, footer }: PageLayoutProps) {
   return (
-    <main className="min-h-dvh flex flex-col px-6 pt-10 pb-24 font-mono max-w-2xl mx-auto w-full">
+    <main className="min-h-dvh flex flex-col px-6 pt-10 pb-36 sm:pb-24 font-mono max-w-2xl mx-auto w-full">
       <Header />
       {children}
-      <footer className="mt-12">
+      {/* <footer className="mt-12">
         <Muted>{footer} █</Muted>
-      </footer>
+      </footer> */}
     </main>
   );
 }

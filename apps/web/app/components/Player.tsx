@@ -49,7 +49,6 @@ export function Player() {
     );
   }, []);
 
-  // Fetch pre-computed peaks when track changes
   useEffect(() => {
     if (!nowPlaying?.peaks) {
       setPeaks([]);
@@ -61,7 +60,6 @@ export function Player() {
       .catch(() => setPeaks([]));
   }, [nowPlaying?.peaks]);
 
-  // Flush on tab close
   useEffect(() => {
     const handleUnload = () => sendPlay(nowPlayingRef.current);
     window.addEventListener("beforeunload", handleUnload);
@@ -107,7 +105,6 @@ export function Player() {
     };
   }, [nowPlaying, sendPlay]);
 
-  // Media Session API — keeps playback alive on a locked phone
   useEffect(() => {
     if (!nowPlaying || !("mediaSession" in navigator)) return;
 
@@ -152,7 +149,17 @@ export function Player() {
     setCurrentTime(time);
   };
 
-  if (!nowPlaying) return null;
+  const playBtn = (
+    <button
+      type="button"
+      onClick={togglePlay}
+      disabled={loading || error}
+      aria-label={playing ? "Pause" : "Play"}
+      className="shrink-0 w-5 text-gold disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer text-sm"
+    >
+      {loading ? <span className="animate-pulse opacity-60">…</span> : playing ? "⏸" : "▶"}
+    </button>
+  );
 
   return (
     <>
@@ -186,68 +193,82 @@ export function Player() {
         }}
       />
 
-      <div className="fixed bottom-0 inset-x-0 bg-navy border-t border-white/10 px-4 py-3 font-mono">
-        <div className="flex items-center gap-4 max-w-2xl mx-auto w-full">
-          {/* Play / pause */}
-          <button
-            type="button"
-            onClick={togglePlay}
-            disabled={loading || error}
-            aria-label={playing ? "Pause" : "Play"}
-            className="shrink-0 w-5 text-gold disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer text-sm"
-          >
-            {loading ? <span className="animate-pulse opacity-60">…</span> : playing ? "⏸" : "▶"}
-          </button>
-
-          {/* Track info */}
-          <div className="shrink-0 hidden sm:block w-52 min-w-0">
-            <div className="text-xs text-white/25 mb-0.5">
-              › signal:{" "}
-              {error ? (
-                <span className="text-red-400">[ error ]</span>
-              ) : playing ? (
-                <span className="text-gold">[ live ]</span>
-              ) : (
-                <span>[ standby ]</span>
+      {/* Mobile player — always in DOM, animates from height 0 when a track loads */}
+      <div
+        className={`sm:hidden fixed bottom-0 inset-x-0 z-30 bg-navy grid ${nowPlaying ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+        style={{ transition: "grid-template-rows 300ms ease-in-out" }}
+      >
+        <div className="overflow-hidden">
+          <div className="h-12 border-t border-white/10 px-4 flex items-center gap-4 font-mono">
+            {playBtn}
+            <div className="flex-1 min-w-0">
+              {nowPlaying && (
+                <p className="text-sm font-bold truncate leading-tight">
+                  <BrandTitle>{nowPlaying.title}</BrandTitle>
+                </p>
               )}
             </div>
-            <div className="text-sm font-bold truncate leading-tight">
-              <BrandTitle>{nowPlaying.title}</BrandTitle>
-            </div>
-            <div className="text-xs text-white/40 truncate">{nowPlaying.artist}</div>
-          </div>
-
-          {/* Progress */}
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <span className="text-xs text-white/30 tabular-nums shrink-0 w-8 text-right">
-              {fmt(currentTime)}
-            </span>
-
-            {peaks.length > 0 ? (
-              <Waveform
-                peaks={peaks}
-                currentTime={currentTime}
-                duration={duration}
-                onSeek={seek}
-                disabled={loading || error}
-              />
-            ) : (
-              <input
-                type="range"
-                min={0}
-                max={duration || 0}
-                value={currentTime}
-                onChange={(e) => seek(Number(e.target.value))}
-                disabled={loading || error}
-                className="flex-1 accent-gold cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                aria-label="Seek"
-              />
-            )}
-
-            <span className="text-xs text-white/30 tabular-nums shrink-0 w-8">{fmt(duration)}</span>
+            <span className="text-xs text-white/30 tabular-nums shrink-0">{fmt(currentTime)}</span>
           </div>
         </div>
       </div>
+
+      {/* Desktop player */}
+      {nowPlaying && (
+        <div className="hidden sm:block fixed bottom-0 inset-x-0 z-30 bg-navy border-t border-white/10 px-4 py-3 font-mono">
+          <div className="flex items-center gap-4 max-w-2xl mx-auto w-full">
+            {playBtn}
+
+            <div className="shrink-0 w-52 min-w-0">
+              <div className="text-xs text-white/25 mb-0.5">
+                › signal:{" "}
+                {error ? (
+                  <span className="text-red-400">[ error ]</span>
+                ) : playing ? (
+                  <span className="text-gold">[ live ]</span>
+                ) : (
+                  <span>[ standby ]</span>
+                )}
+              </div>
+              <div className="text-sm font-bold truncate leading-tight">
+                <BrandTitle>{nowPlaying.title}</BrandTitle>
+              </div>
+              <div className="text-xs text-white/40 truncate">{nowPlaying.artist}</div>
+            </div>
+
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <span className="text-xs text-white/30 tabular-nums shrink-0 w-8 text-right">
+                {fmt(currentTime)}
+              </span>
+
+              {peaks.length > 0 ? (
+                <Waveform
+                  peaks={peaks}
+                  currentTime={currentTime}
+                  duration={duration}
+                  onSeek={seek}
+                  disabled={loading || error}
+                />
+              ) : (
+                <input
+                  type="range"
+                  min={0}
+                  max={duration || 0}
+                  value={currentTime}
+                  onChange={(e) => seek(Number(e.target.value))}
+                  disabled={loading || error}
+                  className="flex-1 accent-gold cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                  aria-label="Seek"
+                />
+              )}
+
+              <span className="text-xs text-white/30 tabular-nums shrink-0 w-8">
+                {fmt(duration)}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

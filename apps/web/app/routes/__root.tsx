@@ -1,4 +1,5 @@
 import { HeadContent, Link, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
+import { BottomNav } from "~/components/BottomNav";
 import { PageLayout } from "~/components/PageLayout";
 import { Player } from "~/components/Player";
 import { TerminalRow } from "~/components/TerminalRow";
@@ -74,30 +75,18 @@ export const Route = createRootRoute({
 
       // Android
       { name: "mobile-web-app-capable", content: "yes" },
-      { name: "theme-color", content: "#080812" },
+      { name: "theme-color", content: "#161615" },
 
       // Windows
-      { name: "msapplication-TileColor", content: "#080812" },
+      { name: "msapplication-TileColor", content: "#161615" },
       { name: "msapplication-TileImage", content: "/icon-192.png" },
       { name: "msapplication-navbutton-color", content: "#c8921a" },
     ],
     links: [
       { rel: "icon", href: "/logo.png", type: "image/png" },
       { rel: "apple-touch-icon", href: "/icon-192.png" },
-      {
-        rel: "preload",
-        href: "/fonts/space-mono-400.woff2",
-        as: "font",
-        type: "font/woff2",
-        crossOrigin: "anonymous",
-      },
-      {
-        rel: "preload",
-        href: "/fonts/space-mono-700.woff2",
-        as: "font",
-        type: "font/woff2",
-        crossOrigin: "anonymous",
-      },
+      { rel: "preload", href: "/fonts/space-mono-400.woff2", as: "font", type: "font/woff2" },
+      { rel: "preload", href: "/fonts/space-mono-700.woff2", as: "font", type: "font/woff2" },
       { rel: "manifest", href: "/manifest.json" },
     ],
     scripts: [
@@ -112,9 +101,12 @@ const fontCSS = `
 @font-face{font-family:"Space Mono";font-style:normal;font-weight:400;font-display:block;src:url("/fonts/space-mono-400.woff2") format("woff2")}
 @font-face{font-family:"Space Mono";font-style:normal;font-weight:700;font-display:block;src:url("/fonts/space-mono-700.woff2") format("woff2")}
 @font-face{font-family:"Space Mono";font-style:italic;font-weight:400;font-display:block;src:url("/fonts/space-mono-400-italic.woff2") format("woff2")}
+@font-face{font-family:"Bedstead";font-style:normal;font-weight:400;font-display:block;src:url("/fonts/bedstead.otf") format("opentype")}
+@font-face{font-family:"Bedstead Condensed";font-style:normal;font-weight:400;font-display:block;src:url("/fonts/bedstead-condensed.otf") format("opentype")}
+@font-face{font-family:"Bedstead";font-stretch:semi-condensed;font-style:normal;font-weight:400;font-display:block;src:url("/fonts/bedstead-semicondensed.otf") format("opentype")}
 *,*::before,*::after{box-sizing:border-box}
 html{line-height:1.5;-webkit-text-size-adjust:100%}
-body{margin:0;font-family:"Space Mono",ui-monospace,monospace;background:#080812;color:#fff}
+body{margin:0;font-family:"Space Mono",ui-monospace,monospace;background:#161615;color:#fff}
 h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit;margin:0}
 p{margin:0}
 ul,ol{list-style:none;margin:0;padding:0}
@@ -135,6 +127,7 @@ function Root() {
         <PlayerProvider>
           <Outlet />
           <Player />
+          <BottomNav />
         </PlayerProvider>
         <Scripts />
       </body>
