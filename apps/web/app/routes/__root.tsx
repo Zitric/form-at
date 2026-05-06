@@ -39,10 +39,55 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { name: "theme-color", content: "#080812" },
+      { name: "author", content: "Form:at" },
       { title: "Form:at" },
+      {
+        name: "description",
+        content: "Glasgow techno collective. Analog soul in a digital world.",
+      },
+
+      // Open Graph — covers Facebook, Instagram, WhatsApp, Discord, Telegram, Slack, LinkedIn
+      { property: "og:type", content: "website" },
+      { property: "og:site_name", content: "Form:at" },
+      { property: "og:title", content: "Form:at" },
+      {
+        property: "og:description",
+        content: "Glasgow techno collective. Analog soul in a digital world.",
+      },
+      { property: "og:image", content: "https://form-at-web.pages.dev/icon-512.png" },
+      { property: "og:image:width", content: "512" },
+      { property: "og:image:height", content: "512" },
+      { property: "og:image:alt", content: "Form:at logo" },
+      { property: "og:url", content: "https://form-at-web.pages.dev" },
+      { property: "og:locale", content: "en_GB" },
+
+      // Twitter / X
+      { name: "twitter:card", content: "summary" },
+      { name: "twitter:title", content: "Form:at" },
+      {
+        name: "twitter:description",
+        content: "Glasgow techno collective. Analog soul in a digital world.",
+      },
+      { name: "twitter:image", content: "https://form-at-web.pages.dev/icon-512.png" },
+      { name: "twitter:image:alt", content: "Form:at logo" },
+
+      // iOS — fullscreen PWA behaviour when launched from home screen
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-title", content: "Form:at" },
+
+      // Android
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "theme-color", content: "#080812" },
+
+      // Windows
+      { name: "msapplication-TileColor", content: "#080812" },
+      { name: "msapplication-TileImage", content: "/icon-192.png" },
+      { name: "msapplication-navbutton-color", content: "#c8921a" },
     ],
     links: [
+      { rel: "icon", href: "/logo.png", type: "image/png" },
+      { rel: "apple-touch-icon", href: "/icon-192.png" },
       {
         rel: "preload",
         href: "/fonts/space-mono-400.woff2",
