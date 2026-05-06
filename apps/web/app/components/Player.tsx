@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Waveform } from "~/components/Waveform";
 import { usePlayer } from "~/contexts/player-context";
 import type { MusicSet } from "~/data/sets";
 
@@ -17,6 +18,7 @@ export function Player() {
   const [error, setError] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [peaks, setPeaks] = useState<number[]>([]);
 
   const playStartRef = useRef<number | null>(null);
   const nowPlayingRef = useRef<MusicSet | null>(nowPlaying);
@@ -24,7 +26,8 @@ export function Player() {
     nowPlayingRef.current = nowPlaying;
   }, [nowPlaying]);
 
-  const sendPlay = (track: MusicSet | null) => {
+  // useCallback required — React Compiler cannot memoize functions that mutate refs
+  const sendPlay = useCallback((track: MusicSet | null) => {
     if (!track || !playStartRef.current) return;
     const seconds = Math.floor((Date.now() - playStartRef.current) / 1000);
     playStartRef.current = null;
@@ -43,16 +46,25 @@ export function Player() {
         { type: "application/json" },
       ),
     );
-  };
+  }, []);
+
+  // Fetch pre-computed peaks when track changes
+  useEffect(() => {
+    if (!nowPlaying?.peaks) {
+      setPeaks([]);
+      return;
+    }
+    fetch(nowPlaying.peaks)
+      .then((r) => r.json())
+      .then((d) => setPeaks((d as { peaks: number[] }).peaks))
+      .catch(() => setPeaks([]));
+  }, [nowPlaying?.peaks]);
 
   // Flush on tab close
   useEffect(() => {
-    function handleUnload() {
-      sendPlay(nowPlayingRef.current);
-    }
+    const handleUnload = () => sendPlay(nowPlayingRef.current);
     window.addEventListener("beforeunload", handleUnload);
     return () => window.removeEventListener("beforeunload", handleUnload);
-    // biome-ignore lint/correctness/useExhaustiveDependencies: React Compiler memoizes sendPlay
   }, [sendPlay]);
 
   useEffect(() => {
@@ -90,9 +102,8 @@ export function Player() {
     return () => {
       cancelled = true;
       audio.removeEventListener("canplay", playWhenReady);
-      sendPlay(nowPlaying); // flush when switching tracks
+      sendPlay(nowPlaying);
     };
-    // biome-ignore lint/correctness/useExhaustiveDependencies: React Compiler memoizes sendPlay
   }, [nowPlaying, sendPlay]);
 
   // Media Session API — keeps playback alive on a locked phone
@@ -133,10 +144,9 @@ export function Player() {
     }
   };
 
-  const seek = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const seek = (time: number) => {
     const audio = audioRef.current;
     if (!audio) return;
-    const time = Number(e.target.value);
     audio.currentTime = time;
     setCurrentTime(time);
   };
@@ -209,16 +219,28 @@ export function Player() {
             <span className="text-[10px] text-white/30 tabular-nums shrink-0 w-8 text-right">
               {fmt(currentTime)}
             </span>
-            <input
-              type="range"
-              min={0}
-              max={duration || 0}
-              value={currentTime}
-              onChange={seek}
-              disabled={loading || error}
-              className="flex-1 accent-gold cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-              aria-label="Seek"
-            />
+
+            {peaks.length > 0 ? (
+              <Waveform
+                peaks={peaks}
+                currentTime={currentTime}
+                duration={duration}
+                onSeek={seek}
+                disabled={loading || error}
+              />
+            ) : (
+              <input
+                type="range"
+                min={0}
+                max={duration || 0}
+                value={currentTime}
+                onChange={(e) => seek(Number(e.target.value))}
+                disabled={loading || error}
+                className="flex-1 accent-gold cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Seek"
+              />
+            )}
+
             <span className="text-[10px] text-white/30 tabular-nums shrink-0 w-8">
               {fmt(duration)}
             </span>

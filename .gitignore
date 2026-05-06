@@ -12,3 +12,6 @@ apps/*/app/routeTree.gen.ts
 
 # TanStack Start transpiled config artifacts
 apps/*/app.config.timestamp_*.js
+
+# Wrangler local dev state
+.wrangler/
