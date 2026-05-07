@@ -70,8 +70,8 @@ function Sets() {
 
   const groups = sets.reduce<Record<string, typeof sets>>((acc, set) => {
     if (!acc[set.title]) acc[set.title] = [];
-    // biome-ignore lint/style/noNonNullAssertion: initialised on the line above
-    acc[set.title]!.push(set);
+    const group = acc[set.title];
+    if (group) group.push(set);
     return acc;
   }, {});
 

@@ -79,7 +79,8 @@ export function SwipeNavigator() {
         }
 
         // Navigate and instantly place the new page off-screen on the opposite side
-        navigate({ to: ROUTES[next] });
+        const route = ROUTES[next];
+        if (route) navigate({ to: route });
         setTransitioning(false);
         setOffset(goingLeft ? window.innerWidth : -window.innerWidth);
 

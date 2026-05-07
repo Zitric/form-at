@@ -9,7 +9,7 @@
     "lint": "turbo lint",
     "tsc": "turbo tsc",
     "format": "biome format --write .",
-    "check": "biome check --write ."
+    "check": "biome check --write . && turbo tsc"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",

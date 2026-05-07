@@ -165,11 +165,13 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     });
     navigator.mediaSession.setActionHandler("previoustrack", () => {
       const i = sets.findIndex((s) => s.id === useStore.getState().nowPlaying?.id);
-      if (i > 0) useStore.getState().loadTrack(sets[i - 1]);
+      const prev = sets[i - 1];
+      if (i > 0 && prev) useStore.getState().loadTrack(prev);
     });
     navigator.mediaSession.setActionHandler("nexttrack", () => {
       const i = sets.findIndex((s) => s.id === useStore.getState().nowPlaying?.id);
-      if (i < sets.length - 1) useStore.getState().loadTrack(sets[i + 1]);
+      const next = sets[i + 1];
+      if (i < sets.length - 1 && next) useStore.getState().loadTrack(next);
     });
   }, [nowPlaying, setIsPlaying, audioRef]);
 
