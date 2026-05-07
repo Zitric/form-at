@@ -1,6 +1,7 @@
 # Form:at
 
 Monorepo for Form:at — a techno collective based in Glasgow.
+Live at [formatglasgow.com](https://formatglasgow.com)
 
 ## Apps
 
@@ -13,15 +14,29 @@ Future apps go in `apps/`. Each app picks its own framework; the default is TanS
 ## Architecture
 
 ### Audio player — the core feature
-Sets must play on locked mobile screens. This is solved with the **Media Session API** in `apps/web/app/components/Player.tsx`. The player is a fixed bottom bar rendered in the root layout, persistent across all routes.
+Sets must play on locked mobile screens. This is solved with the **Media Session API**. The player is a persistent fixed bottom bar rendered in `__root.tsx`, surviving all route changes.
 
 Audio files live on **Cloudflare R2** (free egress). Update the `src` URLs in `apps/web/app/data/sets.ts` to point to your R2 bucket.
 
+All audio logic lives in `apps/web/app/hooks/useAudioPlayer.ts` — track loading, spacebar/media key support, `sendBeacon` analytics, `beforeunload` position save, Media Session API. `Player.tsx` is layout only.
+
 ### Player state
-`PlayerContext` (`app/contexts/player-context.tsx`) is the minimal shared state: just `nowPlaying` and `loadTrack`. The `Player` component owns the `<audio>` element and all playback state locally. This keeps the context simple and avoids prop-drilling.
+Global state is managed by **Zustand** (`apps/web/app/store/`). The store is split into slices:
+
+- `playerSlice.ts` — `nowPlaying`, `isPlaying`, `positions` (per-track resume map), and their setters
+- `store/index.ts` — composes slices, persists `nowPlayingId` + `positions` to localStorage via `zustand/middleware/persist`
+
+`MusicSet` objects are never stored in localStorage — only IDs are persisted and hydrated back via `getSet()` on load. This avoids migration risk if the shape changes.
+
+The `isPlaying` flag in the store is the control surface for external components. `useAudioPlayer` has a bridge effect that watches it and calls `audio.pause()` / `audio.play()` accordingly.
+
+### Navigation
+`SwipeNavigator` (`apps/web/app/components/SwipeNavigator.tsx`) wraps the `<Outlet />` and provides horizontal swipe navigation between the four main routes (`/`, `/sets`, `/events`, `/djs`). Uses `@use-gesture/react` for real-time drag tracking. On swipe confirm, a `cloneNode` snapshot of the outgoing page animates out via direct DOM manipulation while the new page slides in via React state + double `requestAnimationFrame`.
+
+A gold dot indicator sits above `BottomNav` on mobile, showing the current page position. It animates in real-time during drag via direct DOM style updates (no React re-renders).
 
 ### Analytics — play tracking
-Listen events are tracked via `navigator.sendBeacon` (fire-and-forget, survives page close). `Player.tsx` calls `/api/track` on pause, track change, and tab close — ignoring plays under 3 seconds. Data lands in a **Cloudflare D1** SQLite database (`form-at-analytics`, table: `plays`).
+Listen events are tracked via `navigator.sendBeacon` (fire-and-forget, survives page close). `useAudioPlayer` calls `/api/track` on pause, track change, and tab close — ignoring plays under 3 seconds. Data lands in a **Cloudflare D1** SQLite database (`form-at-analytics`, table: `plays`).
 
 Play counts are shown on the `/sets` page via a `createServerFn` loader that queries D1 at SSR time.
 
@@ -56,6 +71,8 @@ Schema lives in `apps/web/schema.sql`. Apply to the remote DB with:
 npx wrangler d1 execute form-at-analytics --remote --file=apps/web/schema.sql
 ```
 
+**Cloudflare Web Analytics** is auto-injected for `formatglasgow.com` — no script tag needed.
+
 ### Auth (not yet built)
 Community features will be gated behind **Better Auth** (self-hosted, open source). The player and sets pages stay fully public — no login required to listen.
 
@@ -84,10 +101,12 @@ Community features will be gated behind **Better Auth** (self-hosted, open sourc
 - File names: `kebab-case` for routes and utilities, `PascalCase` for component files (`Player.tsx`, `Header.tsx`).
 - One component or one logical unit per file. Co-locate the types it needs unless they're shared.
 - Route files own their loader, server functions, and page component. Only extract when a file exceeds ~150 lines or a piece is reused elsewhere.
+- Custom hooks live in `apps/web/app/hooks/`.
 
 ### Styling
-- Tailwind utility classes only — no inline `style` props, no CSS modules, no extra CSS files beyond `global.css`.
-- Stick to the design tokens: `bg-navy` (`#080812`), `text-gold` (`#c8921a`), `font-mono` (Space Mono). Don't introduce new colours or fonts without agreement.
+- Tailwind utility classes only — no inline `style` props except for dynamic values (e.g. animation offsets).
+- Design tokens are in `apps/web/app/styles/tokens.ts` (JS/canvas use) and mirrored in the `@theme` block of `global.css` (Tailwind use). Keep them in sync.
+- Brand colours: `bg-black` (`#161615`), `text-gold` (`#c58538`), `text-purple` (`#43437a`), `text-grey` (`#cbcbcb`), `font-mono` (Space Mono).
 - No rounded corners — the brand aesthetic is sharp edges throughout.
 
 ## Commands
@@ -110,4 +129,7 @@ After `pnpm install`, running `pnpm dev` will auto-generate `apps/web/app/routeT
 - Each app's `tsconfig.json` extends the shared base
 - Biome config at the root covers all workspaces
 - `apps/web/app/server.ts` — custom Cloudflare server entry (do not delete)
+- `apps/web/app/store/` — Zustand store (playerSlice + persist middleware)
+- `apps/web/app/hooks/` — custom hooks (useAudioPlayer)
+- `apps/web/app/styles/tokens.ts` — design token JS source of truth
 - `wrangler.toml` — at repo root, configures Cloudflare Pages + D1 binding

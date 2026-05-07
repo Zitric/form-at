@@ -22,27 +22,6 @@ function DJs() {
           <Label>› {guests.length + residents.length} selectors found</Label>
         </div>
 
-        {/* Guests */}
-        <section className="mb-12">
-          <Label className="mb-6 text-grey tracking-widest uppercase">— guest transmissions</Label>
-          <ul className="space-y-px">
-            {guests.map((dj) => (
-              <li key={dj.id}>
-                <Link
-                  to="/djs/$djId"
-                  params={{ djId: dj.id }}
-                  className="block px-4 py-5 border border-grey/10 hover:border-purple transition-colors group"
-                >
-                  <h2 className="font-display text-2xl sm:text-3xl tracking-tight group-hover:text-white transition-colors mb-1">
-                    {dj.name}
-                  </h2>
-                  {dj.bio && <Body className="line-clamp-1">{dj.bio}</Body>}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-
         {/* Residents */}
         <section>
           <Label className="mb-6 text-grey tracking-widest uppercase">— residents</Label>
@@ -63,6 +42,27 @@ function DJs() {
                   <Label className="shrink-0 ml-4 text-grey group-hover:text-purple transition-colors">
                     [ info ]
                   </Label>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* Guests */}
+        <section className="mb-12">
+          <Label className="mb-6 text-grey tracking-widest uppercase">— guest transmissions</Label>
+          <ul className="space-y-px">
+            {guests.map((dj) => (
+              <li key={dj.id}>
+                <Link
+                  to="/djs/$djId"
+                  params={{ djId: dj.id }}
+                  className="block px-4 py-5 border border-grey/10 hover:border-purple transition-colors group"
+                >
+                  <h2 className="font-display text-2xl sm:text-3xl tracking-tight group-hover:text-white transition-colors mb-1">
+                    {dj.name}
+                  </h2>
+                  {dj.bio && <Body className="line-clamp-1">{dj.bio}</Body>}
                 </Link>
               </li>
             ))}

@@ -32,8 +32,33 @@ export const Route = createFileRoute("/sets/")({
       return {} as Record<string, number>;
     }
   },
+  pendingMs: 0,
+  pendingComponent: SetsSkeleton,
   component: Sets,
 });
+
+function SetsSkeleton() {
+  return (
+    <PageLayout footer="[ end_of_archive ]">
+      <div className="flex-1">
+        <div className="mb-10">
+          <div className="h-9 w-52 bg-white/10 animate-pulse mb-2" />
+          <div className="h-3 w-28 bg-white/10 animate-pulse" />
+        </div>
+        <div className="mb-10">
+          <div className="h-3 w-36 bg-white/10 animate-pulse mb-3" />
+          {Array.from({ length: 5 }).map((_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton rows
+            <div key={i} className="flex items-center py-3 border-b border-white/5">
+              <div className="flex-1 h-3.5 bg-white/10 animate-pulse" />
+              <div className="shrink-0 ml-8 w-3 h-3.5 bg-white/10 animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </PageLayout>
+  );
+}
 
 function Sets() {
   const playCounts = Route.useLoaderData();

@@ -19,3 +19,4 @@ apps/*/app.config.timestamp_*.js
 # Wrangler local dev state
 .wrangler/
 
+CLAUDE.local.md

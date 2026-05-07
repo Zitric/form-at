@@ -51,11 +51,11 @@ export const Route = createRootRoute({
         property: "og:description",
         content: "Glasgow techno collective. Analog soul in a digital world.",
       },
-      { property: "og:image", content: "https://form-at-web.pages.dev/icon-512.png" },
+      { property: "og:image", content: "https://formatglasgow.com/icon-512.png" },
       { property: "og:image:width", content: "512" },
       { property: "og:image:height", content: "512" },
       { property: "og:image:alt", content: "Form:at logo" },
-      { property: "og:url", content: "https://form-at-web.pages.dev" },
+      { property: "og:url", content: "https://formatglasgow.com" },
       { property: "og:locale", content: "en_GB" },
 
       // Twitter / X
@@ -65,7 +65,7 @@ export const Route = createRootRoute({
         name: "twitter:description",
         content: "Glasgow techno collective. Analog soul in a digital world.",
       },
-      { name: "twitter:image", content: "https://form-at-web.pages.dev/icon-512.png" },
+      { name: "twitter:image", content: "https://formatglasgow.com/icon-512.png" },
       { name: "twitter:image:alt", content: "Form:at logo" },
 
       // iOS — fullscreen PWA behaviour when launched from home screen
