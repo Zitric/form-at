@@ -32,6 +32,7 @@ export const Route = createFileRoute("/sets/")({
       return {} as Record<string, number>;
     }
   },
+  staleTime: 5 * 60 * 1000, // play counts are slow-changing — reuse for 5 min
   pendingMs: 0,
   pendingComponent: SetsSkeleton,
   component: Sets,
