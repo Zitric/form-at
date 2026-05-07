@@ -12,11 +12,9 @@ interface WaveformProps {
 const BAR_W = 2;
 const BAR_GAP = 1;
 
-function drawBars(canvas: HTMLCanvasElement, peaks: number[], color: string) {
-  const dpr = window.devicePixelRatio || 1;
-  const w = canvas.offsetWidth;
-  const h = canvas.offsetHeight;
+function drawBars(canvas: HTMLCanvasElement, w: number, h: number, peaks: number[], color: string) {
   if (!w || !h) return;
+  const dpr = window.devicePixelRatio || 1;
 
   canvas.width = w * dpr;
   canvas.height = h * dpr;
@@ -51,8 +49,10 @@ export function Waveform({ peaks, currentTime, duration, onSeek, disabled }: Wav
     if (!bg || !fg || !container) return;
 
     const redraw = () => {
-      drawBars(bg, peaks, colors.purple);
-      drawBars(fg, peaks, colors.gold);
+      const w = container.offsetWidth;
+      const h = container.offsetHeight;
+      drawBars(bg, w, h, peaks, colors.purple);
+      drawBars(fg, w, h, peaks, colors.gold);
     };
 
     redraw();
