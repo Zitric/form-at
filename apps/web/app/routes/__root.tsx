@@ -85,8 +85,30 @@ export const Route = createRootRoute({
     links: [
       { rel: "icon", href: "/logo.png", type: "image/png" },
       { rel: "apple-touch-icon", href: "/icon-192.png" },
-      { rel: "preload", href: "/fonts/space-mono-400.woff2", as: "font", type: "font/woff2" },
-      { rel: "preload", href: "/fonts/space-mono-700.woff2", as: "font", type: "font/woff2" },
+      // Critical above-the-fold image — preload to avoid black flash before mix-blend-screen kicks in
+      { rel: "preload", href: "/wordmark.png", as: "image", fetchPriority: "high" },
+      // crossOrigin is REQUIRED on font preloads — without it the browser fetches twice
+      {
+        rel: "preload",
+        href: "/fonts/space-mono-400.woff2",
+        as: "font",
+        type: "font/woff2",
+        crossOrigin: "anonymous",
+      },
+      {
+        rel: "preload",
+        href: "/fonts/space-mono-700.woff2",
+        as: "font",
+        type: "font/woff2",
+        crossOrigin: "anonymous",
+      },
+      {
+        rel: "preload",
+        href: "/fonts/bedstead-condensed.woff2",
+        as: "font",
+        type: "font/woff2",
+        crossOrigin: "anonymous",
+      },
       { rel: "manifest", href: "/manifest.json" },
     ],
     scripts: [
@@ -101,9 +123,8 @@ const fontCSS = `
 @font-face{font-family:"Space Mono";font-style:normal;font-weight:400;font-display:block;src:url("/fonts/space-mono-400.woff2") format("woff2")}
 @font-face{font-family:"Space Mono";font-style:normal;font-weight:700;font-display:block;src:url("/fonts/space-mono-700.woff2") format("woff2")}
 @font-face{font-family:"Space Mono";font-style:italic;font-weight:400;font-display:block;src:url("/fonts/space-mono-400-italic.woff2") format("woff2")}
-@font-face{font-family:"Bedstead";font-style:normal;font-weight:400;font-display:block;src:url("/fonts/bedstead.otf") format("opentype")}
-@font-face{font-family:"Bedstead Condensed";font-style:normal;font-weight:400;font-display:block;src:url("/fonts/bedstead-condensed.otf") format("opentype")}
-@font-face{font-family:"Bedstead";font-stretch:semi-condensed;font-style:normal;font-weight:400;font-display:block;src:url("/fonts/bedstead-semicondensed.otf") format("opentype")}
+@font-face{font-family:"Bedstead";font-style:normal;font-weight:400;font-display:block;src:url("/fonts/bedstead.woff2") format("woff2")}
+@font-face{font-family:"Bedstead Condensed";font-style:normal;font-weight:400;font-display:block;src:url("/fonts/bedstead-condensed.woff2") format("woff2")}
 *,*::before,*::after{box-sizing:border-box}
 html{line-height:1.5;-webkit-text-size-adjust:100%}
 body{margin:0;font-family:"Space Mono",ui-monospace,monospace;background:#161615;color:#fff}

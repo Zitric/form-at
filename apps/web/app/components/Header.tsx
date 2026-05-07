@@ -9,6 +9,8 @@ export function Header() {
           <img
             src="/wordmark.png"
             alt="Form:at"
+            fetchPriority="high"
+            decoding="sync"
             className="w-[475px] -translate-x-[17.32%] -translate-y-[45.6%] mix-blend-screen"
           />
         </div>
