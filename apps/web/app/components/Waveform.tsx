@@ -12,10 +12,7 @@ interface WaveformProps {
 const BAR_W = 2;
 const BAR_GAP = 1;
 
-function draw(canvas: HTMLCanvasElement, peaks: number[], currentTime: number, duration: number) {
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-
+function drawBars(canvas: HTMLCanvasElement, peaks: number[], color: string) {
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.offsetWidth;
   const h = canvas.offsetHeight;
@@ -23,35 +20,54 @@ function draw(canvas: HTMLCanvasElement, peaks: number[], currentTime: number, d
 
   canvas.width = w * dpr;
   canvas.height = h * dpr;
+  canvas.style.width = `${w}px`;
+  canvas.style.height = `${h}px`;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
   ctx.scale(dpr, dpr);
 
-  const progressX = duration > 0 ? (currentTime / duration) * w : 0;
   const step = BAR_W + BAR_GAP;
   const count = Math.floor(w / step);
-
+  ctx.fillStyle = color;
   for (let i = 0; i < count; i++) {
     const peak = peaks[Math.floor((i / count) * peaks.length)] ?? 0;
     const barH = Math.max(2, peak * h * 0.9);
-    const x = i * step;
-    ctx.fillStyle = x < progressX ? colors.gold : colors.purple;
-    ctx.fillRect(x, (h - barH) / 2, BAR_W, barH);
+    ctx.fillRect(i * step, (h - barH) / 2, BAR_W, barH);
   }
 }
 
 export function Waveform({ peaks, currentTime, duration, onSeek, disabled }: WaveformProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const bgRef = useRef<HTMLCanvasElement>(null);
+  const fgRef = useRef<HTMLCanvasElement>(null);
+  const clipRef = useRef<HTMLDivElement>(null);
 
+  // Redraw bars only when peaks change or the container resizes
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const redraw = () => draw(canvas, peaks, currentTime, duration);
+    const bg = bgRef.current;
+    const fg = fgRef.current;
+    const container = containerRef.current;
+    if (!bg || !fg || !container) return;
+
+    const redraw = () => {
+      drawBars(bg, peaks, colors.purple);
+      drawBars(fg, peaks, colors.gold);
+    };
+
     redraw();
     const ro = new ResizeObserver(redraw);
-    ro.observe(canvas);
+    ro.observe(container);
     return () => ro.disconnect();
-  }, [peaks, currentTime, duration]);
+  }, [peaks]);
 
-  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Progress: one DOM style write — no canvas work at all
+  useEffect(() => {
+    if (!clipRef.current) return;
+    clipRef.current.style.width = duration > 0 ? `${(currentTime / duration) * 100}%` : "0%";
+  }, [currentTime, duration]);
+
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (disabled || !duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
     onSeek(((e.clientX - rect.left) / rect.width) * duration);
@@ -64,11 +80,11 @@ export function Waveform({ peaks, currentTime, duration, onSeek, disabled }: Wav
   };
 
   return (
-    <canvas
-      ref={canvasRef}
+    <div
+      ref={containerRef}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
-      style={{ width: "100%", height: "40px" }}
+      style={{ position: "relative", flex: 1, height: "40px" }}
       className={disabled ? "cursor-not-allowed opacity-30" : "cursor-pointer"}
       aria-label="Seek"
       role="slider"
@@ -76,6 +92,24 @@ export function Waveform({ peaks, currentTime, duration, onSeek, disabled }: Wav
       aria-valuemax={duration}
       aria-valuenow={currentTime}
       tabIndex={0}
-    />
+    >
+      {/* Purple bars — drawn once on peaks/resize */}
+      <canvas ref={bgRef} style={{ position: "absolute", inset: 0 }} />
+
+      {/* Gold bars — same canvas content, clipped to played width via CSS */}
+      <div
+        ref={clipRef}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          bottom: 0,
+          overflow: "hidden",
+          width: "0%",
+        }}
+      >
+        <canvas ref={fgRef} style={{ position: "absolute", top: 0, left: 0 }} />
+      </div>
+    </div>
   );
 }
