@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { RefObject, SyntheticEvent } from "react";
+import type { RefObject } from "react";
 import { type MusicSet, sets } from "~/data/sets";
 import { useStore } from "~/store";
 
@@ -9,16 +9,12 @@ export type AudioProps = {
   onLoadStart: () => void;
   onCanPlay: () => void;
   onError: () => void;
-  onTimeUpdate: (e: SyntheticEvent<HTMLAudioElement>) => void;
   onEnded: () => void;
 };
 
 export type AudioPlayerResult = {
   loading: boolean;
   error: boolean;
-  currentTime: number;
-  duration: number;
-  peaks: number[];
   togglePlay: () => void;
   seek: (time: number) => void;
   audioProps: AudioProps;
@@ -33,24 +29,12 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [peaks, setPeaks] = useState<number[]>([]);
 
   const playStartRef = useRef<number | null>(null);
   const nowPlayingRef = useRef<MusicSet | null>(nowPlaying);
   useEffect(() => {
     nowPlayingRef.current = nowPlaying;
   }, [nowPlaying]);
-
-  // Sync saved position after client hydration — useState(0) avoids SSR mismatch
-  useEffect(() => {
-    const { nowPlaying: np, positions } = useStore.getState();
-    if (np) {
-      const saved = positions[np.id] ?? 0;
-      if (saved > 0) setCurrentTime(saved);
-    }
-  }, []);
 
   // useCallback required — React Compiler cannot memoize functions that mutate refs
   const sendPlay = useCallback((track: MusicSet | null) => {
@@ -73,17 +57,6 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
       ),
     );
   }, []);
-
-  useEffect(() => {
-    if (!nowPlaying?.peaks) {
-      setPeaks([]);
-      return;
-    }
-    fetch(nowPlaying.peaks)
-      .then((r) => r.json())
-      .then((d) => setPeaks((d as { peaks: number[] }).peaks))
-      .catch(() => setPeaks([]));
-  }, [nowPlaying?.peaks]);
 
   useEffect(() => {
     if (!nowPlaying) return;
@@ -125,8 +98,6 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     setLoading(true);
     setError(false);
     setIsPlaying(false);
-    setCurrentTime(savedPos > 0 ? savedPos : 0);
-    setDuration(0);
 
     audio.src = nowPlaying.src;
     audio.load();
@@ -135,7 +106,6 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
       if (cancelled) return;
       if (savedPos > 0) {
         audio.currentTime = savedPos;
-        setCurrentTime(savedPos);
         setLoading(false);
         return;
       }
@@ -191,7 +161,6 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     navigator.mediaSession.setActionHandler("seekto", (details) => {
       if (details.seekTime !== undefined && audioRef.current) {
         audioRef.current.currentTime = details.seekTime;
-        setCurrentTime(details.seekTime);
       }
     });
     navigator.mediaSession.setActionHandler("previoustrack", () => {
@@ -204,19 +173,22 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     });
   }, [nowPlaying, setIsPlaying, audioRef]);
 
-  const togglePlay = () => {
+  const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || loading) return;
     if (useStore.getState().isPlaying) audio.pause();
     else audio.play().catch(() => {});
-  };
+  }, [loading, audioRef]);
 
-  const seek = (time: number) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.currentTime = time;
-    setCurrentTime(time);
-  };
+  // seek sets audio position only; PlayerSeeker picks up the change via the 'seeked' event
+  const seek = useCallback(
+    (time: number) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      audio.currentTime = time;
+    },
+    [audioRef],
+  );
 
   const audioProps: AudioProps = {
     onPlay: () => {
@@ -237,14 +209,9 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
       setError(true);
       setIsPlaying(false);
     },
-    onTimeUpdate: (e: SyntheticEvent<HTMLAudioElement>) => {
-      setCurrentTime(e.currentTarget.currentTime);
-      setDuration(e.currentTarget.duration || 0);
-    },
     onEnded: () => {
       sendPlay(nowPlaying);
       setIsPlaying(false);
-      setCurrentTime(0);
       if (nowPlaying) setLastPosition(nowPlaying.id, 0);
       const i = sets.findIndex((s) => s.id === nowPlaying?.id);
       const nextSet = i < sets.length - 1 ? sets[i + 1] : null;
@@ -252,5 +219,5 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     },
   };
 
-  return { loading, error, currentTime, duration, peaks, togglePlay, seek, audioProps };
+  return { loading, error, togglePlay, seek, audioProps };
 }
