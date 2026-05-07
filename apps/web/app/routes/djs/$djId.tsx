@@ -24,6 +24,7 @@ function DJDetail() {
   const nowPlaying = useStore((s) => s.nowPlaying);
   const isPlaying = useStore((s) => s.isPlaying);
   const loadTrack = useStore((s) => s.loadTrack);
+  const setIsPlaying = useStore((s) => s.setIsPlaying);
 
   return (
     <PageLayout footer="[ end_of_transmission ]">
@@ -62,7 +63,8 @@ function DJDetail() {
             <ul className="space-y-px">
               {sets.map((set) => {
                 if (!set) return null;
-                const isThisPlaying = nowPlaying?.id === set.id && isPlaying;
+                const isLoaded = nowPlaying?.id === set.id;
+                const isThisPlaying = isLoaded && isPlaying;
                 return (
                   <li key={set.id}>
                     <div className="flex items-center justify-between px-4 py-4 border border-grey/10 group">
@@ -82,7 +84,7 @@ function DJDetail() {
                         </Link>
                         <button
                           type="button"
-                          onClick={() => loadTrack(set)}
+                          onClick={() => (isLoaded ? setIsPlaying(!isPlaying) : loadTrack(set))}
                           className={`text-xs transition-colors cursor-pointer ${isThisPlaying ? "text-gold" : "text-grey hover:text-gold"}`}
                         >
                           {isThisPlaying ? "⏸" : "▶"}

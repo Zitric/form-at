@@ -39,7 +39,9 @@ function SetDetail() {
   const nowPlaying = useStore((s) => s.nowPlaying);
   const isPlaying = useStore((s) => s.isPlaying);
   const loadTrack = useStore((s) => s.loadTrack);
-  const isThisPlaying = nowPlaying?.id === set.id && isPlaying;
+  const setIsPlaying = useStore((s) => s.setIsPlaying);
+  const isLoaded = nowPlaying?.id === set.id;
+  const isThisPlaying = isLoaded && isPlaying;
 
   const metaRows: Array<[string, string]> = (
     [
@@ -95,7 +97,7 @@ function SetDetail() {
 
         <button
           type="button"
-          onClick={() => loadTrack(set)}
+          onClick={() => (isLoaded ? setIsPlaying(!isPlaying) : loadTrack(set))}
           className="inline-flex items-center gap-4 border border-grey/20 px-6 py-3 text-sm sm:text-base hover:border-purple hover:text-white transition-colors"
         >
           <span className="text-gold">{isThisPlaying ? "⏸" : "▶"}</span>

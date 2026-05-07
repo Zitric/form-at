@@ -10,17 +10,17 @@ export const useStore = create<AppStore>()(
     name: "format-player",
     partialize: (state) => ({
       nowPlayingId: state.nowPlaying?.id ?? null,
-      lastPositionSeconds: state.lastPositionSeconds,
+      positions: state.positions,
     }),
     merge: (persisted, current) => {
-      const { nowPlayingId, lastPositionSeconds } = persisted as {
+      const { nowPlayingId, positions } = persisted as {
         nowPlayingId: string | null;
-        lastPositionSeconds: number;
+        positions: Record<string, number>;
       };
       return {
         ...current,
         nowPlaying: nowPlayingId ? (getSet(nowPlayingId) ?? null) : null,
-        lastPositionSeconds: lastPositionSeconds ?? 0,
+        positions: positions ?? {},
       };
     },
   }),

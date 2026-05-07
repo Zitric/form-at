@@ -1,7 +1,8 @@
-import { HeadContent, Link, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
+import { HeadContent, Link, Scripts, createRootRoute } from "@tanstack/react-router";
 import { BottomNav } from "~/components/BottomNav";
 import { PageLayout } from "~/components/PageLayout";
 import { Player } from "~/components/Player";
+import { SwipeNavigator } from "~/components/SwipeNavigator";
 import { TerminalRow } from "~/components/TerminalRow";
 import { Body } from "~/components/Text";
 import "~/styles/global.css";
@@ -123,7 +124,7 @@ function Root() {
         <HeadContent />
       </head>
       <body className="bg-black text-white font-mono antialiased">
-        <Outlet />
+        <SwipeNavigator />
         <Player />
         <BottomNav />
         <Scripts />

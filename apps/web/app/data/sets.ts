@@ -14,7 +14,7 @@ export type MusicSet = {
 // Add your sets here. src should be the public Cloudflare R2 URL for the MP3.
 export const sets: MusicSet[] = [
   {
-    id: "signal-002-til",
+    id: "set-002-til",
     title: "FORM:AT 002",
     artist: "t.i.l.",
     date: "2026-04-24",
@@ -26,7 +26,7 @@ export const sets: MusicSet[] = [
     peaks: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20t.i.l.json",
   },
   {
-    id: "signal-002-hubey",
+    id: "set-002-hubey",
     title: "FORM:AT 002",
     artist: "Hubey",
     date: "2026-04-24",
@@ -38,7 +38,7 @@ export const sets: MusicSet[] = [
     peaks: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20hubey.json",
   },
   {
-    id: "signal-002-julz-lever",
+    id: "set-002-julz-lever",
     title: "FORM:AT 002",
     artist: "Julz Lever",
     date: "2026-04-24",

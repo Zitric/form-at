@@ -4,17 +4,18 @@ import type { MusicSet } from "~/data/sets";
 export type PlayerSlice = {
   nowPlaying: MusicSet | null;
   isPlaying: boolean;
-  lastPositionSeconds: number;
+  positions: Record<string, number>;
   loadTrack: (set: MusicSet) => void;
   setIsPlaying: (playing: boolean) => void;
-  setLastPosition: (seconds: number) => void;
+  setLastPosition: (setId: string, seconds: number) => void;
 };
 
 export const createPlayerSlice: StateCreator<PlayerSlice, [], [], PlayerSlice> = (set) => ({
   nowPlaying: null,
   isPlaying: false,
-  lastPositionSeconds: 0,
-  loadTrack: (track) => set({ nowPlaying: track, isPlaying: false, lastPositionSeconds: 0 }),
+  positions: {},
+  loadTrack: (track) => set({ nowPlaying: track, isPlaying: false }),
   setIsPlaying: (playing) => set({ isPlaying: playing }),
-  setLastPosition: (seconds) => set({ lastPositionSeconds: seconds }),
+  setLastPosition: (setId, seconds) =>
+    set((s) => ({ positions: { ...s.positions, [setId]: seconds } })),
 });

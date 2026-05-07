@@ -40,6 +40,7 @@ function Sets() {
   const nowPlaying = useStore((s) => s.nowPlaying);
   const isPlaying = useStore((s) => s.isPlaying);
   const loadTrack = useStore((s) => s.loadTrack);
+  const setIsPlaying = useStore((s) => s.setIsPlaying);
 
   const groups = sets.reduce<Record<string, typeof sets>>((acc, set) => {
     if (!acc[set.title]) acc[set.title] = [];
@@ -69,7 +70,8 @@ function Sets() {
               </Label>
               <ul>
                 {groupSets.map((set) => {
-                  const isThisPlaying = nowPlaying?.id === set.id && isPlaying;
+                  const isLoaded = nowPlaying?.id === set.id;
+                  const isThisPlaying = isLoaded && isPlaying;
                   const plays = playCounts[set.id] ?? 0;
                   return (
                     <li
@@ -94,7 +96,7 @@ function Sets() {
                       </Link>
                       <button
                         type="button"
-                        onClick={() => loadTrack(set)}
+                        onClick={() => (isLoaded ? setIsPlaying(!isPlaying) : loadTrack(set))}
                         aria-label={`Play ${set.artist}`}
                         className="shrink-0 ml-8 text-grey hover:text-gold transition-colors cursor-pointer text-sm"
                       >
