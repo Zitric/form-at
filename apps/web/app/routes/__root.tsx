@@ -1,10 +1,12 @@
 import { HeadContent, Link, Scripts, createRootRoute } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { BottomNav } from "~/components/BottomNav";
 import { PageLayout } from "~/components/PageLayout";
 import { Player } from "~/components/Player";
 import { SwipeNavigator } from "~/components/SwipeNavigator";
 import { TerminalRow } from "~/components/TerminalRow";
 import { Body } from "~/components/Text";
+import { useStore } from "~/store";
 import "~/styles/global.css";
 
 function RootNotFound() {
@@ -85,9 +87,7 @@ export const Route = createRootRoute({
     links: [
       { rel: "icon", href: "/logo.png", type: "image/png" },
       { rel: "apple-touch-icon", href: "/icon-192.png" },
-      // Critical above-the-fold image — preload to avoid black flash before mix-blend-screen kicks in
       { rel: "preload", href: "/wordmark.png", as: "image", fetchPriority: "high" },
-      // crossOrigin is REQUIRED on font preloads — without it the browser fetches twice
       {
         rel: "preload",
         href: "/fonts/space-mono-400.woff2",
@@ -136,15 +136,26 @@ button,input{font-family:inherit;font-size:inherit}
 img{display:block;max-width:100%}
 `.trim();
 
+// Triggers persist rehydration after mount so SSR and the first client render
+// match exactly (both unhydrated). Without this, the saved track flips in during
+// React hydration and causes a visible re-render.
+function HydrateStore() {
+  useEffect(() => {
+    useStore.persist.rehydrate();
+  }, []);
+  return null;
+}
+
 function Root() {
   return (
     <html lang="en">
       <head>
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: font CSS must be inlined to block FOUT; suppressHydrationWarning prevents React from touching it during hydration */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: critical font + reset CSS must be inlined */}
         <style dangerouslySetInnerHTML={{ __html: fontCSS }} suppressHydrationWarning />
         <HeadContent />
       </head>
       <body className="bg-black text-white font-mono antialiased">
+        <HydrateStore />
         <SwipeNavigator />
         <Player />
         <BottomNav />

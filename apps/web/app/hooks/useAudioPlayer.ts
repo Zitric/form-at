@@ -88,14 +88,22 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     return () => window.removeEventListener("beforeunload", handleUnload);
   }, [sendPlay, audioRef]);
 
+  // True until a track has been mounted via this effect once. The very first
+  // mount is the persist-rehydration restore — silent, paused, with a saved
+  // position. We skip the loading flash for that case so the player doesn't
+  // flicker through a "..." state on every reload.
+  const isInitialRestore = useRef(true);
+
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !nowPlaying) return;
 
     let cancelled = false;
     const savedPos = useStore.getState().positions[nowPlaying.id] ?? 0;
+    const isRestore = isInitialRestore.current && savedPos > 0;
+    isInitialRestore.current = false;
 
-    setLoading(true);
+    if (!isRestore) setLoading(true);
     setError(false);
     setIsPlaying(false);
 
