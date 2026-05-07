@@ -1,12 +1,12 @@
 import { NavLinks } from "~/components/NavLinks";
-import { usePlayer } from "~/contexts/player-context";
+import { useStore } from "~/store";
 
 export function BottomNav() {
-  const { nowPlaying } = usePlayer();
+  const nowPlaying = useStore((s) => s.nowPlaying);
 
   return (
     <div
-      className="sm:hidden fixed inset-x-0 z-40 bg-navy border-t border-white/10 font-mono"
+      className="sm:hidden fixed inset-x-0 z-40 bg-black border-t border-white/10 font-mono"
       style={{
         bottom: nowPlaying ? "48px" : "0px",
         transition: "bottom 300ms ease-in-out",

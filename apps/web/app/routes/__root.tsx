@@ -4,7 +4,6 @@ import { PageLayout } from "~/components/PageLayout";
 import { Player } from "~/components/Player";
 import { TerminalRow } from "~/components/TerminalRow";
 import { Body } from "~/components/Text";
-import { PlayerProvider } from "~/contexts/player-context";
 import "~/styles/global.css";
 
 function RootNotFound() {
@@ -123,12 +122,10 @@ function Root() {
         <style dangerouslySetInnerHTML={{ __html: fontCSS }} suppressHydrationWarning />
         <HeadContent />
       </head>
-      <body className="bg-navy text-white font-mono antialiased">
-        <PlayerProvider>
-          <Outlet />
-          <Player />
-          <BottomNav />
-        </PlayerProvider>
+      <body className="bg-black text-white font-mono antialiased">
+        <Outlet />
+        <Player />
+        <BottomNav />
         <Scripts />
       </body>
     </html>

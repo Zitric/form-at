@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BrandTitle } from "~/components/BrandTitle";
 import { Waveform } from "~/components/Waveform";
-import { usePlayer } from "~/contexts/player-context";
 import type { MusicSet } from "~/data/sets";
+import { useStore } from "~/store";
 
 const fmt = (s: number) => {
   if (!Number.isFinite(s)) return "0:00";
@@ -12,12 +12,15 @@ const fmt = (s: number) => {
 };
 
 export function Player() {
-  const { nowPlaying } = usePlayer();
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const setIsPlaying = useStore((s) => s.setIsPlaying);
+  const isPlaying = useStore((s) => s.isPlaying);
+  const setLastPosition = useStore((s) => s.setLastPosition);
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
+  const [currentTime, setCurrentTime] = useState(() => useStore.getState().lastPositionSeconds);
   const [duration, setDuration] = useState(0);
   const [peaks, setPeaks] = useState<number[]>([]);
 
@@ -61,7 +64,13 @@ export function Player() {
   }, [nowPlaying?.peaks]);
 
   useEffect(() => {
-    const handleUnload = () => sendPlay(nowPlayingRef.current);
+    const handleUnload = () => {
+      sendPlay(nowPlayingRef.current);
+      const audio = audioRef.current;
+      if (audio && !audio.paused && audio.currentTime > 0) {
+        useStore.getState().setLastPosition(Math.floor(audio.currentTime));
+      }
+    };
     window.addEventListener("beforeunload", handleUnload);
     return () => window.removeEventListener("beforeunload", handleUnload);
   }, [sendPlay]);
@@ -72,10 +81,12 @@ export function Player() {
 
     let cancelled = false;
 
+    const savedPos = useStore.getState().lastPositionSeconds;
+
     setLoading(true);
     setError(false);
-    setPlaying(false);
-    setCurrentTime(0);
+    setIsPlaying(false);
+    setCurrentTime(savedPos > 0 ? savedPos : 0);
     setDuration(0);
 
     audio.src = nowPlaying.src;
@@ -83,10 +94,16 @@ export function Player() {
 
     const playWhenReady = () => {
       if (cancelled) return;
+      if (savedPos > 0) {
+        audio.currentTime = savedPos;
+        setCurrentTime(savedPos);
+        setLoading(false);
+        return;
+      }
       audio
         .play()
         .then(() => {
-          setPlaying(true);
+          setIsPlaying(true);
           setLoading(false);
         })
         .catch(() => setLoading(false));
@@ -103,7 +120,7 @@ export function Player() {
       audio.removeEventListener("canplay", playWhenReady);
       sendPlay(nowPlaying);
     };
-  }, [nowPlaying, sendPlay]);
+  }, [nowPlaying, sendPlay, setIsPlaying]);
 
   useEffect(() => {
     if (!nowPlaying || !("mediaSession" in navigator)) return;
@@ -118,11 +135,11 @@ export function Player() {
 
     navigator.mediaSession.setActionHandler("play", () => {
       audioRef.current?.play();
-      setPlaying(true);
+      setIsPlaying(true);
     });
     navigator.mediaSession.setActionHandler("pause", () => {
       audioRef.current?.pause();
-      setPlaying(false);
+      setIsPlaying(false);
     });
     navigator.mediaSession.setActionHandler("seekto", (details) => {
       if (details.seekTime !== undefined && audioRef.current) {
@@ -130,12 +147,12 @@ export function Player() {
         setCurrentTime(details.seekTime);
       }
     });
-  }, [nowPlaying]);
+  }, [nowPlaying, setIsPlaying]);
 
   const togglePlay = () => {
     const audio = audioRef.current;
     if (!audio || loading) return;
-    if (playing) {
+    if (useStore.getState().isPlaying) {
       audio.pause();
     } else {
       audio.play().catch(() => {});
@@ -154,10 +171,10 @@ export function Player() {
       type="button"
       onClick={togglePlay}
       disabled={loading || error}
-      aria-label={playing ? "Pause" : "Play"}
+      aria-label={isPlaying ? "Pause" : "Play"}
       className="shrink-0 w-5 text-gold disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer text-sm"
     >
-      {loading ? <span className="animate-pulse opacity-60">…</span> : playing ? "⏸" : "▶"}
+      {loading ? <span className="animate-pulse opacity-60">…</span> : isPlaying ? "⏸" : "▶"}
     </button>
   );
 
@@ -168,19 +185,20 @@ export function Player() {
         ref={audioRef}
         onPlay={() => {
           playStartRef.current ??= Date.now();
-          setPlaying(true);
+          setIsPlaying(true);
           setLoading(false);
         }}
         onPause={() => {
           sendPlay(nowPlaying);
-          setPlaying(false);
+          setIsPlaying(false);
+          setLastPosition(Math.floor(audioRef.current?.currentTime ?? 0));
         }}
         onLoadStart={() => setLoading(true)}
         onCanPlay={() => setLoading(false)}
         onError={() => {
           setLoading(false);
           setError(true);
-          setPlaying(false);
+          setIsPlaying(false);
         }}
         onTimeUpdate={(e) => {
           setCurrentTime(e.currentTarget.currentTime);
@@ -188,14 +206,15 @@ export function Player() {
         }}
         onEnded={() => {
           sendPlay(nowPlaying);
-          setPlaying(false);
+          setIsPlaying(false);
           setCurrentTime(0);
+          setLastPosition(0);
         }}
       />
 
       {/* Mobile player — always in DOM, animates from height 0 when a track loads */}
       <div
-        className={`sm:hidden fixed bottom-0 inset-x-0 z-30 bg-navy grid ${nowPlaying ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+        className={`sm:hidden fixed bottom-0 inset-x-0 z-30 bg-black grid ${nowPlaying ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
         style={{ transition: "grid-template-rows 300ms ease-in-out" }}
       >
         <div className="overflow-hidden">
@@ -231,7 +250,7 @@ export function Player() {
 
       {/* Desktop player */}
       {nowPlaying && (
-        <div className="hidden sm:block fixed bottom-0 inset-x-0 z-30 bg-navy border-t border-white/10 px-4 py-3 font-mono">
+        <div className="hidden sm:block fixed bottom-0 inset-x-0 z-30 bg-black border-t border-white/10 px-4 py-3 font-mono">
           <div className="flex items-center gap-4 max-w-2xl mx-auto w-full">
             {playBtn}
 
@@ -240,7 +259,7 @@ export function Player() {
                 › signal:{" "}
                 {error ? (
                   <span className="text-red-400">[ error ]</span>
-                ) : playing ? (
+                ) : isPlaying ? (
                   <span className="text-gold">[ live ]</span>
                 ) : (
                   <span>[ standby ]</span>

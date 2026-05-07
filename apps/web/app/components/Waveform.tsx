@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { colors } from "~/styles/tokens";
 
 interface WaveformProps {
   peaks: number[];
@@ -32,7 +33,7 @@ function draw(canvas: HTMLCanvasElement, peaks: number[], currentTime: number, d
     const peak = peaks[Math.floor((i / count) * peaks.length)] ?? 0;
     const barH = Math.max(2, peak * h * 0.9);
     const x = i * step;
-    ctx.fillStyle = x < progressX ? "#c8921a" : "rgba(255,255,255,0.2)";
+    ctx.fillStyle = x < progressX ? colors.gold : colors.purple;
     ctx.fillRect(x, (h - barH) / 2, BAR_W, barH);
   }
 }

@@ -5,7 +5,7 @@ export function Header() {
   return (
     <header className="flex items-center justify-center sm:justify-between mb-12">
       <Link to="/" className="opacity-60 hover:opacity-100 transition-opacity shrink-0">
-        <div className="overflow-hidden w-[310px] h-[44px] bg-navy">
+        <div className="overflow-hidden w-[310px] h-[44px] bg-black">
           <img
             src="/wordmark.png"
             alt="Form:at"

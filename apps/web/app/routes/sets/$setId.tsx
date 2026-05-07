@@ -3,10 +3,10 @@ import { BrandTitle } from "~/components/BrandTitle";
 import { PageLayout } from "~/components/PageLayout";
 import { TerminalRow } from "~/components/TerminalRow";
 import { Body, Label } from "~/components/Text";
-import { usePlayer } from "~/contexts/player-context";
 import { fetchSetStats } from "~/data/set-stats";
 import type { SetStats } from "~/data/set-stats";
 import { getSet } from "~/data/sets";
+import { useStore } from "~/store";
 import { fmtDate, fmtDuration } from "~/utils/fmt";
 
 export const Route = createFileRoute("/sets/$setId")({
@@ -36,8 +36,10 @@ function buildStatsRows(stats: SetStats): Array<[string, string]> {
 
 function SetDetail() {
   const { set, stats } = Route.useLoaderData();
-  const { nowPlaying, loadTrack } = usePlayer();
-  const isPlaying = nowPlaying?.id === set.id;
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const isPlaying = useStore((s) => s.isPlaying);
+  const loadTrack = useStore((s) => s.loadTrack);
+  const isThisPlaying = nowPlaying?.id === set.id && isPlaying;
 
   const metaRows: Array<[string, string]> = (
     [
@@ -65,7 +67,9 @@ function SetDetail() {
           ))}
           <TerminalRow
             label="status"
-            value={isPlaying ? <span className="text-gold">[ live ]</span> : <span>[ ready ]</span>}
+            value={
+              isThisPlaying ? <span className="text-gold">[ live ]</span> : <span>[ ready ]</span>
+            }
           />
 
           {statsRows.length > 0 && (
@@ -94,8 +98,8 @@ function SetDetail() {
           onClick={() => loadTrack(set)}
           className="inline-flex items-center gap-4 border border-grey/20 px-6 py-3 text-sm sm:text-base hover:border-purple hover:text-white transition-colors"
         >
-          <span className="text-gold">{isPlaying ? "⏸" : "▶"}</span>
-          {isPlaying ? "now_playing" : "play_set"}
+          <span className="text-gold">{isThisPlaying ? "⏸" : "▶"}</span>
+          {isThisPlaying ? "now_playing" : "play_set"}
         </button>
       </div>
     </PageLayout>

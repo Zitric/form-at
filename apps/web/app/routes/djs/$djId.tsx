@@ -3,10 +3,10 @@ import { BrandTitle } from "~/components/BrandTitle";
 import { PageLayout } from "~/components/PageLayout";
 import { TerminalRow } from "~/components/TerminalRow";
 import { Body, Label } from "~/components/Text";
-import { usePlayer } from "~/contexts/player-context";
 import { getDJ } from "~/data/djs";
 import { events } from "~/data/events";
 import { getSet } from "~/data/sets";
+import { useStore } from "~/store";
 
 export const Route = createFileRoute("/djs/$djId")({
   loader: ({ params }) => {
@@ -21,7 +21,9 @@ export const Route = createFileRoute("/djs/$djId")({
 
 function DJDetail() {
   const { dj, djEvents, sets } = Route.useLoaderData();
-  const { nowPlaying, loadTrack } = usePlayer();
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const isPlaying = useStore((s) => s.isPlaying);
+  const loadTrack = useStore((s) => s.loadTrack);
 
   return (
     <PageLayout footer="[ end_of_transmission ]">
@@ -60,7 +62,7 @@ function DJDetail() {
             <ul className="space-y-px">
               {sets.map((set) => {
                 if (!set) return null;
-                const isPlaying = nowPlaying?.id === set.id;
+                const isThisPlaying = nowPlaying?.id === set.id && isPlaying;
                 return (
                   <li key={set.id}>
                     <div className="flex items-center justify-between px-4 py-4 border border-grey/10 group">
@@ -81,9 +83,9 @@ function DJDetail() {
                         <button
                           type="button"
                           onClick={() => loadTrack(set)}
-                          className={`text-xs transition-colors cursor-pointer ${isPlaying ? "text-gold" : "text-grey hover:text-gold"}`}
+                          className={`text-xs transition-colors cursor-pointer ${isThisPlaying ? "text-gold" : "text-grey hover:text-gold"}`}
                         >
-                          {isPlaying ? "⏸" : "▶"}
+                          {isThisPlaying ? "⏸" : "▶"}
                         </button>
                       </div>
                     </div>

@@ -12,7 +12,7 @@
 
 3. **Cloudflare Web Analytics** — the script is commented out in `__root.tsx`. Add your token from the CF dashboard → Web Analytics and uncomment it.
 
-4. **Set `description` and `duration` fields** — both sets in `sets.ts` are missing these. The detail page and archive list have UI ready for them.
+
 
 5. **Mobile player track info** — title and artist in the bottom bar are `hidden sm:block`. On mobile there is no visible text telling you what is playing.
 

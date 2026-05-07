@@ -3,8 +3,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { BrandTitle } from "~/components/BrandTitle";
 import { PageLayout } from "~/components/PageLayout";
 import { Label } from "~/components/Text";
-import { usePlayer } from "~/contexts/player-context";
 import { sets } from "~/data/sets";
+import { useStore } from "~/store";
 
 const fetchPlayCounts = createServerFn({ method: "GET" }).handler(async ({ context }) => {
   try {
@@ -37,11 +37,14 @@ export const Route = createFileRoute("/sets/")({
 
 function Sets() {
   const playCounts = Route.useLoaderData();
-  const { nowPlaying, loadTrack } = usePlayer();
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const isPlaying = useStore((s) => s.isPlaying);
+  const loadTrack = useStore((s) => s.loadTrack);
 
   const groups = sets.reduce<Record<string, typeof sets>>((acc, set) => {
     if (!acc[set.title]) acc[set.title] = [];
-    acc[set.title].push(set);
+    // biome-ignore lint/style/noNonNullAssertion: initialised on the line above
+    acc[set.title]!.push(set);
     return acc;
   }, {});
 
@@ -66,7 +69,7 @@ function Sets() {
               </Label>
               <ul>
                 {groupSets.map((set) => {
-                  const isPlaying = nowPlaying?.id === set.id;
+                  const isThisPlaying = nowPlaying?.id === set.id && isPlaying;
                   const plays = playCounts[set.id] ?? 0;
                   return (
                     <li
@@ -80,7 +83,7 @@ function Sets() {
                       >
                         <span
                           className={`text-sm sm:text-base transition-colors ${
-                            isPlaying ? "text-gold" : "text-grey group-hover:text-white"
+                            isThisPlaying ? "text-gold" : "text-grey group-hover:text-white"
                           }`}
                         >
                           {set.artist}
@@ -95,7 +98,7 @@ function Sets() {
                         aria-label={`Play ${set.artist}`}
                         className="shrink-0 ml-8 text-grey hover:text-gold transition-colors cursor-pointer text-sm"
                       >
-                        {isPlaying ? "⏸" : "▶"}
+                        {isThisPlaying ? "⏸" : "▶"}
                       </button>
                     </li>
                   );
