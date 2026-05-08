@@ -7,7 +7,7 @@ type TrackBody = {
   listenedSeconds: number;
 };
 
-export const Route = createFileRoute("/api/track")({
+export const Route = createFileRoute("/api/signal")({
   server: {
     handlers: {
       POST: async ({ request, context }) => {

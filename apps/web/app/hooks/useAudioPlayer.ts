@@ -43,7 +43,7 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     playStartRef.current = null;
     if (seconds < 3) return;
     navigator.sendBeacon(
-      "/api/track",
+      "/api/signal",
       new Blob(
         [
           JSON.stringify({
