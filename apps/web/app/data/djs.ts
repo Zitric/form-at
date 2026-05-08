@@ -33,7 +33,7 @@ export const djs: DJ[] = [
   // Residents
   {
     id: "hubey",
-    name: "Hubey",
+    name: "hubey",
     type: "resident",
     bio: "Co-founder of Form:at. Graphic designer and selector. Analog sound for a digital world.",
     photo: "djs/hubey",

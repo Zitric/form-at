@@ -8,8 +8,7 @@ type As = "p" | "span" | "div" | "li" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
 const textVariants = cva("", {
   variants: {
     variant: {
-      heading:
-        "font-display text-white text-[1.375rem] leading-[1.75rem] sm:text-[1.625rem] sm:leading-[2rem]",
+      heading: "font-display t-heading sm:t-heading-md",
       label: "t-label sm:t-label-md",
       body: "t-body sm:t-body-md",
       muted: "t-muted sm:t-muted-md",

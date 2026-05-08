@@ -28,11 +28,11 @@ export const sets: MusicSet[] = [
   {
     id: "set-002-hubey",
     title: "FORM:AT 002",
-    artist: "Hubey",
+    artist: "hubey",
     date: "2026-04-24",
     venue: "Find the red door, Glasgow",
     description:
-      "Hubey is a Glasgow-based techno artist who has been making music for over 20 years. He is known for his unique style of techno that blends elements of acid, house, and techno.",
+      "hubey is a Glasgow-based techno artist who has been making music for over 20 years. He is known for his unique style of techno that blends elements of acid, house, and techno.",
     duration: "1:00:00",
     src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20hubey.mp3",
     peaks: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20hubey.json",
