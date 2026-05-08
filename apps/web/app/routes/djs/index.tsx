@@ -1,6 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { BrandTitle } from "~/components/BrandTitle";
-import { Image } from "~/components/Image";
+import { Card } from "~/components/Card";
 import { PageLayout } from "~/components/PageLayout";
 import { Body, Label, PageTitle } from "~/components/Text";
 import { getGuests, getResidents } from "~/data/djs";
@@ -19,32 +19,32 @@ function DJs() {
       <section>
         <PageTitle>system_architects</PageTitle>
         <ul className="space-y-px mb-6">
-          {residents.map((dj) => (
+          {residents.map((dj, index) => (
             <li key={dj.id}>
-              <Link
-                to="/djs/$djId"
-                params={{ djId: dj.id }}
-                preload="intent"
-                className="flex items-center gap-4 px-4 py-4 border border-grey/10 hover:border-purple transition-colors group"
+              <Card
+                imageSrc={dj.photo}
+                imageAlt={dj.name}
+                onClick={() => {}}
+                action={
+                  <Link
+                    to="/djs/$djId"
+                    params={{ djId: dj.id }}
+                    preload="intent"
+                    className="inline-flex items-center gap-2 px-3 py-2 text-xs text-grey hover:text-purple hover:border hover:border-purple/30 transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    [ info ]
+                  </Link>
+                }
+                animationDelay={index}
               >
-                {dj.photo && (
-                  <Image
-                    src={dj.photo}
-                    alt={dj.name}
-                    sizes="64px"
-                    className="w-16 h-16 object-cover shrink-0"
-                  />
-                )}
-                <div className="flex-1 min-w-0">
-                  <h2 className="font-display text-xl sm:text-2xl tracking-tight group-hover:text-white transition-colors">
+                <div className="flex flex-col gap-1">
+                  <p className="font-display text-base sm:text-lg tracking-tight truncate">
                     {dj.name}
-                  </h2>
-                  {dj.bio && <Body className="line-clamp-1 mt-0.5">{dj.bio}</Body>}
+                  </p>
+                  {dj.bio && <p className="text-xs sm:text-sm text-grey truncate">{dj.bio}</p>}
                 </div>
-                <Label className="shrink-0 text-grey group-hover:text-purple transition-colors">
-                  [ info ]
-                </Label>
-              </Link>
+              </Card>
             </li>
           ))}
         </ul>
@@ -54,19 +54,29 @@ function DJs() {
       <section className="mb-12">
         <PageTitle>guest_transmissions</PageTitle>
         <ul className="space-y-px">
-          {guests.map((dj) => (
+          {guests.map((dj, index) => (
             <li key={dj.id}>
-              <Link
-                to="/djs/$djId"
-                params={{ djId: dj.id }}
-                preload="intent"
-                className="block px-4 py-5 border border-grey/10 hover:border-purple transition-colors group"
+              <Card
+                action={
+                  <Link
+                    to="/djs/$djId"
+                    params={{ djId: dj.id }}
+                    preload="intent"
+                    className="inline-flex items-center gap-2 px-3 py-2 text-xs text-grey hover:text-purple hover:border hover:border-purple/30 transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    [ info ]
+                  </Link>
+                }
+                animationDelay={index + residents.length}
               >
-                <h2 className="font-display text-2xl sm:text-3xl tracking-tight group-hover:text-white transition-colors mb-1">
-                  {dj.name}
-                </h2>
-                {dj.bio && <Body className="line-clamp-1">{dj.bio}</Body>}
-              </Link>
+                <div className="flex flex-col gap-1">
+                  <p className="font-display text-base sm:text-lg tracking-tight truncate">
+                    {dj.name}
+                  </p>
+                  {dj.bio && <p className="text-xs sm:text-sm text-grey truncate">{dj.bio}</p>}
+                </div>
+              </Card>
             </li>
           ))}
         </ul>

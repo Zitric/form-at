@@ -1,5 +1,5 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { BrandTitle } from "~/components/BrandTitle";
+import { Card } from "~/components/Card";
 import { PageLayout } from "~/components/PageLayout";
 import { Label, PageTitle } from "~/components/Text";
 import { getDJ } from "~/data/djs";
@@ -19,9 +19,9 @@ function Events() {
         <section className="mb-12">
           <Label className="mb-6 text-grey tracking-widest uppercase">— incoming signals</Label>
           <ul className="space-y-px">
-            {upcoming.map((event) => (
+            {upcoming.map((event, index) => (
               <li key={event.id}>
-                <EventCard event={event} />
+                <EventCard event={event} index={index} />
               </li>
             ))}
           </ul>
@@ -32,9 +32,9 @@ function Events() {
         <section>
           <PageTitle>sequence_log</PageTitle>
           <ul className="space-y-px">
-            {past.map((event) => (
+            {past.map((event, index) => (
               <li key={event.id}>
-                <EventCard event={event} past />
+                <EventCard event={event} index={index + upcoming.length} past />
               </li>
             ))}
           </ul>
@@ -46,45 +46,41 @@ function Events() {
 
 function EventCard({
   event,
+  index,
   past = false,
-}: { event: ReturnType<typeof getPastEvents>[number]; past?: boolean }) {
+}: {
+  event: ReturnType<typeof getPastEvents>[number];
+  index: number;
+  past?: boolean;
+}) {
   const lineup = event.lineupIds.map((id) => getDJ(id)).filter(Boolean);
 
   return (
-    <div className={`px-4 py-5 border border-grey/10 ${past ? "opacity-60" : ""}`}>
-      <div className="flex items-start justify-between gap-4 mb-3">
-        <h2 className="font-display text-2xl sm:text-3xl tracking-tight">
-          <BrandTitle>{event.title}</BrandTitle>
-        </h2>
-        <Label className="shrink-0 text-grey pt-1">{past ? "[ past ]" : "[ upcoming ]"}</Label>
-      </div>
-
-      <div className="space-y-1 mb-4">
-        <Label>
+    <Card animationDelay={index} className={past ? "opacity-60" : ""}>
+      <div className="flex flex-col gap-2 flex-1 min-w-0">
+        <p className="font-display text-base sm:text-lg tracking-tight truncate">{event.title}</p>
+        <p className="text-xs sm:text-sm text-grey truncate">
           {event.date} · {event.venue}
-        </Label>
-        <Label>{event.runtime}</Label>
-        <Label className="text-grey">{event.audio}</Label>
+        </p>
+        {lineup.length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-1">
+            {lineup.map((dj) => {
+              if (!dj) return null;
+              return (
+                <Link
+                  key={dj.id}
+                  to="/djs/$djId"
+                  params={{ djId: dj.id }}
+                  preload="intent"
+                  className="text-xs border border-grey/20 px-2 py-0.5 text-grey hover:border-purple hover:text-purple transition-colors"
+                >
+                  {dj.name}
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </div>
-
-      {lineup.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {lineup.map((dj) => {
-            if (!dj) return null;
-            return (
-              <Link
-                key={dj.id}
-                to="/djs/$djId"
-                params={{ djId: dj.id }}
-                preload="intent"
-                className="text-xs border border-grey/20 px-3 py-1 text-grey hover:border-purple hover:text-purple transition-colors"
-              >
-                {dj.name}
-              </Link>
-            );
-          })}
-        </div>
-      )}
-    </div>
+    </Card>
   );
 }
