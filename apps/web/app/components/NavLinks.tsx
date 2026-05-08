@@ -25,6 +25,7 @@ export function NavLinks({ className, itemClassName, activeClassName }: NavLinks
           <Link
             key={to}
             to={to}
+            preload="intent"
             className={cn(
               itemClassName,
               isActive && activeClassName,

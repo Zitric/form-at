@@ -96,6 +96,7 @@ function Sets() {
                     <Link
                       to="/sets/$setId"
                       params={{ setId: set.id }}
+                      preload="intent"
                       className="flex-1 min-w-0 cursor-pointer group"
                     >
                       <span

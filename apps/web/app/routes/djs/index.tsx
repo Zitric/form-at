@@ -24,6 +24,7 @@ function DJs() {
               <Link
                 to="/djs/$djId"
                 params={{ djId: dj.id }}
+                preload="intent"
                 className="flex items-center gap-4 px-4 py-4 border border-grey/10 hover:border-purple transition-colors group"
               >
                 {dj.photo && (
@@ -58,6 +59,7 @@ function DJs() {
               <Link
                 to="/djs/$djId"
                 params={{ djId: dj.id }}
+                preload="intent"
                 className="block px-4 py-5 border border-grey/10 hover:border-purple transition-colors group"
               >
                 <h2 className="font-display text-2xl sm:text-3xl tracking-tight group-hover:text-white transition-colors mb-1">

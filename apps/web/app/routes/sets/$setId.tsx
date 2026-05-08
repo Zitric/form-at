@@ -58,6 +58,7 @@ function SetDetail() {
       <div className="flex-1">
         <Link
           to="/sets"
+          preload="intent"
           className="inline-flex items-center gap-2 text-xs sm:text-sm text-grey hover:text-purple transition-colors mb-10"
         >
           ‹ sets_archive

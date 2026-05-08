@@ -32,6 +32,7 @@ function DJDetail() {
       <div className="flex-1">
         <Link
           to="/djs"
+          preload="intent"
           className="inline-flex items-center gap-2 text-xs sm:text-sm text-grey hover:text-purple transition-colors mb-6"
         >
           ‹ djs_collective
@@ -91,6 +92,7 @@ function DJDetail() {
                         <Link
                           to="/sets/$setId"
                           params={{ setId: set.id }}
+                          preload="intent"
                           className="text-xs text-grey hover:text-purple transition-colors"
                         >
                           [ info ]
@@ -119,6 +121,7 @@ function DJDetail() {
                 <li key={event.id}>
                   <Link
                     to="/events"
+                    preload="intent"
                     className="flex items-center justify-between px-4 py-4 border border-grey/10 hover:border-purple transition-colors group"
                   >
                     <div>

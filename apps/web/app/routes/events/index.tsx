@@ -76,6 +76,7 @@ function EventCard({
                 key={dj.id}
                 to="/djs/$djId"
                 params={{ djId: dj.id }}
+                preload="intent"
                 className="text-xs border border-grey/20 px-3 py-1 text-grey hover:border-purple hover:text-purple transition-colors"
               >
                 {dj.name}

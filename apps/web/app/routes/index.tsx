@@ -32,6 +32,7 @@ function Home() {
 
         <Link
           to="/sets"
+          preload="intent"
           className="inline-flex self-auto items-center gap-4 self-start border border-grey/20 px-5 py-3 text-sm sm:text-base text-grey hover:border-purple hover:text-white transition-colors "
         >
           <span className="text-gold">›</span>
