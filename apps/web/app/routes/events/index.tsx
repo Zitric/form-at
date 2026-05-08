@@ -1,8 +1,7 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Card } from "~/components/Card";
 import { PageLayout } from "~/components/PageLayout";
 import { Label, PageTitle } from "~/components/Text";
-import { getDJ } from "~/data/djs";
 import { getPastEvents, getUpcomingEvents } from "~/data/events";
 
 export const Route = createFileRoute("/events/")({
@@ -53,33 +52,19 @@ function EventCard({
   index: number;
   past?: boolean;
 }) {
-  const lineup = event.lineupIds.map((id) => getDJ(id)).filter(Boolean);
+  const navigate = useNavigate();
 
   return (
-    <Card animationDelay={index} className={past ? "opacity-60" : ""}>
-      <div className="flex flex-col gap-2 flex-1 min-w-0">
+    <Card
+      animationDelay={index}
+      className={past ? "opacity-60" : ""}
+      onClick={() => navigate({ to: "/events/$eventId", params: { eventId: event.id } })}
+    >
+      <div className="flex flex-col gap-1">
         <p className="font-display text-base sm:text-lg tracking-tight truncate">{event.title}</p>
         <p className="text-xs sm:text-sm text-grey truncate">
           {event.date} · {event.venue}
         </p>
-        {lineup.length > 0 && (
-          <div className="flex flex-wrap gap-1 pt-1">
-            {lineup.map((dj) => {
-              if (!dj) return null;
-              return (
-                <Link
-                  key={dj.id}
-                  to="/djs/$djId"
-                  params={{ djId: dj.id }}
-                  preload="intent"
-                  className="text-xs border border-grey/20 px-2 py-0.5 text-grey hover:border-purple hover:text-purple transition-colors"
-                >
-                  {dj.name}
-                </Link>
-              );
-            })}
-          </div>
-        )}
       </div>
     </Card>
   );

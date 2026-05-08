@@ -20,6 +20,7 @@ export const events: Event[] = [
     audio: "techno / electro / dub",
     runtime: "23:00 — 04:00",
     status: "past",
+    flyer: "events/002",
   },
   {
     id: "format-001",
@@ -30,8 +31,13 @@ export const events: Event[] = [
     audio: "techno / electro / dub",
     runtime: "23:00 — 04:00",
     status: "past",
+    flyer: "events/001",
   },
 ];
+
+export function getEvent(id: string): Event | undefined {
+  return events.find((e) => e.id === id);
+}
 
 export function getUpcomingEvents(): Event[] {
   return events.filter((e) => e.status === "upcoming");
