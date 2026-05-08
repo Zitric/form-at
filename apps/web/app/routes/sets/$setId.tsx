@@ -1,5 +1,7 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { BrandTitle } from "~/components/BrandTitle";
+import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { Image } from "~/components/Image";
 import { PageLayout } from "~/components/PageLayout";
 import { TerminalRow } from "~/components/TerminalRow";
@@ -9,6 +11,9 @@ import type { SetStats } from "~/data/set-stats";
 import { getSet } from "~/data/sets";
 import { useStore } from "~/store";
 import { fmtDate, fmtDuration } from "~/utils/fmt";
+
+// Module-level flag — true once the typewriter has played on any set detail page in this client session.
+let hasTypedSetDetail = false;
 
 export const Route = createFileRoute("/sets/$setId")({
   loader: async ({ params }) => {
@@ -43,6 +48,11 @@ function SetDetail() {
   const setIsPlaying = useStore((s) => s.setIsPlaying);
   const isLoaded = nowPlaying?.id === set.id;
   const isThisPlaying = isLoaded && isPlaying;
+
+  const isFirstLoading = !hasTypedSetDetail;
+  useEffect(() => {
+    hasTypedSetDetail = true;
+  }, []);
 
   const metaRows: Array<[string, string]> = (
     [
@@ -102,9 +112,7 @@ function SetDetail() {
         <Body className="mb-10">{set.artist}</Body>
 
         {set.description && (
-          <Body className="leading-relaxed mb-10 border-l border-grey/10 pl-4">
-            {set.description}
-          </Body>
+          <ConsoleWriter isFirstLoading={isFirstLoading}>{set.description}</ConsoleWriter>
         )}
 
         <button

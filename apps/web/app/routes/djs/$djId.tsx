@@ -1,13 +1,18 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { BrandTitle } from "~/components/BrandTitle";
+import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { Image } from "~/components/Image";
 import { PageLayout } from "~/components/PageLayout";
 import { TerminalRow } from "~/components/TerminalRow";
-import { Body, Label } from "~/components/Text";
+import { Label } from "~/components/Text";
 import { getDJ } from "~/data/djs";
 import { events } from "~/data/events";
 import { getSet } from "~/data/sets";
 import { useStore } from "~/store";
+
+// Module-level flag — true once the typewriter has played on any DJ detail page in this client session.
+let hasTypedDjDetail = false;
 
 export const Route = createFileRoute("/djs/$djId")({
   loader: ({ params }) => {
@@ -26,6 +31,11 @@ function DJDetail() {
   const isPlaying = useStore((s) => s.isPlaying);
   const loadTrack = useStore((s) => s.loadTrack);
   const setIsPlaying = useStore((s) => s.setIsPlaying);
+
+  const isFirstLoading = !hasTypedDjDetail;
+  useEffect(() => {
+    hasTypedDjDetail = true;
+  }, []);
 
   return (
     <PageLayout footer="[ end_of_transmission ]">
@@ -67,7 +77,7 @@ function DJDetail() {
           <BrandTitle>{dj.name}</BrandTitle>
         </h1>
 
-        {dj.bio && <Body className="mb-10 border-l border-grey/10 pl-4 max-w-sm">{dj.bio}</Body>}
+        {dj.bio && <ConsoleWriter isFirstLoading={isFirstLoading}>{dj.bio}</ConsoleWriter>}
 
         {sets.length > 0 && (
           <section className="mb-12">
