@@ -203,7 +203,7 @@ export function Player() {
         style={{ transition: "grid-template-rows 300ms ease-in-out" }}
       >
         <div className="overflow-hidden">
-          <div className="h-[52px] border-t border-white/10 px-4 flex items-center gap-2 font-mono">
+          <div className="h-[60px] pb-[5px] border-t border-white/10 px-4 flex items-center gap-2 font-mono">
             <PlayerControls
               loading={loading}
               error={error}

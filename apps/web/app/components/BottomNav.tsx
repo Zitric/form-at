@@ -10,11 +10,11 @@ export function BottomNav() {
   return (
     <div
       className={cn(
-        "sm:hidden fixed inset-x-0 z-40 bg-black border-t border-white/10 font-mono",
+        "sm:hidden fixed inset-x-0 z-40 bg-black border-t border-white/10 font-mono h-[55px]",
         isFirstLoad && "animate-slow-fade-in",
       )}
       style={{
-        bottom: nowPlaying ? "52px" : "0px",
+        bottom: nowPlaying ? "60px" : "0px",
         transition: "bottom 300ms ease-in-out",
       }}
       suppressHydrationWarning

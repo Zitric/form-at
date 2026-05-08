@@ -110,7 +110,7 @@ export function SwipeNavigator() {
   );
 
   // Dots sit above BottomNav (≈52px) and optionally the player bar (52px)
-  const dotsBottom = nowPlaying ? 108 : 56;
+  const dotsBottom = nowPlaying ? 119 : 59;
 
   return (
     <>

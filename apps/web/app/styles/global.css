@@ -8,7 +8,7 @@
   --font-mono: "Space Mono", ui-monospace, monospace;
   --font-display: "Bedstead Condensed", "Bedstead", sans-serif;
   --animate-blink: blink 1s step-start infinite;
-  --animate-slow-fade-in: fade-in 3s ease-out;
+  --animate-slow-fade-in: fade-in 5s ease-out;
   --animate-fade-in: fade-in 0.6s ease-out;
   --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
   --animate-border-pulse: border-pulse 2s ease-in-out infinite;
