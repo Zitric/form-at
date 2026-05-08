@@ -66,7 +66,6 @@ function SetsSkeleton() {
 }
 
 function Sets() {
-  const playCounts = Route.useLoaderData();
   const nowPlaying = useStore((s) => s.nowPlaying);
   const isPlaying = useStore((s) => s.isPlaying);
   const loadTrack = useStore((s) => s.loadTrack);
@@ -82,7 +81,6 @@ function Sets() {
   return (
     <PageLayout footer="[ end_of_archive ]">
       {Object.entries(groups).map(([title, groupSets]) => {
-        const shortTitle = title.replace(/^form:at\s+/i, "").trim();
         return (
           <section key={title} className="mb-10">
             <PageTitle>002 : audio_extracted</PageTitle>
@@ -90,7 +88,6 @@ function Sets() {
             <ul className="space-y-px">
               {groupSets.map((set, index) => {
                 const isLoaded = nowPlaying?.id === set.id;
-                const isThisPlaying = isLoaded && isPlaying;
                 return (
                   <li key={set.id}>
                     <Card
