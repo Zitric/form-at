@@ -24,6 +24,7 @@ export const sets: MusicSet[] = [
     duration: "1:00:00",
     src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20t.i.l.mp3",
     peaks: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20t.i.l.json",
+    artwork: "sets/002",
   },
   {
     id: "set-002-hubey",
@@ -36,6 +37,7 @@ export const sets: MusicSet[] = [
     duration: "1:00:00",
     src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20hubey.mp3",
     peaks: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20hubey.json",
+    artwork: "sets/002",
   },
   {
     id: "set-002-julz-lever",
@@ -49,6 +51,7 @@ export const sets: MusicSet[] = [
     src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20Julz%20Lever.mp3",
     peaks:
       "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20Julz%20Lever.json",
+    artwork: "sets/002",
   },
 ];
 

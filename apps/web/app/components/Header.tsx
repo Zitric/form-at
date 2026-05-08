@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
+import { NavLinks } from "~/components/NavLinks";
 import { useFirstLoad } from "~/hooks/useFirstLoad";
 import { cn } from "~/utils/cn";
-import { NavLinks } from "~/components/NavLinks";
 
 export function Header() {
   const isFirstLoad = useFirstLoad();
@@ -9,7 +9,7 @@ export function Header() {
   return (
     <header
       className={cn(
-        "flex items-center justify-center -mx-6 px-6 mb-12 sm:mx-0 sm:px-0 sm:justify-between",
+        "flex items-center justify-center px-6 pt-10 mb-8 sm:pt-10 sm:mb-12 sm:justify-between max-w-2xl mx-auto w-full",
         isFirstLoad && "animate-slow-fade-in",
       )}
       suppressHydrationWarning

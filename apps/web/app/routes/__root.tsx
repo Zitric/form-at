@@ -1,6 +1,7 @@
 import { HeadContent, Link, Scripts, createRootRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { BottomNav } from "~/components/BottomNav";
+import { Header } from "~/components/Header";
 import { PageLayout } from "~/components/PageLayout";
 import { Player } from "~/components/Player";
 import { SwipeNavigator } from "~/components/SwipeNavigator";
@@ -164,6 +165,7 @@ function Root() {
       </head>
       <body className="bg-black text-white font-mono antialiased">
         <HydrateStore />
+        <Header />
         <SwipeNavigator />
         <Player />
         <BottomNav />

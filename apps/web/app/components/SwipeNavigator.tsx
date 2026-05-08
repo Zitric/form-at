@@ -27,7 +27,7 @@ export function SwipeNavigator() {
   const idx = routeIndex(pathname);
 
   const bind = useDrag(
-    ({ movement: [mx], last, velocity: [vx], direction: [dx] }) => {
+    ({ movement: [mx], last, velocity: [vx] }) => {
       if (busy.current) return;
 
       if (!last) {
@@ -44,7 +44,7 @@ export function SwipeNavigator() {
       }
 
       const swiped = Math.abs(mx) > SWIPE_PX || Math.abs(vx) > SWIPE_VX;
-      const goingLeft = dx < 0;
+      const goingLeft = mx < 0;
       const next = goingLeft ? idx + 1 : idx - 1;
 
       if (swiped && next >= 0 && next < ROUTES.length) {
@@ -81,7 +81,6 @@ export function SwipeNavigator() {
         // Navigate and instantly place the new page off-screen on the opposite side
         const route = ROUTES[next];
         if (route) navigate({ to: route });
-        setTransitioning(false);
         setOffset(goingLeft ? window.innerWidth : -window.innerWidth);
 
         // Two rAFs so the browser paints the off-screen position before transitioning.

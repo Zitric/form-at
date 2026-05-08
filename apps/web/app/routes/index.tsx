@@ -1,8 +1,9 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { PageLayout } from "~/components/PageLayout";
 import { useFirstLoad } from "~/hooks/useFirstLoad";
+import { useStore } from "~/store";
 import { cn } from "~/utils/cn";
 
 const mainText =
@@ -21,10 +22,27 @@ export const Route = createFileRoute("/")({
 function Home() {
   const isFirstLoading = !hasTypedHome;
   const isFirstLoad = useFirstLoad();
+  const navigate = useNavigate();
+
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const isPlaying = useStore((s) => s.isPlaying);
+  const loadTrack = useStore((s) => s.loadTrack);
+  const setIsPlaying = useStore((s) => s.setIsPlaying);
 
   useEffect(() => {
     hasTypedHome = true;
   }, []);
+
+  const handleListenClick = () => {
+    // If track is saved and not playing: resume it
+    if (nowPlaying && !isPlaying) {
+      loadTrack(nowPlaying);
+      setIsPlaying(true);
+    } else {
+      // Otherwise navigate to sets (either no track or already playing)
+      navigate({ to: "/sets" });
+    }
+  };
 
   return (
     <PageLayout footer="[ disconnect_to_reconnect ]">
@@ -33,18 +51,18 @@ function Home() {
           <ConsoleWriter isFirstLoading={isFirstLoading}>{mainText}</ConsoleWriter>
         </div>
 
-        <Link
-          to="/sets"
-          preload="intent"
+        <button
+          type="button"
+          onClick={handleListenClick}
           className={cn(
-            "inline-flex self-center items-center gap-4 border border-grey/20 px-5 py-3 text-sm sm:text-base text-grey hover:border-purple hover:text-white transition-colors animate-border-pulse",
+            "flex items-center justify-center gap-4 self-center w-full sm:w-auto sm:px-12 border border-grey/20 px-6 py-4 text-sm sm:text-base text-grey hover:border-purple hover:text-white transition-colors animate-border-pulse",
             isFirstLoad && "animate-slow-fade-in",
           )}
           suppressHydrationWarning
         >
           <span className="text-gold">›</span>
-          <span>access_audio [ listen ]</span>
-        </Link>
+          <span>{nowPlaying && !isPlaying ? "resume_signal" : "access_audio [ listen ]"}</span>
+        </button>
       </div>
     </PageLayout>
   );

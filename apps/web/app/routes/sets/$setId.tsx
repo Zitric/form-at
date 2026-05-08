@@ -1,5 +1,6 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { BrandTitle } from "~/components/BrandTitle";
+import { Image } from "~/components/Image";
 import { PageLayout } from "~/components/PageLayout";
 import { TerminalRow } from "~/components/TerminalRow";
 import { Body, Label } from "~/components/Text";
@@ -64,6 +65,16 @@ function SetDetail() {
           ‹ sets_archive
         </Link>
 
+        {set.artwork && (
+          <Image
+            src={set.artwork}
+            alt={set.title}
+            sizes="(min-width: 768px) 448px, 100vw"
+            priority
+            className="w-full max-w-md aspect-square object-cover mb-8 mx-auto"
+          />
+        )}
+
         <div className="space-y-1 mb-8">
           {metaRows.map(([label, value]) => (
             <TerminalRow key={label} label={label} value={value} />
@@ -99,7 +110,7 @@ function SetDetail() {
         <button
           type="button"
           onClick={() => (isLoaded ? setIsPlaying(!isPlaying) : loadTrack(set))}
-          className="inline-flex items-center gap-4 border border-grey/20 px-6 py-3 text-sm sm:text-base hover:border-purple hover:text-white transition-colors"
+          className="flex items-center justify-center gap-4 w-full sm:w-auto sm:px-12 border border-grey/20 px-6 py-4 text-sm sm:text-base text-grey hover:border-purple hover:text-white transition-colors"
         >
           <span className="text-gold">{isThisPlaying ? "⏸" : "▶"}</span>
           {isThisPlaying ? "now_playing" : "play_set"}

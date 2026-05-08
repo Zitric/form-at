@@ -1,7 +1,7 @@
-import { cn } from "~/utils/cn";
-import { useFirstLoad } from "~/hooks/useFirstLoad";
 import { NavLinks } from "~/components/NavLinks";
+import { useFirstLoad } from "~/hooks/useFirstLoad";
 import { useStore } from "~/store";
+import { cn } from "~/utils/cn";
 
 export function BottomNav() {
   const isFirstLoad = useFirstLoad();

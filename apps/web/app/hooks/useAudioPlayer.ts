@@ -114,8 +114,6 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
       if (cancelled) return;
       if (savedPos > 0) {
         audio.currentTime = savedPos;
-        setLoading(false);
-        return;
       }
       audio
         .play()

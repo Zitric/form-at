@@ -1,6 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { BrandTitle } from "~/components/BrandTitle";
+import { Card } from "~/components/Card";
 import { PageLayout } from "~/components/PageLayout";
 import { PageTitle } from "~/components/Text";
 import { sets } from "~/data/sets";
@@ -50,9 +50,13 @@ function SetsSkeleton() {
           <div className="h-3 w-36 bg-white/10 animate-pulse mb-3" />
           {Array.from({ length: 5 }).map((_, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton rows
-            <div key={i} className="flex items-center py-3 border-b border-white/5">
-              <div className="flex-1 h-3.5 bg-white/10 animate-pulse" />
-              <div className="shrink-0 ml-8 w-3 h-3.5 bg-white/10 animate-pulse" />
+            <div key={i} className="flex items-center gap-4 p-4 border border-grey/10 mb-px">
+              <div className="shrink-0 w-20 h-20 sm:w-28 sm:h-28 bg-white/10 animate-pulse" />
+              <div className="flex-1">
+                <div className="h-4 bg-white/10 animate-pulse mb-2 w-48" />
+                <div className="h-3 bg-white/10 animate-pulse w-32" />
+              </div>
+              <div className="shrink-0 h-4 w-12 bg-white/10 animate-pulse" />
             </div>
           ))}
         </div>
@@ -83,41 +87,38 @@ function Sets() {
           <section key={title} className="mb-10">
             <PageTitle>002 : audio_extracted</PageTitle>
 
-            <ul>
-              {groupSets.map((set) => {
+            <ul className="space-y-px">
+              {groupSets.map((set, index) => {
                 const isLoaded = nowPlaying?.id === set.id;
                 const isThisPlaying = isLoaded && isPlaying;
-                const plays = playCounts[set.id] ?? 0;
                 return (
-                  <li
-                    key={set.id}
-                    className="flex items-center py-3 border-b border-white/5 last:border-0"
-                  >
-                    <Link
-                      to="/sets/$setId"
-                      params={{ setId: set.id }}
-                      preload="intent"
-                      className="flex-1 min-w-0 cursor-pointer group"
-                    >
-                      <span
-                        className={`text-sm sm:text-base transition-colors ${
-                          isThisPlaying ? "text-gold" : "text-grey group-hover:text-white"
-                        }`}
-                      >
-                        {set.artist}
-                      </span>
-                      {plays > 0 && (
-                        <span className="ml-3 text-xs text-gold tabular-nums">› {plays}</span>
-                      )}
-                    </Link>
-                    <button
-                      type="button"
+                  <li key={set.id}>
+                    <Card
+                      imageSrc={set.artwork}
+                      imageAlt={set.title}
                       onClick={() => (isLoaded ? setIsPlaying(!isPlaying) : loadTrack(set))}
-                      aria-label={`Play ${set.artist}`}
-                      className="shrink-0 ml-8 text-grey hover:text-gold transition-colors cursor-pointer text-sm"
+                      action={
+                        <Link
+                          to="/sets/$setId"
+                          params={{ setId: set.id }}
+                          preload="intent"
+                          className="inline-flex items-center gap-2 px-3 py-2 text-xs text-grey hover:text-purple hover:border hover:border-purple/30 transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          [ info ]
+                        </Link>
+                      }
+                      animationDelay={index}
                     >
-                      {isThisPlaying ? "⏸" : "▶"}
-                    </button>
+                      <div className="flex flex-col gap-1">
+                        <p className="font-display text-base sm:text-lg tracking-tight truncate">
+                          {set.artist} @ {set.venue}
+                        </p>
+                        {set.date && (
+                          <p className="text-xs sm:text-sm text-grey truncate">{set.date}</p>
+                        )}
+                      </div>
+                    </Card>
                   </li>
                 );
               })}
