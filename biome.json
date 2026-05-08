@@ -18,6 +18,11 @@
       "trailingCommas": "all"
     }
   },
+  "css": {
+    "formatter": {
+      "enabled": true
+    }
+  },
   "files": {
     "ignore": [
       "**/node_modules/**",
