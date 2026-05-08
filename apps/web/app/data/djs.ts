@@ -35,7 +35,7 @@ export const djs: DJ[] = [
     id: "hubey",
     name: "hubey",
     type: "resident",
-    bio: "Co-founder of Form:at. Graphic designer and selector. Analog sound for a digital world.",
+    bio: "With a house head and an acid heart, hubey has been dishing out bangers around Glasgow, playing with Luna Roja, OH parties and, of course, as a resident at Form:at. Further afield, she can be found in her home town of Dumfries, and has played at the excellent Eden Festival. Expect house, electro, techno... and a wavey adventure to all the places in between.",
     photo: "djs/hubey",
     setIds: ["set-002-hubey"],
   },
