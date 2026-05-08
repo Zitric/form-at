@@ -8,6 +8,10 @@
   --font-mono: "Space Mono", ui-monospace, monospace;
   --font-display: "Bedstead Condensed", "Bedstead", sans-serif;
   --animate-blink: blink 1s step-start infinite;
+  --animate-slow-fade-in: fade-in 3s ease-out;
+  --animate-fade-in: fade-in 0.6s ease-out;
+  --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
+  --animate-border-pulse: border-pulse 2s ease-in-out infinite;
 }
 
 @keyframes blink {
@@ -18,6 +22,37 @@
   50%,
   100% {
     color: #161615;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(197, 133, 56, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgb(197, 133, 56, 0);
+  }
+}
+
+@keyframes border-pulse {
+  0%,
+  100% {
+    border-color: #c58538;
+    box-shadow: inset 0 0 8px rgba(197, 133, 56, 0.3);
+  }
+  50% {
+    border-color: #43437a;
+    box-shadow: inset 0 0 16px rgba(197, 133, 56, 0.1);
   }
 }
 
@@ -65,6 +100,24 @@
 @utility t-muted-md {
   font-size: 0.75rem; /* 12px */
   line-height: 1rem;
+}
+
+/* ── Animation utilities ──────────────────────────────────────────────────── */
+
+@utility animate-fade-in {
+  animation: fade-in 0.6s ease-out;
+}
+
+@utility animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@utility animate-border-pulse {
+  animation: border-pulse 2s ease-in-out infinite;
+}
+
+@utility transition-opacity-smooth {
+  transition: opacity 500ms ease-in-out;
 }
 
 @layer base {

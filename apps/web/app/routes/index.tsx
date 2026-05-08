@@ -2,6 +2,8 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { PageLayout } from "~/components/PageLayout";
+import { useFirstLoad } from "~/hooks/useFirstLoad";
+import { cn } from "~/utils/cn";
 
 const mainText =
   "Based in Glasgow, Form:at is an underground techno and electro initiative, dedicated to finding an analog soul in an increasingly digital world. Our operations are grassroots, building intimate, community-focused spaces where music is curated with care and mutual respect is prioritized. We create void points to escape the noise. Join us to disconnect and reconnect with the source.";
@@ -18,6 +20,7 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   const isFirstLoading = !hasTypedHome;
+  const isFirstLoad = useFirstLoad();
 
   useEffect(() => {
     hasTypedHome = true;
@@ -33,7 +36,11 @@ function Home() {
         <Link
           to="/sets"
           preload="intent"
-          className="inline-flex self-center items-center gap-4 border border-grey/20 px-5 py-3 text-sm sm:text-base text-grey hover:border-purple hover:text-white transition-colors"
+          className={cn(
+            "inline-flex self-center items-center gap-4 border border-grey/20 px-5 py-3 text-sm sm:text-base text-grey hover:border-purple hover:text-white transition-colors animate-border-pulse",
+            isFirstLoad && "animate-slow-fade-in",
+          )}
+          suppressHydrationWarning
         >
           <span className="text-gold">›</span>
           <span>access_audio [ listen ]</span>

@@ -17,8 +17,8 @@ export const ConsoleWriter = ({
     <div className="flex pl-4 py-2 my-4 bg-black/5 hover:bg-black/10 transition-colors group">
       <span className="hidden sm:flex lg:flex text-gold mr-2">root@format:</span>
 
-      <Body>
-        {isFirstLoading ? (
+      {isFirstLoading ? (
+        <div className="t-body sm:t-body-md">
           <Typewriter
             options={{
               delay: speed,
@@ -30,10 +30,10 @@ export const ConsoleWriter = ({
               typewriter.typeString(children).start();
             }}
           />
-        ) : (
-          children
-        )}
-      </Body>
+        </div>
+      ) : (
+        <Body>{children}</Body>
+      )}
     </div>
   );
 };

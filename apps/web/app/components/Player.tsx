@@ -43,6 +43,7 @@ const PlayerControls = memo(function PlayerControls({
         disabled={!hasPrev || loading}
         aria-label="Previous track"
         className={skipBtnClass}
+        suppressHydrationWarning
       >
         ⏮
       </button>
@@ -52,6 +53,7 @@ const PlayerControls = memo(function PlayerControls({
         disabled={loading || error}
         aria-label={isPlaying ? "Pause" : "Play"}
         className="shrink-0 w-5 text-gold disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer text-sm"
+        suppressHydrationWarning
       >
         {loading ? <span className="animate-pulse opacity-60">…</span> : isPlaying ? "⏸" : "▶"}
       </button>
@@ -61,6 +63,7 @@ const PlayerControls = memo(function PlayerControls({
         disabled={!hasNext || loading}
         aria-label="Next track"
         className={skipBtnClass}
+        suppressHydrationWarning
       >
         ⏭
       </button>
