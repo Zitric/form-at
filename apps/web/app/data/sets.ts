@@ -33,7 +33,7 @@ export const sets: MusicSet[] = [
     date: "2026-04-24",
     venue: "Find the red door, Glasgow",
     description:
-      "hubey is a Glasgow-based techno artist who has been making music for over 20 years. He is known for his unique style of techno that blends elements of acid, house, and techno.",
+      "Mid-sequence escalation. Elevating the frequency with a high-energy blend of acid, electro, and driving grooves that took total control of the dancefloor.",
     duration: "1:31:55",
     src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20hubey.mp3",
     peaks: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20hubey.json",
