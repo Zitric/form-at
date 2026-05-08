@@ -57,7 +57,7 @@ function Home() {
           style={{
             animation: isFirstLoad
               ? "fade-in 5s ease-out, border-pulse 2s ease-in-out 5s infinite"
-              : "border-pulse 2s ease-in-out infinite",
+              : "fade-in 0.6s ease-out, border-pulse 2s ease-in-out 0.6s infinite",
           }}
           suppressHydrationWarning
         >
@@ -67,7 +67,7 @@ function Home() {
 
         <div
           className="flex items-center justify-center gap-10 mt-8"
-          style={{ animation: isFirstLoad ? "fade-in 5s ease-out" : undefined }}
+          style={{ animation: isFirstLoad ? "fade-in 5s ease-out" : "fade-in 0.6s ease-out" }}
           suppressHydrationWarning
         >
           <a

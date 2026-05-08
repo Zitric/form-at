@@ -1,20 +1,24 @@
 import { useEffect, useState } from "react";
 
-// Module-level flag persists across route changes; resets only on full page reload.
-// In development, React StrictMode double-mounts components which sets this flag
-// before the visible mount, breaking the animation. We always return true in dev.
-const isDev = process.env.NODE_ENV === "development";
-let hasLoadedOnce = false;
+// Track when the very first mount happened to distinguish React StrictMode
+// remounts (happen within milliseconds, dev only) from real subsequent mounts
+// (happen seconds later via navigation). Both physical mounts of StrictMode's
+// logical "first mount" should animate; real subsequent mounts should not.
+let firstMountTimestamp: number | null = null;
+const STRICT_MODE_REMOUNT_WINDOW_MS = 500;
 
 export function useFirstLoad(): boolean {
   const [isFirstLoad, setIsFirstLoad] = useState(false);
 
   useEffect(() => {
-    if (!hasLoadedOnce) {
+    const now = Date.now();
+    if (firstMountTimestamp === null) {
+      firstMountTimestamp = now;
       setIsFirstLoad(true);
-      hasLoadedOnce = true;
+    } else if (now - firstMountTimestamp < STRICT_MODE_REMOUNT_WINDOW_MS) {
+      setIsFirstLoad(true);
     }
   }, []);
 
-  return isDev || isFirstLoad;
+  return isFirstLoad;
 }

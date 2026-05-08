@@ -28,9 +28,7 @@ function DJs() {
                 animationDelay={index}
               >
                 <div className="flex flex-col gap-1">
-                  <p className="font-display text-base sm:text-lg tracking-tight truncate">
-                    {dj.name}
-                  </p>
+                  <p className="text-sm sm:text-base tracking-tight truncate">{dj.name}</p>
                   {dj.bio && <p className="text-xs sm:text-sm text-grey truncate">{dj.bio}</p>}
                 </div>
               </Card>
@@ -50,9 +48,7 @@ function DJs() {
                 animationDelay={index + residents.length}
               >
                 <div className="flex flex-col gap-1">
-                  <p className="font-display text-base sm:text-lg tracking-tight truncate">
-                    {dj.name}
-                  </p>
+                  <p className="text-sm sm:text-base tracking-tight truncate">{dj.name}</p>
                   {dj.bio && <p className="text-xs sm:text-sm text-grey truncate">{dj.bio}</p>}
                 </div>
               </Card>

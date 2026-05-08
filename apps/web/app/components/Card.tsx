@@ -76,7 +76,7 @@ export function Card({
           children
         ) : (
           <>
-            <p className="font-display text-base sm:text-lg tracking-tight truncate">{primary}</p>
+            <p className="text-sm sm:text-base tracking-tight truncate">{primary}</p>
             {secondary && <p className="text-xs sm:text-sm text-grey truncate">{secondary}</p>}
           </>
         )}

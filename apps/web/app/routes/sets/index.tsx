@@ -108,8 +108,8 @@ function Sets() {
                       animationDelay={index}
                     >
                       <div className="flex flex-col gap-1">
-                        <p className="font-display text-base sm:text-lg tracking-tight truncate">
-                          {set.artist} @ {set.venue}
+                        <p className="text-sm sm:text-base tracking-tight truncate">
+                          {set.artist} @ {set.title}, Glasgow
                         </p>
                         {set.date && (
                           <p className="text-xs sm:text-sm text-grey truncate">{set.date}</p>

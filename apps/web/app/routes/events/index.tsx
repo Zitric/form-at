@@ -60,12 +60,9 @@ function EventCard({
       className={past ? "opacity-60" : ""}
       onClick={() => navigate({ to: "/events/$eventId", params: { eventId: event.id } })}
     >
-      <div className="flex flex-col gap-1">
-        <p className="font-display text-base sm:text-lg tracking-tight truncate">{event.title}</p>
-        <p className="text-xs sm:text-sm text-grey truncate">
-          {event.date} · {event.venue}
-        </p>
-      </div>
+      <p className="text-sm sm:text-base tracking-tight truncate">
+        {event.title} · {event.date} · Glasgow
+      </p>
     </Card>
   );
 }
