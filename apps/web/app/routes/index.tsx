@@ -1,10 +1,9 @@
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { PageLayout } from "~/components/PageLayout";
 import { useFirstLoad } from "~/hooks/useFirstLoad";
 import { useStore } from "~/store";
-import { cn } from "~/utils/cn";
 
 const mainText =
   "Based in Glasgow, Form:at is an underground techno and electro initiative, dedicated to finding an analog soul in an increasingly digital world. Our operations are grassroots, building intimate, community-focused spaces where music is curated with care and mutual respect is prioritized. We create void points to escape the noise. Join us to disconnect and reconnect with the source.";
@@ -54,10 +53,12 @@ function Home() {
         <button
           type="button"
           onClick={handleListenClick}
-          className={cn(
-            "flex items-center justify-center gap-4 self-center w-full sm:w-auto sm:px-24 border border-grey/20 px-6 py-4 text-sm sm:text-base text-grey hover:border-purple hover:text-white transition-colors animate-border-pulse",
-            isFirstLoad && "animate-slow-fade-in",
-          )}
+          className="flex items-center justify-center gap-4 self-center w-full sm:w-auto sm:px-24 border border-grey/20 px-6 py-4 text-sm sm:text-base text-grey hover:border-purple hover:text-white transition-colors"
+          style={{
+            animation: isFirstLoad
+              ? "fade-in 5s ease-out, border-pulse 2s ease-in-out 5s infinite"
+              : "border-pulse 2s ease-in-out infinite",
+          }}
           suppressHydrationWarning
         >
           <span className="text-gold">›</span>
@@ -65,10 +66,8 @@ function Home() {
         </button>
 
         <div
-          className={cn(
-            "flex items-center justify-center gap-10 mt-8",
-            isFirstLoad && "animate-slow-fade-in",
-          )}
+          className="flex items-center justify-center gap-10 mt-8"
+          style={{ animation: isFirstLoad ? "fade-in 5s ease-out" : undefined }}
           suppressHydrationWarning
         >
           <a

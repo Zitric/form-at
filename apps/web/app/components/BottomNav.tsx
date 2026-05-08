@@ -1,7 +1,6 @@
 import { NavLinks } from "~/components/NavLinks";
 import { useFirstLoad } from "~/hooks/useFirstLoad";
 import { useStore } from "~/store";
-import { cn } from "~/utils/cn";
 
 export function BottomNav() {
   const isFirstLoad = useFirstLoad();
@@ -9,13 +8,11 @@ export function BottomNav() {
 
   return (
     <div
-      className={cn(
-        "sm:hidden fixed inset-x-0 z-40 bg-black border-t border-white/10 font-mono h-[55px]",
-        isFirstLoad && "animate-slow-fade-in",
-      )}
+      className="sm:hidden fixed inset-x-0 z-40 bg-black border-t border-white/10 font-mono h-[55px]"
       style={{
         bottom: nowPlaying ? "60px" : "0px",
         transition: "bottom 300ms ease-in-out",
+        animation: isFirstLoad ? "fade-in 5s ease-out" : undefined,
       }}
       suppressHydrationWarning
     >
