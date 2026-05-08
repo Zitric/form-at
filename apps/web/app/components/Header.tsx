@@ -16,7 +16,7 @@ export function Header() {
     >
       <Link
         to="/"
-        className="opacity-60 hover:opacity-100 transition-opacity shrink-0 pl-16 sm:pl-0"
+        className="hover:opacity-70 transition-opacity shrink-0 pl-18 sm:pl-0"
       >
         <div className="overflow-hidden w-[280px] h-[40px] sm:w-[310px] sm:h-[44px] bg-black">
           <img

@@ -46,7 +46,7 @@ function Home() {
 
   return (
     <PageLayout footer="[ disconnect_to_reconnect ]">
-      <div className="flex flex-col justify-start sm:justify-center pt-4 sm:py-16">
+      <div className="flex flex-col justify-start sm:justify-center sm:py-16">
         <div className="space-y-2 mb-8 sm:mb-12 min-h-[20dvh]">
           <ConsoleWriter isFirstLoading={isFirstLoading}>{mainText}</ConsoleWriter>
         </div>
