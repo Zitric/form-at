@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { Muted } from "~/components/Text";
 import { useRouteTransition } from "~/hooks/useRouteTransition";
 import { cn } from "~/utils/cn";
 
@@ -20,9 +19,6 @@ export function PageLayout({ children, footer }: PageLayoutProps) {
       suppressHydrationWarning
     >
       {children}
-      {/* <footer className="mt-12">
-        <Muted>{footer} █</Muted>
-      </footer> */}
     </main>
   );
 }

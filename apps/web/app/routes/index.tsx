@@ -55,7 +55,7 @@ function Home() {
           type="button"
           onClick={handleListenClick}
           className={cn(
-            "flex items-center justify-center gap-4 self-center w-full sm:w-auto sm:px-12 border border-grey/20 px-6 py-4 text-sm sm:text-base text-grey hover:border-purple hover:text-white transition-colors animate-border-pulse",
+            "flex items-center justify-center gap-4 self-center w-full sm:w-auto sm:px-24 border border-grey/20 px-6 py-4 text-sm sm:text-base text-grey hover:border-purple hover:text-white transition-colors animate-border-pulse",
             isFirstLoad && "animate-slow-fade-in",
           )}
           suppressHydrationWarning
@@ -63,6 +63,29 @@ function Home() {
           <span className="text-gold">›</span>
           <span>{nowPlaying && !isPlaying ? "resume_signal" : "access_audio [ listen ]"}</span>
         </button>
+
+        <div
+          className={cn(
+            "flex items-center justify-center gap-10 mt-8",
+            isFirstLoad && "animate-slow-fade-in",
+          )}
+          suppressHydrationWarning
+        >
+          <a
+            href="https://www.instagram.com/form.at_glasgow/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-grey hover:text-white transition-colors tracking-widest"
+          >
+            [ instagram ]
+          </a>
+          <a
+            href="mailto:format.gla@gmail.com"
+            className="text-sm text-grey hover:text-white transition-colors tracking-widest"
+          >
+            [ bookings ]
+          </a>
+        </div>
       </div>
     </PageLayout>
   );

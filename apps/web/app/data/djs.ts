@@ -17,7 +17,7 @@ export type DJ = {
 };
 
 export const djs: DJ[] = [
-  // Guests — promoted first
+  // Guests
   {
     id: "angel-negrin",
     name: "Ángel Negrín",
@@ -28,9 +28,18 @@ export const djs: DJ[] = [
     id: "brandon-lee-vear",
     name: "Brandon Lee Vear",
     type: "guest",
-    bio: "Glasgow-based DJ and producer. Deep, hypnotic techno with a raw edge.",
+    bio: "Brandon Lee Vear is an Australian born poet and musician based in Glasgow. As a resident of local artist run space EXIT club, Brandon’s sound is defined by the outer edges of hypnotic and psychedelic techno, electro and experimental. Coming from a background in the DIY punk scene in Chicago, counter culture and independence are central to his artistry. Sharing line-ups with the likes of Rrose, Stanislav Tolkachev and Marco Shuttle, he has become a key figure in Scotland’s experimental scene.",
   },
+
   // Residents
+  {
+    id: "til",
+    name: "t.i.l.",
+    type: "resident",
+    bio: "Resident selector at Form:at. Acid, dub and the frequencies in between.",
+    photo: "djs/til",
+    setIds: ["set-002-til"],
+  },
   {
     id: "hubey",
     name: "hubey",
@@ -46,14 +55,6 @@ export const djs: DJ[] = [
     bio: "Co-founder of Form:at. Software engineer by day, techno selector by night.",
     photo: "djs/julz-lever",
     setIds: ["set-002-julz-lever"],
-  },
-  {
-    id: "til",
-    name: "t.i.l.",
-    type: "resident",
-    bio: "Resident selector at Form:at. Acid, dub and the frequencies in between.",
-    photo: "djs/til",
-    setIds: ["set-002-til"],
   },
 ];
 
