@@ -22,7 +22,15 @@ export function NavLinks({ className, itemClassName, activeClassName }: NavLinks
       {links.map(({ to, label }) => {
         const isActive = to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
         return (
-          <Link key={to} to={to} className={cn(itemClassName, isActive && activeClassName)}>
+          <Link
+            key={to}
+            to={to}
+            className={cn(
+              itemClassName,
+              isActive && activeClassName,
+              "font-display text-lg lowercase",
+            )}
+          >
             {isActive ? `[ ${label} ]` : label}
           </Link>
         );

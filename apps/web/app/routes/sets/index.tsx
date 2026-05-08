@@ -2,7 +2,7 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { BrandTitle } from "~/components/BrandTitle";
 import { PageLayout } from "~/components/PageLayout";
-import { Label } from "~/components/Text";
+import { PageTitle } from "~/components/Text";
 import { sets } from "~/data/sets";
 import { useStore } from "~/store";
 
@@ -77,65 +77,53 @@ function Sets() {
 
   return (
     <PageLayout footer="[ end_of_archive ]">
-      <div className="flex-1">
-        <div className="mb-10">
-          <h1 className="font-display text-4xl sm:text-5xl tracking-tight mb-1">
-            <BrandTitle>SETS_ARCHIVE</BrandTitle>
-          </h1>
-          <Label>
-            › {sets.length} recording{sets.length !== 1 ? "s" : ""} found
-          </Label>
-        </div>
+      {Object.entries(groups).map(([title, groupSets]) => {
+        const shortTitle = title.replace(/^form:at\s+/i, "").trim();
+        return (
+          <section key={title} className="mb-10">
+            <PageTitle>002 : audio_extracted</PageTitle>
 
-        {Object.entries(groups).map(([title, groupSets]) => {
-          const shortTitle = title.replace(/^form:at\s+/i, "").trim();
-          return (
-            <section key={title} className="mb-10">
-              <Label className="mb-3 text-grey tracking-widest uppercase">
-                — {shortTitle} · set archive
-              </Label>
-              <ul>
-                {groupSets.map((set) => {
-                  const isLoaded = nowPlaying?.id === set.id;
-                  const isThisPlaying = isLoaded && isPlaying;
-                  const plays = playCounts[set.id] ?? 0;
-                  return (
-                    <li
-                      key={set.id}
-                      className="flex items-center py-3 border-b border-white/5 last:border-0"
+            <ul>
+              {groupSets.map((set) => {
+                const isLoaded = nowPlaying?.id === set.id;
+                const isThisPlaying = isLoaded && isPlaying;
+                const plays = playCounts[set.id] ?? 0;
+                return (
+                  <li
+                    key={set.id}
+                    className="flex items-center py-3 border-b border-white/5 last:border-0"
+                  >
+                    <Link
+                      to="/sets/$setId"
+                      params={{ setId: set.id }}
+                      className="flex-1 min-w-0 cursor-pointer group"
                     >
-                      <Link
-                        to="/sets/$setId"
-                        params={{ setId: set.id }}
-                        className="flex-1 min-w-0 cursor-pointer group"
+                      <span
+                        className={`text-sm sm:text-base transition-colors ${
+                          isThisPlaying ? "text-gold" : "text-grey group-hover:text-white"
+                        }`}
                       >
-                        <span
-                          className={`text-sm sm:text-base transition-colors ${
-                            isThisPlaying ? "text-gold" : "text-grey group-hover:text-white"
-                          }`}
-                        >
-                          {set.artist}
-                        </span>
-                        {plays > 0 && (
-                          <span className="ml-3 text-xs text-gold tabular-nums">› {plays}</span>
-                        )}
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => (isLoaded ? setIsPlaying(!isPlaying) : loadTrack(set))}
-                        aria-label={`Play ${set.artist}`}
-                        className="shrink-0 ml-8 text-grey hover:text-gold transition-colors cursor-pointer text-sm"
-                      >
-                        {isThisPlaying ? "⏸" : "▶"}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          );
-        })}
-      </div>
+                        {set.artist}
+                      </span>
+                      {plays > 0 && (
+                        <span className="ml-3 text-xs text-gold tabular-nums">› {plays}</span>
+                      )}
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => (isLoaded ? setIsPlaying(!isPlaying) : loadTrack(set))}
+                      aria-label={`Play ${set.artist}`}
+                      className="shrink-0 ml-8 text-grey hover:text-gold transition-colors cursor-pointer text-sm"
+                    >
+                      {isThisPlaying ? "⏸" : "▶"}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        );
+      })}
     </PageLayout>
   );
 }

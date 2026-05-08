@@ -1,7 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { BrandTitle } from "~/components/BrandTitle";
 import { PageLayout } from "~/components/PageLayout";
-import { Label } from "~/components/Text";
+import { Label, PageTitle } from "~/components/Text";
 import { getDJ } from "~/data/djs";
 import { getPastEvents, getUpcomingEvents } from "~/data/events";
 
@@ -15,47 +15,31 @@ function Events() {
 
   return (
     <PageLayout footer="[ end_of_transmission ]">
-      <div className="flex-1">
-        <div className="mb-10">
-          <h1 className="font-display text-4xl sm:text-5xl tracking-tight mb-1">
-            <BrandTitle>EVENTS</BrandTitle>
-          </h1>
-          <Label>› {upcoming.length + past.length} transmissions logged</Label>
-        </div>
-
-        {upcoming.length > 0 && (
-          <section className="mb-12">
-            <Label className="mb-6 text-grey tracking-widest uppercase">— incoming signals</Label>
-            <ul className="space-y-px">
-              {upcoming.map((event) => (
-                <li key={event.id}>
-                  <EventCard event={event} />
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
+      {upcoming.length > 0 && (
         <section className="mb-12">
           <Label className="mb-6 text-grey tracking-widest uppercase">— incoming signals</Label>
-          {upcoming.length === 0 && (
-            <p className="t-body sm:t-body-md text-grey">no transmissions scheduled — stay tuned</p>
-          )}
+          <ul className="space-y-px">
+            {upcoming.map((event) => (
+              <li key={event.id}>
+                <EventCard event={event} />
+              </li>
+            ))}
+          </ul>
         </section>
+      )}
 
-        {past.length > 0 && (
-          <section>
-            <Label className="mb-6 text-grey tracking-widest uppercase">— archive</Label>
-            <ul className="space-y-px">
-              {past.map((event) => (
-                <li key={event.id}>
-                  <EventCard event={event} past />
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-      </div>
+      {past.length > 0 && (
+        <section>
+          <PageTitle>sequence_log</PageTitle>
+          <ul className="space-y-px">
+            {past.map((event) => (
+              <li key={event.id}>
+                <EventCard event={event} past />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </PageLayout>
   );
 }

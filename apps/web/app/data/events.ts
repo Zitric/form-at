@@ -26,7 +26,7 @@ export const events: Event[] = [
     title: "FORM:AT 001",
     date: "2026-02-06",
     venue: "Southside, Glasgow",
-    lineupIds: ["hubey", "angel-negrin", "julz-lever"],
+    lineupIds: ["angel-negrin", "julz-lever", "hubey"],
     audio: "techno / electro / dub",
     runtime: "23:00 — 04:00",
     status: "past",

@@ -1,5 +1,6 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { BrandTitle } from "~/components/BrandTitle";
+import { Image } from "~/components/Image";
 import { PageLayout } from "~/components/PageLayout";
 import { TerminalRow } from "~/components/TerminalRow";
 import { Body, Label } from "~/components/Text";
@@ -31,10 +32,22 @@ function DJDetail() {
       <div className="flex-1">
         <Link
           to="/djs"
-          className="inline-flex items-center gap-2 text-xs sm:text-sm text-grey hover:text-purple transition-colors mb-10"
+          className="inline-flex items-center gap-2 text-xs sm:text-sm text-grey hover:text-purple transition-colors mb-6"
         >
           ‹ djs_collective
         </Link>
+
+        {dj.photo && (
+          <Image
+            src={dj.photo}
+            alt={dj.name}
+            sizes="(min-width: 768px) 672px, 100vw"
+            priority
+            className="w-full aspect-square object-cover mb-8"
+            // className="w-full aspect-[3/2] object-cover mb-8"
+            // className="w-full aspect-[4/5] object-cover mb-8"
+          />
+        )}
 
         <div className="space-y-1 mb-8">
           <TerminalRow label="type" value={dj.type} />

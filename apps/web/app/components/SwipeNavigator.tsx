@@ -133,7 +133,7 @@ export function SwipeNavigator() {
 
       {/* Page position dots — mobile only */}
       <div
-        className="sm:hidden fixed left-0 right-0 flex justify-center z-50 pointer-events-none mb-1"
+        className="sm:hidden fixed left-0 right-0 flex justify-center z-50 pointer-events-none mb-4"
         style={{ bottom: dotsBottom, transition: "bottom 300ms ease-in-out" }}
       >
         <div className="relative flex items-center gap-1.5">
