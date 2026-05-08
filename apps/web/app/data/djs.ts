@@ -3,6 +3,11 @@ export type DJ = {
   name: string;
   type: "resident" | "guest";
   bio?: string;
+  /**
+   * Base path under `/images/`, no size or extension — consumed by `<Image src={dj.photo}>`.
+   * e.g. `"djs/julz-lever"` → resolves to the AVIF/WebP variants in `public/images/djs/`.
+   * Source file goes in `apps/web/images-source/djs/{id}.jpg`; run `pnpm optimize-images` to generate.
+   */
   photo?: string;
   socials?: {
     instagram?: string;
@@ -31,21 +36,24 @@ export const djs: DJ[] = [
     name: "Hubey",
     type: "resident",
     bio: "Co-founder of Form:at. Graphic designer and selector. Analog sound for a digital world.",
-    setIds: ["signal-002-hubey"],
+    photo: "djs/hubey",
+    setIds: ["set-002-hubey"],
   },
   {
     id: "julz-lever",
     name: "Julz Lever",
     type: "resident",
     bio: "Co-founder of Form:at. Software engineer by day, techno selector by night.",
-    setIds: ["signal-002-julz-lever"],
+    photo: "djs/julz-lever",
+    setIds: ["set-002-julz-lever"],
   },
   {
     id: "til",
     name: "t.i.l.",
     type: "resident",
     bio: "Resident selector at Form:at. Acid, dub and the frequencies in between.",
-    setIds: ["signal-002-til"],
+    photo: "djs/til",
+    setIds: ["set-002-til"],
   },
 ];
 

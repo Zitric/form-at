@@ -9,6 +9,7 @@
     "start": "vite preview",
     "lint": "biome check app",
     "tsc": "tsc --noEmit",
+    "optimize-images": "node scripts/optimize-images.mjs",
     "deploy": "pnpm build && npx wrangler pages deploy dist/client --project-name=form-at-web --commit-dirty=true"
   },
   "dependencies": {
@@ -33,6 +34,7 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "esbuild": "^0.28.0",
     "rollup-plugin-visualizer": "^7.0.1",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.1.0",
     "typescript": "^5.8.0",
     "vite": "^7.0.0",

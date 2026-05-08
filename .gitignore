@@ -20,3 +20,6 @@ apps/*/app.config.timestamp_*.js
 .wrangler/
 
 CLAUDE.local.md
+
+# Heavy image originals — optimized variants in apps/web/public/images/ are committed
+apps/*/images-source/

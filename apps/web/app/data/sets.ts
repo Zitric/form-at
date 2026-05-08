@@ -20,7 +20,7 @@ export const sets: MusicSet[] = [
     date: "2026-04-24",
     venue: "Find the red door, Glasgow",
     description:
-      "t.i.l. is a Glasgow-based techno artist who has been making music for over 20 years. He is known for his unique style of techno that blends elements of acid, house, and techno.",
+      "Opening transmission for sequence 002. Establishing the initial connection with deep, hypnotic dub techno.",
     duration: "1:00:00",
     src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20t.i.l.mp3",
     peaks: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20t.i.l.json",
@@ -44,7 +44,7 @@ export const sets: MusicSet[] = [
     date: "2026-04-24",
     venue: "Find the red door, Glasgow",
     description:
-      "Hubey is a Glasgow-based techno artist who has been making music for over 20 years. He is known for his unique style of techno that blends elements of acid, house, and techno.",
+      "Closing protocol for sequence 002. High-fidelity techno pushing the system's architecture to its absolute limit",
     duration: "1:00:00",
     src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20Julz%20Lever.mp3",
     peaks:
