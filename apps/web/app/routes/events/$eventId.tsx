@@ -2,7 +2,7 @@ import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { Image } from "~/components/Image";
 import { PageLayout } from "~/components/PageLayout";
 import { TerminalRow } from "~/components/TerminalRow";
-import { Label } from "~/components/Text";
+import { Label, PageTitle } from "~/components/Text";
 import { getDJ } from "~/data/djs";
 import { getEvent } from "~/data/events";
 
@@ -32,7 +32,7 @@ function EventDetail() {
         <Link
           to="/events"
           preload="intent"
-          className="inline-flex items-center gap-2 text-xs sm:text-sm text-grey hover:text-purple transition-colors mb-10"
+          className="inline-flex items-center gap-2 text-sm sm:text-base text-grey hover:text-purple transition-colors mb-10"
         >
           ‹ events_archive
         </Link>
@@ -59,7 +59,7 @@ function EventDetail() {
 
         {lineup.length > 0 && (
           <div className="mb-10">
-            <Label className="mb-3 text-grey">lineup</Label>
+            <PageTitle>lineup</PageTitle>
             <ul className="space-y-1.5">
               {lineup.map((dj) => {
                 if (!dj) return null;

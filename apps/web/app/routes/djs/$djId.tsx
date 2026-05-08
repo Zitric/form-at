@@ -1,11 +1,12 @@
-import { Link, createFileRoute, notFound } from "@tanstack/react-router";
+import { Link, createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { BrandTitle } from "~/components/BrandTitle";
+import { Card } from "~/components/Card";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { Image } from "~/components/Image";
 import { PageLayout } from "~/components/PageLayout";
 import { TerminalRow } from "~/components/TerminalRow";
-import { Label } from "~/components/Text";
+import { PageTitle } from "~/components/Text";
 import { getDJ } from "~/data/djs";
 import { events } from "~/data/events";
 import { getSet } from "~/data/sets";
@@ -31,6 +32,7 @@ function DJDetail() {
   const isPlaying = useStore((s) => s.isPlaying);
   const loadTrack = useStore((s) => s.loadTrack);
   const setIsPlaying = useStore((s) => s.setIsPlaying);
+  const navigate = useNavigate();
 
   const isFirstLoading = !hasTypedDjDetail;
   useEffect(() => {
@@ -43,7 +45,7 @@ function DJDetail() {
         <Link
           to="/djs"
           preload="intent"
-          className="inline-flex items-center gap-2 text-xs sm:text-sm text-grey hover:text-purple transition-colors mb-6"
+          className="inline-flex items-center gap-2 text-sm sm:text-base text-grey hover:text-purple transition-colors mb-6"
         >
           ‹ djs_collective
         </Link>
@@ -81,41 +83,39 @@ function DJDetail() {
 
         {sets.length > 0 && (
           <section className="mb-12">
-            <Label className="mb-4 text-grey tracking-widest uppercase">
-              — recorded transmissions
-            </Label>
+            <PageTitle className="mb-4 text-grey tracking-widest">audio_logs</PageTitle>
             <ul className="space-y-px">
-              {sets.map((set) => {
+              {sets.map((set, index) => {
                 if (!set) return null;
                 const isLoaded = nowPlaying?.id === set.id;
-                const isThisPlaying = isLoaded && isPlaying;
                 return (
                   <li key={set.id}>
-                    <div className="flex items-center justify-between px-4 py-4 border border-grey/10 group">
-                      <div>
-                        <p className="font-display text-lg sm:text-xl tracking-tight transition-colors">
-                          {set.title}
-                        </p>
-                        {set.date && <Label>{set.date}</Label>}
-                      </div>
-                      <div className="flex items-center gap-4 shrink-0 ml-4">
+                    <Card
+                      imageSrc={set.artwork}
+                      imageAlt={set.title}
+                      onClick={() => (isLoaded ? setIsPlaying(!isPlaying) : loadTrack(set))}
+                      action={
                         <Link
                           to="/sets/$setId"
                           params={{ setId: set.id }}
                           preload="intent"
-                          className="text-xs text-grey hover:text-purple transition-colors"
+                          className="inline-flex items-center gap-2 px-3 py-2 text-xs text-grey hover:text-purple hover:border hover:border-purple/30 transition-colors"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           [ info ]
                         </Link>
-                        <button
-                          type="button"
-                          onClick={() => (isLoaded ? setIsPlaying(!isPlaying) : loadTrack(set))}
-                          className={`text-xs transition-colors cursor-pointer ${isThisPlaying ? "text-gold" : "text-grey hover:text-gold"}`}
-                        >
-                          {isThisPlaying ? "⏸" : "▶"}
-                        </button>
+                      }
+                      animationDelay={index}
+                    >
+                      <div className="flex flex-col gap-1">
+                        <p className="text-sm sm:text-base tracking-tight truncate">
+                          {set.title}, Glasgow
+                        </p>
+                        {set.date && (
+                          <p className="text-xs sm:text-sm text-grey truncate">{set.date}</p>
+                        )}
                       </div>
-                    </div>
+                    </Card>
                   </li>
                 );
               })}
@@ -125,27 +125,21 @@ function DJDetail() {
 
         {djEvents.length > 0 && (
           <section>
-            <Label className="mb-4 text-grey tracking-widest uppercase">— events</Label>
+            <PageTitle className="mb-4 text-grey tracking-widest">deployment_history</PageTitle>
             <ul className="space-y-px">
-              {djEvents.map((event) => (
+              {djEvents.map((event, index) => (
                 <li key={event.id}>
-                  <Link
-                    to="/events"
-                    preload="intent"
-                    className="flex items-center justify-between px-4 py-4 border border-grey/10 hover:border-purple transition-colors group"
+                  <Card
+                    animationDelay={index + sets.length}
+                    className={event.status === "past" ? "opacity-60" : ""}
+                    onClick={() =>
+                      navigate({ to: "/events/$eventId", params: { eventId: event.id } })
+                    }
                   >
-                    <div>
-                      <p className="font-display text-lg sm:text-xl tracking-tight group-hover:text-white transition-colors">
-                        {event.title}
-                      </p>
-                      <Label>
-                        {event.date} · {event.venue}
-                      </Label>
-                    </div>
-                    <Label className="shrink-0 ml-4 text-grey group-hover:text-purple transition-colors">
-                      {event.status === "upcoming" ? "[ soon ]" : "[ past ]"}
-                    </Label>
-                  </Link>
+                    <p className="text-sm sm:text-base tracking-tight truncate">
+                      {event.title} · {event.date} · Glasgow
+                    </p>
+                  </Card>
                 </li>
               ))}
             </ul>

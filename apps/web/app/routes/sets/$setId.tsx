@@ -1,16 +1,14 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { BrandTitle } from "~/components/BrandTitle";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { Image } from "~/components/Image";
 import { PageLayout } from "~/components/PageLayout";
 import { TerminalRow } from "~/components/TerminalRow";
-import { Body, Label } from "~/components/Text";
+import { Label, PageTitle } from "~/components/Text";
 import { fetchSetStats } from "~/data/set-stats";
 import type { SetStats } from "~/data/set-stats";
 import { getSet } from "~/data/sets";
 import { useStore } from "~/store";
-import { fmtDate, fmtDuration } from "~/utils/fmt";
 
 // Module-level flag — true once the typewriter has played on any set detail page in this client session.
 let hasTypedSetDetail = false;
@@ -27,16 +25,12 @@ export const Route = createFileRoute("/sets/$setId")({
 
 function buildStatsRows(stats: SetStats): Array<[string, string]> {
   const rows: Array<[string, string]> = [["plays", `${stats.playCount}`]];
-  if (stats.totalSeconds > 0)
-    rows.push(["signal_time", `${fmtDuration(stats.totalSeconds)} total`]);
-  if (stats.avgSeconds > 0) rows.push(["avg_session", fmtDuration(Math.round(stats.avgSeconds))]);
   if (stats.countryCount > 0)
     rows.push([
       "reach",
       `${stats.countryCount} ${stats.countryCount === 1 ? "territory" : "territories"}`,
     ]);
   if (stats.topCountries.length > 0) rows.push(["top_territories", stats.topCountries.join(" / ")]);
-  if (stats.firstPlay) rows.push(["first_tx", fmtDate(stats.firstPlay)]);
   return rows;
 }
 
@@ -56,8 +50,9 @@ function SetDetail() {
 
   const metaRows: Array<[string, string]> = (
     [
+      set.title && ["event", set.title],
       set.date && ["date", set.date],
-      set.venue && ["loc", set.venue],
+      // set.venue && ["loc", set.venue],
       set.duration && ["duration", set.duration],
     ] as Array<[string, string] | false>
   ).filter((row): row is [string, string] => Boolean(row));
@@ -70,7 +65,7 @@ function SetDetail() {
         <Link
           to="/sets"
           preload="intent"
-          className="inline-flex items-center gap-2 text-xs sm:text-sm text-grey hover:text-purple transition-colors mb-10"
+          className="inline-flex items-center gap-2 text-sm sm:text-base text-grey hover:text-purple transition-colors mb-10"
         >
           ‹ sets_archive
         </Link>
@@ -81,7 +76,7 @@ function SetDetail() {
             alt={set.title}
             sizes="(min-width: 768px) 448px, 100vw"
             priority
-            className="w-full max-w-md aspect-square object-cover mb-8 mx-auto"
+            className="w-full max-w-md aspect-square object-cover mb-6 mx-auto"
           />
         )}
 
@@ -95,7 +90,6 @@ function SetDetail() {
               isThisPlaying ? <span className="text-gold">[ live ]</span> : <span>[ ready ]</span>
             }
           />
-
           {statsRows.length > 0 && (
             <>
               <Label className="pt-3 text-grey">· · ·</Label>
@@ -107,9 +101,8 @@ function SetDetail() {
         </div>
 
         <h1 className="text-3xl sm:text-4xl font-bold leading-tight tracking-tight mb-2">
-          <BrandTitle>{set.title}</BrandTitle>
+          <PageTitle>{set.artist}</PageTitle>
         </h1>
-        <Body className="mb-10">{set.artist}</Body>
 
         {set.description && (
           <ConsoleWriter isFirstLoading={isFirstLoading}>{set.description}</ConsoleWriter>
@@ -118,7 +111,7 @@ function SetDetail() {
         <button
           type="button"
           onClick={() => (isLoaded ? setIsPlaying(!isPlaying) : loadTrack(set))}
-          className="flex items-center justify-center gap-4 w-full sm:w-auto sm:px-12 border border-grey/20 px-6 py-4 text-sm sm:text-base text-grey hover:border-purple hover:text-white transition-colors"
+          className="flex items-center justify-center gap-4 w-full sm:w-auto sm:px-12 border border-grey/20 px-6 py-4 mb-8! text-sm sm:text-base text-grey hover:border-purple hover:text-white transition-colors"
         >
           <span className="text-gold">{isThisPlaying ? "⏸" : "▶"}</span>
           {isThisPlaying ? "now_playing" : "play_set"}

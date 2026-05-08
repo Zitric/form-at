@@ -66,7 +66,7 @@ function Home() {
         </button>
 
         <div
-          className="flex items-center justify-center gap-10 mt-8"
+          className="flex items-center justify-center gap-10 my-8"
           style={{ animation: isFirstLoad ? "fade-in 5s ease-out" : "fade-in 0.6s ease-out" }}
           suppressHydrationWarning
         >
