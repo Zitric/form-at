@@ -23,12 +23,14 @@ export const djs: DJ[] = [
     name: "Ángel Negrín",
     type: "guest",
     bio: "Ángel Negrín is a Venezuelan DJ based in Glasgow. After years of playing in psychedelic, punk and post-rock bands, his focus shifted to selecting and mixing music following his experiences in the rave scenes of Belgium and Scotland. He runs the Luna Roja parties, focused on psychedelic and hypnotic sounds.",
+    photo: "djs/angel-negrin",
   },
   {
     id: "brandon-lee-vear",
     name: "Brandon Lee Vear",
     type: "guest",
     bio: "Brandon Lee Vear is an Australian born poet and musician based in Glasgow. As a resident of local artist run space EXIT club, Brandon’s sound is defined by the outer edges of hypnotic and psychedelic techno, electro and experimental. Coming from a background in the DIY punk scene in Chicago, counter culture and independence are central to his artistry. Sharing line-ups with the likes of Rrose, Stanislav Tolkachev and Marco Shuttle, he has become a key figure in Scotland’s experimental scene.",
+    photo: "djs/brandon-lee-vear",
   },
 
   // Residents

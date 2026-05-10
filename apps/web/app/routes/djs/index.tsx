@@ -44,6 +44,8 @@ function DJs() {
           {guests.map((dj, index) => (
             <li key={dj.id}>
               <Card
+                imageSrc={dj.photo}
+                imageAlt={dj.name}
                 onClick={() => navigate({ to: "/djs/$djId", params: { djId: dj.id } })}
                 animationDelay={index + residents.length}
               >
