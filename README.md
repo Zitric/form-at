@@ -30,6 +30,36 @@ pnpm build         # production build
 pnpm check         # Biome lint + format
 ```
 
+### Tests
+
+| Command                   | What it runs                                  |
+|---------------------------|-----------------------------------------------|
+| `pnpm -C apps/web test`         | Vitest watch — unit tests during development |
+| `pnpm -C apps/web test:run`     | Vitest single run (used in CI)               |
+| `pnpm -C apps/web test:ui`      | Vitest UI dashboard                          |
+| `pnpm -C apps/web test:e2e`     | Playwright — boots dev server automatically  |
+| `pnpm -C apps/web test:e2e:ui`  | Playwright UI mode (great for debugging)     |
+
+Two layers, separate folders:
+
+- **`apps/web/tests/unit`** — Vitest + jsdom + Testing Library. Pure logic: store actions, hooks, components, utilities.
+- **`apps/web/tests/e2e`** — Playwright across Chromium + WebKit + mobile profiles. Real browser flows. Audio is mocked with a tiny silent MP3 fixture so tests don't hit R2.
+
+First Playwright run also needs `pnpm exec playwright install` to fetch browser binaries.
+
+See `apps/web/tests/README.md` for conventions and how to add tests.
+
+### CI / CD
+
+Two GitHub Actions workflows in `.github/workflows/`:
+
+- **`ci.yml`** — runs on every push (except `main`) and every pull request. Three parallel jobs: `static` (biome + tsc), `unit` (vitest), `e2e` (playwright on Chromium and WebKit).
+- **`deploy.yml`** — runs on push to `main`. Re-runs the same `static` / `unit` / `e2e` jobs as gates, then deploys to Cloudflare Pages only if all pass. Direct pushes to main can't bypass the test suite.
+
+Required secrets:
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+
 ---
 
 ## Architecture notes

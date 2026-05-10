@@ -1,26 +1,29 @@
-name: Deploy
+name: CI
 
 on:
   push:
+    branches-ignore: [main] # main pushes go to deploy.yml after a PR has been merged
+  pull_request:
     branches: [main]
 
 concurrency:
-  group: deploy-main
-  cancel-in-progress: false
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   NODE_VERSION: 22
   PNPM_VERSION: 9.15.0
 
 jobs:
-  # Run the full test matrix before deploying so a direct push to main can't
-  # ship broken code. PRs run the same checks via ci.yml.
+  # ── Static analysis: biome lint + format + tsc type check ────────────────
   static:
+    name: Lint & types
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with: { version: "${{ env.PNPM_VERSION }}" }
+        with:
+          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -29,12 +32,15 @@ jobs:
       - run: pnpm -C apps/web lint
       - run: pnpm -C apps/web tsc
 
+  # ── Unit tests (vitest, jsdom) ───────────────────────────────────────────
   unit:
+    name: Unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with: { version: "${{ env.PNPM_VERSION }}" }
+        with:
+          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -42,45 +48,43 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm -C apps/web test:run
 
+  # ── E2E tests (playwright, chromium + webkit) ─────────────────────────────
   e2e:
+    name: E2E tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with: { version: "${{ env.PNPM_VERSION }}" }
+        with:
+          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+
       - name: Cache Playwright browsers
         id: pw-cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ runner.os }}-${{ hashFiles('apps/web/package.json') }}
+
       - name: Install Playwright browsers
         if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: pnpm -C apps/web exec playwright install --with-deps chromium
+        run: pnpm -C apps/web exec playwright install --with-deps chromium webkit
+
       - name: Install Playwright system deps
         if: steps.pw-cache.outputs.cache-hit == 'true'
-        run: pnpm -C apps/web exec playwright install-deps chromium
-      - run: pnpm -C apps/web test:e2e --project=chromium
+        run: pnpm -C apps/web exec playwright install-deps chromium webkit
 
-  deploy:
-    needs: [static, unit, e2e]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with: { version: "${{ env.PNPM_VERSION }}" }
-      - uses: actions/setup-node@v4
+      - name: Run Playwright tests
+        run: pnpm -C apps/web test:e2e --project=chromium --project=webkit
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - run: npx wrangler pages deploy apps/web/dist/client --project-name=form-at-web --branch=main
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7

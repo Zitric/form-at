@@ -23,3 +23,10 @@ CLAUDE.local.md
 
 # Heavy image originals — optimized variants in apps/web/public/images/ are committed
 apps/*/images-source/
+
+# Playwright artefacts — reports, traces, videos
+apps/*/playwright-report/
+apps/*/test-results/
+
+# Vitest coverage
+apps/*/coverage/

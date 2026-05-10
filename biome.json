@@ -29,7 +29,10 @@
       "**/.output/**",
       "**/.turbo/**",
       "**/dist/**",
-      "**/routeTree.gen.ts"
+      "**/routeTree.gen.ts",
+      "**/playwright-report/**",
+      "**/test-results/**",
+      "**/coverage/**"
     ]
   }
 }

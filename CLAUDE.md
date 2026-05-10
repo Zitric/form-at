@@ -118,6 +118,38 @@ pnpm build            # build all apps via Turbo
 pnpm check            # Biome lint + format across the whole repo
 ```
 
+### Tests (in `apps/web/`)
+
+```bash
+pnpm test             # vitest watch
+pnpm test:run         # vitest single run (CI)
+pnpm test:ui          # vitest UI
+pnpm test:e2e         # playwright (boots dev server itself)
+pnpm test:e2e:ui      # playwright UI mode
+```
+
+Test layout:
+- `apps/web/tests/unit/` — Vitest + jsdom. Store, hooks, components, utils.
+- `apps/web/tests/e2e/` — Playwright. Real browser flows; mocks `*.mp3` requests with a silent fixture.
+- `apps/web/tests/setup.ts` — jest-dom matchers + `HTMLMediaElement` stubs (jsdom doesn't decode audio).
+- `apps/web/tests/README.md` — conventions for adding tests.
+
+Notes:
+- Vitest config (`apps/web/vitest.config.ts`) is **standalone** — it does NOT extend `vite.config.ts`, because the `tanstackStart` plugin sets up SSR routing that conflicts with isolated test rendering.
+- Playwright config (`apps/web/playwright.config.ts`) uses `workers: 1` because Vite's dev server races on parallel route loads. The suite is still <15s.
+- Click handlers that call `playTrack` rely on the module-level `audioEl` ref in `playerSlice.ts`. Tests register a fake audio element via `registerAudioElement()` in `beforeEach`.
+
+## CI / CD
+
+Two GitHub Actions workflows in `.github/workflows/`:
+
+- **`ci.yml`** — runs on push (non-main) + pull_request. Three parallel jobs: `static` (biome lint + tsc), `unit` (vitest), `e2e` (playwright on Chromium + WebKit).
+- **`deploy.yml`** — runs on push to `main`. Re-runs the same three jobs as gates, then `deploy` runs only after all pass. A direct push to `main` cannot bypass the test suite.
+
+Both workflows use `pnpm/action-setup` pinned to the version in the root `package.json` `packageManager` field, plus `actions/setup-node` with pnpm cache. Playwright browsers are cached at `~/.cache/ms-playwright` keyed on `apps/web/package.json`.
+
+Required GitHub secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
+
 ## First run
 
 After `pnpm install`, running `pnpm dev` will auto-generate `apps/web/app/routeTree.gen.ts` (TanStack Router code-gen). This file is gitignored — it regenerates on every dev start.
@@ -132,4 +164,7 @@ After `pnpm install`, running `pnpm dev` will auto-generate `apps/web/app/routeT
 - `apps/web/app/store/` — Zustand store (playerSlice + persist middleware)
 - `apps/web/app/hooks/` — custom hooks (useAudioPlayer)
 - `apps/web/app/styles/tokens.ts` — design token JS source of truth
+- `apps/web/vitest.config.ts` / `apps/web/playwright.config.ts` — test configs
+- `apps/web/tests/` — unit + e2e tests, plus README on conventions
+- `.github/workflows/ci.yml` / `deploy.yml` — CI pipeline + gated deploy
 - `wrangler.toml` — at repo root, configures Cloudflare Pages + D1 binding
