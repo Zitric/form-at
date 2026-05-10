@@ -1,0 +1,30 @@
+import { expect, test } from "@playwright/test";
+
+test.describe("navigation", () => {
+  test("desktop nav links route between sections", async ({ page, isMobile }) => {
+    test.skip(isMobile, "Desktop nav is hidden on small viewports");
+    await page.goto("/");
+    for (const [label, urlRe] of [
+      ["sets", /\/sets$/],
+      ["events", /\/events$/],
+      ["djs", /\/djs$/],
+      ["home", /\/$/],
+    ] as const) {
+      await page.getByRole("link", { name: label, exact: true }).first().click();
+      await expect(page).toHaveURL(urlRe);
+    }
+  });
+
+  test("mobile bottom nav links route between sections", async ({ page, isMobile }) => {
+    test.skip(!isMobile, "BottomNav is mobile-only");
+    await page.goto("/");
+    for (const [label, urlRe] of [
+      ["sets", /\/sets$/],
+      ["events", /\/events$/],
+      ["djs", /\/djs$/],
+    ] as const) {
+      await page.getByRole("link", { name: label }).first().click();
+      await expect(page).toHaveURL(urlRe);
+    }
+  });
+});
