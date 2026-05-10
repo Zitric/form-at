@@ -25,18 +25,16 @@ function Home() {
 
   const nowPlaying = useStore((s) => s.nowPlaying);
   const isPlaying = useStore((s) => s.isPlaying);
-  const loadTrack = useStore((s) => s.loadTrack);
-  const setIsPlaying = useStore((s) => s.setIsPlaying);
+  const playTrack = useStore((s) => s.playTrack);
 
   useEffect(() => {
     hasTypedHome = true;
   }, []);
 
   const handleListenClick = () => {
-    // If track is saved and not playing: resume it
+    // If track is saved and not playing: resume it (synchronously, preserves user gesture)
     if (nowPlaying && !isPlaying) {
-      loadTrack(nowPlaying);
-      setIsPlaying(true);
+      playTrack(nowPlaying);
     } else {
       // Otherwise navigate to sets (either no track or already playing)
       navigate({ to: "/sets" });

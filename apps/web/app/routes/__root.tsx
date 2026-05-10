@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { BottomNav } from "~/components/BottomNav";
 import { Header } from "~/components/Header";
 import { PageLayout } from "~/components/PageLayout";
+import { PlaybackErrorToast } from "~/components/PlaybackErrorToast";
 import { Player } from "~/components/Player";
 import { SwipeNavigator } from "~/components/SwipeNavigator";
 import { TerminalRow } from "~/components/TerminalRow";
@@ -168,6 +169,7 @@ function Root() {
         <Header />
         <SwipeNavigator />
         <Player />
+        <PlaybackErrorToast />
         <BottomNav />
         <Scripts />
       </body>

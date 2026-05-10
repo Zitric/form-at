@@ -2,7 +2,7 @@ import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { Image } from "~/components/Image";
 import { PageLayout } from "~/components/PageLayout";
 import { TerminalRow } from "~/components/TerminalRow";
-import { Label, PageTitle } from "~/components/Text";
+import { PageTitle } from "~/components/Text";
 import { getDJ } from "~/data/djs";
 import { getEvent } from "~/data/events";
 
@@ -47,9 +47,9 @@ function EventDetail() {
           />
         )}
 
-        <h1 className="text-3xl sm:text-4xl font-display font-bold leading-tight tracking-tight mb-2">
+        <PageTitle className="text-3xl sm:text-4xl font-display font-bold leading-tight tracking-tight mb-2">
           {event.title}
-        </h1>
+        </PageTitle>
 
         <div className="space-y-1 mb-8">
           {metaRows.map(([label, value]) => (
@@ -60,23 +60,24 @@ function EventDetail() {
         {lineup.length > 0 && (
           <div className="mb-10">
             <PageTitle>lineup</PageTitle>
-            <ul className="space-y-1.5">
-              {lineup.map((dj) => {
+            <p className="text-sm sm:text-base text-grey leading-relaxed">
+              {lineup.map((dj, i) => {
                 if (!dj) return null;
                 return (
-                  <li key={dj.id}>
+                  <span key={dj.id}>
+                    {i > 0 && <span className="text-grey/40 mx-2">/</span>}
                     <Link
                       to="/djs/$djId"
                       params={{ djId: dj.id }}
                       preload="intent"
-                      className="inline-flex items-center gap-2 px-3 py-2 text-sm border border-grey/20 text-grey hover:border-purple hover:text-purple transition-colors rounded"
+                      className="hover:text-gold transition-colors"
                     >
                       {dj.name}
                     </Link>
-                  </li>
+                  </span>
                 );
               })}
-            </ul>
+            </p>
           </div>
         )}
       </div>

@@ -25,7 +25,7 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
   const setIsPlaying = useStore((s) => s.setIsPlaying);
   const isPlaying = useStore((s) => s.isPlaying);
   const setLastPosition = useStore((s) => s.setLastPosition);
-  const loadTrack = useStore((s) => s.loadTrack);
+  const playTrack = useStore((s) => s.playTrack);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -98,52 +98,60 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     const audio = audioRef.current;
     if (!audio || !nowPlaying) return;
 
+    // Two cases handle src/play:
+    //   1) User clicked → playTrack action already set src + called play() synchronously
+    //      (preserves mobile user-gesture token). Detect via src match and skip.
+    //   2) Persisted nowPlaying restored on reload → no user gesture, can't auto-play.
+    //      Just set src and seek to saved position; user has to click to start.
+    const trackUrl = new URL(nowPlaying.src, window.location.href).href;
+    if (audio.src === trackUrl || audio.currentSrc === trackUrl) {
+      // Click path already handled it
+      return;
+    }
+
     let cancelled = false;
     const savedPos = useStore.getState().positions[nowPlaying.id] ?? 0;
-    const isRestore = isInitialRestore.current && savedPos > 0;
+    const isRestore = isInitialRestore.current;
     isInitialRestore.current = false;
 
-    if (!isRestore) setLoading(true);
     setError(false);
-    setIsPlaying(false);
 
     audio.src = nowPlaying.src;
     audio.load();
 
-    const playWhenReady = () => {
+    const seekWhenReady = () => {
       if (cancelled) return;
-      if (savedPos > 0) {
-        audio.currentTime = savedPos;
-      }
-      audio
-        .play()
-        .then(() => {
-          setIsPlaying(true);
-          setLoading(false);
-        })
-        .catch(() => setLoading(false));
+      if (savedPos > 0) audio.currentTime = savedPos;
     };
 
     if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
-      playWhenReady();
+      seekWhenReady();
     } else {
-      audio.addEventListener("canplay", playWhenReady, { once: true });
+      audio.addEventListener("canplay", seekWhenReady, { once: true });
+    }
+
+    // Non-restore path (e.g. programmatic loadTrack without user gesture): try to play
+    // and accept that mobile may reject. Reset isPlaying on rejection.
+    if (!isRestore) {
+      audio.play().catch(() => setIsPlaying(false));
     }
 
     return () => {
       cancelled = true;
-      audio.removeEventListener("canplay", playWhenReady);
+      audio.removeEventListener("canplay", seekWhenReady);
       sendPlay(nowPlaying);
     };
   }, [nowPlaying, sendPlay, setIsPlaying, audioRef]);
 
-  // Bridge: lets external components drive playback via the store's isPlaying flag
+  // Bridge: lets external components drive playback via the store's isPlaying flag.
+  // If audio.play() rejects, reset the flag instead of swallowing — otherwise the UI
+  // shows "playing" while the audio is actually paused.
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
     if (!isPlaying && !audio.paused) audio.pause();
-    else if (isPlaying && audio.paused) audio.play().catch(() => {});
-  }, [isPlaying, audioRef]);
+    else if (isPlaying && audio.paused) audio.play().catch(() => setIsPlaying(false));
+  }, [isPlaying, audioRef, setIsPlaying]);
 
   useEffect(() => {
     if (!nowPlaying || !("mediaSession" in navigator)) return;
@@ -157,8 +165,12 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     });
 
     navigator.mediaSession.setActionHandler("play", () => {
-      audioRef.current?.play();
-      setIsPlaying(true);
+      const audio = audioRef.current;
+      if (!audio) return;
+      audio
+        .play()
+        .then(() => setIsPlaying(true))
+        .catch(() => setIsPlaying(false));
     });
     navigator.mediaSession.setActionHandler("pause", () => {
       audioRef.current?.pause();
@@ -172,21 +184,28 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     navigator.mediaSession.setActionHandler("previoustrack", () => {
       const i = sets.findIndex((s) => s.id === useStore.getState().nowPlaying?.id);
       const prev = sets[i - 1];
-      if (i > 0 && prev) useStore.getState().loadTrack(prev);
+      if (i > 0 && prev) useStore.getState().playTrack(prev);
     });
     navigator.mediaSession.setActionHandler("nexttrack", () => {
       const i = sets.findIndex((s) => s.id === useStore.getState().nowPlaying?.id);
       const next = sets[i + 1];
-      if (i < sets.length - 1 && next) useStore.getState().loadTrack(next);
+      if (i < sets.length - 1 && next) useStore.getState().playTrack(next);
     });
   }, [nowPlaying, setIsPlaying, audioRef]);
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || loading) return;
-    if (useStore.getState().isPlaying) audio.pause();
-    else audio.play().catch(() => {});
-  }, [loading, audioRef]);
+    if (useStore.getState().isPlaying) {
+      audio.pause();
+      setIsPlaying(false);
+    } else {
+      audio
+        .play()
+        .then(() => setIsPlaying(true))
+        .catch(() => setIsPlaying(false));
+    }
+  }, [loading, audioRef, setIsPlaying]);
 
   // seek sets audio position only; PlayerSeeker picks up the change via the 'seeked' event
   const seek = useCallback(
@@ -223,7 +242,7 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
       if (nowPlaying) setLastPosition(nowPlaying.id, 0);
       const i = sets.findIndex((s) => s.id === nowPlaying?.id);
       const nextSet = i < sets.length - 1 ? sets[i + 1] : null;
-      if (nextSet) loadTrack(nextSet);
+      if (nextSet) playTrack(nextSet);
     },
   };
 

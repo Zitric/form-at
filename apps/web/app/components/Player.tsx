@@ -1,9 +1,11 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { BrandTitle } from "~/components/BrandTitle";
+import { NextIcon, PauseIcon, PlayIcon, PrevIcon } from "~/components/PlayerIcons";
 import { Waveform } from "~/components/Waveform";
 import { type MusicSet, sets } from "~/data/sets";
 import { useAudioPlayer } from "~/hooks/useAudioPlayer";
 import { useStore } from "~/store";
+import { registerAudioElement } from "~/store/playerSlice";
 
 const fmt = (s: number) => {
   if (!Number.isFinite(s)) return "0:00";
@@ -45,7 +47,7 @@ const PlayerControls = memo(function PlayerControls({
         className={skipBtnClass}
         suppressHydrationWarning
       >
-        ⏮
+        <PrevIcon />
       </button>
       <button
         type="button"
@@ -55,7 +57,13 @@ const PlayerControls = memo(function PlayerControls({
         className="shrink-0 w-5 text-gold disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer text-sm"
         suppressHydrationWarning
       >
-        {loading ? <span className="animate-pulse opacity-60">…</span> : isPlaying ? "⏸" : "▶"}
+        {loading ? (
+          <span className="animate-pulse opacity-60">…</span>
+        ) : isPlaying ? (
+          <PauseIcon />
+        ) : (
+          <PlayIcon />
+        )}
       </button>
       <button
         type="button"
@@ -65,7 +73,7 @@ const PlayerControls = memo(function PlayerControls({
         className={skipBtnClass}
         suppressHydrationWarning
       >
-        ⏭
+        <NextIcon />
       </button>
     </>
   );
@@ -181,17 +189,24 @@ const PlayerSeeker = memo(function PlayerSeeker({
 export function Player() {
   const nowPlaying = useStore((s) => s.nowPlaying);
   const isPlaying = useStore((s) => s.isPlaying);
-  const loadTrack = useStore((s) => s.loadTrack);
+  const playTrack = useStore((s) => s.playTrack);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { loading, error, togglePlay, seek, audioProps } = useAudioPlayer(audioRef);
+
+  // Expose the audio element to the store so click handlers in any component can
+  // call audio.play() synchronously inside the user-gesture stack frame.
+  useEffect(() => {
+    registerAudioElement(audioRef.current);
+    return () => registerAudioElement(null);
+  }, []);
 
   const currentIdx = sets.findIndex((s) => s.id === nowPlaying?.id);
   const prevSet = currentIdx > 0 ? sets[currentIdx - 1] : null;
   const nextSet = currentIdx < sets.length - 1 ? sets[currentIdx + 1] : null;
 
-  const onPrev = useCallback(() => prevSet && loadTrack(prevSet), [prevSet, loadTrack]);
-  const onNext = useCallback(() => nextSet && loadTrack(nextSet), [nextSet, loadTrack]);
+  const onPrev = useCallback(() => prevSet && playTrack(prevSet), [prevSet, playTrack]);
+  const onNext = useCallback(() => nextSet && playTrack(nextSet), [nextSet, playTrack]);
 
   return (
     <>

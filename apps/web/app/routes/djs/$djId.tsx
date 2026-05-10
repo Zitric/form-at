@@ -28,10 +28,7 @@ export const Route = createFileRoute("/djs/$djId")({
 
 function DJDetail() {
   const { dj, djEvents, sets } = Route.useLoaderData();
-  const nowPlaying = useStore((s) => s.nowPlaying);
-  const isPlaying = useStore((s) => s.isPlaying);
-  const loadTrack = useStore((s) => s.loadTrack);
-  const setIsPlaying = useStore((s) => s.setIsPlaying);
+  const playTrack = useStore((s) => s.playTrack);
   const navigate = useNavigate();
 
   const isFirstLoading = !hasTypedDjDetail;
@@ -87,13 +84,12 @@ function DJDetail() {
             <ul className="space-y-px">
               {sets.map((set, index) => {
                 if (!set) return null;
-                const isLoaded = nowPlaying?.id === set.id;
                 return (
                   <li key={set.id}>
                     <Card
                       imageSrc={set.artwork}
                       imageAlt={set.title}
-                      onClick={() => (isLoaded ? setIsPlaying(!isPlaying) : loadTrack(set))}
+                      onClick={() => playTrack(set)}
                       action={
                         <Link
                           to="/sets/$setId"

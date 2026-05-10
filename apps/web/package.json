@@ -10,6 +10,7 @@
     "lint": "biome check app",
     "tsc": "tsc --noEmit",
     "optimize-images": "node scripts/optimize-images.mjs",
+    "stats": "node scripts/stats.mjs",
     "deploy": "pnpm build && npx wrangler pages deploy dist/client --project-name=form-at-web --commit-dirty=true"
   },
   "dependencies": {

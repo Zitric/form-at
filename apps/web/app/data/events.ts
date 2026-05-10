@@ -13,7 +13,7 @@ export type Event = {
 export const events: Event[] = [
   {
     id: "format-002",
-    title: "FORM:AT 002",
+    title: "Form:at 002",
     date: "2026-04-24",
     venue: "Southside, Glasgow",
     lineupIds: ["brandon-lee-vear", "julz-lever", "hubey", "til"],
@@ -24,7 +24,7 @@ export const events: Event[] = [
   },
   {
     id: "format-001",
-    title: "FORM:AT 001",
+    title: "Form:at 001",
     date: "2026-02-06",
     venue: "Southside, Glasgow",
     lineupIds: ["angel-negrin", "julz-lever", "hubey"],

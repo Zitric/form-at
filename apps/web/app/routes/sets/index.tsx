@@ -66,10 +66,7 @@ function SetsSkeleton() {
 }
 
 function Sets() {
-  const nowPlaying = useStore((s) => s.nowPlaying);
-  const isPlaying = useStore((s) => s.isPlaying);
-  const loadTrack = useStore((s) => s.loadTrack);
-  const setIsPlaying = useStore((s) => s.setIsPlaying);
+  const playTrack = useStore((s) => s.playTrack);
 
   const groups = sets.reduce<Record<string, typeof sets>>((acc, set) => {
     if (!acc[set.title]) acc[set.title] = [];
@@ -87,13 +84,12 @@ function Sets() {
 
             <ul className="space-y-px">
               {groupSets.map((set, index) => {
-                const isLoaded = nowPlaying?.id === set.id;
                 return (
                   <li key={set.id}>
                     <Card
                       imageSrc={set.artwork}
                       imageAlt={set.title}
-                      onClick={() => (isLoaded ? setIsPlaying(!isPlaying) : loadTrack(set))}
+                      onClick={() => playTrack(set)}
                       action={
                         <Link
                           to="/sets/$setId"

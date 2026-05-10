@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { Image } from "~/components/Image";
 import { PageLayout } from "~/components/PageLayout";
+import { PauseIcon, PlayIcon } from "~/components/PlayerIcons";
 import { TerminalRow } from "~/components/TerminalRow";
 import { Label, PageTitle } from "~/components/Text";
 import { fetchSetStats } from "~/data/set-stats";
@@ -38,8 +39,7 @@ function SetDetail() {
   const { set, stats } = Route.useLoaderData();
   const nowPlaying = useStore((s) => s.nowPlaying);
   const isPlaying = useStore((s) => s.isPlaying);
-  const loadTrack = useStore((s) => s.loadTrack);
-  const setIsPlaying = useStore((s) => s.setIsPlaying);
+  const playTrack = useStore((s) => s.playTrack);
   const isLoaded = nowPlaying?.id === set.id;
   const isThisPlaying = isLoaded && isPlaying;
 
@@ -110,10 +110,10 @@ function SetDetail() {
 
         <button
           type="button"
-          onClick={() => (isLoaded ? setIsPlaying(!isPlaying) : loadTrack(set))}
+          onClick={() => playTrack(set)}
           className="flex items-center justify-center gap-4 w-full sm:w-auto sm:px-12 border border-grey/20 px-6 py-4 mb-8! text-sm sm:text-base text-grey hover:border-purple hover:text-white transition-colors"
         >
-          <span className="text-gold">{isThisPlaying ? "⏸" : "▶"}</span>
+          <span className="text-gold">{isThisPlaying ? <PauseIcon /> : <PlayIcon />}</span>
           {isThisPlaying ? "now_playing" : "play_set"}
         </button>
       </div>
