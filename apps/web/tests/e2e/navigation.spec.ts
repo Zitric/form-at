@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { gotoAndHydrate } from "./_helpers";
 
 test.describe("navigation", () => {
   test("desktop nav links route between sections", async ({ page, isMobile }) => {
     test.skip(isMobile, "Desktop nav is hidden on small viewports");
-    await page.goto("/");
+    await gotoAndHydrate(page, "/");
     for (const [label, urlRe] of [
       ["sets", /\/sets$/],
       ["events", /\/events$/],
@@ -17,7 +18,7 @@ test.describe("navigation", () => {
 
   test("mobile bottom nav links route between sections", async ({ page, isMobile }) => {
     test.skip(!isMobile, "BottomNav is mobile-only");
-    await page.goto("/");
+    await gotoAndHydrate(page, "/");
     for (const [label, urlRe] of [
       ["sets", /\/sets$/],
       ["events", /\/events$/],

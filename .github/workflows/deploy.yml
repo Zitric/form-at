@@ -26,6 +26,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # routeTree.gen.ts is gitignored — vite generates it on dev/build start.
+      - run: pnpm -C apps/web exec vite build
       - run: pnpm -C apps/web lint
       - run: pnpm -C apps/web tsc
 

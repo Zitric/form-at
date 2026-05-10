@@ -92,7 +92,7 @@ function SetDetail() {
           />
           {statsRows.length > 0 && (
             <>
-              <Label className="pt-3 text-grey">· · ·</Label>
+              {/* <Label className="pt-3 text-grey">· · ·</Label> */}
               {statsRows.map(([label, value]) => (
                 <TerminalRow key={label} label={label} value={value} dimValue />
               ))}
