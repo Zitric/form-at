@@ -1,5 +1,10 @@
-// Keep WIDTHS / FORMATS in sync with apps/web/scripts/optimize-images.mjs
-const WIDTHS = [640, 1080, 1920] as const;
+// Keep WIDTHS in sync with apps/web/scripts/optimize-images.mjs. We deliberately
+// cap at 1080 because some source images (DJ portraits) don't reach 1920px wide
+// — the optimizer doesn't upscale, so requesting a 1920 variant would 404 on
+// those and Firefox doesn't fall back to the <img src> default reliably. 1080
+// covers every realistic display: 4K desktop with DPR=2 at our largest layout
+// (~672px) still renders cleanly.
+const WIDTHS = [640, 1080] as const;
 
 type ImageProps = {
   /**

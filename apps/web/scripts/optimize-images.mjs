@@ -13,8 +13,9 @@ const SRC = join(ROOT, "images-source");
 const OUT = join(ROOT, "public/images");
 
 // Output one variant per (width × format). Sized for typical web layouts:
-// 640px = mobile, 1080px = tablet / desktop @1x, 1920px = desktop @2x or hero.
-const WIDTHS = [640, 1080, 1920];
+// 640px = mobile, 1080px = tablet / desktop. Keep in sync with the WIDTHS
+// constant in apps/web/app/components/Image.tsx.
+const WIDTHS = [640, 1080];
 const FORMATS = [
   { ext: "avif", options: { quality: 60, effort: 6 } },
   { ext: "webp", options: { quality: 82 } },

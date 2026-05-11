@@ -18,7 +18,7 @@ export const Route = createFileRoute("/events/$eventId")({
     const event = loaderData?.event;
     if (!event) return {};
     return pageHead({
-      title: `${event.title} · ${event.date} · Form:at`,
+      title: `${event.title} · ${event.date}`,
       description: `${event.title} on ${event.date} at ${event.venue}. ${event.audio}.`,
       path: `/events/${event.id}`,
     });

@@ -31,7 +31,7 @@ export const Route = createFileRoute("/sets/$setId")({
     const set = loaderData?.set;
     if (!set) return {};
     return pageHead({
-      title: `${set.artist} — ${set.title} · Form:at`,
+      title: `${set.artist} — ${set.title} · ${set.date}`,
       description: set.description ?? `Recorded set from ${set.artist} at ${set.title}, Glasgow.`,
       path: `/sets/${set.id}`,
     });
