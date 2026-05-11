@@ -1,72 +1,58 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
-import { createServerFn } from "@tanstack/react-start";
+import { Await, Link, createFileRoute, defer } from "@tanstack/react-router";
+import { Suspense } from "react";
 import { Card } from "~/components/Card";
 import { PageLayout } from "~/components/PageLayout";
-import { PageTitle } from "~/components/Text";
+import { TerminalRow } from "~/components/TerminalRow";
+import { Label, PageTitle } from "~/components/Text";
+import { type OverallStats, fetchOverallStats } from "~/data/set-stats";
 import { sets } from "~/data/sets";
 import { useStore } from "~/store";
+import { fmtDuration } from "~/utils/fmt";
 
-const fetchPlayCounts = createServerFn({ method: "GET" }).handler(async ({ context }) => {
-  try {
-    const cf = (context as unknown as Record<string, unknown>).cloudflare as
-      | { env: { DB: D1Database } }
-      | undefined;
-    const db = cf?.env?.DB;
-    if (!db) return {} as Record<string, number>;
-
-    const { results } = await db
-      .prepare("SELECT set_id, COUNT(*) AS count FROM plays GROUP BY set_id")
-      .all<{ set_id: string; count: number }>();
-
-    return Object.fromEntries(results.map((r) => [r.set_id, r.count]));
-  } catch {
-    return {} as Record<string, number>;
-  }
-});
-
+// The list of sets is a static module import → page renders instantly.
+// Overall stats come from D1 — return an UN-AWAITED promise so the loader
+// resolves immediately; the OverallMetrics component reads it via <Await>
+// inside Suspense so the cards never wait on stats.
 export const Route = createFileRoute("/sets/")({
-  loader: async () => {
-    try {
-      return await fetchPlayCounts();
-    } catch {
-      return {} as Record<string, number>;
-    }
-  },
-  staleTime: 5 * 60 * 1000, // play counts are slow-changing — reuse for 5 min
-  pendingMs: 0,
-  pendingComponent: SetsSkeleton,
+  loader: () => ({ overallStats: defer(fetchOverallStats()) }),
+  staleTime: 5 * 60 * 1000,
+  gcTime: 30 * 60 * 1000,
   component: Sets,
 });
 
-function SetsSkeleton() {
+function OverallMetrics({ promise }: { promise: Promise<OverallStats | null> }) {
   return (
-    <PageLayout footer="[ end_of_archive ]">
-      <div className="flex-1">
-        <div className="mb-10">
-          <div className="h-9 w-52 bg-white/10 animate-pulse mb-2" />
-          <div className="h-3 w-28 bg-white/10 animate-pulse" />
-        </div>
-        <div className="mb-10">
-          <div className="h-3 w-36 bg-white/10 animate-pulse mb-3" />
-          {Array.from({ length: 5 }).map((_, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton rows
-            <div key={i} className="flex items-center gap-4 p-4 border border-grey/10 mb-px">
-              <div className="shrink-0 w-20 h-20 sm:w-28 sm:h-28 bg-white/10 animate-pulse" />
-              <div className="flex-1">
-                <div className="h-4 bg-white/10 animate-pulse mb-2 w-48" />
-                <div className="h-3 bg-white/10 animate-pulse w-32" />
+    <Suspense fallback={<div className="h-[72px]" aria-hidden />}>
+      <Await promise={promise}>
+        {(stats) => {
+          if (!stats) return null;
+          return (
+            <div className="mb-8 animate-fade-in">
+              <Label className="mb-2 text-grey tracking-widest">[ archive_metrics ]</Label>
+              <div className="space-y-1">
+                <TerminalRow label="plays" value={String(stats.totalPlays)} dimValue />
+                <TerminalRow
+                  label="listened_for"
+                  value={fmtDuration(stats.totalSeconds)}
+                  dimValue
+                />
+                <TerminalRow
+                  label="reach"
+                  value={`${stats.countryCount} ${stats.countryCount === 1 ? "territory" : "territories"}`}
+                  dimValue
+                />
               </div>
-              <div className="shrink-0 h-4 w-12 bg-white/10 animate-pulse" />
             </div>
-          ))}
-        </div>
-      </div>
-    </PageLayout>
+          );
+        }}
+      </Await>
+    </Suspense>
   );
 }
 
 function Sets() {
   const playTrack = useStore((s) => s.playTrack);
+  const { overallStats } = Route.useLoaderData();
 
   const groups = sets.reduce<Record<string, typeof sets>>((acc, set) => {
     if (!acc[set.title]) acc[set.title] = [];
@@ -77,6 +63,7 @@ function Sets() {
 
   return (
     <PageLayout footer="[ end_of_archive ]">
+      <OverallMetrics promise={overallStats} />
       {Object.entries(groups).map(([title, groupSets]) => {
         return (
           <section key={title} className="mb-10">

@@ -21,6 +21,11 @@ export const Route = createFileRoute("/sets/$setId")({
     const stats = await fetchSetStats({ data: params.setId }).catch(() => null);
     return { set, stats };
   },
+  // Stats barely change minute-to-minute — reuse the cached payload for 5 min so
+  // navigating away and back doesn't re-hit D1.
+  staleTime: 5 * 60 * 1000,
+  // Keep cached stats in memory for 30 min after the route unmounts.
+  gcTime: 30 * 60 * 1000,
   component: SetDetail,
 });
 
