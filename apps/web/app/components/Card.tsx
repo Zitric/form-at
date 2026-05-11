@@ -48,7 +48,7 @@ export function Card({
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
       className={cn(
-        "flex items-center gap-4 p-4 border border-grey/10 hover:border-purple transition-colors mb-8 rounded-lg",
+        "flex items-center gap-4 p-4 border border-grey/10 hover:border-purple transition-colors mb-8 rounded-lg group",
         onClick && "cursor-pointer",
         className,
       )}
@@ -83,7 +83,7 @@ export function Card({
       </div>
 
       {/* Action button */}
-      {action && <div className="shrink-0">{action}</div>}
+      {action && <div className="shrink-0 pl-2">{action}</div>}
     </div>
   );
 }

@@ -1,6 +1,7 @@
-import { Await, Link, createFileRoute, defer } from "@tanstack/react-router";
+import { Await, createFileRoute, defer, useNavigate } from "@tanstack/react-router";
 import { Suspense } from "react";
 import { Card } from "~/components/Card";
+import { CirclePlayButton } from "~/components/CirclePlayButton";
 import { PageLayout } from "~/components/PageLayout";
 import { TerminalRow } from "~/components/TerminalRow";
 import { Label, PageTitle } from "~/components/Text";
@@ -72,7 +73,10 @@ function OverallMetrics({ promise }: { promise: Promise<OverallStats | null> }) 
 }
 
 function Sets() {
+  const navigate = useNavigate();
   const playTrack = useStore((s) => s.playTrack);
+  const nowPlaying = useStore((s) => s.nowPlaying);
+  const isPlaying = useStore((s) => s.isPlaying);
   const { overallStats } = Route.useLoaderData();
 
   const groups = sets.reduce<Record<string, typeof sets>>((acc, set) => {
@@ -92,22 +96,22 @@ function Sets() {
 
             <ul className="space-y-px">
               {groupSets.map((set, index) => {
+                const isThisPlaying = nowPlaying?.id === set.id && isPlaying;
+
                 return (
                   <li key={set.id}>
                     <Card
                       imageSrc={set.artwork}
                       imageAlt={set.title}
-                      onClick={() => playTrack(set)}
+                      onClick={() => navigate({ to: "/sets/$setId", params: { setId: set.id } })}
                       action={
-                        <Link
-                          to="/sets/$setId"
-                          params={{ setId: set.id }}
-                          preload="intent"
-                          className="inline-flex items-center gap-2 px-3 py-2 text-xs text-grey hover:text-purple hover:border hover:border-purple/30 transition-colors"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          [ info ]
-                        </Link>
+                        <CirclePlayButton
+                          isThisPlaying={isThisPlaying}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            playTrack(set);
+                          }}
+                        />
                       }
                       animationDelay={index}
                     >

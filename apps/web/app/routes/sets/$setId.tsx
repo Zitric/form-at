@@ -101,6 +101,16 @@ function SetDetail() {
           />
         )}
 
+        <button
+          type="button"
+          onClick={() => playTrack(set)}
+          className="flex items-center justify-center gap-4 w-full sm:min-w-[280px] border-2 border-gold px-6 py-4 mb-8! text-sm text-grey shadow-[0_0_15px_rgba(197,133,56,0.2)] hover:shadow-[0_0_25px_rgba(197,133,56,0.4)] hover:cursor-pointer  transition-all group"
+          style={{ animation: "border-pulse 2s infinite" }}
+        >
+          <span className="text-gold">{isThisPlaying ? <PauseIcon /> : <PlayIcon />}</span>
+          {isThisPlaying ? "now_playing" : "play_set"}
+        </button>
+
         <div className="space-y-1 mb-8">
           {metaRows.map(([label, value]) => (
             <TerminalRow key={label} label={label} value={value} />
@@ -131,16 +141,6 @@ function SetDetail() {
         {set.description && (
           <ConsoleWriter isFirstLoading={isFirstLoading}>{set.description}</ConsoleWriter>
         )}
-
-        <button
-          type="button"
-          onClick={() => playTrack(set)}
-          className="flex items-center justify-center gap-4 w-full sm:min-w-[280px] border-2 border-gold px-6 py-4 mb-8! text-sm text-grey shadow-[0_0_15px_rgba(197,133,56,0.2)] hover:shadow-[0_0_25px_rgba(197,133,56,0.4)] hover:cursor-pointer  transition-all group"
-          style={{ animation: "border-pulse 2s infinite" }}
-        >
-          <span className="text-gold">{isThisPlaying ? <PauseIcon /> : <PlayIcon />}</span>
-          {isThisPlaying ? "now_playing" : "play_set"}
-        </button>
       </div>
     </PageLayout>
   );

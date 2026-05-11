@@ -2,6 +2,7 @@ import { Link, createFileRoute, notFound, useNavigate } from "@tanstack/react-ro
 import { useEffect } from "react";
 import { BrandTitle } from "~/components/BrandTitle";
 import { Card } from "~/components/Card";
+import { CirclePlayButton } from "~/components/CirclePlayButton";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { Image } from "~/components/Image";
 import { JsonLd } from "~/components/JsonLd";
@@ -48,6 +49,8 @@ export const Route = createFileRoute("/djs/$djId")({
 function DJDetail() {
   const { dj, djEvents, sets } = Route.useLoaderData();
   const playTrack = useStore((s) => s.playTrack);
+  const isPlaying = useStore((s) => s.isPlaying);
+  const nowPlaying = useStore((s) => s.nowPlaying);
   const navigate = useNavigate();
 
   const isFirstLoading = !hasTypedDjDetail;
@@ -115,28 +118,28 @@ function DJDetail() {
             <ul className="space-y-px">
               {sets.map((set, index) => {
                 if (!set) return null;
+                const isThisPlaying = nowPlaying?.id === set.id && isPlaying;
+
                 return (
                   <li key={set.id}>
                     <Card
                       imageSrc={set.artwork}
                       imageAlt={set.title}
-                      onClick={() => playTrack(set)}
+                      onClick={() => navigate({ to: "/sets/$setId", params: { setId: set.id } })}
                       action={
-                        <Link
-                          to="/sets/$setId"
-                          params={{ setId: set.id }}
-                          preload="intent"
-                          className="inline-flex items-center gap-2 px-3 py-2 text-xs text-grey hover:text-purple hover:border hover:border-purple/30 transition-colors"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          [ info ]
-                        </Link>
+                        <CirclePlayButton
+                          isThisPlaying={isThisPlaying}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            playTrack(set);
+                          }}
+                        />
                       }
                       animationDelay={index}
                     >
                       <div className="flex flex-col gap-1">
                         <p className="text-sm sm:text-base tracking-tight truncate">
-                          {set.title}, Glasgow
+                          {set.artist} @ {set.title}, Glasgow
                         </p>
                         {set.date && (
                           <p className="text-xs sm:text-sm text-grey truncate">{set.date}</p>
