@@ -22,37 +22,24 @@ export type DJ = {
     residentadvisor?: string;
     bandcamp?: string;
     spotify?: string;
+    linktree?: string;
     website?: string;
   };
   setIds?: string[];
 };
 
 export const djs: DJ[] = [
-  // Guests
-  {
-    id: "angel-negrin",
-    name: "Ángel Negrín",
-    type: "guest",
-    bio: "Ángel Negrín is a Venezuelan DJ based in Glasgow. After years of playing in psychedelic, punk and post-rock bands, his focus shifted to selecting and mixing music following his experiences in the rave scenes of Belgium and Scotland. He runs the Luna Roja parties, focused on psychedelic and hypnotic sounds.",
-    photo: "djs/angel-negrin",
-  },
-  {
-    id: "brandon-lee-vear",
-    name: "Brandon Lee Vear",
-    type: "guest",
-    bio: "Brandon Lee Vear is an Australian born poet and musician based in Glasgow. As a resident of local artist run space EXIT club, Brandon’s sound is defined by the outer edges of hypnotic and psychedelic techno, electro and experimental. Coming from a background in the DIY punk scene in Chicago, counter culture and independence are central to his artistry. Sharing line-ups with the likes of Rrose, Stanislav Tolkachev and Marco Shuttle, he has become a key figure in Scotland’s experimental scene.",
-    photo: "djs/brandon-lee-vear",
-  },
-
   // Residents
   {
-    id: "til",
-    name: "t.i.l.",
+    id: "julz-lever",
+    name: "Julz Lever",
     type: "resident",
-    bio: "Newly integrated into the Glasgow network, Valdas is a selector whose focus lies in precise curation. Transitioning from radio transmissions to live operations, he made his foundational debut at Form:at 002. A rising operator within the local architecture.",
-    photo: "djs/til",
-    setIds: ["set-002-til"],
+    bio: "A DJ and selector since 2004, Julz Lever cut his teeth on Technics turntables across the Spanish club circuit before bringing his raw, hypnotic techno vision to Scotland. Today, he is a central figure in Glasgow's underground architecture as the co-founder and resident of Form:at. A former resident of Edinburgh's Bailando Collective and co-founder of Circuit Control, Julz has left his mark on iconic venues like The Flying Duck and The Poetry Club. Heavily influenced by the hypnotic precision of Rene Wise, Rrose, Border One, Dasha Rush and many more... His sets are built on deep, driving, and uncompromising frequencies.",
+    photo: "djs/julz-lever",
+    setIds: ["set-002-julz-lever"],
+    socials: { soundcloud: "julz-lever", residentadvisor: "julzlever", linktree: "julzlever" },
   },
+
   {
     id: "hubey",
     name: "hubey",
@@ -61,19 +48,45 @@ export const djs: DJ[] = [
     photo: "djs/hubey",
     setIds: ["set-002-hubey"],
     socials: {
-      soundcloud: "hubey",
+      soundcloud: "https://soundcloud.com/hubeyyy",
       instagram: "https://www.instagram.com/_hubey__/",
       residentadvisor: "hubey",
     },
   },
   {
-    id: "julz-lever",
-    name: "Julz Lever",
+    id: "til",
+    name: "t.i.l.",
     type: "resident",
-    bio: "A DJ and selector since 2004, Julz Lever cut his teeth on Technics turntables across the Spanish club circuit before bringing his raw, hypnotic techno vision to Scotland. Today, he is a central figure in Glasgow's underground architecture as the co-founder and resident of Form:at. A former resident of Edinburgh's Bailando Collective and co-founder of Circuit Control, Julz has left his mark on iconic venues like The Flying Duck and The Poetry Club. Heavily influenced by the hypnotic precision of Rene Wise, Rrose, Border One, Dasha Rush and many more... His sets are built on deep, driving, and uncompromising frequencies.",
-    photo: "djs/julz-lever",
-    setIds: ["set-002-julz-lever"],
-    socials: { soundcloud: "julz-lever", residentadvisor: "julzlever" },
+    bio: "Newly integrated into the Glasgow network, Valdas is a selector whose focus lies in precise curation. Transitioning from radio transmissions to live operations, he made his foundational debut at Form:at 002. A rising operator within the local architecture.",
+    photo: "djs/til",
+    setIds: ["set-002-til"],
+  },
+
+  // Guests
+  {
+    id: "angel-negrin",
+    name: "Ángel Negrín",
+    type: "guest",
+    bio: "Ángel Negrín is a Venezuelan DJ based in Glasgow. After years of playing in psychedelic, punk and post-rock bands, his focus shifted to selecting and mixing music following his experiences in the rave scenes of Belgium and Scotland. He runs the Luna Roja parties, focused on psychedelic and hypnotic sounds.",
+    photo: "djs/angel-negrin",
+    socials: {
+      soundcloud: "https://soundcloud.com/angelnegrin",
+      instagram: "https://www.instagram.com/angelnegrin/",
+      residentadvisor: "angelnegrin",
+    },
+  },
+  {
+    id: "brandon-lee-vear",
+    name: "Brandon Lee Vear",
+    type: "guest",
+    bio: "Brandon Lee Vear is an Australian born poet and musician based in Glasgow. As a resident of local artist run space EXIT club, Brandon’s sound is defined by the outer edges of hypnotic and psychedelic techno, electro and experimental. Coming from a background in the DIY punk scene in Chicago, counter culture and independence are central to his artistry. Sharing line-ups with the likes of Rrose, Stanislav Tolkachev and Marco Shuttle, he has become a key figure in Scotland’s experimental scene.",
+    photo: "djs/brandon-lee-vear",
+    socials: {
+      soundcloud: "https://soundcloud.com/angelnegrin",
+      instagram: "https://www.instagram.com/brandonleevear/",
+      residentadvisor: "brandonleevear",
+      linktree: "brandonleevear",
+    },
   },
 ];
 

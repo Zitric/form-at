@@ -14,6 +14,7 @@ export type SocialKey =
   | "residentadvisor"
   | "bandcamp"
   | "spotify"
+  | "linktree"
   | "website";
 
 type SocialAdapter = {
@@ -55,6 +56,10 @@ export const SOCIALS: Record<SocialKey, SocialAdapter> = {
     label: "spotify",
     toUrl: (h) => wrap(h, () => `https://open.spotify.com/artist/${h}`),
   },
+  linktree: {
+    label: "linktree",
+    toUrl: (h) => wrap(h, () => `https://linktr.ee/${h}`),
+  },
   website: {
     label: "web",
     toUrl: (h) => (isUrl(h) ? h : `https://${h}`),
@@ -70,5 +75,6 @@ export const SOCIAL_ORDER: SocialKey[] = [
   "spotify",
   "residentadvisor",
   "facebook",
+  "linktree",
   "website",
 ];
