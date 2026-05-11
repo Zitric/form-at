@@ -12,6 +12,7 @@ import { events } from "~/data/events";
 import { getSet } from "~/data/sets";
 import { useStore } from "~/store";
 import { pageHead } from "~/utils/head";
+import { SOCIALS, SOCIAL_ORDER, type SocialKey } from "~/utils/socials";
 
 // Module-level flag — true once the typewriter has played on any DJ detail page in this client session.
 let hasTypedDjDetail = false;
@@ -49,7 +50,7 @@ function DJDetail() {
   }, []);
 
   return (
-    <PageLayout footer="[ end_of_transmission ]">
+    <PageLayout>
       <div className="flex-1">
         <Link
           to="/djs"
@@ -65,22 +66,35 @@ function DJDetail() {
             alt={dj.name}
             sizes="(min-width: 768px) 672px, 100vw"
             priority
-            className="w-full aspect-square object-cover mb-8"
-            // className="w-full aspect-[3/2] object-cover mb-8"
-            // className="w-full aspect-[4/5] object-cover mb-8"
+            className="w-full aspect-square object-cover mb-6"
           />
+        )}
+
+        {dj.socials && Object.values(dj.socials).some(Boolean) && (
+          <div className="flex justify-center flex-wrap gap-x-5 gap-y-2 mb-6 ">
+            {SOCIAL_ORDER.map((key: SocialKey) => {
+              const handle = dj.socials?.[key];
+              if (!handle) return null;
+              const { label, toUrl } = SOCIALS[key];
+              return (
+                <a
+                  key={key}
+                  href={toUrl(handle)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-grey hover:text-white transition-colors tracking-widest"
+                >
+                  [ {label} ]
+                </a>
+              );
+            })}
+          </div>
         )}
 
         <div className="space-y-1 mb-8">
           <TerminalRow label="type" value={dj.type} />
           {djEvents.length > 0 && (
             <TerminalRow label="events" value={`${djEvents.length} transmissions`} />
-          )}
-          {dj.socials?.instagram && (
-            <TerminalRow label="instagram" value={`@${dj.socials.instagram}`} />
-          )}
-          {dj.socials?.soundcloud && (
-            <TerminalRow label="soundcloud" value={dj.socials.soundcloud} />
           )}
         </div>
 

@@ -37,7 +37,7 @@ function EventDetail() {
   ];
 
   return (
-    <PageLayout footer="[ end_of_transmission ]">
+    <PageLayout>
       <div className="flex-1">
         <Link
           to="/events"

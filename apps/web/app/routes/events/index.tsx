@@ -20,7 +20,7 @@ function Events() {
   const past = getPastEvents();
 
   return (
-    <PageLayout footer="[ end_of_transmission ]">
+    <PageLayout>
       {upcoming.length > 0 && (
         <section className="mb-12">
           <Label className="mb-6 text-grey tracking-widest uppercase">— incoming signals</Label>

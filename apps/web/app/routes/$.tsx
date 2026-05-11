@@ -7,7 +7,7 @@ export const Route = createFileRoute("/$")({
 
 function NotFound() {
   return (
-    <PageLayout footer="[ end_of_transmission ]">
+    <PageLayout>
       <div className="flex-1 flex flex-col justify-center">
         <p className="text-xs text-grey mb-4">
           <span className="text-gold mr-2">›</span>status: [ 404 ]

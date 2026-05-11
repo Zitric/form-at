@@ -13,7 +13,7 @@ import "~/styles/global.css";
 
 function RootNotFound() {
   return (
-    <PageLayout footer="[ end_of_transmission ]">
+    <PageLayout>
       <div className="flex-1 flex flex-col justify-center">
         <TerminalRow label="status" value="[ 404 ]" className="mb-4" />
         <h1 className="text-5xl sm:text-7xl font-bold leading-none tracking-tighter mb-6">

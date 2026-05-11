@@ -9,9 +9,20 @@ export type DJ = {
    * Source file goes in `apps/web/images-source/djs/{id}.jpg`; run `pnpm optimize-images` to generate.
    */
   photo?: string;
+  /**
+   * External presence — store just the handle/slug (no full URL). The URL
+   * builder in ~/utils/socials.ts wraps each into the canonical link.
+   * For `website`, store the full URL since there's no canonical host pattern.
+   */
   socials?: {
     instagram?: string;
     soundcloud?: string;
+    mixcloud?: string;
+    facebook?: string;
+    residentadvisor?: string;
+    bandcamp?: string;
+    spotify?: string;
+    website?: string;
   };
   setIds?: string[];
 };
@@ -49,6 +60,11 @@ export const djs: DJ[] = [
     bio: "With a house head and an acid heart, hubey has been dishing out bangers around Glasgow, playing with Luna Roja, OH parties and, of course, as a resident at Form:at. Further afield, she can be found in her home town of Dumfries, and has played at the excellent Eden Festival. Expect house, electro, techno... and a wavey adventure to all the places in between.",
     photo: "djs/hubey",
     setIds: ["set-002-hubey"],
+    socials: {
+      soundcloud: "hubey",
+      instagram: "https://www.instagram.com/_hubey__/",
+      residentadvisor: "hubey",
+    },
   },
   {
     id: "julz-lever",
@@ -57,6 +73,7 @@ export const djs: DJ[] = [
     bio: "A DJ and selector since 2004, Julz Lever cut his teeth on Technics turntables across the Spanish club circuit before bringing his raw, hypnotic techno vision to Scotland. Today, he is a central figure in Glasgow's underground architecture as the co-founder and resident of Form:at. A former resident of Edinburgh's Bailando Collective and co-founder of Circuit Control, Julz has left his mark on iconic venues like The Flying Duck and The Poetry Club. Heavily influenced by the hypnotic precision of Rene Wise, Rrose, Border One, Dasha Rush and many more... His sets are built on deep, driving, and uncompromising frequencies.",
     photo: "djs/julz-lever",
     setIds: ["set-002-julz-lever"],
+    socials: { soundcloud: "julz-lever", residentadvisor: "julzlever" },
   },
 ];
 

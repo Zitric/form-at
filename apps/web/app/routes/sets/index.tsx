@@ -34,7 +34,7 @@ function OverallMetrics({ promise }: { promise: Promise<OverallStats | null> }) 
         {(stats) => {
           if (!stats) return null;
           return (
-            <div className="mb-8 animate-fade-in">
+            <div className="mb-8">
               <Label className="mb-2 text-grey tracking-widest">[ archive_metrics ]</Label>
               <div className="space-y-1">
                 <TerminalRow label="plays" value={String(stats.totalPlays)} dimValue />
@@ -69,7 +69,7 @@ function Sets() {
   }, {});
 
   return (
-    <PageLayout footer="[ end_of_archive ]">
+    <PageLayout>
       <OverallMetrics promise={overallStats} />
       {Object.entries(groups).map(([title, groupSets]) => {
         return (

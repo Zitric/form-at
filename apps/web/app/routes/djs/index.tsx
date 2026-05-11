@@ -21,7 +21,7 @@ function DJs() {
   const navigate = useNavigate();
 
   return (
-    <PageLayout footer="[ end_of_transmission ]">
+    <PageLayout>
       {/* Residents */}
       <section>
         <PageTitle>system_architects</PageTitle>

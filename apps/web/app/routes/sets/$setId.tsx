@@ -75,7 +75,7 @@ function SetDetail() {
   const statsRows = stats ? buildStatsRows(stats) : [];
 
   return (
-    <PageLayout footer="[ end_of_transmission ]">
+    <PageLayout>
       <div className="flex-1">
         <Link
           to="/sets"
@@ -115,9 +115,12 @@ function SetDetail() {
           )}
         </div>
 
-        <h1 className="text-3xl sm:text-4xl font-bold leading-tight tracking-tight mb-2">
-          <PageTitle>{set.artist}</PageTitle>
-        </h1>
+        <PageTitle
+          as="h1"
+          className="text-3xl sm:text-4xl font-bold leading-tight tracking-tight mb-2"
+        >
+          {set.artist}
+        </PageTitle>
 
         {set.description && (
           <ConsoleWriter isFirstLoading={isFirstLoading}>{set.description}</ConsoleWriter>

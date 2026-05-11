@@ -68,9 +68,7 @@ async function processOne(srcPath) {
   const maxWidth = Math.max(...WIDTHS);
   if (srcWidth < maxWidth) {
     console.warn(
-      `⚠ ${file}: source is ${srcWidth}px wide, smaller than the max ` +
-        `requested width (${maxWidth}px). Some browsers may render this image ` +
-        "blank. Upload a larger source for best results.",
+      `⚠ ${file}: source is ${srcWidth}px wide, smaller than the max requested width (${maxWidth}px). Some browsers may render this image blank. Upload a larger source for best results.`,
     );
   }
 
