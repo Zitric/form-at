@@ -23,7 +23,7 @@ test.describe("player", () => {
   test("clicking a set card mounts player controls", async ({ page }) => {
     await gotoAndHydrate(page, "/sets");
     await page.locator("ul li").first().getByRole("button").first().click();
-    const controls = page.getByRole("button", { name: /^(Pause|Play)$/i });
+    const controls = page.getByRole("button", { name: /Pause|Play/i });
     await expect(controls.first()).toBeVisible({ timeout: 10_000 });
   });
 });

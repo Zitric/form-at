@@ -4,7 +4,7 @@ import { gotoAndHydrate } from "./_helpers";
 test.describe("home page", () => {
   test("renders manifesto and main CTA", async ({ page }) => {
     await gotoAndHydrate(page, "/");
-    await expect(page.getByText(/Based in Glasgow/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/Based in Glasgow/i).first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole("button", { name: /access_audio|resume_signal/ })).toBeVisible();
   });
 
