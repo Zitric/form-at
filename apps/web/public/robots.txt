@@ -1,0 +1,42 @@
+# https://formatglasgow.com — Glasgow techno collective
+#
+# Default: allow everything.
+User-agent: *
+Allow: /
+
+# AI engines — explicit opt-in so we show up when people ask about Glasgow
+# techno collectives, our DJs, events, etc. These bots respect robots.txt.
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+Sitemap: https://formatglasgow.com/sitemap.xml

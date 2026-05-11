@@ -36,5 +36,9 @@ export function pageHead({
       { name: "twitter:description", content: description },
       ...imageMeta,
     ],
+    // Canonical helps search engines deduplicate (e.g. trailing-slash or
+    // case variants resolve to the same page) and tells AI crawlers which
+    // URL to cite when answering questions about this content.
+    links: [{ rel: "canonical", href: url }],
   };
 }

@@ -27,6 +27,9 @@ apps/*/images-source/
 # Per-route OG banners — regenerated on every build by scripts/generate-og.ts
 apps/*/public/og/
 
+# Sitemap — regenerated on every build by scripts/generate-sitemap.ts
+apps/*/public/sitemap.xml
+
 # Playwright artefacts — reports, traces, videos
 apps/*/playwright-report/
 apps/*/test-results/

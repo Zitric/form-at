@@ -4,6 +4,7 @@ import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { PageLayout } from "~/components/PageLayout";
 import { useFirstLoad } from "~/hooks/useFirstLoad";
 import { useStore } from "~/store";
+import { pageHead } from "~/utils/head";
 
 const mainText =
   "Based in Glasgow, Form:at is an underground techno and electro initiative, dedicated to finding an analog soul in an increasingly digital world. Our operations are grassroots, building intimate, community-focused spaces where music is curated with care and mutual respect is prioritized. We create void points to escape the noise. Join us to disconnect and reconnect with the source.";
@@ -15,6 +16,12 @@ const mainText =
 let hasTypedHome = false;
 
 export const Route = createFileRoute("/")({
+  head: () =>
+    pageHead({
+      title: "Form:at",
+      description: "Glasgow techno collective. Analog soul in a digital world.",
+      path: "/",
+    }),
   component: Home,
 });
 
