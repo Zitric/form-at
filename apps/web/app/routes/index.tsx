@@ -1,11 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
+import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
 import { SocialLink } from "~/components/SocialLink";
 import { useFirstLoad } from "~/hooks/useFirstLoad";
 import { useStore } from "~/store";
 import { pageHead } from "~/utils/head";
+import { organizationLd } from "~/utils/jsonld";
 
 const mainText =
   "Based in Glasgow, Form:at is an underground techno and electro initiative, dedicated to finding an analog soul in an increasingly digital world. Our operations are grassroots, building intimate, community-focused spaces where music is curated with care and mutual respect is prioritized. We create void points to escape the noise. Join us to disconnect and reconnect with the source.";
@@ -51,6 +53,7 @@ function Home() {
 
   return (
     <PageLayout>
+      <JsonLd data={organizationLd()} />
       <div className="flex flex-col justify-start sm:justify-center sm:py-16">
         <div className="space-y-2 mb-8 sm:mb-12 min-h-[20dvh]">
           <ConsoleWriter isFirstLoading={isFirstLoading}>{mainText}</ConsoleWriter>

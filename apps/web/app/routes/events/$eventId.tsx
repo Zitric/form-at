@@ -1,11 +1,13 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { Image } from "~/components/Image";
+import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
 import { TerminalRow } from "~/components/TerminalRow";
 import { PageTitle } from "~/components/Text";
 import { getDJ } from "~/data/djs";
 import { getEvent } from "~/data/events";
 import { pageHead } from "~/utils/head";
+import { eventLd } from "~/utils/jsonld";
 
 export const Route = createFileRoute("/events/$eventId")({
   loader: async ({ params }) => {
@@ -38,6 +40,7 @@ function EventDetail() {
 
   return (
     <PageLayout>
+      <JsonLd data={eventLd(event, lineup)} />
       <div className="flex-1">
         <Link
           to="/events"

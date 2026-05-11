@@ -4,6 +4,7 @@ import { BrandTitle } from "~/components/BrandTitle";
 import { Card } from "~/components/Card";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { Image } from "~/components/Image";
+import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
 import { SocialLink } from "~/components/SocialLink";
 import { TerminalRow } from "~/components/TerminalRow";
@@ -13,6 +14,7 @@ import { events } from "~/data/events";
 import { getSet } from "~/data/sets";
 import { useStore } from "~/store";
 import { pageHead } from "~/utils/head";
+import { djLd } from "~/utils/jsonld";
 import { SOCIALS, SOCIAL_ORDER, type SocialKey } from "~/utils/socials";
 
 // Module-level flag — true once the typewriter has played on any DJ detail page in this client session.
@@ -55,6 +57,7 @@ function DJDetail() {
 
   return (
     <PageLayout>
+      <JsonLd data={djLd(dj)} />
       <div className="flex-1">
         <Link
           to="/djs"
