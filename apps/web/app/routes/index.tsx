@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { PageLayout } from "~/components/PageLayout";
+import { SocialLink } from "~/components/SocialLink";
 import { useFirstLoad } from "~/hooks/useFirstLoad";
 import { useStore } from "~/store";
 import { pageHead } from "~/utils/head";
@@ -75,14 +76,12 @@ function Home() {
           style={{ animation: isFirstLoad ? "fade-in 5s ease-out" : "fade-in 0.6s ease-out" }}
           suppressHydrationWarning
         >
-          <a
+          <SocialLink
             href="https://www.instagram.com/form.at_glasgow/"
-            target="_blank"
-            rel="noopener noreferrer"
             className="text-sm text-grey hover:text-white transition-colors tracking-widest"
           >
             [ instagram ]
-          </a>
+          </SocialLink>
           <a
             href="mailto:format.gla@gmail.com"
             className="text-sm text-grey hover:text-white transition-colors tracking-widest"

@@ -5,6 +5,7 @@ import { Card } from "~/components/Card";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { Image } from "~/components/Image";
 import { PageLayout } from "~/components/PageLayout";
+import { SocialLink } from "~/components/SocialLink";
 import { TerminalRow } from "~/components/TerminalRow";
 import { PageTitle } from "~/components/Text";
 import { getDJ } from "~/data/djs";
@@ -80,15 +81,13 @@ function DJDetail() {
               if (!handle) return null;
               const { label, toUrl } = SOCIALS[key];
               return (
-                <a
+                <SocialLink
                   key={key}
                   href={toUrl(handle)}
-                  target="_blank"
-                  rel="noopener noreferrer"
                   className="text-sm text-grey hover:text-white transition-colors tracking-widest"
                 >
                   [ {label} ]
-                </a>
+                </SocialLink>
               );
             })}
           </div>
