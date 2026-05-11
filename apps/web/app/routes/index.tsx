@@ -62,7 +62,7 @@ function Home() {
         <button
           type="button"
           onClick={handleListenClick}
-          className="flex items-center justify-center gap-4 self-center w-full sm:w-auto sm:px-24 border border-grey/20 px-6 py-4 text-sm sm:text-base text-grey hover:border-purple hover:text-white transition-colors"
+          className="flex items-center justify-center gap-4 self-center w-full sm:w-auto sm:px-24 border-2 border-grey/20 px-6 py-4 text-sm sm:text-base text-grey hover:border-purple hover:text-white hover:cursor-pointer transition-colors shadow-[0_0_15px_rgba(197,133,56,0.2)] hover:shadow-[0_0_25px_rgba(197,133,56,0.4)]"
           style={{
             animation: isFirstLoad
               ? "fade-in 5s ease-out, border-pulse 2s ease-in-out 5s infinite"

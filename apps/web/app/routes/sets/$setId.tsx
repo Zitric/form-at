@@ -36,6 +36,9 @@ export const Route = createFileRoute("/sets/$setId")({
       title: `${set.artist} — ${set.title} · ${set.date}`,
       description: set.description ?? `Recorded set from ${set.artist} at ${set.title}, Glasgow.`,
       path: `/sets/${set.id}`,
+      // Per-set banner generated at build by scripts/generate-og.ts (artwork
+      // + artist + title composition). Falls back to /og-image.png if missing.
+      image: set.artwork ? `/og/sets/${set.id}.png` : undefined,
     });
   },
   component: SetDetail,
@@ -132,7 +135,8 @@ function SetDetail() {
         <button
           type="button"
           onClick={() => playTrack(set)}
-          className="flex items-center justify-center gap-4 w-full sm:w-auto sm:px-12 border border-grey/20 px-6 py-4 mb-8! text-sm sm:text-base text-grey hover:border-purple hover:text-white transition-colors"
+          className="flex items-center justify-center gap-4 w-full sm:min-w-[280px] border-2 border-gold px-6 py-4 mb-8! text-sm text-grey shadow-[0_0_15px_rgba(197,133,56,0.2)] hover:shadow-[0_0_25px_rgba(197,133,56,0.4)] hover:cursor-pointer  transition-all group"
+          style={{ animation: "border-pulse 2s infinite" }}
         >
           <span className="text-gold">{isThisPlaying ? <PauseIcon /> : <PlayIcon />}</span>
           {isThisPlaying ? "now_playing" : "play_set"}

@@ -23,6 +23,9 @@ export const Route = createFileRoute("/events/$eventId")({
       title: `${event.title} · ${event.date}`,
       description: `${event.title} on ${event.date} at ${event.venue}. ${event.audio}.`,
       path: `/events/${event.id}`,
+      // Per-event banner generated at build by scripts/generate-og.ts
+      // (flyer + title + date composition). Falls back to /og-image.png if missing.
+      image: event.flyer ? `/og/events/${event.id}.png` : undefined,
     });
   },
   component: EventDetail,
