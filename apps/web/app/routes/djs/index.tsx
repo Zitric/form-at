@@ -3,8 +3,15 @@ import { Card } from "~/components/Card";
 import { PageLayout } from "~/components/PageLayout";
 import { PageTitle } from "~/components/Text";
 import { getGuests, getResidents } from "~/data/djs";
+import { pageHead } from "~/utils/head";
 
 export const Route = createFileRoute("/djs/")({
+  head: () =>
+    pageHead({
+      title: "DJs · Form:at",
+      description: "Residents and guest DJs at Form:at, Glasgow's techno collective.",
+      path: "/djs",
+    }),
   component: DJs,
 });
 

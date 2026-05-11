@@ -5,6 +5,7 @@ import { TerminalRow } from "~/components/TerminalRow";
 import { PageTitle } from "~/components/Text";
 import { getDJ } from "~/data/djs";
 import { getEvent } from "~/data/events";
+import { pageHead } from "~/utils/head";
 
 export const Route = createFileRoute("/events/$eventId")({
   loader: async ({ params }) => {
@@ -12,6 +13,15 @@ export const Route = createFileRoute("/events/$eventId")({
     if (!event) throw notFound();
     const lineup = event.lineupIds.map((id) => getDJ(id)).filter(Boolean);
     return { event, lineup };
+  },
+  head: ({ loaderData }) => {
+    const event = loaderData?.event;
+    if (!event) return {};
+    return pageHead({
+      title: `${event.title} · ${event.date} · Form:at`,
+      description: `${event.title} on ${event.date} at ${event.venue}. ${event.audio}.`,
+      path: `/events/${event.id}`,
+    });
   },
   component: EventDetail,
 });

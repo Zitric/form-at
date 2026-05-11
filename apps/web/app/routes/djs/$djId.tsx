@@ -11,6 +11,7 @@ import { getDJ } from "~/data/djs";
 import { events } from "~/data/events";
 import { getSet } from "~/data/sets";
 import { useStore } from "~/store";
+import { pageHead } from "~/utils/head";
 
 // Module-level flag — true once the typewriter has played on any DJ detail page in this client session.
 let hasTypedDjDetail = false;
@@ -22,6 +23,17 @@ export const Route = createFileRoute("/djs/$djId")({
     const djEvents = events.filter((e) => e.lineupIds.includes(params.djId));
     const sets = (dj.setIds ?? []).map((id) => getSet(id)).filter(Boolean);
     return { dj, djEvents, sets };
+  },
+  head: ({ loaderData }) => {
+    const dj = loaderData?.dj;
+    if (!dj) return {};
+    return pageHead({
+      title: `${dj.name} · Form:at`,
+      description:
+        dj.bio ??
+        `${dj.name} — ${dj.type === "resident" ? "resident" : "guest"} DJ at Form:at, Glasgow.`,
+      path: `/djs/${dj.id}`,
+    });
   },
   component: DJDetail,
 });

@@ -3,8 +3,15 @@ import { Card } from "~/components/Card";
 import { PageLayout } from "~/components/PageLayout";
 import { Label, PageTitle } from "~/components/Text";
 import { getPastEvents, getUpcomingEvents } from "~/data/events";
+import { pageHead } from "~/utils/head";
 
 export const Route = createFileRoute("/events/")({
+  head: () =>
+    pageHead({
+      title: "Events · Form:at",
+      description: "Upcoming and past Form:at events. Glasgow techno collective.",
+      path: "/events",
+    }),
   component: Events,
 });
 

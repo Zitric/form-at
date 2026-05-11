@@ -10,6 +10,7 @@ import { fetchSetStats } from "~/data/set-stats";
 import type { SetStats } from "~/data/set-stats";
 import { getSet } from "~/data/sets";
 import { useStore } from "~/store";
+import { pageHead } from "~/utils/head";
 
 // Module-level flag — true once the typewriter has played on any set detail page in this client session.
 let hasTypedSetDetail = false;
@@ -26,6 +27,15 @@ export const Route = createFileRoute("/sets/$setId")({
   staleTime: 5 * 60 * 1000,
   // Keep cached stats in memory for 30 min after the route unmounts.
   gcTime: 30 * 60 * 1000,
+  head: ({ loaderData }) => {
+    const set = loaderData?.set;
+    if (!set) return {};
+    return pageHead({
+      title: `${set.artist} — ${set.title} · Form:at`,
+      description: set.description ?? `Recorded set from ${set.artist} at ${set.title}, Glasgow.`,
+      path: `/sets/${set.id}`,
+    });
+  },
   component: SetDetail,
 });
 

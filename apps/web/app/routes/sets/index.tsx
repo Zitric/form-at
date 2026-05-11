@@ -8,6 +8,7 @@ import { type OverallStats, fetchOverallStats } from "~/data/set-stats";
 import { sets } from "~/data/sets";
 import { useStore } from "~/store";
 import { fmtDuration } from "~/utils/fmt";
+import { pageHead } from "~/utils/head";
 
 // The list of sets is a static module import → page renders instantly.
 // Overall stats come from D1 — return an UN-AWAITED promise so the loader
@@ -17,6 +18,12 @@ export const Route = createFileRoute("/sets/")({
   loader: () => ({ overallStats: defer(fetchOverallStats()) }),
   staleTime: 5 * 60 * 1000,
   gcTime: 30 * 60 * 1000,
+  head: () =>
+    pageHead({
+      title: "Sets · Form:at",
+      description: "Recorded transmissions from the Form:at archive. Techno, electro, dub.",
+      path: "/sets",
+    }),
   component: Sets,
 });
 
