@@ -24,6 +24,9 @@ CLAUDE.local.md
 # Heavy image originals — optimized variants in apps/web/public/images/ are committed
 apps/*/images-source/
 
+# Per-route OG banners — regenerated on every build by scripts/generate-og.ts
+apps/*/public/og/
+
 # Playwright artefacts — reports, traces, videos
 apps/*/playwright-report/
 apps/*/test-results/

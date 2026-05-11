@@ -34,6 +34,9 @@ export const Route = createFileRoute("/djs/$djId")({
         dj.bio ??
         `${dj.name} — ${dj.type === "resident" ? "resident" : "guest"} DJ at Form:at, Glasgow.`,
       path: `/djs/${dj.id}`,
+      // Per-DJ banner generated at build by scripts/generate-og.ts. Falls back
+      // to the root /og-image.png if a DJ has no photo (script skips them).
+      image: dj.photo ? `/og/djs/${dj.id}.png` : undefined,
     });
   },
   component: DJDetail,

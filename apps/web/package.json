@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build && npx esbuild dist/server/server.js --bundle --format=esm --platform=browser --conditions=workerd --define:process.env.NODE_ENV='\"production\"' --outfile=dist/client/_worker.js --external:node:async_hooks --external:node:stream --external:node:stream/web",
+    "build": "pnpm og && vite build && npx esbuild dist/server/server.js --bundle --format=esm --platform=browser --conditions=workerd --define:process.env.NODE_ENV='\"production\"' --outfile=dist/client/_worker.js --external:node:async_hooks --external:node:stream --external:node:stream/web",
     "start": "vite preview",
     "lint": "biome check app",
     "tsc": "tsc --noEmit",
@@ -15,7 +15,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "optimize-images": "node scripts/optimize-images.mjs",
-    "og": "node scripts/generate-og.mjs",
+    "og": "tsx scripts/generate-og.ts",
     "stats": "node scripts/stats.mjs",
     "deploy": "pnpm build && npx wrangler pages deploy dist/client --project-name=form-at-web --commit-dirty=true"
   },
@@ -49,6 +49,7 @@
     "rollup-plugin-visualizer": "^7.0.1",
     "sharp": "^0.34.5",
     "tailwindcss": "^4.1.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.8.0",
     "vite": "^7.0.0",
     "vite-tsconfig-paths": "^5.1.0",
