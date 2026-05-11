@@ -29,12 +29,26 @@ export const Route = createFileRoute("/sets/")({
 
 function OverallMetrics({ promise }: { promise: Promise<OverallStats | null> }) {
   return (
-    <Suspense fallback={<div className="h-[72px]" aria-hidden />}>
+    // Fallback mirrors the real layout 1:1 so the page reserves the exact final
+    // height. Without this, the 72px placeholder vs ~100px real content created
+    // a layout shift (CLS) when the promise resolved.
+    <Suspense
+      fallback={
+        <div className="mb-8 invisible" aria-hidden="true">
+          <Label className="mb-2 text-grey tracking-widest">[ archive_metrics ]</Label>
+          <div className="space-y-1">
+            <TerminalRow label="plays" value="—" />
+            <TerminalRow label="listened_for" value="—" />
+            <TerminalRow label="reach" value="—" />
+          </div>
+        </div>
+      }
+    >
       <Await promise={promise}>
         {(stats) => {
           if (!stats) return null;
           return (
-            <div className="mb-8">
+            <div className="mb-8 animate-fade-in">
               <Label className="mb-2 text-grey tracking-widest">[ archive_metrics ]</Label>
               <div className="space-y-1">
                 <TerminalRow label="plays" value={String(stats.totalPlays)} dimValue />

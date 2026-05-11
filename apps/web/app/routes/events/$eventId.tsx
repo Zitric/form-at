@@ -56,7 +56,10 @@ function EventDetail() {
             alt={event.title}
             sizes="(min-width: 768px) 560px, 100vw"
             priority
-            className="w-full max-w-2xl object-contain mb-10 mx-auto rounded-lg"
+            // aspect-square reserves the box dimensions before the image loads —
+            // our flyers are 1:1. Without it the browser only knows the height
+            // once the image bytes arrive, which triggers a layout shift (CLS).
+            className="w-full max-w-2xl aspect-square object-cover mb-10 mx-auto rounded-lg"
           />
         )}
 
