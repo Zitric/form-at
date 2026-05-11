@@ -17,7 +17,7 @@ const ROOT = join(__dirname, "..");
 const WIDTH = 1200;
 const HEIGHT = 630;
 const BG = { r: 22, g: 22, b: 21 }; // brand "#161615" (--color-black)
-const TAGLINE = "Analog soul in a digital world";
+const TAGLINE = "Techno · Electro · Dub · Glasgow";
 const SITE = "formatglasgow.com";
 
 // Pull the wordmark and inspect its metadata so we can scale proportionally.
@@ -74,7 +74,10 @@ const out = await sharp({
   },
 })
   .composite([
-    { input: wordmarkCropped, top: wordmarkTop, left: wordmarkLeft },
+    // `blend: "screen"` mirrors the live <Header>'s `mix-blend-screen` so the
+    // wordmark sprite's near-black background drops out against the brand black
+    // canvas — only the white letterforms remain visible.
+    { input: wordmarkCropped, top: wordmarkTop, left: wordmarkLeft, blend: "screen" },
     { input: Buffer.from(textSvg), top: 0, left: 0 },
   ])
   .png({ compressionLevel: 9 })
