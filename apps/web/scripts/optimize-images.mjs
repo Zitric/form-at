@@ -59,6 +59,21 @@ async function processOne(srcPath) {
   const meta = await sharp(srcPath).metadata();
   const srcWidth = meta.width ?? Math.max(...WIDTHS);
 
+  // The <Image> component's srcset requests every width in WIDTHS. If the
+  // source is smaller than the largest target, the optimizer can't produce a
+  // matching variant (it doesn't upscale) and the browser will 404 on it.
+  // Firefox in particular doesn't fall back to the <img src> default reliably
+  // in that case, leading to silently-invisible images. Loud warning here so
+  // it's caught at build time, not in production.
+  const maxWidth = Math.max(...WIDTHS);
+  if (srcWidth < maxWidth) {
+    console.warn(
+      `⚠ ${file}: source is ${srcWidth}px wide, smaller than the max ` +
+        `requested width (${maxWidth}px). Some browsers may render this image ` +
+        "blank. Upload a larger source for best results.",
+    );
+  }
+
   // Don't upscale: cap target widths to the source width, dedupe.
   const targets = [...new Set(WIDTHS.map((w) => Math.min(w, srcWidth)))];
 

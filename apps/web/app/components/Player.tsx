@@ -143,14 +143,24 @@ const PlayerSeeker = memo(function PlayerSeeker({
 
   // Fetch waveform peaks only when we don't already have them in cache. The fetched
   // result is written straight to the store, so `peaks` (derived above) updates with it.
+  // Failures degrade gracefully — the seeker falls back to a plain range slider —
+  // but we surface them in dev so a misconfigured peaks URL doesn't go unnoticed.
   useEffect(() => {
     if (!nowPlaying?.peaks) return;
     if (cachedPeaks && cachedPeaks.length > 0) return;
     const trackId = nowPlaying.id;
-    fetch(nowPlaying.peaks)
-      .then((r) => r.json())
+    const peaksUrl = nowPlaying.peaks;
+    fetch(peaksUrl)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((d) => setCachedPeaks(trackId, (d as { peaks: number[] }).peaks))
-      .catch(() => {});
+      .catch((err) => {
+        if (process.env.NODE_ENV === "development") {
+          console.warn(`[player] peaks fetch failed for ${trackId} (${peaksUrl}):`, err);
+        }
+      });
   }, [nowPlaying?.peaks, nowPlaying?.id, cachedPeaks, setCachedPeaks]);
 
   const seeker =
