@@ -156,12 +156,22 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
   useEffect(() => {
     if (!nowPlaying || !("mediaSession" in navigator)) return;
 
+    // Build multiple artwork sizes so Android / iOS pick the best one for the
+    // lock-screen player. `nowPlaying.artwork` is a base path like "sets/002";
+    // the optimize-images script emits 640/1080/1920 variants in WebP and AVIF.
+    // We use WebP because Media Session image decoders don't always support AVIF.
+    const artworkBase = nowPlaying.artwork
+      ? `${window.location.origin}/images/${nowPlaying.artwork}`
+      : null;
     navigator.mediaSession.metadata = new MediaMetadata({
       title: nowPlaying.title,
       artist: nowPlaying.artist,
-      artwork: nowPlaying.artwork
-        ? [{ src: nowPlaying.artwork, sizes: "512x512", type: "image/png" }]
-        : [],
+      artwork: artworkBase
+        ? [
+            { src: `${artworkBase}-640.webp`, sizes: "640x640", type: "image/webp" },
+            { src: `${artworkBase}-1080.webp`, sizes: "1080x1080", type: "image/webp" },
+          ]
+        : [{ src: `${window.location.origin}/og-image.png`, sizes: "1200x630", type: "image/png" }],
     });
 
     navigator.mediaSession.setActionHandler("play", () => {

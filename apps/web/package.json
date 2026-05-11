@@ -15,6 +15,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "optimize-images": "node scripts/optimize-images.mjs",
+    "og": "node scripts/generate-og.mjs",
     "stats": "node scripts/stats.mjs",
     "deploy": "pnpm build && npx wrangler pages deploy dist/client --project-name=form-at-web --commit-dirty=true"
   },

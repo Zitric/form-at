@@ -218,23 +218,42 @@ export function Player() {
         style={{ transition: "grid-template-rows 300ms ease-in-out" }}
       >
         <div className="overflow-hidden">
-          <div className="h-[60px] pb-[5px] border-t border-white/10 px-4 flex items-center gap-2 font-mono">
-            <PlayerControls
-              loading={loading}
-              error={error}
-              isPlaying={isPlaying}
-              hasPrev={!!prevSet}
-              hasNext={!!nextSet}
-              onPrev={onPrev}
-              onNext={onNext}
-              onToggle={togglePlay}
-            />
-            <PlayerSeeker
-              audioRef={audioRef}
-              nowPlaying={nowPlaying}
-              seek={seek}
-              disabled={loading || error}
-            />
+          <div className="h-[78px] pb-[5px] border-t border-white/10 font-mono flex flex-col">
+            {/* Track info — single thin row, truncates on small screens */}
+            <div className="px-4 pt-1.5 pb-0.5 text-xs truncate text-center">
+              <span className="text-white">{nowPlaying?.artist}</span>
+              {nowPlaying && (
+                <>
+                  <span className="mx-2 text-grey/40">·</span>
+                  <span className="text-grey">{nowPlaying.title}</span>
+                  {nowPlaying.date && (
+                    <>
+                      <span className="mx-2 text-grey/40">·</span>
+                      <span className="text-grey">{nowPlaying.date}</span>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+            {/* Controls + seeker */}
+            <div className="px-4 flex items-center gap-2 flex-1">
+              <PlayerControls
+                loading={loading}
+                error={error}
+                isPlaying={isPlaying}
+                hasPrev={!!prevSet}
+                hasNext={!!nextSet}
+                onPrev={onPrev}
+                onNext={onNext}
+                onToggle={togglePlay}
+              />
+              <PlayerSeeker
+                audioRef={audioRef}
+                nowPlaying={nowPlaying}
+                seek={seek}
+                disabled={loading || error}
+              />
+            </div>
           </div>
         </div>
       </div>

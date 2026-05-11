@@ -10,7 +10,7 @@ export function BottomNav() {
     <div
       className="sm:hidden fixed inset-x-0 z-40 bg-black border-t border-white/10 font-mono h-[55px]"
       style={{
-        bottom: nowPlaying ? "60px" : "0px",
+        bottom: nowPlaying ? "78px" : "0px",
         transition: "bottom 300ms ease-in-out",
         animation: isFirstLoad ? "fade-in 5s ease-out" : undefined,
       }}

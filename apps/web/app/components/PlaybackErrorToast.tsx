@@ -13,7 +13,7 @@ export function PlaybackErrorToast() {
   if (!hasError || !nowPlaying) return null;
 
   return (
-    <div className="fixed inset-x-0 z-40 flex items-center justify-center pointer-events-none px-4 bottom-[123px] sm:bottom-[84px]">
+    <div className="fixed inset-x-0 z-40 flex items-center justify-center pointer-events-none px-4 bottom-[141px] sm:bottom-[84px]">
       <div className="pointer-events-auto bg-black border border-red-400/40 text-red-400 text-xs font-mono flex items-center max-w-sm">
         <button
           type="button"

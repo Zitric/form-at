@@ -55,22 +55,22 @@ export const Route = createRootRoute({
         property: "og:description",
         content: "Glasgow techno collective. Analog soul in a digital world.",
       },
-      { property: "og:image", content: "https://formatglasgow.com/icon-512.png" },
-      { property: "og:image:width", content: "512" },
-      { property: "og:image:height", content: "512" },
-      { property: "og:image:alt", content: "Form:at logo" },
+      { property: "og:image", content: "https://formatglasgow.com/og-image.png" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:image:alt", content: "FORM:AT — analog soul in a digital world" },
       { property: "og:url", content: "https://formatglasgow.com" },
       { property: "og:locale", content: "en_GB" },
 
-      // Twitter / X
-      { name: "twitter:card", content: "summary" },
+      // Twitter / X — large card to match the 1200×630 banner
+      { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Form:at" },
       {
         name: "twitter:description",
         content: "Glasgow techno collective. Analog soul in a digital world.",
       },
-      { name: "twitter:image", content: "https://formatglasgow.com/icon-512.png" },
-      { name: "twitter:image:alt", content: "Form:at logo" },
+      { name: "twitter:image", content: "https://formatglasgow.com/og-image.png" },
+      { name: "twitter:image:alt", content: "FORM:AT — analog soul in a digital world" },
 
       // iOS — fullscreen PWA behaviour when launched from home screen
       { name: "apple-mobile-web-app-capable", content: "yes" },
