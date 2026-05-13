@@ -64,7 +64,7 @@ async function generateMainBanner() {
   <text x="50%" y="62%" text-anchor="middle" class="tagline">${TAGLINE.toUpperCase()}</text>
   <text x="50%" y="86%" text-anchor="middle" class="site">${SITE}</text>
 </svg>`;
-  const wmTop = Math.round((HEIGHT / 2 - wm.height) / 2);
+  const wmTop = Math.round((HEIGHT - wm.height) / 4) - 40;
   const wmLeft = Math.round((WIDTH - wm.width) / 2);
 
   const out = await sharp({
