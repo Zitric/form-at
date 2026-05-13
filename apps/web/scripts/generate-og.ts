@@ -118,7 +118,7 @@ async function composeMediaBanner(args: {
   // `text-anchor="middle"` anchored at PANEL_CENTER_X for visual balance.
   const PANEL_CENTER_X = (630 + WIDTH) / 2;
   const wmLeft = Math.round(PANEL_CENTER_X - wm.width / 2);
-  const wmTop = Math.round(HEIGHT / 2 - wm.height / 2);
+  const wmTop = Math.round((HEIGHT - wm.height) / 2) - 40;
 
   const textSvg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}">

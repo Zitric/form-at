@@ -88,7 +88,6 @@ function Sets() {
 
   return (
     <PageLayout>
-      <OverallMetrics promise={overallStats} />
       {Object.entries(groups).map(([title, groupSets]) => {
         return (
           <section key={title} className="mb-10">
@@ -131,6 +130,7 @@ function Sets() {
           </section>
         );
       })}
+      <OverallMetrics promise={overallStats} />
     </PageLayout>
   );
 }
