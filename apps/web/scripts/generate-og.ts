@@ -112,7 +112,9 @@ async function composeMediaBanner(args: {
 
   // Aligning wordmark to x=675 to match the text anchor,
   // creating a clean left-justified layout in the right panel.
-  const wmLeft = 675;
+
+  const PANEL_CENTER_X = (630 + WIDTH) / 2;
+  const wmLeft = Math.round(PANEL_CENTER_X - wm.width / 2);
   const wmTop = Math.round(HEIGHT / 4 - wm.height / 2);
 
   const textSvg = `
