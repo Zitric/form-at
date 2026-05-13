@@ -40,13 +40,27 @@ export const sets: MusicSet[] = [
     artwork: "sets/002",
   },
   {
+    id: "set-002-brandon-lee-vear",
+    title: "FORM:AT 002",
+    artist: "Brandon Lee Vear",
+    date: "2026-04-24",
+    venue: "Find the red door, Glasgow",
+    description:
+      "External operator integrated. A two-hour sustained transmission of deep, hypnotic techno, locking the dancefloor into a continuous loop during peak system hours.",
+    duration: "2:01:55",
+    src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20Brandon%20Lee%20Vear.mp3.mp3",
+    peaks:
+      "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20Brandon%20Lee%20Vear.mp3.json",
+    artwork: "sets/002",
+  },
+  {
     id: "set-002-julz-lever",
     title: "FORM:AT 002",
     artist: "Julz Lever",
     date: "2026-04-24",
     venue: "Find the red door, Glasgow",
     description:
-      "Closing protocol for sequence 002. High-fidelity techno pushing the system's architecture to its absolute limit",
+      "Closing protocol for sequence 002. High-fidelity techno pushing the system's architecture to its absolute limit.",
     duration: "1:39:30",
     src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20Julz%20Lever.mp3",
     peaks:
