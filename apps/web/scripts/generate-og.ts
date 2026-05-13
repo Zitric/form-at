@@ -28,9 +28,6 @@ const TAGLINE = "Techno · Electro · Dub · Glasgow";
 const SITE = "formatglasgow.com";
 
 // ── Wordmark prep (shared by every banner) ─────────────────────────────────
-// Crop the FORM:AT mark out of the wordmark sprite the same way the live
-// <Header> does (translate + clip). Then we have one buffer for the giant
-// centered version (main banner) and one for the smaller corner version.
 const wordmarkPath = join(PUBLIC, "wordmark.png");
 const wmMeta = await sharp(wordmarkPath).metadata();
 const wmSrcW = wmMeta.width ?? 0;
@@ -50,6 +47,13 @@ async function makeWordmark(targetWidth: number) {
   return { buf, width: targetWidth, height: targetHeight };
 }
 
+// ── Utility: Safe SVG Escaping ─────────────────────────────────────────────
+// Safely handles undefined/null values without crashing the build
+function escapeSvg(s: string | undefined | null) {
+  if (!s) return "";
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 // ── 1) Main banner (home, listings, fallback) ──────────────────────────────
 async function generateMainBanner() {
   const wm = await makeWordmark(780);
@@ -64,7 +68,7 @@ async function generateMainBanner() {
   <text x="50%" y="62%" text-anchor="middle" class="tagline">${TAGLINE.toUpperCase()}</text>
   <text x="50%" y="86%" text-anchor="middle" class="site">${SITE}</text>
 </svg>`;
-  const wmTop = Math.round((HEIGHT - wm.height) / 4) - 40;
+  const wmTop = Math.round((HEIGHT - wm.height) / 4);
   const wmLeft = Math.round((WIDTH - wm.width) / 2);
 
   const out = await sharp({
@@ -82,14 +86,7 @@ async function generateMainBanner() {
   log(outPath, out.length);
 }
 
-// ── Shared composition: 630×630 image left + wordmark top-right + text SVG ─
-// Used by DJ / Set / Event banners. They differ only in image source and text.
-
-function escapeSvg(s: string) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-// Shared CSS for the text overlay — same family and gold/grey/white palette.
+// ── Shared composition: 630×630 image left + content right ─────────────────
 const TEXT_STYLES = `
     .title { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
              font-size: 52px; font-weight: 700; fill: #ffffff; letter-spacing: 2px; }
@@ -113,12 +110,10 @@ async function composeMediaBanner(args: {
 
   const wm = await makeWordmark(260);
 
-  // Wordmark centered both axes in the right panel (x: 630..1200, y: 0..630).
-  // Text in `textInnerSvg` is positioned below the wordmark and uses
-  // `text-anchor="middle"` anchored at PANEL_CENTER_X for visual balance.
-  const PANEL_CENTER_X = (630 + WIDTH) / 2;
-  const wmLeft = Math.round(PANEL_CENTER_X - wm.width / 2);
-  const wmTop = Math.round(HEIGHT / 2 - wm.height / 2);
+  // Aligning wordmark to x=675 to match the text anchor,
+  // creating a clean left-justified layout in the right panel.
+  const wmLeft = 675;
+  const wmTop = Math.round(HEIGHT / 4 - wm.height / 2);
 
   const textSvg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}">
@@ -145,7 +140,7 @@ async function composeMediaBanner(args: {
 
 // ── 2) Per-DJ banner ───────────────────────────────────────────────────────
 async function generateDJBanner(dj: DJ) {
-  if (!dj.photo) return; // DJs without a photo fall back to the global banner
+  if (!dj.photo) return;
 
   const photoSrc = join(PUBLIC, "images", `${dj.photo}-1080.webp`);
   if (!existsSync(photoSrc)) {
@@ -167,7 +162,6 @@ async function generateDJBanner(dj: DJ) {
 }
 
 // ── 3) Per-set banner ──────────────────────────────────────────────────────
-// Layout: set artwork on the left, artist + set title + date on the right.
 async function generateSetBanner(set: MusicSet) {
   if (!set.artwork) return;
 
@@ -191,7 +185,6 @@ async function generateSetBanner(set: MusicSet) {
 }
 
 // ── 4) Per-event banner ────────────────────────────────────────────────────
-// Layout: event flyer on the left, title + date + venue on the right.
 async function generateEventBanner(event: Event) {
   if (!event.flyer) return;
 
