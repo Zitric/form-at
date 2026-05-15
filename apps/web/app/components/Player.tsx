@@ -20,7 +20,7 @@ const skipBtnClass =
 // Memoised — only re-renders when play state or loading changes, not on every timeUpdate
 const PlayerControls = memo(function PlayerControls({
   loading,
-  error,
+  hasError,
   isPlaying,
   hasPrev,
   hasNext,
@@ -29,7 +29,7 @@ const PlayerControls = memo(function PlayerControls({
   onToggle,
 }: {
   loading: boolean;
-  error: boolean;
+  hasError: boolean;
   isPlaying: boolean;
   hasPrev: boolean;
   hasNext: boolean;
@@ -52,7 +52,7 @@ const PlayerControls = memo(function PlayerControls({
       <button
         type="button"
         onClick={onToggle}
-        disabled={loading || error}
+        disabled={loading || hasError}
         aria-label={isPlaying ? "Pause" : "Play"}
         className="shrink-0 w-5 text-gold disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer text-sm"
         suppressHydrationWarning
@@ -202,7 +202,7 @@ export function Player() {
   const playTrack = useStore((s) => s.playTrack);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const { loading, error, togglePlay, seek, audioProps } = useAudioPlayer(audioRef);
+  const { loading, hasError, togglePlay, seek, audioProps } = useAudioPlayer(audioRef);
 
   // Expose the audio element to the store so click handlers in any component can
   // call audio.play() synchronously inside the user-gesture stack frame.
@@ -249,7 +249,7 @@ export function Player() {
             <div className="px-4 flex items-center gap-2 flex-1">
               <PlayerControls
                 loading={loading}
-                error={error}
+                hasError={hasError}
                 isPlaying={isPlaying}
                 hasPrev={!!prevSet}
                 hasNext={!!nextSet}
@@ -261,7 +261,7 @@ export function Player() {
                 audioRef={audioRef}
                 nowPlaying={nowPlaying}
                 seek={seek}
-                disabled={loading || error}
+                disabled={loading || hasError}
               />
             </div>
           </div>
@@ -274,7 +274,7 @@ export function Player() {
           <div className="flex items-center gap-4 max-w-2xl mx-auto w-full">
             <PlayerControls
               loading={loading}
-              error={error}
+              hasError={hasError}
               isPlaying={isPlaying}
               hasPrev={!!prevSet}
               hasNext={!!nextSet}
@@ -286,7 +286,7 @@ export function Player() {
             <div className="shrink-0 w-52 min-w-0">
               <div className="text-xs text-grey mb-0.5">
                 › signal:{" "}
-                {error ? (
+                {hasError ? (
                   <span className="text-red-400">[ error ]</span>
                 ) : isPlaying ? (
                   <span className="text-gold">[ live ]</span>
@@ -305,7 +305,7 @@ export function Player() {
                 audioRef={audioRef}
                 nowPlaying={nowPlaying}
                 seek={seek}
-                disabled={loading || error}
+                disabled={loading || hasError}
               />
             </div>
           </div>

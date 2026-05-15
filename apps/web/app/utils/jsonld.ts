@@ -16,6 +16,11 @@ import { SOCIALS, SOCIAL_ORDER } from "./socials";
 
 const SITE = "https://formatglasgow.com";
 
+// Form:at's own external presence — strengthens entity recognition for AI
+// search ("which Glasgow techno collective is Form:at?") and Google's
+// knowledge graph. Add new platforms here as the collective claims them.
+const FORMAT_SAME_AS = ["https://www.instagram.com/form.at_glasgow/"];
+
 // ── helpers ────────────────────────────────────────────────────────────────
 
 /** "1:39:30" → "PT1H39M30S" · "45:18" → "PT45M18S" · undefined → undefined */
@@ -30,6 +35,38 @@ function durationToISO8601(s: string | undefined): string | undefined {
   else return undefined;
   const result = `PT${h ? `${h}H` : ""}${m ? `${m}M` : ""}${sec ? `${sec}S` : ""}`;
   return result === "PT" ? "PT0S" : result;
+}
+
+/**
+ * Combine `event.date` ("2026-04-24") with `event.runtime` ("23:00 — 05:00")
+ * into ISO 8601 local datetimes for Schema.org. End time wrapping past
+ * midnight rolls the date forward by a day. Returns date-only `startDate`
+ * (no `endDate`) if runtime can't be parsed — Google still accepts this.
+ *
+ * Local-time strings (no timezone) are intentional: Glasgow flips between
+ * GMT and BST across the year, and Schema.org interprets unqualified
+ * datetimes in the event location's local timezone — which is what we want.
+ */
+function eventDateTimes(
+  date: string,
+  runtime: string | undefined,
+): {
+  startDate: string;
+  endDate?: string;
+} {
+  const match = runtime?.match(/(\d{1,2}):(\d{2})\s*[—–-]\s*(\d{1,2}):(\d{2})/);
+  if (!match) return { startDate: date };
+
+  const [, sh, sm, eh, em] = match as unknown as [string, string, string, string, string];
+  const startDate = `${date}T${sh.padStart(2, "0")}:${sm}:00`;
+  const startMin = Number(sh) * 60 + Number(sm);
+  const endMin = Number(eh) * 60 + Number(em);
+
+  const endDateBase = endMin < startMin ? new Date(`${date}T00:00:00Z`).getTime() + 86400000 : null;
+  const endDay = endDateBase ? new Date(endDateBase).toISOString().slice(0, 10) : date;
+  const endDate = `${endDay}T${eh.padStart(2, "0")}:${em}:00`;
+
+  return { startDate, endDate };
 }
 
 /** Collect full social URLs for the `sameAs` field. */
@@ -70,7 +107,7 @@ export function organizationLd() {
       "@type": "Place",
       name: "Glasgow, Scotland",
     },
-    sameAs: ["https://www.instagram.com/form.at_glasgow/"],
+    sameAs: FORMAT_SAME_AS,
   };
 }
 
@@ -118,16 +155,15 @@ export function setLd(set: MusicSet) {
 
 export function eventLd(event: Event, lineup: ReadonlyArray<DJ | undefined>) {
   const resolvedLineup = lineup.filter((dj): dj is DJ => Boolean(dj));
+  const { startDate, endDate } = eventDateTimes(event.date, event.runtime);
   return {
     "@context": "https://schema.org",
     "@type": "MusicEvent",
     name: event.title,
     url: `${SITE}/events/${event.id}`,
-    startDate: event.date,
-    eventStatus:
-      event.status === "upcoming"
-        ? "https://schema.org/EventScheduled"
-        : "https://schema.org/EventScheduled",
+    startDate,
+    ...(endDate ? { endDate } : {}),
+    eventStatus: "https://schema.org/EventScheduled",
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
     location: {
       "@type": "Place",

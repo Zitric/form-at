@@ -34,31 +34,19 @@ export function Card({
   animationDelay = 0,
   children,
 }: CardProps) {
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (onClick && (e.key === "Enter" || e.key === " ")) {
-      e.preventDefault();
-      onClick();
-    }
+  const containerClass = cn(
+    "flex items-center gap-4 p-4 border border-grey/10 hover:border-purple transition-colors mb-8 rounded-lg group text-left w-full",
+    onClick && "cursor-pointer",
+    className,
+  );
+  const animationStyle = {
+    animation: "fadeInUp 0.5s ease-out forwards",
+    animationDelay: `${animationDelay * 75}ms`,
+    opacity: 0,
   };
 
-  return (
-    <div
-      onClick={onClick}
-      onKeyDown={handleKeyDown}
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      className={cn(
-        "flex items-center gap-4 p-4 border border-grey/10 hover:border-purple transition-colors mb-8 rounded-lg group",
-        onClick && "cursor-pointer",
-        className,
-      )}
-      style={{
-        animation: "fadeInUp 0.5s ease-out forwards",
-        animationDelay: `${animationDelay * 75}ms`,
-        opacity: 0,
-      }}
-    >
-      {/* Image */}
+  const content = (
+    <>
       {imageSrc && (
         <div className="shrink-0 w-20 h-20 sm:w-28 sm:h-28 bg-black/40 border border-grey/20 overflow-hidden">
           <Image
@@ -70,7 +58,6 @@ export function Card({
         </div>
       )}
 
-      {/* Content */}
       <div className="flex-1 min-w-0">
         {children ? (
           children
@@ -81,9 +68,47 @@ export function Card({
           </>
         )}
       </div>
+    </>
+  );
 
-      {/* Action button */}
-      {action && <div className="shrink-0 pl-2">{action}</div>}
+  // When the card has an `action` (e.g. a play button), the outer element can't
+  // be a <button> — nesting interactive elements is invalid HTML. We fall back
+  // to a div with explicit ARIA + keyboard handling so screen readers still see
+  // it as activatable.
+  if (action) {
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (onClick && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault();
+        onClick();
+      }
+    };
+    return (
+      <div
+        onClick={onClick}
+        onKeyDown={handleKeyDown}
+        role={onClick ? "button" : undefined}
+        tabIndex={onClick ? 0 : undefined}
+        className={containerClass}
+        style={animationStyle}
+      >
+        {content}
+        <div className="shrink-0 pl-2">{action}</div>
+      </div>
+    );
+  }
+
+  // No nested action — render as a real <button> for native a11y + keyboard.
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={containerClass} style={animationStyle}>
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className={containerClass} style={animationStyle}>
+      {content}
     </div>
   );
 }

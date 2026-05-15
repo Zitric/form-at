@@ -1,22 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
 import { SocialLink } from "~/components/SocialLink";
 import { useFirstLoad } from "~/hooks/useFirstLoad";
+import { useTypedOnce } from "~/hooks/useTypedOnce";
 import { useStore } from "~/store";
 import { pageHead } from "~/utils/head";
 import { organizationLd } from "~/utils/jsonld";
 
 const mainText =
   "Based in Glasgow, Form:at is an underground techno and electro initiative, dedicated to finding an analog soul in an increasingly digital world. Our operations are grassroots, building intimate, community-focused spaces where music is curated with care and mutual respect is prioritized. We create void points to escape the noise. Join us to disconnect and reconnect with the source.";
-
-// Module-level flag — true once the typewriter has played in this client session.
-// Resets on full page reload (the JS bundle re-evaluates), persists across
-// client-side navigations (Home unmounts/remounts but the module stays loaded).
-// SSR also gets a fresh module per request so the first server render animates.
-let hasTypedHome = false;
 
 export const Route = createFileRoute("/")({
   head: () =>
@@ -29,17 +23,13 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
-  const isFirstLoading = !hasTypedHome;
+  const isFirstLoading = useTypedOnce("home");
   const isFirstLoad = useFirstLoad();
   const navigate = useNavigate();
 
   const nowPlaying = useStore((s) => s.nowPlaying);
   const isPlaying = useStore((s) => s.isPlaying);
   const playTrack = useStore((s) => s.playTrack);
-
-  useEffect(() => {
-    hasTypedHome = true;
-  }, []);
 
   const handleListenClick = () => {
     // If track is saved and not playing: resume it (synchronously, preserves user gesture)

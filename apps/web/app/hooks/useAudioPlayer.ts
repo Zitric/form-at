@@ -14,7 +14,7 @@ export type AudioProps = {
 
 export type AudioPlayerResult = {
   loading: boolean;
-  error: boolean;
+  hasError: boolean;
   togglePlay: () => void;
   seek: (time: number) => void;
   audioProps: AudioProps;
@@ -26,9 +26,13 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
   const isPlaying = useStore((s) => s.isPlaying);
   const setLastPosition = useStore((s) => s.setLastPosition);
   const playTrack = useStore((s) => s.playTrack);
+  // hasError lives in the store so PlaybackErrorToast (which doesn't share this
+  // hook) can read it. Every failure path here MUST set it, otherwise users see
+  // a silent stall instead of the retry toast.
+  const hasError = useStore((s) => s.hasError);
+  const setHasError = useStore((s) => s.setHasError);
 
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
 
   const playStartRef = useRef<number | null>(null);
   const nowPlayingRef = useRef<MusicSet | null>(nowPlaying);
@@ -114,7 +118,7 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     const isRestore = isInitialRestore.current;
     isInitialRestore.current = false;
 
-    setError(false);
+    setHasError(false);
 
     audio.src = nowPlaying.src;
     audio.load();
@@ -133,7 +137,10 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     // Non-restore path (e.g. programmatic loadTrack without user gesture): try to play
     // and accept that mobile may reject. Reset isPlaying on rejection.
     if (!isRestore) {
-      audio.play().catch(() => setIsPlaying(false));
+      audio.play().catch(() => {
+        setIsPlaying(false);
+        setHasError(true);
+      });
     }
 
     return () => {
@@ -141,17 +148,21 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
       audio.removeEventListener("canplay", seekWhenReady);
       sendPlay(nowPlaying);
     };
-  }, [nowPlaying, sendPlay, setIsPlaying, audioRef]);
+  }, [nowPlaying, sendPlay, setIsPlaying, setHasError, audioRef]);
 
   // Bridge: lets external components drive playback via the store's isPlaying flag.
-  // If audio.play() rejects, reset the flag instead of swallowing — otherwise the UI
-  // shows "playing" while the audio is actually paused.
+  // If audio.play() rejects, reset the flag and surface the error so the retry
+  // toast appears — otherwise the UI shows "playing" while the audio is paused.
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
     if (!isPlaying && !audio.paused) audio.pause();
-    else if (isPlaying && audio.paused) audio.play().catch(() => setIsPlaying(false));
-  }, [isPlaying, audioRef, setIsPlaying]);
+    else if (isPlaying && audio.paused)
+      audio.play().catch(() => {
+        setIsPlaying(false);
+        setHasError(true);
+      });
+  }, [isPlaying, audioRef, setIsPlaying, setHasError]);
 
   useEffect(() => {
     if (!nowPlaying || !("mediaSession" in navigator)) return;
@@ -160,9 +171,10 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     // lock-screen player. `nowPlaying.artwork` is a base path like "sets/002";
     // the optimize-images script emits 640/1080/1920 variants in WebP and AVIF.
     // We use WebP because Media Session image decoders don't always support AVIF.
-    const artworkBase = nowPlaying.artwork
-      ? `${window.location.origin}/images/${nowPlaying.artwork}`
-      : null;
+    // Fallback uses the square PWA icons — lock-screen players expect square
+    // artwork and would distort the 1200×630 og-image otherwise.
+    const origin = window.location.origin;
+    const artworkBase = nowPlaying.artwork ? `${origin}/images/${nowPlaying.artwork}` : null;
     navigator.mediaSession.metadata = new MediaMetadata({
       title: nowPlaying.title,
       artist: nowPlaying.artist,
@@ -171,7 +183,10 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
             { src: `${artworkBase}-640.webp`, sizes: "640x640", type: "image/webp" },
             { src: `${artworkBase}-1080.webp`, sizes: "1080x1080", type: "image/webp" },
           ]
-        : [{ src: `${window.location.origin}/og-image.png`, sizes: "1200x630", type: "image/png" }],
+        : [
+            { src: `${origin}/icon-192.png`, sizes: "192x192", type: "image/png" },
+            { src: `${origin}/icon-512.png`, sizes: "512x512", type: "image/png" },
+          ],
     });
 
     navigator.mediaSession.setActionHandler("play", () => {
@@ -212,10 +227,16 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     } else {
       audio
         .play()
-        .then(() => setIsPlaying(true))
-        .catch(() => setIsPlaying(false));
+        .then(() => {
+          setIsPlaying(true);
+          setHasError(false);
+        })
+        .catch(() => {
+          setIsPlaying(false);
+          setHasError(true);
+        });
     }
-  }, [loading, audioRef, setIsPlaying]);
+  }, [loading, audioRef, setIsPlaying, setHasError]);
 
   // seek sets audio position only; PlayerSeeker picks up the change via the 'seeked' event
   const seek = useCallback(
@@ -232,6 +253,7 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
       playStartRef.current ??= Date.now();
       setIsPlaying(true);
       setLoading(false);
+      setHasError(false);
     },
     onPause: () => {
       sendPlay(nowPlaying);
@@ -243,7 +265,7 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     onCanPlay: () => setLoading(false),
     onError: () => {
       setLoading(false);
-      setError(true);
+      setHasError(true);
       setIsPlaying(false);
     },
     onEnded: () => {
@@ -256,5 +278,5 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     },
   };
 
-  return { loading, error, togglePlay, seek, audioProps };
+  return { loading, hasError, togglePlay, seek, audioProps };
 }

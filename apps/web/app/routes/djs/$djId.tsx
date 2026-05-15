@@ -1,5 +1,4 @@
 import { Link, createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
 import { BrandTitle } from "~/components/BrandTitle";
 import { Card } from "~/components/Card";
 import { CirclePlayButton } from "~/components/CirclePlayButton";
@@ -13,13 +12,11 @@ import { PageTitle } from "~/components/Text";
 import { getDJ } from "~/data/djs";
 import { events } from "~/data/events";
 import { getSet } from "~/data/sets";
+import { useTypedOnce } from "~/hooks/useTypedOnce";
 import { useStore } from "~/store";
 import { pageHead } from "~/utils/head";
 import { djLd } from "~/utils/jsonld";
 import { SOCIALS, SOCIAL_ORDER, type SocialKey } from "~/utils/socials";
-
-// Module-level flag — true once the typewriter has played on any DJ detail page in this client session.
-let hasTypedDjDetail = false;
 
 export const Route = createFileRoute("/djs/$djId")({
   loader: ({ params }) => {
@@ -53,10 +50,7 @@ function DJDetail() {
   const nowPlaying = useStore((s) => s.nowPlaying);
   const navigate = useNavigate();
 
-  const isFirstLoading = !hasTypedDjDetail;
-  useEffect(() => {
-    hasTypedDjDetail = true;
-  }, []);
+  const isFirstLoading = useTypedOnce("dj-detail");
 
   return (
     <PageLayout>

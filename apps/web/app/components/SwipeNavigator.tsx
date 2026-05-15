@@ -60,6 +60,11 @@ export function SwipeNavigator() {
         const inner = container?.firstElementChild as HTMLDivElement | null;
         if (container && inner) {
           const snapshot = inner.cloneNode(true) as HTMLDivElement;
+          // The snapshot contains a clone of the page's <main> landmark.
+          // Hide it from assistive tech for the duration of the transition
+          // so screen readers don't see two landmarks at once.
+          snapshot.setAttribute("aria-hidden", "true");
+          snapshot.inert = true;
           Object.assign(snapshot.style, {
             position: "absolute",
             top: "0",

@@ -110,9 +110,8 @@ async function composeMediaBanner(args: {
 
   const wm = await makeWordmark(260);
 
-  // Aligning wordmark to x=675 to match the text anchor,
-  // creating a clean left-justified layout in the right panel.
-
+  // Wordmark centered horizontally in the right panel (x: 630..1200),
+  // sitting in the upper quarter so titles/meta have room below it.
   const PANEL_CENTER_X = (630 + WIDTH) / 2;
   const wmLeft = Math.round(PANEL_CENTER_X - wm.width / 2);
   const wmTop = Math.round(HEIGHT / 4 - wm.height / 2);

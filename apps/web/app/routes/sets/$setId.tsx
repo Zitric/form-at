@@ -1,5 +1,4 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
-import { useEffect } from "react";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { Image } from "~/components/Image";
 import { JsonLd } from "~/components/JsonLd";
@@ -10,12 +9,10 @@ import { Label, PageTitle } from "~/components/Text";
 import { fetchSetStats } from "~/data/set-stats";
 import type { SetStats } from "~/data/set-stats";
 import { getSet } from "~/data/sets";
+import { useTypedOnce } from "~/hooks/useTypedOnce";
 import { useStore } from "~/store";
 import { pageHead } from "~/utils/head";
 import { setLd } from "~/utils/jsonld";
-
-// Module-level flag — true once the typewriter has played on any set detail page in this client session.
-let hasTypedSetDetail = false;
 
 export const Route = createFileRoute("/sets/$setId")({
   loader: async ({ params }) => {
@@ -63,10 +60,7 @@ function SetDetail() {
   const isLoaded = nowPlaying?.id === set.id;
   const isThisPlaying = isLoaded && isPlaying;
 
-  const isFirstLoading = !hasTypedSetDetail;
-  useEffect(() => {
-    hasTypedSetDetail = true;
-  }, []);
+  const isFirstLoading = useTypedOnce("set-detail");
 
   const metaRows: Array<[string, string]> = (
     [
