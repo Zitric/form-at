@@ -28,10 +28,23 @@ describe("Card", () => {
     expect(screen.getByRole("button", { name: "[ info ]" })).toBeInTheDocument();
   });
 
-  it("becomes a button (role + tabIndex) when onClick is provided", () => {
+  it("renders as a native <button> when onClick is provided and no action is nested", () => {
     render(<Card primary="t" onClick={() => {}} />);
     const card = screen.getByRole("button");
-    expect(card).toHaveAttribute("tabindex", "0");
+    // Native button — focusable without explicit tabindex.
+    expect(card.tagName).toBe("BUTTON");
+    expect(card).toHaveAttribute("type", "button");
+  });
+
+  it("falls back to div+role=button when onClick AND action coexist (no nested interactives)", () => {
+    render(
+      <Card primary="t" onClick={() => {}} action={<button type="button">[ play ]</button>} />,
+    );
+    // Outer card is the activatable role; the inner [ play ] button is also a button.
+    const buttons = screen.getAllByRole("button");
+    const outer = buttons.find((b) => b.tagName !== "BUTTON");
+    expect(outer).toBeDefined();
+    expect(outer).toHaveAttribute("tabindex", "0");
   });
 
   it("fires onClick on click and on Enter/Space keypress", async () => {
