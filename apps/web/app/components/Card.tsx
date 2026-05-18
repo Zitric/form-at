@@ -35,7 +35,7 @@ export function Card({
   children,
 }: CardProps) {
   const containerClass = cn(
-    "flex items-center gap-4 p-4 border border-grey/10 hover:border-purple transition-colors mb-8 rounded-lg group text-left w-full",
+    "flex items-center gap-4 p-4 border border-grey/10 hover:border-purple transition-colors mb-8 rounded-card group text-left w-full",
     onClick && "cursor-pointer",
     className,
   );
@@ -48,7 +48,7 @@ export function Card({
   const content = (
     <>
       {imageSrc && (
-        <div className="shrink-0 w-20 h-20 sm:w-28 sm:h-28 bg-black/40 border border-grey/20 overflow-hidden">
+        <div className="shrink-0 w-20 h-20 sm:w-28 sm:h-28 bg-black/40 border border-grey/20 overflow-hidden rounded-card">
           <Image
             src={imageSrc}
             alt={imageAlt || primary || ""}

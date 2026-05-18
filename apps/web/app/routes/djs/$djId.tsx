@@ -70,7 +70,7 @@ function DJDetail() {
             alt={dj.name}
             sizes="(min-width: 768px) 672px, 100vw"
             priority
-            className="w-full aspect-square object-cover mb-6"
+            className="w-full aspect-square object-cover mb-6 rounded-card"
           />
         )}
 
