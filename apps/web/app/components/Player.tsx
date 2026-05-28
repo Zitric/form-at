@@ -1,5 +1,4 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { BrandTitle } from "~/components/BrandTitle";
 import { NextIcon, PauseIcon, PlayIcon, PrevIcon } from "~/components/PlayerIcons";
 import { Waveform } from "~/components/Waveform";
 import { type MusicSet, sets } from "~/data/sets";
@@ -15,7 +14,7 @@ const fmt = (s: number) => {
 };
 
 const skipBtnClass =
-  "shrink-0 w-5 text-grey hover:text-white disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer text-sm transition-colors";
+  "shrink-0 w-6 text-base sm:w-5 sm:text-sm text-grey hover:text-white disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer transition-colors";
 
 // Memoised — only re-renders when play state or loading changes, not on every timeUpdate
 const PlayerControls = memo(function PlayerControls({
@@ -54,7 +53,7 @@ const PlayerControls = memo(function PlayerControls({
         onClick={onToggle}
         disabled={loading || hasError}
         aria-label={isPlaying ? "Pause" : "Play"}
-        className="shrink-0 w-5 text-gold disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer text-sm"
+        className="shrink-0 inline-flex items-center justify-center w-7 text-xl sm:w-10 sm:h-10 text-gold disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
         suppressHydrationWarning
       >
         {loading ? (
@@ -284,20 +283,16 @@ export function Player() {
             />
 
             <div className="shrink-0 w-52 min-w-0">
-              <div className="text-xs text-grey mb-0.5">
-                › signal:{" "}
-                {hasError ? (
-                  <span className="text-red-400">[ error ]</span>
-                ) : isPlaying ? (
-                  <span className="text-gold">[ live ]</span>
-                ) : (
-                  <span>[ standby ]</span>
+              <div className="text-sm text-white truncate leading-tight">{nowPlaying.artist}</div>
+              <div className="text-xs text-grey truncate">
+                {nowPlaying.title}
+                {nowPlaying.date && (
+                  <>
+                    <span className="mx-2 text-grey/40">·</span>
+                    {nowPlaying.date}
+                  </>
                 )}
               </div>
-              <div className="text-sm font-bold truncate leading-tight">
-                <BrandTitle>{nowPlaying.title}</BrandTitle>
-              </div>
-              <div className="text-xs text-grey truncate">{nowPlaying.artist}</div>
             </div>
 
             <div className="flex items-center gap-3 flex-1 min-w-0">
