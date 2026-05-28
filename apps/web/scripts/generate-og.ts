@@ -26,6 +26,9 @@ const HEIGHT = 630;
 const BG = { r: 22, g: 22, b: 21 }; // brand "#161615"
 const TAGLINE = "Techno · Electro · Dub · Glasgow";
 const SITE = "formatglasgow.com";
+// Center of the right panel (the 630..1200 strip beside the photo). Wordmark
+// + every text line align to this so the column reads as a single stack.
+const PANEL_CENTER_X = (630 + WIDTH) / 2;
 
 // ── Wordmark prep (shared by every banner) ─────────────────────────────────
 const wordmarkPath = join(PUBLIC, "wordmark.png");
@@ -112,7 +115,6 @@ async function composeMediaBanner(args: {
 
   // Wordmark centered horizontally in the right panel (x: 630..1200),
   // sitting in the upper quarter so titles/meta have room below it.
-  const PANEL_CENTER_X = (630 + WIDTH) / 2;
   const wmLeft = Math.round(PANEL_CENTER_X - wm.width / 2);
   const wmTop = Math.round(HEIGHT / 4 - wm.height / 2);
 
@@ -153,9 +155,9 @@ async function generateDJBanner(dj: DJ) {
   await composeMediaBanner({
     imagePath: photoSrc,
     textInnerSvg: `
-      <text x="675" y="345" class="title">${escapeSvg(dj.name)}</text>
-      <text x="675" y="395" class="meta">${role} · GLASGOW</text>
-      <text x="675" y="565" class="site">${SITE}</text>
+      <text x="${PANEL_CENTER_X}" y="345" text-anchor="middle" class="title">${escapeSvg(dj.name)}</text>
+      <text x="${PANEL_CENTER_X}" y="395" text-anchor="middle" class="meta">${role} · GLASGOW</text>
+      <text x="${PANEL_CENTER_X}" y="565" text-anchor="middle" class="site">${SITE}</text>
     `,
     outDir: join(PUBLIC, "og", "djs"),
     outName: `${dj.id}.png`,
@@ -175,10 +177,10 @@ async function generateSetBanner(set: MusicSet) {
   await composeMediaBanner({
     imagePath: artworkSrc,
     textInnerSvg: `
-      <text x="675" y="315" class="title">${escapeSvg(set.artist)}</text>
-      <text x="675" y="365" class="sub">${escapeSvg(set.title)}</text>
-      <text x="675" y="405" class="sub" fill="#888">${escapeSvg(set.date)}</text>
-      <text x="675" y="565" class="site">${SITE}</text>
+      <text x="${PANEL_CENTER_X}" y="315" text-anchor="middle" class="title">${escapeSvg(set.artist)}</text>
+      <text x="${PANEL_CENTER_X}" y="365" text-anchor="middle" class="sub">${escapeSvg(set.title)}</text>
+      <text x="${PANEL_CENTER_X}" y="405" text-anchor="middle" class="sub" fill="#888">${escapeSvg(set.date)}</text>
+      <text x="${PANEL_CENTER_X}" y="565" text-anchor="middle" class="site">${SITE}</text>
     `,
     outDir: join(PUBLIC, "og", "sets"),
     outName: `${set.id}.png`,
@@ -198,10 +200,10 @@ async function generateEventBanner(event: Event) {
   await composeMediaBanner({
     imagePath: flyerSrc,
     textInnerSvg: `
-      <text x="675" y="315" class="title">${escapeSvg(event.title)}</text>
-      <text x="675" y="365" class="sub">${escapeSvg(event.date)}</text>
-      <text x="675" y="405" class="sub" fill="#888">${escapeSvg(event.venue)}</text>
-      <text x="675" y="565" class="site">${SITE}</text>
+      <text x="${PANEL_CENTER_X}" y="315" text-anchor="middle" class="title">${escapeSvg(event.title)}</text>
+      <text x="${PANEL_CENTER_X}" y="365" text-anchor="middle" class="sub">${escapeSvg(event.date)}</text>
+      <text x="${PANEL_CENTER_X}" y="405" text-anchor="middle" class="sub" fill="#888">${escapeSvg(event.venue)}</text>
+      <text x="${PANEL_CENTER_X}" y="565" text-anchor="middle" class="site">${SITE}</text>
     `,
     outDir: join(PUBLIC, "og", "events"),
     outName: `${event.id}.png`,
