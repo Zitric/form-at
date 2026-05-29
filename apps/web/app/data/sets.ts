@@ -15,7 +15,7 @@ export type MusicSet = {
 export const sets: MusicSet[] = [
   {
     id: "set-002-til",
-    title: "FORM:AT 002",
+    title: "Form:at 002",
     artist: "t.i.l.",
     date: "2026-04-24",
     venue: "Find the red door, Glasgow",
@@ -28,7 +28,7 @@ export const sets: MusicSet[] = [
   },
   {
     id: "set-002-hubey",
-    title: "FORM:AT 002",
+    title: "Form:at 002",
     artist: "hubey",
     date: "2026-04-24",
     venue: "Find the red door, Glasgow",
@@ -41,7 +41,7 @@ export const sets: MusicSet[] = [
   },
   {
     id: "set-002-brandon-lee-vear",
-    title: "FORM:AT 002",
+    title: "Form:at 002",
     artist: "Brandon Lee Vear",
     date: "2026-04-24",
     venue: "Find the red door, Glasgow",
@@ -55,7 +55,7 @@ export const sets: MusicSet[] = [
   },
   {
     id: "set-002-julz-lever",
-    title: "FORM:AT 002",
+    title: "Form:at 002",
     artist: "Julz Lever",
     date: "2026-04-24",
     venue: "Find the red door, Glasgow",
