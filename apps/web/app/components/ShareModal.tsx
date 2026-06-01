@@ -86,7 +86,7 @@ export function ShareModal() {
           <div className="flex flex-col">
             {hasNativeShare && (
               <button type="button" onClick={shareViaApps} className={rowClass}>
-                [ share_via_apps ]
+                [ apps ]
               </button>
             )}
             <button
