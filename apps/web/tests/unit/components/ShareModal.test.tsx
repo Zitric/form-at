@@ -83,11 +83,11 @@ describe("ShareModal", () => {
     expect(screen.getByRole("button", { name: /telegram/ })).toBeInTheDocument();
   });
 
-  it("shows share_via_apps only when navigator.share is supported", () => {
+  it("shows \[ apps \] only when navigator.share is supported", () => {
     // Without native share
     useStore.setState({ shareSet: testSet });
     const { rerender } = render(<ShareModal />);
-    expect(screen.queryByRole("button", { name: /share_via_apps/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /\[ apps \]/ })).toBeNull();
 
     // With native share — install the property directly on navigator
     Object.defineProperty(navigator, "share", {
@@ -96,7 +96,7 @@ describe("ShareModal", () => {
       value: vi.fn().mockResolvedValue(undefined),
     });
     rerender(<ShareModal />);
-    expect(screen.getByRole("button", { name: /share_via_apps/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /\[ apps \]/ })).toBeInTheDocument();
   });
 
   it("triggers a toast and closes the modal on copy_link click", async () => {
