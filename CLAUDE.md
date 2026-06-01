@@ -97,6 +97,15 @@ Community features will be gated behind **Better Auth** (self-hosted, open sourc
 - **`useCallback` / `useMemo`** only when there is a measurable performance reason or a dependency array requires a stable reference. Don't add them pre-emptively.
 - Prefer native Web APIs (`fetch`, `URL`, `Request`, `Response`) over wrapper libraries for simple cases.
 
+### Readable JSX
+JSX should describe **what** the UI is, not **how** it's computed. When an inline expression starts demanding a mental parser, hoist it.
+
+- **Nested ternaries in JSX → named consts.** If you'd need to re-indent a ternary chain to read it, extract it above the `return`. Name it for the value it produces (`playButtonLabel`, `statusIndicator`), not the condition (`isPlayingAndLoaded`).
+- **Inline math / string-building → named const or shared util.** A one-off `Math.floor(t/60)` is fine; a repeated `M:SS` formatter belongs in `~/utils/fmt.ts`. Reach for the util the second time you write the same expression.
+- **Conditional JSX fragments → named consts.** `isPlaying ? <span className="text-gold">[ live ]</span> : <span>[ ready ]</span>` reads better as a `statusIndicator` const.
+- **Conditional callback args → named consts.** `onClick={() => playTrack(set, a && b ? { startTime: t } : undefined)}` becomes `onClick={() => playTrack(set, playTrackOptions)}` with the options computed above. The handler then reads as the verb it is.
+- **Threshold: ~one screen of JSX, no value in the markup should require >5 seconds to understand.** If you'd have to stop reading to evaluate a ternary, it doesn't belong there.
+
 ### File and naming conventions
 - File names: `kebab-case` for routes and utilities, `PascalCase` for component files (`Player.tsx`, `Header.tsx`).
 - One component or one logical unit per file. Co-locate the types it needs unless they're shared.

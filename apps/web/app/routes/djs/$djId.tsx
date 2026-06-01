@@ -6,6 +6,7 @@ import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { Image } from "~/components/Image";
 import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
+import { ShareIconButton } from "~/components/ShareIconButton";
 import { SocialLink } from "~/components/SocialLink";
 import { TerminalRow } from "~/components/TerminalRow";
 import { PageTitle } from "~/components/Text";
@@ -121,23 +122,27 @@ function DJDetail() {
                       imageAlt={set.title}
                       onClick={() => navigate({ to: "/sets/$setId", params: { setId: set.id } })}
                       action={
-                        <CirclePlayButton
-                          isThisPlaying={isThisPlaying}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            playTrack(set);
-                          }}
-                        />
+                        <div className="flex items-center gap-1">
+                          <ShareIconButton set={set} />
+                          <CirclePlayButton
+                            isThisPlaying={isThisPlaying}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              playTrack(set);
+                            }}
+                          />
+                        </div>
                       }
                       animationDelay={index}
                     >
                       <div className="flex flex-col gap-1">
                         <p className="text-sm sm:text-base tracking-tight truncate">
-                          {set.artist} @ {set.title}, Glasgow
+                          {set.artist} @ {set.title}
                         </p>
-                        {set.date && (
-                          <p className="text-xs sm:text-sm text-grey truncate">{set.date}</p>
-                        )}
+                        <p className="text-xs sm:text-sm text-grey truncate">
+                          {set.date}
+                          {set.date && " · "}Glasgow
+                        </p>
                       </div>
                     </Card>
                   </li>

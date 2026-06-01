@@ -2,11 +2,12 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { getSet } from "~/data/sets";
 import { type PlayerSlice, createPlayerSlice } from "./playerSlice";
+import { type UiSlice, createUiSlice } from "./uiSlice";
 
-export type AppStore = PlayerSlice;
+export type AppStore = PlayerSlice & UiSlice;
 
 export const useStore = create<AppStore>()(
-  persist((...a) => ({ ...createPlayerSlice(...a) }), {
+  persist((...a) => ({ ...createPlayerSlice(...a), ...createUiSlice(...a) }), {
     name: "format-player",
     // Wait until <HydrateStore> mounts before reading localStorage. Without this,
     // SSR (no localStorage → empty) and the first client render (synchronous

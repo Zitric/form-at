@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { Card } from "~/components/Card";
 import { CirclePlayButton } from "~/components/CirclePlayButton";
 import { PageLayout } from "~/components/PageLayout";
+import { ShareIconButton } from "~/components/ShareIconButton";
 import { TerminalRow } from "~/components/TerminalRow";
 import { Label, PageTitle } from "~/components/Text";
 import { type OverallStats, fetchOverallStats } from "~/data/set-stats";
@@ -104,23 +105,27 @@ function Sets() {
                       imageAlt={set.title}
                       onClick={() => navigate({ to: "/sets/$setId", params: { setId: set.id } })}
                       action={
-                        <CirclePlayButton
-                          isThisPlaying={isThisPlaying}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            playTrack(set);
-                          }}
-                        />
+                        <div className="flex items-center gap-1">
+                          <ShareIconButton set={set} />
+                          <CirclePlayButton
+                            isThisPlaying={isThisPlaying}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              playTrack(set);
+                            }}
+                          />
+                        </div>
                       }
                       animationDelay={index}
                     >
                       <div className="flex flex-col gap-1">
                         <p className="text-sm sm:text-base tracking-tight truncate">
-                          {set.artist} @ {set.title}, Glasgow
+                          {set.artist} @ {set.title}
                         </p>
-                        {set.date && (
-                          <p className="text-xs sm:text-sm text-grey truncate">{set.date}</p>
-                        )}
+                        <p className="text-xs sm:text-sm text-grey truncate">
+                          {set.date}
+                          {set.date && " · "}Glasgow
+                        </p>
                       </div>
                     </Card>
                   </li>

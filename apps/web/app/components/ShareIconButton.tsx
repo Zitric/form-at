@@ -1,21 +1,21 @@
 import type { MusicSet } from "~/data/sets";
-import { useShareSet } from "~/hooks/useShareSet";
+import { useStore } from "~/store";
 
 // Sibling of <CirclePlayButton>: same circular silhouette, bordered, with the
 // same hover + transition treatment — but smaller and in subdued grey so the
 // play button still reads as the primary action.
 export function ShareIconButton({ set }: { set: MusicSet }) {
-  const share = useShareSet();
+  const openShareModal = useStore((s) => s.openShareModal);
 
   return (
     <button
       type="button"
       onClick={(e) => {
         e.stopPropagation();
-        share(set);
+        openShareModal(set);
       }}
       aria-label={`Share ${set.artist} — ${set.title}`}
-      className="flex items-center justify-center shrink-0 w-14 h-14  text-grey transition-all duration-300 cursor-pointer hover:scale-110 hover:border-gold hover:text-gold"
+      className="flex items-center justify-center shrink-0 w-14 h-14 text-grey transition-all duration-300 cursor-pointer hover:scale-110 hover:text-gold"
     >
       <svg
         viewBox="0 0 24 24"

@@ -5,16 +5,21 @@ import { type MusicSet, sets } from "~/data/sets";
 import { useAudioPlayer } from "~/hooks/useAudioPlayer";
 import { useStore } from "~/store";
 import { registerAudioElement } from "~/store/playerSlice";
-
-const fmt = (s: number) => {
-  if (!Number.isFinite(s)) return "0:00";
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${m}:${sec.toString().padStart(2, "0")}`;
-};
+import { fmtTimestamp } from "~/utils/fmt";
 
 const skipBtnClass =
   "shrink-0 w-6 text-base sm:w-5 sm:text-sm text-grey hover:text-white disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer transition-colors";
+
+// Resolves the glyph for the central play/pause button. Loading takes priority
+// because a press during load should read as "busy", not as "ready to play".
+function playToggleIcon({ loading, isPlaying }: { loading: boolean; isPlaying: boolean }) {
+  if (loading) return <span className="animate-pulse opacity-60">…</span>;
+  return isPlaying ? <PauseIcon /> : <PlayIcon />;
+}
+
+// Inline separator used in track meta rows. Kept as a single source of truth so
+// the dot styling doesn't drift between mobile and desktop layouts.
+const metaSeparator = <span className="mx-2 text-grey/40">·</span>;
 
 // Memoised — only re-renders when play state or loading changes, not on every timeUpdate
 const PlayerControls = memo(function PlayerControls({
@@ -56,13 +61,7 @@ const PlayerControls = memo(function PlayerControls({
         className="shrink-0 inline-flex items-center justify-center w-7 text-xl sm:w-10 sm:h-10 text-gold disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
         suppressHydrationWarning
       >
-        {loading ? (
-          <span className="animate-pulse opacity-60">…</span>
-        ) : isPlaying ? (
-          <PauseIcon />
-        ) : (
-          <PlayIcon />
-        )}
+        {playToggleIcon({ loading, isPlaying })}
       </button>
       <button
         type="button"
@@ -187,10 +186,10 @@ const PlayerSeeker = memo(function PlayerSeeker({
   return (
     <>
       <span className="text-xs text-grey tabular-nums shrink-0 w-8 text-right">
-        {fmt(currentTime)}
+        {fmtTimestamp(currentTime)}
       </span>
       {seeker}
-      <span className="text-xs text-grey tabular-nums shrink-0 w-8">{fmt(duration)}</span>
+      <span className="text-xs text-grey tabular-nums shrink-0 w-8">{fmtTimestamp(duration)}</span>
     </>
   );
 });
@@ -217,33 +216,53 @@ export function Player() {
   const onPrev = useCallback(() => prevSet && playTrack(prevSet), [prevSet, playTrack]);
   const onNext = useCallback(() => nextSet && playTrack(nextSet), [nextSet, playTrack]);
 
+  // Mobile lays meta out as a single inline row `artist · title · date`.
+  const mobileTrackInfo = nowPlaying && (
+    <>
+      <span className="text-white">{nowPlaying.artist}</span>
+      {metaSeparator}
+      <span className="text-grey">{nowPlaying.title}</span>
+      {nowPlaying.date && (
+        <>
+          {metaSeparator}
+          <span className="text-grey">{nowPlaying.date}</span>
+        </>
+      )}
+    </>
+  );
+
+  // Desktop stacks artist on its own line, then `title · date` underneath.
+  const desktopTrackInfo = nowPlaying && (
+    <div className="shrink-0 w-52 min-w-0">
+      <div className="text-sm text-white truncate leading-tight">{nowPlaying.artist}</div>
+      <div className="text-xs text-grey truncate">
+        {nowPlaying.title}
+        {nowPlaying.date && (
+          <>
+            {metaSeparator}
+            {nowPlaying.date}
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  // The mobile player slides in/out by animating grid-template-rows between 0fr
+  // and 1fr — toggled here so the rest of the JSX stays declarative.
+  const mobileRowsClass = nowPlaying ? "grid-rows-[1fr]" : "grid-rows-[0fr]";
+
   return (
     <>
       <audio ref={audioRef} {...audioProps} preload="none" />
 
       {/* Mobile player — always in DOM, animates from height 0 when a track loads */}
       <div
-        className={`sm:hidden fixed bottom-0 inset-x-0 z-30 bg-black grid ${nowPlaying ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+        className={`sm:hidden fixed bottom-0 inset-x-0 z-30 bg-black grid ${mobileRowsClass}`}
         style={{ transition: "grid-template-rows 300ms ease-in-out" }}
       >
         <div className="overflow-hidden">
           <div className="h-[78px] pb-[5px] border-t border-white/10 font-mono flex flex-col">
-            {/* Track info — single thin row, truncates on small screens */}
-            <div className="px-4 pt-1.5 pb-0.5 text-xs truncate text-center">
-              <span className="text-white">{nowPlaying?.artist}</span>
-              {nowPlaying && (
-                <>
-                  <span className="mx-2 text-grey/40">·</span>
-                  <span className="text-grey">{nowPlaying.title}</span>
-                  {nowPlaying.date && (
-                    <>
-                      <span className="mx-2 text-grey/40">·</span>
-                      <span className="text-grey">{nowPlaying.date}</span>
-                    </>
-                  )}
-                </>
-              )}
-            </div>
+            <div className="px-4 pt-1.5 pb-0.5 text-xs truncate text-center">{mobileTrackInfo}</div>
             {/* Controls + seeker */}
             <div className="px-4 flex items-center gap-2 flex-1">
               <PlayerControls
@@ -282,18 +301,7 @@ export function Player() {
               onToggle={togglePlay}
             />
 
-            <div className="shrink-0 w-52 min-w-0">
-              <div className="text-sm text-white truncate leading-tight">{nowPlaying.artist}</div>
-              <div className="text-xs text-grey truncate">
-                {nowPlaying.title}
-                {nowPlaying.date && (
-                  <>
-                    <span className="mx-2 text-grey/40">·</span>
-                    {nowPlaying.date}
-                  </>
-                )}
-              </div>
-            </div>
+            {desktopTrackInfo}
 
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <PlayerSeeker

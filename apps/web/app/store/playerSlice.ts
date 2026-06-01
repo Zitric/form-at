@@ -10,6 +10,9 @@ let audioEl: HTMLAudioElement | null = null;
 export function registerAudioElement(el: HTMLAudioElement | null) {
   audioEl = el;
 }
+export function getAudioCurrentTime() {
+  return audioEl?.currentTime ?? 0;
+}
 
 export type PlayerSlice = {
   nowPlaying: MusicSet | null;
@@ -19,7 +22,7 @@ export type PlayerSlice = {
   peaksCache: Record<string, number[]>;
   durations: Record<string, number>;
   loadTrack: (set: MusicSet) => void;
-  playTrack: (set: MusicSet) => void;
+  playTrack: (set: MusicSet, opts?: { startTime?: number }) => void;
   togglePlay: () => void;
   setIsPlaying: (playing: boolean) => void;
   setHasError: (hasError: boolean) => void;
@@ -38,18 +41,20 @@ export const createPlayerSlice: StateCreator<PlayerSlice, [], [], PlayerSlice> =
 
   loadTrack: (track) => set({ nowPlaying: track, isPlaying: false, hasError: false }),
 
-  playTrack: (track) => {
+  playTrack: (track, opts) => {
     const audio = audioEl;
     const state = get();
+    const override = opts?.startTime;
 
-    // Same track already loaded — just toggle play/pause.
+    // Same track already loaded — seek if a startTime was provided, otherwise toggle.
     if (state.nowPlaying?.id === track.id && audio) {
+      if (override !== undefined) audio.currentTime = override;
       if (audio.paused) {
         audio
           .play()
           .then(() => set({ isPlaying: true, hasError: false }))
           .catch(() => set({ isPlaying: false, hasError: true }));
-      } else {
+      } else if (override === undefined) {
         audio.pause();
         set({ isPlaying: false });
       }
@@ -57,16 +62,16 @@ export const createPlayerSlice: StateCreator<PlayerSlice, [], [], PlayerSlice> =
     }
 
     // New track. Set src + call play() in the SAME synchronous block as the click —
-    // this is what preserves the user-gesture token on mobile. Apply the saved
-    // resume position once metadata loads (slightly delayed but seamless).
+    // this is what preserves the user-gesture token on mobile. Apply the resume
+    // position once metadata loads (slightly delayed but seamless). `opts.startTime`
+    // overrides the saved position so timestamp deeplinks (?t=...) work.
     if (audio) {
-      const savedPos = state.positions[track.id] ?? 0;
+      const startPos = override ?? state.positions[track.id] ?? 0;
       audio.src = track.src;
-      if (savedPos > 0) {
+      if (startPos > 0) {
         const applySeek = () => {
-          // Guard against the user picking a different track before metadata loads.
           if (get().nowPlaying?.id === track.id) {
-            audio.currentTime = savedPos;
+            audio.currentTime = startPos;
           }
         };
         if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {

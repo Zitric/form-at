@@ -4,17 +4,24 @@ import { Image } from "~/components/Image";
 import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
 import { PauseIcon, PlayIcon } from "~/components/PlayerIcons";
+import { ShareSetButton } from "~/components/ShareSetButton";
 import { TerminalRow } from "~/components/TerminalRow";
-import { Label, PageTitle } from "~/components/Text";
+import { PageTitle } from "~/components/Text";
 import { fetchSetStats } from "~/data/set-stats";
 import type { SetStats } from "~/data/set-stats";
 import { getSet } from "~/data/sets";
 import { useTypedOnce } from "~/hooks/useTypedOnce";
 import { useStore } from "~/store";
+import { fmtTimestamp } from "~/utils/fmt";
 import { pageHead } from "~/utils/head";
 import { setLd } from "~/utils/jsonld";
 
 export const Route = createFileRoute("/sets/$setId")({
+  validateSearch: (search: Record<string, unknown>): { t?: number } => {
+    const raw = search.t;
+    const n = typeof raw === "string" || typeof raw === "number" ? Number(raw) : Number.NaN;
+    return Number.isFinite(n) && n > 0 ? { t: Math.floor(n) } : {};
+  },
   loader: async ({ params }) => {
     const set = getSet(params.setId);
     if (!set) throw notFound();
@@ -54,6 +61,7 @@ function buildStatsRows(stats: SetStats): Array<[string, string]> {
 
 function SetDetail() {
   const { set, stats } = Route.useLoaderData();
+  const { t } = Route.useSearch();
   const nowPlaying = useStore((s) => s.nowPlaying);
   const isPlaying = useStore((s) => s.isPlaying);
   const playTrack = useStore((s) => s.playTrack);
@@ -72,6 +80,24 @@ function SetDetail() {
   ).filter((row): row is [string, string] => Boolean(row));
 
   const statsRows = stats ? buildStatsRows(stats) : [];
+
+  // The set arrives via a shared deeplink (?t=…) and hasn't been loaded yet —
+  // apply the timestamp override on the first click only. Subsequent clicks
+  // (resume/pause) shouldn't fight the user's listening position.
+  const shouldStartAtSharedTime = !isLoaded && t !== undefined;
+  const playTrackOptions = shouldStartAtSharedTime ? { startTime: t } : undefined;
+
+  const playButtonLabel = isThisPlaying
+    ? "now_playing"
+    : shouldStartAtSharedTime
+      ? `play @ ${fmtTimestamp(t)}`
+      : "play_set";
+
+  const statusIndicator = isThisPlaying ? (
+    <span className="text-gold">[ live ]</span>
+  ) : (
+    <span>[ ready ]</span>
+  );
 
   return (
     <PageLayout>
@@ -97,32 +123,25 @@ function SetDetail() {
 
         <button
           type="button"
-          onClick={() => playTrack(set)}
-          className="flex items-center justify-center gap-4 w-full sm:min-w-[280px] border-2 border-gold px-6 py-4 mb-8! text-sm text-grey shadow-[0_0_15px_rgba(197,133,56,0.2)] hover:shadow-[0_0_25px_rgba(197,133,56,0.4)] hover:cursor-pointer  transition-all group"
+          onClick={() => playTrack(set, playTrackOptions)}
+          className="flex items-center justify-center gap-4 w-full sm:min-w-[280px] border-2 border-gold px-6 py-4 mb-4! text-sm text-grey shadow-[0_0_15px_rgba(197,133,56,0.2)] hover:shadow-[0_0_25px_rgba(197,133,56,0.4)] hover:cursor-pointer  transition-all group"
           style={{ animation: "border-pulse 2s infinite" }}
         >
           <span className="text-gold">{isThisPlaying ? <PauseIcon /> : <PlayIcon />}</span>
-          {isThisPlaying ? "now_playing" : "play_set"}
+          {playButtonLabel}
         </button>
+
+        <ShareSetButton set={set} />
 
         <div className="space-y-1 mb-8">
           {metaRows.map(([label, value]) => (
             <TerminalRow key={label} label={label} value={value} />
           ))}
-          <TerminalRow
-            label="status"
-            value={
-              isThisPlaying ? <span className="text-gold">[ live ]</span> : <span>[ ready ]</span>
-            }
-          />
-          {statsRows.length > 0 && (
-            <>
-              {/* <Label className="pt-3 text-grey">· · ·</Label> */}
-              {statsRows.map(([label, value]) => (
-                <TerminalRow key={label} label={label} value={value} dimValue />
-              ))}
-            </>
-          )}
+          <TerminalRow label="status" value={statusIndicator} />
+          {statsRows.length > 0 &&
+            statsRows.map(([label, value]) => (
+              <TerminalRow key={label} label={label} value={value} dimValue />
+            ))}
         </div>
 
         <PageTitle
