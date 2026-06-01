@@ -48,11 +48,11 @@ export function Card({
   const content = (
     <>
       {imageSrc && (
-        <div className="shrink-0 w-20 h-20 sm:w-28 sm:h-28 bg-black/40 border border-grey/20 overflow-hidden rounded-card">
+        <div className="shrink-0 w-16 h-16 sm:w-28 sm:h-28 bg-black/40 border border-grey/20 overflow-hidden rounded-card">
           <Image
             src={imageSrc}
             alt={imageAlt || primary || ""}
-            sizes="(min-width: 640px) 112px, 80px"
+            sizes="(min-width: 640px) 112px, 64px"
             className="w-full h-full object-cover"
           />
         </div>
@@ -92,7 +92,7 @@ export function Card({
         style={animationStyle}
       >
         {content}
-        <div className="shrink-0 pl-2">{action}</div>
+        <div className="shrink-0">{action}</div>
       </div>
     );
   }

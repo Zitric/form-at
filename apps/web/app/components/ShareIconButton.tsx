@@ -15,7 +15,7 @@ export function ShareIconButton({ set }: { set: MusicSet }) {
         openShareModal(set);
       }}
       aria-label={`Share ${set.artist} — ${set.title}`}
-      className="flex items-center justify-center shrink-0 w-14 h-14 text-grey transition-all duration-300 cursor-pointer hover:scale-110 hover:text-gold"
+      className="flex items-center justify-center shrink-0 w-10 h-10 sm:w-14 sm:h-14 text-grey transition-all duration-300 cursor-pointer hover:scale-110 hover:text-gold"
     >
       <svg
         viewBox="0 0 24 24"
