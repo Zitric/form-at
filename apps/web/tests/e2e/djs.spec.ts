@@ -5,7 +5,7 @@ test.describe("djs page", () => {
   test("renders both sections (residents + guests)", async ({ page }) => {
     await gotoAndHydrate(page, "/djs");
     await expect(page.getByText(/system_architects/i)).toBeVisible();
-    await expect(page.getByText(/guest_transmissions/i)).toBeVisible();
+    await expect(page.getByText(/guest_operators/i)).toBeVisible();
   });
 
   test("clicking a DJ card opens their profile", async ({ page }) => {
