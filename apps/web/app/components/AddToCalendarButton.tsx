@@ -1,18 +1,18 @@
 import { useState } from "react";
 import { Modal } from "~/components/Modal";
 import type { Event } from "~/data/events";
-import { buildGoogleCalendarUrl, buildIcs, buildOutlookCalendarUrl } from "~/utils/ics";
+import { buildGoogleCalendarTargetUrl, buildIcs, buildOutlookCalendarTargetUrl } from "~/utils/ics";
 
 const rowClass =
   "text-left text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer py-1";
 
+// Calendar options that are pure navigation render as <a>. Apple/.ics
+// stays a <button> because it's an action (build blob → download), not a
+// navigation, so there's no URL to put in href.
+type CalendarLink = { label: string; href: string };
+
 export function AddToCalendarButton({ event }: { event: Event }) {
   const [open, setOpen] = useState(false);
-
-  const openExternal = (href: string) => {
-    window.open(href, "_blank", "noopener,noreferrer");
-    setOpen(false);
-  };
 
   // The .ics route is best for Apple Calendar — on iOS Safari it triggers the
   // native "Add to Calendar" sheet directly; on desktop it downloads the file
@@ -30,6 +30,11 @@ export function AddToCalendarButton({ event }: { event: Event }) {
     URL.revokeObjectURL(url);
     setOpen(false);
   };
+
+  const links: CalendarLink[] = [
+    { label: "[ google ]", href: buildGoogleCalendarTargetUrl(event) },
+    { label: "[ outlook ]", href: buildOutlookCalendarTargetUrl(event) },
+  ];
 
   return (
     <>
@@ -51,20 +56,24 @@ export function AddToCalendarButton({ event }: { event: Event }) {
         }
       >
         <div className="flex flex-col">
-          <button
-            type="button"
-            onClick={() => openExternal(buildGoogleCalendarUrl(event))}
-            className={rowClass}
-          >
-            [ google ]
-          </button>
-          <button
-            type="button"
-            onClick={() => openExternal(buildOutlookCalendarUrl(event))}
-            className={rowClass}
-          >
-            [ outlook ]
-          </button>
+          {links.map(({ label, href }) => {
+            // `intent://` URLs need same-window navigation so the OS can
+            // hand off to the target app — opening them in a new tab tends
+            // to leave a blank window behind on Android Chrome.
+            const isIntent = href.startsWith("intent:");
+            return (
+              <a
+                key={label}
+                href={href}
+                target={isIntent ? undefined : "_blank"}
+                rel={isIntent ? undefined : "noopener noreferrer"}
+                onClick={() => setOpen(false)}
+                className={rowClass}
+              >
+                {label}
+              </a>
+            );
+          })}
           <button type="button" onClick={downloadIcs} className={rowClass}>
             [ apple / .ics ]
           </button>
