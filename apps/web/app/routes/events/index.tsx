@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Card } from "~/components/Card";
 import { PageLayout } from "~/components/PageLayout";
-import { Label, PageTitle } from "~/components/Text";
+import { PageTitle } from "~/components/Text";
 import { getPastEvents, getUpcomingEvents } from "~/data/events";
 import { pageHead } from "~/utils/head";
 
@@ -23,7 +23,7 @@ function Events() {
     <PageLayout>
       {upcoming.length > 0 && (
         <section className="mb-12">
-          <Label className="mb-6 text-grey tracking-widest uppercase">— incoming signals</Label>
+          <PageTitle>next_transmission</PageTitle>
           <ul className="space-y-px">
             {upcoming.map((event, index) => (
               <li key={event.id}>
@@ -64,10 +64,11 @@ function EventCard({
   return (
     <Card
       animationDelay={index}
+      variant={past ? "default" : "cta"}
       className={past ? "opacity-60" : ""}
       onClick={() => navigate({ to: "/events/$eventId", params: { eventId: event.id } })}
     >
-      <p className="text-sm sm:text-base tracking-tight truncate">
+      <p className="text-sm sm:text-base tracking-tight truncate text-center">
         {event.title} · {event.date} · Glasgow
       </p>
     </Card>

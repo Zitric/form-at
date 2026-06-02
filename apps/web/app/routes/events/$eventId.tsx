@@ -1,4 +1,5 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
+import { AddToCalendarButton } from "~/components/AddToCalendarButton";
 import { Image } from "~/components/Image";
 import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
@@ -53,30 +54,17 @@ function EventDetail() {
           ‹ events_archive
         </Link>
 
-        {event.flyer && (
-          <Image
-            src={event.flyer}
-            alt={event.title}
-            sizes="(min-width: 768px) 560px, 100vw"
-            priority
-            // aspect-square reserves the box dimensions before the image loads —
-            // our flyers are 1:1. Without it the browser only knows the height
-            // once the image bytes arrive, which triggers a layout shift (CLS).
-            className="w-full max-w-2xl aspect-square object-cover mb-10 mx-auto rounded-card"
-          />
-        )}
-
         <PageTitle className="text-3xl sm:text-4xl font-display font-bold leading-tight tracking-tight mb-2">
           {event.title}
         </PageTitle>
 
-        <div className="space-y-1 mb-8">
+        <div className="space-y-1 mb-6">
           {metaRows.map(([label, value]) => (
             <TerminalRow key={label} label={label} value={value} />
           ))}
         </div>
 
-        {lineup.length > 0 && (
+        {lineup.length > 0 ? (
           <div className="mb-10">
             <PageTitle>lineup</PageTitle>
             <p className="text-sm sm:text-base text-grey leading-relaxed">
@@ -98,8 +86,35 @@ function EventDetail() {
               })}
             </p>
           </div>
-        )}
+        ) : event.status === "upcoming" ? (
+          <div className="mb-10">
+            <PageTitle>lineup</PageTitle>
+            <p className="text-sm sm:text-base text-grey leading-relaxed">
+              [ lineup will be released soon ]
+            </p>
+          </div>
+        ) : null}
       </div>
+
+      {event.status === "upcoming" && (
+        <div className="mb-10 flex justify-center">
+          <AddToCalendarButton event={event} />
+        </div>
+      )}
+
+      {event.flyer && (
+        <Image
+          src={event.flyer}
+          alt={event.title}
+          sizes="(min-width: 768px) 560px, 100vw"
+          priority
+          // Flyers vary in aspect ratio (square posters vs portrait designs),
+          // so we let the image render at its natural ratio rather than
+          // forcing a square crop. Brief CLS on load is the trade-off; on a
+          // detail page with a single hero image, it's acceptable.
+          className="w-full max-w-2xl h-auto mb-10 mx-auto rounded-card"
+        />
+      )}
     </PageLayout>
   );
 }

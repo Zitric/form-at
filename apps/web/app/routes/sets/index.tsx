@@ -103,6 +103,7 @@ function Sets() {
                     <Card
                       imageSrc={set.artwork}
                       imageAlt={set.title}
+                      hideImageOnMobile
                       onClick={() => navigate({ to: "/sets/$setId", params: { setId: set.id } })}
                       action={
                         <div className="flex items-center gap-1">

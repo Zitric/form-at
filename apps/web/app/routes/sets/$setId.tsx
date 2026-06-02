@@ -6,13 +6,13 @@ import { PageLayout } from "~/components/PageLayout";
 import { PauseIcon, PlayIcon } from "~/components/PlayerIcons";
 import { ShareSetButton } from "~/components/ShareSetButton";
 import { TerminalRow } from "~/components/TerminalRow";
-import { PageTitle } from "~/components/Text";
+import { Label, PageTitle } from "~/components/Text";
 import { fetchSetStats } from "~/data/set-stats";
 import type { SetStats } from "~/data/set-stats";
 import { getSet } from "~/data/sets";
 import { useTypedOnce } from "~/hooks/useTypedOnce";
 import { useStore } from "~/store";
-import { fmtTimestamp } from "~/utils/fmt";
+import { asciiBar, countryFlag, fmtDate, fmtTimestamp } from "~/utils/fmt";
 import { pageHead } from "~/utils/head";
 import { setLd } from "~/utils/jsonld";
 
@@ -55,7 +55,15 @@ function buildStatsRows(stats: SetStats): Array<[string, string]> {
       "reach",
       `${stats.countryCount} ${stats.countryCount === 1 ? "territory" : "territories"}`,
     ]);
-  if (stats.topCountries.length > 0) rows.push(["top_territories", stats.topCountries.join(" / ")]);
+  if (stats.topCountries.length > 0) {
+    const labelled = stats.topCountries
+      .map((c) => {
+        const flag = countryFlag(c);
+        return flag ? `${flag} ${c}` : c;
+      })
+      .join("  ·  ");
+    rows.push(["top_territories", labelled]);
+  }
   return rows;
 }
 
@@ -70,13 +78,10 @@ function SetDetail() {
 
   const isFirstLoading = useTypedOnce("set-detail");
 
+  // Event + date are now surfaced in the subtitle under the artist name; the
+  // meta block carries the remaining playback-relevant attributes only.
   const metaRows: Array<[string, string]> = (
-    [
-      set.title && ["event", set.title],
-      set.date && ["date", set.date],
-      // set.venue && ["loc", set.venue],
-      set.duration && ["duration", set.duration],
-    ] as Array<[string, string] | false>
+    [set.duration && ["duration", set.duration]] as Array<[string, string] | false>
   ).filter((row): row is [string, string] => Boolean(row));
 
   const statsRows = stats ? buildStatsRows(stats) : [];
@@ -121,10 +126,25 @@ function SetDetail() {
           />
         )}
 
+        {/* Identity — artist as the page's h1, with event + date as a tight
+            subtitle so listeners landing from a share link immediately see
+            who/what/when before anything else. */}
+        <PageTitle
+          as="h1"
+          className="text-3xl sm:text-4xl font-bold leading-tight tracking-tight mb-1"
+        >
+          {set.artist}
+        </PageTitle>
+        <p className="text-sm sm:text-base text-grey mb-6">
+          @ {set.title}
+          {set.date && ` · ${set.date}`}
+        </p>
+
+        {/* Primary action */}
         <button
           type="button"
           onClick={() => playTrack(set, playTrackOptions)}
-          className="flex items-center justify-center gap-4 w-full sm:min-w-[280px] border-2 border-gold px-6 py-4 mb-4! text-sm text-grey shadow-[0_0_15px_rgba(197,133,56,0.2)] hover:shadow-[0_0_25px_rgba(197,133,56,0.4)] hover:cursor-pointer  transition-all group"
+          className="flex items-center justify-center gap-4 w-full sm:min-w-[280px] border-2 border-gold px-6 py-4 mb-6! text-sm text-grey shadow-[0_0_15px_rgba(197,133,56,0.2)] hover:shadow-[0_0_25px_rgba(197,133,56,0.4)] hover:cursor-pointer  transition-all group"
           style={{ animation: "border-pulse 2s infinite" }}
         >
           <span className="text-gold">{isThisPlaying ? <PauseIcon /> : <PlayIcon />}</span>
@@ -133,27 +153,44 @@ function SetDetail() {
 
         <ShareSetButton set={set} />
 
-        <div className="space-y-1 mb-8">
-          {metaRows.map(([label, value]) => (
-            <TerminalRow key={label} label={label} value={value} />
-          ))}
-          <TerminalRow label="status" value={statusIndicator} />
-          {statsRows.length > 0 &&
-            statsRows.map(([label, value]) => (
-              <TerminalRow key={label} label={label} value={value} dimValue />
-            ))}
-        </div>
-
-        <PageTitle
-          as="h1"
-          className="text-3xl sm:text-4xl font-bold leading-tight tracking-tight mb-2"
-        >
-          {set.artist}
-        </PageTitle>
-
+        {/* Description — moved above meta so the "what is this set" payload
+            isn't buried below dim metadata rows. */}
         {set.description && (
           <ConsoleWriter isFirstLoading={isFirstLoading}>{set.description}</ConsoleWriter>
         )}
+
+        {/* Two-column block: track properties on the left (recording facts +
+            historical anchors), broadcast metrics on the right (analytics +
+            sparkline). Stacks on mobile, sits side-by-side on sm+. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-8 mt-8 mb-8">
+          <div>
+            <Label className="mb-2 text-grey tracking-widest">[ properties ]</Label>
+            <div className="space-y-1">
+              {metaRows.map(([label, value]) => (
+                <TerminalRow key={label} label={label} value={value} />
+              ))}
+              <TerminalRow label="status" value={statusIndicator} />
+              {stats?.firstPlay && (
+                <TerminalRow label="first_signal" value={fmtDate(stats.firstPlay)} dimValue />
+              )}
+              {stats?.lastPlay && (
+                <TerminalRow label="last_signal" value={fmtDate(stats.lastPlay)} dimValue />
+              )}
+            </div>
+          </div>
+
+          {statsRows.length > 0 && stats && (
+            <div>
+              <Label className="mb-2 text-grey tracking-widest">[ broadcast_metrics ]</Label>
+              <div className="space-y-1">
+                {statsRows.map(([label, value]) => (
+                  <TerminalRow key={label} label={label} value={value} dimValue />
+                ))}
+                <TerminalRow label="last_60d" value={asciiBar(stats.weeklyPlays)} dimValue />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </PageLayout>
   );

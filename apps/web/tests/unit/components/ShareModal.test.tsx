@@ -83,7 +83,7 @@ describe("ShareModal", () => {
     expect(screen.getByRole("button", { name: /telegram/ })).toBeInTheDocument();
   });
 
-  it("shows \[ apps \] only when navigator.share is supported", () => {
+  it("shows [ apps ] only when navigator.share is supported", () => {
     // Without native share
     useStore.setState({ shareSet: testSet });
     const { rerender } = render(<ShareModal />);

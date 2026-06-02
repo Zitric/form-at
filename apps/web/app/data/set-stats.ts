@@ -6,8 +6,39 @@ export type SetStats = {
   avgSeconds: number;
   countryCount: number;
   firstPlay: number | null;
+  lastPlay: number | null;
   topCountries: string[];
+  /** Plays grouped into TREND_BUCKET_DAYS-day buckets over the last
+   * TREND_WINDOW_DAYS, oldest first. Bucketing smooths low daily volume
+   * into a readable sparkline; one bar per week reads much better than 60
+   * mostly-empty daily bars. */
+  weeklyPlays: number[];
 };
+
+export const TREND_WINDOW_DAYS = 60;
+export const TREND_BUCKET_DAYS = 7;
+
+function fillDailyWindow(rows: { day: string; plays: number }[], days: number): number[] {
+  const map = new Map(rows.map((r) => [r.day, r.plays]));
+  const result: number[] = [];
+  const today = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setUTCDate(d.getUTCDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    result.push(map.get(key) ?? 0);
+  }
+  return result;
+}
+
+function bucketByWeek(daily: number[], bucketDays: number): number[] {
+  const buckets: number[] = [];
+  for (let i = 0; i < daily.length; i += bucketDays) {
+    const sum = daily.slice(i, i + bucketDays).reduce((a, b) => a + b, 0);
+    buckets.push(sum);
+  }
+  return buckets;
+}
 
 export type OverallStats = {
   totalPlays: number;
@@ -53,14 +84,15 @@ export const fetchSetStats = createServerFn({ method: "GET" })
       const db = cf?.env?.DB;
       if (!db) return null;
 
-      const [row, countries] = await Promise.all([
+      const [row, countries, daily] = await Promise.all([
         db
           .prepare(
             `SELECT COUNT(*) as play_count,
               COALESCE(SUM(listened_seconds), 0) as total_seconds,
               COALESCE(ROUND(AVG(listened_seconds)), 0) as avg_seconds,
               COUNT(DISTINCT country) as country_count,
-              MIN(started_at) as first_play
+              MIN(started_at) as first_play,
+              MAX(started_at) as last_play
              FROM plays WHERE set_id = ?`,
           )
           .bind(setId)
@@ -70,6 +102,7 @@ export const fetchSetStats = createServerFn({ method: "GET" })
             avg_seconds: number;
             country_count: number;
             first_play: number | null;
+            last_play: number | null;
           }>(),
         db
           .prepare(
@@ -79,9 +112,22 @@ export const fetchSetStats = createServerFn({ method: "GET" })
           )
           .bind(setId)
           .all<{ country: string }>(),
+        db
+          .prepare(
+            `SELECT DATE(started_at/1000, 'unixepoch') AS day, COUNT(*) AS plays
+             FROM plays
+             WHERE set_id = ?
+               AND started_at >= (strftime('%s', 'now', '-${TREND_WINDOW_DAYS} days') * 1000)
+             GROUP BY day
+             ORDER BY day ASC`,
+          )
+          .bind(setId)
+          .all<{ day: string; plays: number }>(),
       ]);
 
       if (!row || row.play_count === 0) return null;
+
+      const dailyDense = fillDailyWindow(daily.results, TREND_WINDOW_DAYS);
 
       return {
         playCount: row.play_count,
@@ -89,7 +135,9 @@ export const fetchSetStats = createServerFn({ method: "GET" })
         avgSeconds: row.avg_seconds,
         countryCount: row.country_count,
         firstPlay: row.first_play,
+        lastPlay: row.last_play,
         topCountries: countries.results.map((r) => r.country.toLowerCase()),
+        weeklyPlays: bucketByWeek(dailyDense, TREND_BUCKET_DAYS),
       } satisfies SetStats;
     } catch {
       return null;

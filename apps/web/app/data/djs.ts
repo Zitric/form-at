@@ -64,18 +64,6 @@ export const djs: DJ[] = [
 
   // Guests
   {
-    id: "angel-negrin",
-    name: "Ángel Negrín",
-    type: "guest",
-    bio: "Ángel Negrín is a Venezuelan DJ based in Glasgow. After years of playing in psychedelic, punk and post-rock bands, his focus shifted to selecting and mixing music following his experiences in the rave scenes of Belgium and Scotland. He runs the Luna Roja parties, focused on psychedelic and hypnotic sounds.",
-    photo: "djs/angel-negrin",
-    socials: {
-      soundcloud: "angelnegrin",
-      instagram: "angelnegrin",
-      residentadvisor: "angelnegrin",
-    },
-  },
-  {
     id: "brandon-lee-vear",
     name: "Brandon Lee Vear",
     type: "guest",
@@ -86,6 +74,18 @@ export const djs: DJ[] = [
       instagram: "brandonleevear",
       residentadvisor: "brandonleevear",
       linktree: "brandonleevear",
+    },
+  },
+  {
+    id: "angel-negrin",
+    name: "Ángel Negrín",
+    type: "guest",
+    bio: "Ángel Negrín is a Venezuelan DJ based in Glasgow. After years of playing in psychedelic, punk and post-rock bands, his focus shifted to selecting and mixing music following his experiences in the rave scenes of Belgium and Scotland. He runs the Luna Roja parties, focused on psychedelic and hypnotic sounds.",
+    photo: "djs/angel-negrin",
+    socials: {
+      soundcloud: "angelnegrin",
+      instagram: "angelnegrin",
+      residentadvisor: "angelnegrin",
     },
   },
 ];

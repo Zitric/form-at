@@ -47,7 +47,7 @@ function durationToISO8601(s: string | undefined): string | undefined {
  * GMT and BST across the year, and Schema.org interprets unqualified
  * datetimes in the event location's local timezone — which is what we want.
  */
-function eventDateTimes(
+export function eventDateTimes(
   date: string,
   runtime: string | undefined,
 ): {

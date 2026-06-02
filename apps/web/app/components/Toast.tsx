@@ -36,7 +36,7 @@ export function Toast() {
           : `fadeInUp ${EXIT_MS}ms ease-out`,
       }}
     >
-      <div className="bg-black border border-gold/40 text-gold text-xs font-mono px-4 py-2">
+      <div className="bg-black border border-gold/60 text-white text-xs font-mono px-4 py-2">
         [ {toast} ]
       </div>
     </div>

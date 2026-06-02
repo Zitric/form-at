@@ -46,7 +46,7 @@ function DJs() {
 
       {/* Guests */}
       <section className="mb-12">
-        <PageTitle>guest_transmissions</PageTitle>
+        <PageTitle>guest_operators</PageTitle>
         <ul className="space-y-px">
           {guests.map((dj, index) => (
             <li key={dj.id}>

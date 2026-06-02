@@ -2,6 +2,12 @@ import type { ReactNode } from "react";
 import { Image } from "~/components/Image";
 import { cn } from "~/utils/cn";
 
+/** Picks the card's visual treatment:
+ *  - `default` — neutral grey border, hover shifts to purple. Use for list items.
+ *  - `cta` — gold border with pulsing glow, matching the home + `play_set` CTAs.
+ *    Use when the card is the primary action on the page (e.g. the next event). */
+type CardVariant = "default" | "cta";
+
 interface CardProps {
   /** Image src (without base path, e.g., "djs/id" or "sets/id") */
   imageSrc?: string;
@@ -21,7 +27,18 @@ interface CardProps {
   animationDelay?: number;
   /** Dynamic children for flexible content */
   children?: ReactNode;
+  /** Visual treatment — see CardVariant for the catalog. Defaults to `default`. */
+  variant?: CardVariant;
+  /** When true, the image is hidden below `sm` so phone widths get the full
+   * row for text. Use for set cards (list view doesn't need the artwork); keep
+   * off for DJ cards where the photo is the identity. */
+  hideImageOnMobile?: boolean;
 }
+
+const variantClass: Record<CardVariant, string> = {
+  default: "border border-grey/10 hover:border-purple",
+  cta: "border-2 border-gold shadow-[0_0_15px_rgba(197,133,56,0.2)] hover:shadow-[0_0_25px_rgba(197,133,56,0.4)]",
+};
 
 export function Card({
   imageSrc,
@@ -33,22 +50,41 @@ export function Card({
   className,
   animationDelay = 0,
   children,
+  variant = "default",
+  hideImageOnMobile = false,
 }: CardProps) {
   const containerClass = cn(
-    "flex items-center gap-4 p-4 border border-grey/10 hover:border-purple transition-colors mb-8 rounded-card group text-left w-full",
+    "flex items-center gap-4 p-4 transition-all mb-8 rounded-card group text-left w-full",
+    variantClass[variant],
     onClick && "cursor-pointer",
     className,
   );
-  const animationStyle = {
-    animation: "fadeInUp 0.5s ease-out forwards",
-    animationDelay: `${animationDelay * 75}ms`,
-    opacity: 0,
-  };
+  // The CTA variant layers a continuous border-pulse on top of the one-shot
+  // entry animation. Inline `animation` shorthand beats Tailwind classes here,
+  // so we have to compose both animations into the same property — using
+  // animate-border-pulse as a class gets clobbered by the entry animation.
+  const animationStyle =
+    variant === "cta"
+      ? {
+          animation: "fadeInUp 0.5s ease-out forwards, border-pulse 2s ease-in-out infinite",
+          animationDelay: `${animationDelay * 75}ms, 0s`,
+          opacity: 0,
+        }
+      : {
+          animation: "fadeInUp 0.5s ease-out forwards",
+          animationDelay: `${animationDelay * 75}ms`,
+          opacity: 0,
+        };
 
   const content = (
     <>
       {imageSrc && (
-        <div className="shrink-0 w-16 h-16 sm:w-28 sm:h-28 bg-black/40 border border-grey/20 overflow-hidden rounded-card">
+        <div
+          className={cn(
+            "shrink-0 w-16 h-16 sm:w-28 sm:h-28 bg-black/40 border border-grey/20 overflow-hidden rounded-card",
+            hideImageOnMobile && "hidden sm:block",
+          )}
+        >
           <Image
             src={imageSrc}
             alt={imageAlt || primary || ""}
