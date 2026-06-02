@@ -17,8 +17,15 @@ test.describe("events page", () => {
 
   test("event detail page shows lineup with DJ links", async ({ page }) => {
     await gotoAndHydrate(page, "/events");
-    await page.locator("ul li").first().getByRole("button").first().click();
-    await expect(page.getByText(/lineup/i)).toBeVisible();
+    // Click the first event in the sequence_log (past events) — upcoming
+    // events may have an unconfirmed lineup and only render a placeholder.
+    await page
+      .locator('section:has-text("sequence_log") ul li')
+      .first()
+      .getByRole("button")
+      .first()
+      .click();
+    await expect(page.getByRole("heading", { name: /lineup/i })).toBeVisible();
     const djLink = page.locator('a[href^="/djs/"]').first();
     await expect(djLink).toBeVisible();
   });
