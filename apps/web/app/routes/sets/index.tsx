@@ -37,7 +37,7 @@ function OverallMetrics({ promise }: { promise: Promise<OverallStats | null> }) 
     <Suspense
       fallback={
         <div className="mb-8 invisible" aria-hidden="true">
-          <Label className="mb-2 text-grey tracking-widest">[ archive_metrics ]</Label>
+          <Label className="mb-2 text-grey tracking-widest">{"// archive_metrics"}</Label>
           <div className="space-y-1">
             <TerminalRow label="plays" value="—" />
             <TerminalRow label="listened_for" value="—" />
@@ -51,7 +51,7 @@ function OverallMetrics({ promise }: { promise: Promise<OverallStats | null> }) 
           if (!stats) return null;
           return (
             <div className="mb-8 animate-fade-in">
-              <Label className="mb-2 text-grey tracking-widest">[ archive_metrics ]</Label>
+              <Label className="mb-2 text-grey tracking-widest">{"// archive_metrics"}</Label>
               <div className="space-y-1">
                 <TerminalRow label="plays" value={String(stats.totalPlays)} dimValue />
                 <TerminalRow

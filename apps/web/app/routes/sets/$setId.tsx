@@ -1,4 +1,5 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { Image } from "~/components/Image";
 import { JsonLd } from "~/components/JsonLd";
@@ -48,21 +49,35 @@ export const Route = createFileRoute("/sets/$setId")({
   component: SetDetail,
 });
 
-function buildStatsRows(stats: SetStats): Array<[string, string]> {
-  const rows: Array<[string, string]> = [["plays", `${stats.playCount}`]];
+function buildStatsRows(stats: SetStats): Array<[string, ReactNode]> {
+  const rows: Array<[string, ReactNode]> = [["plays", `${stats.playCount}`]];
   if (stats.countryCount > 0)
     rows.push([
       "reach",
       `${stats.countryCount} ${stats.countryCount === 1 ? "territory" : "territories"}`,
     ]);
   if (stats.topCountries.length > 0) {
-    const labelled = stats.topCountries
-      .map((c) => {
-        const flag = countryFlag(c);
-        return flag ? `${flag} ${c}` : c;
+    const upper = stats.topCountries.map((c) => c.toUpperCase());
+    // Two-column layout (≥sm) is tighter, so we drop the country codes and
+    // keep just the flag glyphs. Single-column mobile has room for both.
+    const flagsWithCodes = upper
+      .map((code) => {
+        const flag = countryFlag(code);
+        return flag ? `${flag} ${code}` : code;
       })
       .join("  ·  ");
-    rows.push(["top_territories", labelled]);
+    const flagsOnly = upper.map(countryFlag).filter(Boolean).join("  ·  ");
+    rows.push([
+      "top_territories",
+      <>
+        <span key="mobile" className="sm:hidden">
+          {flagsWithCodes}
+        </span>
+        <span key="desktop" className="hidden sm:inline">
+          {flagsOnly}
+        </span>
+      </>,
+    ]);
   }
   return rows;
 }
@@ -164,7 +179,7 @@ function SetDetail() {
             sparkline). Stacks on mobile, sits side-by-side on sm+. */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-8 mt-8 mb-8">
           <div>
-            <Label className="mb-2 text-grey tracking-widest">[ properties ]</Label>
+            <Label className="mb-2 text-grey tracking-widest">{"// properties"}</Label>
             <div className="space-y-1">
               {metaRows.map(([label, value]) => (
                 <TerminalRow key={label} label={label} value={value} />
@@ -181,7 +196,7 @@ function SetDetail() {
 
           {statsRows.length > 0 && stats && (
             <div>
-              <Label className="mb-2 text-grey tracking-widest">[ broadcast_metrics ]</Label>
+              <Label className="mb-2 text-grey tracking-widest">{"// broadcast_metrics"}</Label>
               <div className="space-y-1">
                 {statsRows.map(([label, value]) => (
                   <TerminalRow key={label} label={label} value={value} dimValue />
