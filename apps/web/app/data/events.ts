@@ -12,6 +12,16 @@ export type Event = {
 
 export const events: Event[] = [
   {
+    id: "format-003",
+    title: "Form:at 003",
+    date: "2026-08-28",
+    venue: "Southside, Glasgow",
+    lineupIds: [],
+    audio: "techno / electro / dub",
+    runtime: "23:00 — 05:00",
+    status: "upcoming",
+  },
+  {
     id: "format-002",
     title: "Form:at 002",
     date: "2026-04-24",
