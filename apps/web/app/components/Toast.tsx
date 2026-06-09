@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useStore } from "~/store";
+import { Z } from "~/styles/z";
 
 const VISIBLE_MS = 1700;
 const EXIT_MS = 250;
@@ -29,7 +30,7 @@ export function Toast() {
 
   return (
     <div
-      className="fixed inset-x-0 z-40 flex items-center justify-center pointer-events-none px-4 bottom-[130px] sm:bottom-[100px]"
+      className={`fixed inset-x-0 ${Z.toast} flex items-center justify-center pointer-events-none px-4 bottom-[145px] sm:bottom-[100px]`}
       style={{
         animation: exiting
           ? `fadeOutDown ${EXIT_MS}ms ease-in forwards`

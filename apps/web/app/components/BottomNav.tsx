@@ -1,6 +1,7 @@
 import { NavLinks } from "~/components/NavLinks";
 import { useFirstLoad } from "~/hooks/useFirstLoad";
 import { useStore } from "~/store";
+import { Z } from "~/styles/z";
 
 export function BottomNav() {
   const isFirstLoad = useFirstLoad();
@@ -8,7 +9,7 @@ export function BottomNav() {
 
   return (
     <div
-      className="sm:hidden fixed inset-x-0 z-40 bg-black border-t border-white/10 font-mono h-[55px]"
+      className={`sm:hidden fixed inset-x-0 ${Z.bottomNav} bg-black border-t border-white/10 font-mono h-[55px]`}
       style={{
         bottom: nowPlaying ? "78px" : "0px",
         transition: "bottom 300ms ease-in-out",

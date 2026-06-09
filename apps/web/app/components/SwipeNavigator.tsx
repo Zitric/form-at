@@ -2,6 +2,7 @@ import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useDrag } from "@use-gesture/react";
 import { useRef, useState } from "react";
 import { useStore } from "~/store";
+import { Z } from "~/styles/z";
 
 const ROUTES = ["/", "/sets", "/events", "/djs"] as const;
 const SWIPE_PX = 80;
@@ -137,7 +138,7 @@ export function SwipeNavigator() {
 
       {/* Page position dots — mobile only */}
       <div
-        className="sm:hidden fixed left-0 right-0 flex justify-center z-50 pointer-events-none mb-4"
+        className={`sm:hidden fixed left-0 right-0 flex justify-center ${Z.swipeIndicator} pointer-events-none mb-4`}
         style={{ bottom: dotsBottom, transition: "bottom 300ms ease-in-out" }}
       >
         <div className="relative flex items-center gap-1.5">

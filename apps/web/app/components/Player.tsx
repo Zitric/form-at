@@ -5,6 +5,7 @@ import { type MusicSet, sets } from "~/data/sets";
 import { useAudioPlayer } from "~/hooks/useAudioPlayer";
 import { useStore } from "~/store";
 import { registerAudioElement } from "~/store/playerSlice";
+import { Z } from "~/styles/z";
 import { fmtTimestamp } from "~/utils/fmt";
 
 const skipBtnClass =
@@ -257,7 +258,7 @@ export function Player() {
 
       {/* Mobile player — always in DOM, animates from height 0 when a track loads */}
       <div
-        className={`sm:hidden fixed bottom-0 inset-x-0 z-30 bg-black grid ${mobileRowsClass}`}
+        className={`sm:hidden fixed bottom-0 inset-x-0 ${Z.player} bg-black grid ${mobileRowsClass}`}
         style={{ transition: "grid-template-rows 300ms ease-in-out" }}
       >
         <div className="overflow-hidden">
@@ -288,7 +289,9 @@ export function Player() {
 
       {/* Desktop player */}
       {nowPlaying && (
-        <div className="hidden sm:block fixed bottom-0 inset-x-0 z-30 bg-black border-t border-white/10 px-4 py-3 font-mono">
+        <div
+          className={`hidden sm:block fixed bottom-0 inset-x-0 ${Z.player} bg-black border-t border-white/10 px-4 py-3 font-mono`}
+        >
           <div className="flex items-center gap-4 max-w-2xl mx-auto w-full">
             <PlayerControls
               loading={loading}
