@@ -1,15 +1,21 @@
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+
+// Matches the duration on `@utility animate-fade-out` in global.css. We stay
+// mounted just long enough for that animation to finish before unmounting.
+const EXIT_MS = 200;
 
 // Explicit `fixed inset-0 m-auto` restores the user-agent centering that
 // Tailwind's preflight strips when it resets `dialog { margin: 0 }`.
 // `h-fit` stops `inset-0` from stretching the panel to the full viewport.
-const dialogClass =
-  "fixed inset-0 m-auto h-fit bg-black border border-gold/40 w-[calc(100vw-2rem)] max-w-md p-6 font-mono animate-fade-in backdrop:bg-black/80";
+const baseDialogClass =
+  "fixed inset-0 m-auto h-fit bg-black border border-gold/40 w-[calc(100vw-2rem)] max-w-md p-6 font-mono backdrop:bg-black/80";
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  /** Header content rendered to the left of the close button. */
+  /** Header content rendered to the left of the close button. Kept terse —
+   *  variable subjects (long artist names, emails, event titles) should sit
+   *  inside the body as a `›` context row, not in the heading. */
   title?: ReactNode;
   /** Accessible name for the dialog (read by screen readers). */
   ariaLabel?: string;
@@ -22,14 +28,35 @@ type Props = {
 export function Modal({ open, onClose, title, ariaLabel, children }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
+  // We need two pieces of state to play an exit animation: `show` tracks
+  // whether the <dialog> is in the DOM, `isClosing` whether it should be
+  // rendering the fade-out keyframe. When the parent flips `open` to false
+  // we stay mounted for EXIT_MS so the animation can finish, then unmount.
+  const [show, setShow] = useState(open);
+  const [isClosing, setIsClosing] = useState(false);
+
   useEffect(() => {
-    if (!open) return;
+    if (open) {
+      setShow(true);
+      setIsClosing(false);
+      return;
+    }
+    setIsClosing(true);
+    const id = window.setTimeout(() => {
+      setShow(false);
+      setIsClosing(false);
+    }, EXIT_MS);
+    return () => window.clearTimeout(id);
+  }, [open]);
+
+  useEffect(() => {
+    if (!show) return;
     const d = dialogRef.current;
     if (!d || d.open) return;
     d.showModal();
-  }, [open]);
+  }, [show]);
 
-  if (!open) return null;
+  if (!show) return null;
 
   // Backdrop clicks bubble up to the <dialog> itself with target === currentTarget.
   // Clicks inside the content land on descendants, so they don't match.
@@ -48,6 +75,10 @@ export function Modal({ open, onClose, title, ariaLabel, children }: Props) {
     }
   };
 
+  const animationClass = isClosing
+    ? "animate-fade-out backdrop:animate-fade-out"
+    : "animate-fade-in";
+
   return (
     <dialog
       ref={dialogRef}
@@ -59,7 +90,7 @@ export function Modal({ open, onClose, title, ariaLabel, children }: Props) {
       onCancel={(e) => e.preventDefault()}
       aria-label={ariaLabel}
       aria-modal="true"
-      className={dialogClass}
+      className={`${baseDialogClass} ${animationClass}`}
     >
       <div className="flex items-start justify-between mb-6 gap-4">
         <div className="min-w-0 flex-1">{title}</div>
