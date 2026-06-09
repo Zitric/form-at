@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { BookingsButton } from "~/components/BookingsButton";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
@@ -76,12 +77,7 @@ function Home() {
           >
             [ instagram ]
           </SocialLink>
-          <a
-            href="mailto:format.gla@gmail.com"
-            className="text-sm text-grey hover:text-white transition-colors tracking-widest"
-          >
-            [ bookings ]
-          </a>
+          <BookingsButton className="text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer" />
         </div>
       </div>
     </PageLayout>
