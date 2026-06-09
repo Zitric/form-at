@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Modal } from "~/components/Modal";
+import { TerminalRow } from "~/components/TerminalRow";
 import type { Event } from "~/data/events";
+import { isAndroid } from "~/utils/deeplink";
 import { buildGoogleCalendarTargetUrl, buildIcs, buildOutlookCalendarTargetUrl } from "~/utils/ics";
 
 const rowClass =
@@ -51,10 +53,14 @@ export function AddToCalendarButton({ event }: { event: Event }) {
         ariaLabel="Add to calendar"
         title={
           <div className="text-xs text-grey tracking-widest truncate">
-            › add <span className="text-white">{event.title}</span> to calendar
+            › <span className="text-white">add_to_calendar</span>
           </div>
         }
       >
+        {/* Subject row — confirms which event the calendar entry is for,
+            keeps the title bar uncluttered, and matches the rest of the
+            app's terminal-row metadata convention. */}
+        <TerminalRow label="event" value={`${event.title} · ${event.date}`} className="mb-4" />
         <div className="flex flex-col">
           {links.map(({ label, href }) => {
             // `intent://` URLs need same-window navigation so the OS can
@@ -74,9 +80,17 @@ export function AddToCalendarButton({ event }: { event: Event }) {
               </a>
             );
           })}
-          <button type="button" onClick={downloadIcs} className={rowClass}>
-            [ apple / .ics ]
-          </button>
+          {/* Hide the .ics route on Android — `[ google ]` above already
+              hands off to the native Google Calendar app via intent URL,
+              and a `.ics` download on Android lands in /Downloads with no
+              prompt to open it. iOS Safari, by contrast, turns the same
+              download into the native "Add to Calendar" sheet, so the
+              option stays for everyone except Android. */}
+          {!isAndroid() && (
+            <button type="button" onClick={downloadIcs} className={rowClass}>
+              [ apple / .ics ]
+            </button>
+          )}
         </div>
       </Modal>
     </>

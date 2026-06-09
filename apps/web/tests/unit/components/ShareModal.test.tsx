@@ -79,8 +79,10 @@ describe("ShareModal", () => {
     useStore.setState({ shareSet: testSet });
     render(<ShareModal />);
     expect(screen.getByRole("button", { name: /copy_link/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /whatsapp/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /telegram/ })).toBeInTheDocument();
+    // WhatsApp and Telegram are now anchors (their href IS the share action),
+    // not buttons that imperatively call window.open.
+    expect(screen.getByRole("link", { name: /whatsapp/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /telegram/ })).toBeInTheDocument();
   });
 
   it("shows [ apps ] only when navigator.share is supported", () => {
@@ -114,30 +116,20 @@ describe("ShareModal", () => {
     expect(useStore.getState().shareSet).toBeNull();
   });
 
-  it("opens the WhatsApp share URL with the set link", async () => {
+  it("WhatsApp link href points at wa.me with the set URL embedded", () => {
     useStore.setState({ shareSet: testSet });
-    const user = userEvent.setup();
     render(<ShareModal />);
-    await user.click(screen.getByRole("button", { name: /whatsapp/ }));
-    expect(window.open).toHaveBeenCalledWith(
-      expect.stringContaining("wa.me"),
-      "_blank",
-      "noopener,noreferrer",
-    );
-    const url = (window.open as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
-    expect(url).toContain(encodeURIComponent(`/sets/${testSet.id}`));
+    const href = screen.getByRole("link", { name: /whatsapp/ }).getAttribute("href") ?? "";
+    expect(href).toContain("wa.me");
+    expect(href).toContain(encodeURIComponent(`/sets/${testSet.id}`));
   });
 
-  it("opens the Telegram share URL with the set link", async () => {
+  it("Telegram link href points at t.me/share/url with the set URL embedded", () => {
     useStore.setState({ shareSet: testSet });
-    const user = userEvent.setup();
     render(<ShareModal />);
-    await user.click(screen.getByRole("button", { name: /telegram/ }));
-    expect(window.open).toHaveBeenCalledWith(
-      expect.stringMatching(/t\.me\/share\/url/),
-      "_blank",
-      "noopener,noreferrer",
-    );
+    const href = screen.getByRole("link", { name: /telegram/ }).getAttribute("href") ?? "";
+    expect(href).toMatch(/t\.me\/share\/url/);
+    expect(href).toContain(encodeURIComponent(`/sets/${testSet.id}`));
   });
 
   it("closes the modal when the close button is clicked", async () => {
