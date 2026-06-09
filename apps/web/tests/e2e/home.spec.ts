@@ -10,13 +10,23 @@ test.describe("home page", () => {
     await expect(page.getByRole("button", { name: /access_audio|resume_signal/ })).toBeVisible();
   });
 
-  test("renders instagram and bookings social links", async ({ page }) => {
+  test("renders instagram link and bookings modal trigger", async ({ page }) => {
     await gotoAndHydrate(page, "/");
+
     const ig = page.getByRole("link", { name: /instagram/i });
-    const mail = page.getByRole("link", { name: /bookings/i });
     await expect(ig).toBeVisible();
     await expect(ig).toHaveAttribute("href", /instagram\.com\/form\.at_glasgow/);
-    await expect(mail).toBeVisible();
-    await expect(mail).toHaveAttribute("href", /mailto:format\.gla@gmail\.com/);
+
+    // Bookings is no longer a raw mailto link — it's a button that opens a
+    // modal so users can pick gmail / outlook / mail_app / copy_email
+    // instead of being forced into whatever the default mail client is.
+    const bookingsTrigger = page.getByRole("button", { name: /bookings/i });
+    await expect(bookingsTrigger).toBeVisible();
+    await bookingsTrigger.click();
+    await expect(page.getByText(/format\.gla@gmail\.com/)).toBeVisible();
+    await expect(page.getByRole("link", { name: /mail_app/i })).toHaveAttribute(
+      "href",
+      /^mailto:format\.gla@gmail\.com/,
+    );
   });
 });
