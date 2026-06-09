@@ -60,7 +60,7 @@ export function AddToCalendarButton({ event }: { event: Event }) {
         {/* Subject row — confirms which event the calendar entry is for,
             keeps the title bar uncluttered, and matches the rest of the
             app's terminal-row metadata convention. */}
-        <TerminalRow label="event" value={`${event.title} · ${event.date}`} className="mb-4" />
+        <TerminalRow label="event" value={`${event.title} · ${event.date}`} className="mb-6" />
         <div className="flex flex-col">
           {links.map(({ label, href }) => {
             // `intent://` URLs need same-window navigation so the OS can

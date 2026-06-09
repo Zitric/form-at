@@ -83,7 +83,7 @@ export function ShareModal() {
       {/* Subject row — names what's about to be shared, in the same
           terminal-row style as the rest of the app. Long artist names
           wrap inside the body instead of truncating in the title. */}
-      <TerminalRow label="set" value={`${shareSet.artist} @ ${shareSet.title}`} className="mb-4" />
+      <TerminalRow label="set" value={`${shareSet.artist} @ ${shareSet.title}`} className="mb-6" />
       {/* Flexbox + flex-shrink-0 lets each column auto-size to its widest
           button (e.g. `[ copy @ 49:00 ]`) instead of being forced into an
           equal half. When the two columns together can't fit the modal

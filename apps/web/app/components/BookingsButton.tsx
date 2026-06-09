@@ -73,7 +73,7 @@ export function BookingsButton({ className }: { className?: string }) {
         {/* Subject row — always renders the full address so it never truncates
             inside the title bar, matches the modal's terminal aesthetic, and
             doubles as a "you're about to email this" confirmation. */}
-        <TerminalRow label="target" value={BOOKINGS_EMAIL} className="mb-4" />
+        <TerminalRow label="target" value={BOOKINGS_EMAIL} className="mb-6" />
         <div className="flex flex-col">
           <button type="button" onClick={copyEmail} className={rowClass}>
             [ copy_email ]

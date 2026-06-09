@@ -92,7 +92,7 @@ export function Modal({ open, onClose, title, ariaLabel, children }: Props) {
       aria-modal="true"
       className={`${baseDialogClass} ${animationClass}`}
     >
-      <div className="flex items-start justify-between mb-6 gap-4">
+      <div className="flex items-start justify-between mb-2 gap-4">
         <div className="min-w-0 flex-1">{title}</div>
         <button
           type="button"
