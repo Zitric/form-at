@@ -80,11 +80,12 @@ function DJDetail() {
             {SOCIAL_ORDER.map((key: SocialKey) => {
               const handle = dj.socials?.[key];
               if (!handle) return null;
-              const { label, toUrl } = SOCIALS[key];
+              const { label, toUrl, androidPackage } = SOCIALS[key];
               return (
                 <SocialLink
                   key={key}
                   href={toUrl(handle)}
+                  androidPackage={androidPackage}
                   className="text-sm text-grey hover:text-white transition-colors tracking-widest"
                 >
                   [ {label} ]

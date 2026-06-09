@@ -22,6 +22,11 @@ type SocialAdapter = {
   label: string;
   /** Build the public URL from the stored handle (or pass through if already a URL). */
   toUrl: (handle: string) => string;
+  /** Android package name. When present, taps on this link are routed via an
+   *  `intent://` URL on Android so the native app opens (with the web URL as a
+   *  graceful fallback). iOS handles the same handoff transparently via
+   *  Universal Links — no per-platform config needed there. */
+  androidPackage?: string;
 };
 
 const isUrl = (s: string) => /^https?:\/\//.test(s);
@@ -31,30 +36,37 @@ export const SOCIALS: Record<SocialKey, SocialAdapter> = {
   instagram: {
     label: "instagram",
     toUrl: (h) => wrap(h, () => `https://instagram.com/${h}`),
+    androidPackage: "com.instagram.android",
   },
   soundcloud: {
     label: "soundcloud",
     toUrl: (h) => wrap(h, () => `https://soundcloud.com/${h}`),
+    androidPackage: "com.soundcloud.android",
   },
   mixcloud: {
     label: "mixcloud",
     toUrl: (h) => wrap(h, () => `https://mixcloud.com/${h}`),
+    androidPackage: "com.mixcloud.player",
   },
   facebook: {
     label: "facebook",
     toUrl: (h) => wrap(h, () => `https://facebook.com/${h}`),
+    androidPackage: "com.facebook.katana",
   },
   residentadvisor: {
     label: "ra",
     toUrl: (h) => wrap(h, () => `https://ra.co/dj/${h}`),
+    androidPackage: "com.residentadvisor.ra",
   },
   bandcamp: {
     label: "bandcamp",
     toUrl: (h) => wrap(h, () => `https://${h}.bandcamp.com`),
+    androidPackage: "com.bandcamp.android",
   },
   spotify: {
     label: "spotify",
     toUrl: (h) => wrap(h, () => `https://open.spotify.com/artist/${h}`),
+    androidPackage: "com.spotify.music",
   },
   linktree: {
     label: "linktree",

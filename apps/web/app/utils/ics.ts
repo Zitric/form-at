@@ -1,4 +1,5 @@
 import type { Event } from "~/data/events";
+import { buildAndroidIntent, isAndroid } from "~/utils/deeplink";
 import { eventDateTimes } from "~/utils/jsonld";
 
 // ICS spec disallows raw `,` `;` `\` and newlines in text fields — they must be
@@ -91,18 +92,12 @@ export function buildGoogleCalendarUrl(event: Event): string {
   return `https://www.google.com/calendar/render?${params}`;
 }
 
-const isAndroid = (): boolean =>
-  typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
-
 /** Android-only `intent://` URL that opens the native Google Calendar app
  *  directly. Falls back to the web URL if the app isn't installed. On any
  *  non-Android user agent this returns the web URL unchanged. */
 export function buildGoogleCalendarTargetUrl(event: Event): string {
   const webUrl = buildGoogleCalendarUrl(event);
-  if (!isAndroid()) return webUrl;
-  const stripped = webUrl.replace(/^https?:\/\//, "");
-  const fallback = encodeURIComponent(webUrl);
-  return `intent://${stripped}#Intent;scheme=https;package=com.google.android.calendar;S.browser_fallback_url=${fallback};end`;
+  return isAndroid() ? buildAndroidIntent(webUrl, "com.google.android.calendar") : webUrl;
 }
 
 /** Outlook Live deep-link — opens outlook.live.com calendar compose view with
@@ -130,8 +125,5 @@ export function buildOutlookCalendarUrl(event: Event): string {
  *  returns the web URL unchanged. */
 export function buildOutlookCalendarTargetUrl(event: Event): string {
   const webUrl = buildOutlookCalendarUrl(event);
-  if (!isAndroid()) return webUrl;
-  const stripped = webUrl.replace(/^https?:\/\//, "");
-  const fallback = encodeURIComponent(webUrl);
-  return `intent://${stripped}#Intent;scheme=https;package=com.microsoft.office.outlook;S.browser_fallback_url=${fallback};end`;
+  return isAndroid() ? buildAndroidIntent(webUrl, "com.microsoft.office.outlook") : webUrl;
 }

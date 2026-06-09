@@ -71,6 +71,7 @@ function Home() {
         >
           <SocialLink
             href="https://www.instagram.com/form.at_glasgow/"
+            androidPackage="com.instagram.android"
             className="text-sm text-grey hover:text-white transition-colors tracking-widest"
           >
             [ instagram ]
