@@ -158,6 +158,22 @@
   transition: opacity 500ms ease-in-out;
 }
 
+/* Respect the OS "Reduce Motion" preference. We collapse every animation /
+   transition to ~0ms instead of disabling them — animations that drive state
+   (e.g. our grid-row slide-in for the player) still fire their listeners and
+   leave the element in the correct final state; users just don't see the
+   motion. Using !important so utilities and inline styles can't override. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 @layer base {
   h1,
   h2,

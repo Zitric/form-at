@@ -5,6 +5,7 @@ import { type MusicSet, sets } from "~/data/sets";
 import { useAudioPlayer } from "~/hooks/useAudioPlayer";
 import { useStore } from "~/store";
 import { registerAudioElement } from "~/store/playerSlice";
+import { ABOVE_NAV_BOTTOM } from "~/styles/layout";
 import { Z } from "~/styles/z";
 import { fmtTimestamp } from "~/utils/fmt";
 
@@ -256,10 +257,16 @@ export function Player() {
     <>
       <audio ref={audioRef} {...audioProps} preload="none" />
 
-      {/* Mobile player — always in DOM, animates from height 0 when a track loads */}
+      {/* Mobile player — always in DOM, animates from height 0 when a track
+          loads. Sits directly on top of the BottomNav (which is permanently
+          anchored to the bottom edge), so its `bottom` is the nav's full
+          height including iOS safe-area inset. */}
       <div
-        className={`sm:hidden fixed bottom-0 inset-x-0 ${Z.player} bg-black grid ${mobileRowsClass}`}
-        style={{ transition: "grid-template-rows 300ms ease-in-out" }}
+        className={`sm:hidden fixed inset-x-0 ${Z.player} bg-black grid ${mobileRowsClass}`}
+        style={{
+          bottom: ABOVE_NAV_BOTTOM,
+          transition: "grid-template-rows 300ms ease-in-out",
+        }}
       >
         <div className="overflow-hidden">
           <div className="h-[78px] pb-[5px] border-t border-white/10 font-mono flex flex-col">

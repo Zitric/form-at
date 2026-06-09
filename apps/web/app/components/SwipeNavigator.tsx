@@ -2,6 +2,7 @@ import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useDrag } from "@use-gesture/react";
 import { useRef, useState } from "react";
 import { useStore } from "~/store";
+import { ABOVE_CHROME_BOTTOM, ABOVE_NAV_BOTTOM } from "~/styles/layout";
 import { Z } from "~/styles/z";
 
 const ROUTES = ["/", "/sets", "/events", "/djs"] as const;
@@ -115,8 +116,10 @@ export function SwipeNavigator() {
     { axis: "x", filterTaps: true },
   );
 
-  // Dots sit above BottomNav (≈52px) and optionally the player bar (52px)
-  const dotsBottom = nowPlaying ? 137 : 59;
+  // Dots sit above the chrome — nav alone when no track is loaded, nav +
+  // player when audio is active. Includes iOS safe-area via the shared
+  // layout helpers.
+  const dotsBottom = nowPlaying ? ABOVE_CHROME_BOTTOM : ABOVE_NAV_BOTTOM;
 
   return (
     <>
