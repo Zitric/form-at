@@ -1,9 +1,11 @@
 import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useDrag } from "@use-gesture/react";
 import { useRef, useState } from "react";
+import { useNavReady } from "~/hooks/useNavReady";
 import { useStore } from "~/store";
 import { ABOVE_CHROME_BOTTOM, ABOVE_NAV_BOTTOM } from "~/styles/layout";
 import { Z } from "~/styles/z";
+import { rubberBand } from "~/utils/rubberBand";
 
 const ROUTES = ["/", "/sets", "/events", "/djs"] as const;
 const SWIPE_PX = 80;
@@ -11,6 +13,10 @@ const SWIPE_VX = 0.5;
 const DURATION = 220;
 // w-1 (4px) + gap-1.5 (6px) = 10px per dot step
 const DOT_STEP = 10;
+// Edge-of-list rubber-band asymptote, as a fraction of viewport width. At 0.4
+// the resistance lets the page travel ~40% of the screen at most — visible
+// enough to read as "edge", restrained enough not to look like navigation.
+const EDGE_RUBBER_BAND_RATIO = 0.4;
 
 function routeIndex(pathname: string): number {
   return ROUTES.findIndex((r) => (r === "/" ? pathname === "/" : pathname.startsWith(r)));
@@ -20,6 +26,7 @@ export function SwipeNavigator() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const nowPlaying = useStore((s) => s.nowPlaying);
+  const navReady = useNavReady();
   const [offset, setOffset] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
   const busy = useRef(false);
@@ -35,7 +42,9 @@ export function SwipeNavigator() {
       if (!last) {
         const atStart = idx === 0 && mx > 0;
         const atEnd = idx === ROUTES.length - 1 && mx < 0;
-        setOffset(atStart || atEnd ? mx * 0.15 : mx);
+        setOffset(
+          atStart || atEnd ? rubberBand(mx, window.innerWidth * EDGE_RUBBER_BAND_RATIO) : mx,
+        );
         // Animate dots indicator directly — no React re-render needed
         if (dotsIndicatorRef.current) {
           const frac = Math.max(-1, Math.min(1, -mx / window.innerWidth));
@@ -118,8 +127,10 @@ export function SwipeNavigator() {
 
   // Dots sit above the chrome — nav alone when no track is loaded, nav +
   // player when audio is active. Includes iOS safe-area via the shared
-  // layout helpers.
-  const dotsBottom = nowPlaying ? ABOVE_CHROME_BOTTOM : ABOVE_NAV_BOTTOM;
+  // layout helpers. Gated on `navReady` so a first-load rehydrated track
+  // doesn't shove the dots up before the player slot has actually slid in
+  // beneath them.
+  const dotsBottom = nowPlaying && navReady ? ABOVE_CHROME_BOTTOM : ABOVE_NAV_BOTTOM;
 
   return (
     <>
