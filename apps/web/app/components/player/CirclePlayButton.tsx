@@ -1,5 +1,5 @@
 import type React from "react";
-import { PauseIcon, PlayIcon } from "~/components/PlayerIcons";
+import { PauseIcon, PlayIcon } from "~/components/player/PlayerIcons";
 import { cn } from "~/utils/cn";
 
 interface CirclePlayButtonProps {

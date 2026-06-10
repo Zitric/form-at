@@ -15,7 +15,8 @@ export function PlaybackErrorToast() {
 
   return (
     <div
-      className={`fixed inset-x-0 ${Z.toast} flex items-center justify-center pointer-events-none px-4 bottom-[145px] sm:bottom-[100px]`}
+      // Same bottom math as <Toast>: nav (55) + mini-player (50) + safe-area + 12.
+      className={`fixed inset-x-0 ${Z.toast} flex items-center justify-center pointer-events-none px-4 bottom-[calc(105px+env(safe-area-inset-bottom)+12px)] sm:bottom-[100px]`}
     >
       <div className="pointer-events-auto bg-black border border-red-400/40 text-red-400 text-xs font-mono flex items-center max-w-sm">
         <button
