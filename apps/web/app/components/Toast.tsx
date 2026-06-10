@@ -30,7 +30,11 @@ export function Toast() {
 
   return (
     <div
-      className={`fixed inset-x-0 ${Z.toast} flex items-center justify-center pointer-events-none px-4 bottom-[145px] sm:bottom-[100px]`}
+      // Mobile bottom = nav (55) + mini-player (50) + safe-area + 12px gap.
+      // Desktop has no BottomNav, just clears the static ~78px desktop player.
+      // If LAYOUT in styles/layout.ts changes, this calc needs the matching
+      // px update — kept inline so Tailwind's JIT picks it up at build time.
+      className={`fixed inset-x-0 ${Z.toast} flex items-center justify-center pointer-events-none px-4 bottom-[calc(105px+env(safe-area-inset-bottom)+12px)] sm:bottom-[100px]`}
       style={{
         animation: exiting
           ? `fadeOutDown ${EXIT_MS}ms ease-in forwards`

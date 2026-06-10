@@ -59,6 +59,23 @@
   }
 }
 
+/* Marquee scroll for the mobile mini-player's track info when it overflows.
+   The consumer measures the overflow and sets `--marquee-end` as a negative
+   px value (e.g. -42px). Pauses at start (0–15% = 1.5s) and at end (85–100%
+   = 1.5s) so the listener can read both ends; the loop snap from end → start
+   between iterations is instant (one frame), which is the inherent cost of
+   the single-copy approach. */
+@keyframes marquee-scroll {
+  0%,
+  15% {
+    transform: translateX(0);
+  }
+  85%,
+  100% {
+    transform: translateX(var(--marquee-end));
+  }
+}
+
 @keyframes fadeInUp {
   from {
     opacity: 0;

@@ -1,11 +1,12 @@
 import type { MusicSet } from "~/data/sets";
 import { useStore } from "~/store";
+import { cn } from "~/utils/cn";
 
-export function ShareSetButton({ set }: { set: MusicSet }) {
+export function ShareSetButton({ set, className }: { set: MusicSet; className?: string }) {
   const openShareModal = useStore((s) => s.openShareModal);
 
   return (
-    <div className="flex justify-center mb-8">
+    <div className={cn("flex justify-center mb-6!", className)}>
       <button
         type="button"
         onClick={() => openShareModal(set)}

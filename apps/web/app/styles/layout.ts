@@ -11,9 +11,11 @@
 export const LAYOUT = {
   /** Content height of `BottomNav` on mobile (excludes safe-area padding). */
   navHeightMobile: 55,
-  /** Audio bar slot height on mobile. Phase 2 will reduce this when the
-   *  rich player becomes a single-line mini-player. */
-  playerHeightMobile: 78,
+  /** Mobile mini-player slot height — 40px tap-to-open-full-player row plus
+   *  a 16px tap row hosting the drag-to-scrub progress bar. The progress bar
+   *  needs the 16px to be reliably touchable; its visible track stays 4px
+   *  (7px while actively dragging). */
+  playerHeightMobile: 56,
 } as const;
 
 /** CSS `bottom` value placing a fixed surface directly above the BottomNav,

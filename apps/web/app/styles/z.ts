@@ -15,7 +15,11 @@ export const Z = {
    *  visible during a drag, but stays *below* `toast` so a copy-success or
    *  error-retry pill never disappears behind it. */
   swipeIndicator: "z-30",
+  /** Mobile full-screen "now playing" overlay. Covers nav + mini-player +
+   *  swipe indicator when open. Toast stays above it so share-success and
+   *  error pills are still visible while the overlay is up. */
+  fullPlayer: "z-40",
   /** Transient feedback pills — copy success, playback error retry. Top of
    *  the stack (excluding the native dialog top layer used by Modal). */
-  toast: "z-40",
+  toast: "z-50",
 } as const;
