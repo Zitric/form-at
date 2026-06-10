@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { BookingsButton } from "~/components/BookingsButton";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { JsonLd } from "~/components/JsonLd";
@@ -28,6 +29,17 @@ function Home() {
   const isFirstLoad = useFirstLoad();
   const navigate = useNavigate();
 
+  // Opacity-transition fade-in to avoid the appear → disappear → fade flash
+  // the previous keyframe-on-mount approach caused (full diagnosis in
+  // BottomNav.tsx). Unlike the chrome components, Home *does* remount on
+  // navigation back to /, so we still honour the first-load gating:
+  // 5s on the user's very first visit, 0.6s on subsequent returns.
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    setVisible(true);
+  }, []);
+  const fadeDuration = isFirstLoad ? "5s" : "0.6s";
+
   const nowPlaying = useStore((s) => s.nowPlaying);
   const isPlaying = useStore((s) => s.isPlaying);
   const playTrack = useStore((s) => s.playTrack);
@@ -55,9 +67,14 @@ function Home() {
           onClick={handleListenClick}
           className="flex items-center justify-center gap-4 self-center w-full sm:px-24 border-2 border-grey/20 px-6 py-4 text-sm sm:text-base text-grey hover:border-purple hover:text-white hover:cursor-pointer transition-colors shadow-[0_0_15px_rgba(197,133,56,0.2)] hover:shadow-[0_0_25px_rgba(197,133,56,0.4)]"
           style={{
-            animation: isFirstLoad
-              ? "fade-in 5s ease-out, border-pulse 2s ease-in-out 5s infinite"
-              : "fade-in 0.6s ease-out, border-pulse 2s ease-in-out 0.6s infinite",
+            opacity: visible ? 1 : 0,
+            // Opacity transition for fade-in, keyframe animation for the
+            // border pulse — they're independent properties so they coexist
+            // cleanly. The pulse waits out the fade by matching the
+            // animation-delay to the fade duration so the user reads the
+            // text before the border starts breathing.
+            transition: `opacity ${fadeDuration} ease-out`,
+            animation: `border-pulse 2s ease-in-out ${fadeDuration} infinite`,
           }}
           suppressHydrationWarning
         >
@@ -67,7 +84,10 @@ function Home() {
 
         <div
           className="flex items-center justify-center gap-10 my-8"
-          style={{ animation: isFirstLoad ? "fade-in 5s ease-out" : "fade-in 0.6s ease-out" }}
+          style={{
+            opacity: visible ? 1 : 0,
+            transition: `opacity ${fadeDuration} ease-out`,
+          }}
           suppressHydrationWarning
         >
           <SocialLink
