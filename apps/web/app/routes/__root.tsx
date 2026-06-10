@@ -3,13 +3,12 @@ import { useEffect } from "react";
 import { BottomNav } from "~/components/BottomNav";
 import { Header } from "~/components/Header";
 import { PageLayout } from "~/components/PageLayout";
-import { PlaybackErrorToast } from "~/components/PlaybackErrorToast";
-import { Player } from "~/components/Player";
 import { ShareModal } from "~/components/ShareModal";
 import { SwipeNavigator } from "~/components/SwipeNavigator";
 import { TerminalRow } from "~/components/TerminalRow";
 import { Body } from "~/components/Text";
 import { Toast } from "~/components/Toast";
+import { PlaybackErrorToast, Player } from "~/components/player";
 import { useStore } from "~/store";
 import "~/styles/global.css";
 

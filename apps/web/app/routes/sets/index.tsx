@@ -1,11 +1,11 @@
 import { Await, createFileRoute, defer, useNavigate } from "@tanstack/react-router";
 import { Suspense } from "react";
 import { Card } from "~/components/Card";
-import { CirclePlayButton } from "~/components/CirclePlayButton";
 import { PageLayout } from "~/components/PageLayout";
 import { ShareIconButton } from "~/components/ShareIconButton";
 import { TerminalRow } from "~/components/TerminalRow";
 import { Label, PageTitle } from "~/components/Text";
+import { CirclePlayButton } from "~/components/player";
 import { type OverallStats, fetchOverallStats } from "~/data/set-stats";
 import { sets } from "~/data/sets";
 import { useStore } from "~/store";

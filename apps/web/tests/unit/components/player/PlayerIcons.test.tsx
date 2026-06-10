@@ -1,6 +1,6 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { NextIcon, PauseIcon, PlayIcon, PrevIcon } from "~/components/PlayerIcons";
+import { NextIcon, PauseIcon, PlayIcon, PrevIcon } from "~/components/player";
 
 describe("PlayerIcons", () => {
   it("renders SVG (not unicode emoji) for Play", () => {
