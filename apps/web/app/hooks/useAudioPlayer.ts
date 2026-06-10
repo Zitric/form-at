@@ -3,7 +3,7 @@ import type { RefObject } from "react";
 import { type MusicSet, sets } from "~/data/sets";
 import { useStore } from "~/store";
 
-export type AudioProps = {
+type AudioProps = {
   onPlay: () => void;
   onPause: () => void;
   onLoadStart: () => void;

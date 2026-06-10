@@ -1,0 +1,25 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["turbo.json", "scripts/*.{ts,mjs,js}"],
+      "ignoreBinaries": ["vite", "playwright", "wrangler"]
+    },
+    "apps/web": {
+      "entry": [
+        "app/server.ts",
+        "app/router.tsx",
+        "app/routes/**/*.{ts,tsx}",
+        "scripts/*.{ts,mjs,js}",
+        "tests/**/*.{ts,tsx}"
+      ],
+      "project": ["app/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}", "scripts/**/*.{ts,mjs,js}"],
+      "paths": {
+        "~/*": ["app/*"]
+      },
+      "ignoreDependencies": ["jsdom", "tailwindcss", "@form-at/tsconfig"],
+      "ignoreBinaries": ["vite", "vitest", "wrangler"]
+    },
+    "packages/tsconfig": {}
+  }
+}

@@ -15,8 +15,8 @@ export type SetStats = {
   weeklyPlays: number[];
 };
 
-export const TREND_WINDOW_DAYS = 60;
-export const TREND_BUCKET_DAYS = 7;
+const TREND_WINDOW_DAYS = 60;
+const TREND_BUCKET_DAYS = 7;
 
 function fillDailyWindow(rows: { day: string; plays: number }[], days: number): number[] {
   const map = new Map(rows.map((r) => [r.day, r.plays]));
