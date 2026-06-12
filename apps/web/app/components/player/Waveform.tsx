@@ -52,6 +52,18 @@ export function Waveform({ peaks, currentTime, duration, onSeek, disabled }: Wav
   // hidden — pointer-events stay off so the tooltip never intercepts the drag
   // beneath it.
   const [tooltip, setTooltip] = useState<{ x: number; time: number } | null>(null);
+  // Local scrub-target time, owns the indicator position during and just after
+  // a drag. Bypasses the slow audio-element round-trip (audio.currentTime → seeked
+  // event → PlayerSeeker re-render → currentTime prop) that was making the gold
+  // fill visibly lag the tooltip on rapid drags. `null` means "indicator follows
+  // `currentTime` from props" (normal playback).
+  const [scrubTime, setScrubTime] = useState<number | null>(null);
+  // After release we keep `scrubTime` set until the audio element catches up to
+  // the requested position, so the indicator doesn't snap backwards to the old
+  // playhead while the new buffer range is fetching. `true` between release and
+  // catch-up; reset on new gesture start.
+  const [waitingForCatchup, setWaitingForCatchup] = useState(false);
+  const effectiveTime = scrubTime ?? currentTime;
 
   // Redraw bars only when peaks change or the container resizes
   useEffect(() => {
@@ -73,22 +85,44 @@ export function Waveform({ peaks, currentTime, duration, onSeek, disabled }: Wav
     return () => ro.disconnect();
   }, [peaks]);
 
-  // Progress: one DOM style write — no canvas work at all
+  // Progress: one DOM style write — no canvas work at all. Reads `effectiveTime`
+  // so during a scrub the indicator tracks the finger via local state, and
+  // during playback (scrubTime null) it follows the audio's currentTime.
   useEffect(() => {
     if (!clipRef.current) return;
-    clipRef.current.style.width = duration > 0 ? `${(currentTime / duration) * 100}%` : "0%";
-  }, [currentTime, duration]);
+    clipRef.current.style.width = duration > 0 ? `${(effectiveTime / duration) * 100}%` : "0%";
+  }, [effectiveTime, duration]);
 
-  // Tap-or-drag handler. Single code path: tap is a zero-distance drag,
-  // movement-based drag updates onSeek on every frame for live follow-finger
-  // scrub. The 4px threshold separates "tap to seek" from "drag to scrub" so
-  // we never pause for a tap.
+  // Once audio catches up to the requested seek target (within 1s — enough
+  // tolerance for buffered-boundary settling without making the user wait for
+  // exact equality), hand the indicator back to the playback feed. Skipped
+  // while a new gesture is mid-flight so a follow-up drag doesn't race the
+  // catch-up clear.
+  useEffect(() => {
+    if (!waitingForCatchup || scrubTime === null) return;
+    if (Math.abs(currentTime - scrubTime) < 1) {
+      setScrubTime(null);
+      setWaitingForCatchup(false);
+    }
+  }, [currentTime, scrubTime, waitingForCatchup]);
+
+  // Tap-or-drag handler. We deliberately do *not* call onSeek on every move:
+  // streaming audio queues a buffer fetch per `audio.currentTime` write, and
+  // those queue up behind the user on rapid drags — the indicator visibly
+  // lags. Instead `scrubTime` (local state) owns the indicator during the
+  // gesture and we commit a single onSeek on release. The audio was paused
+  // by useScrubControl above the 4px threshold, so the user wasn't hearing
+  // the interim positions anyway. Tap (sub-threshold) still seeks on
+  // release — that's the same `last` branch.
   const bind = useDrag(({ active, first, xy: [x], movement: [mx], event, last }) => {
     event.stopPropagation();
     const el = containerRef.current;
     if (!el) return;
 
-    if (first) scrub.acceptIfReady();
+    if (first) {
+      scrub.acceptIfReady();
+      setWaitingForCatchup(false); // new gesture, abandon any pending catch-up
+    }
     if (!scrub.isAccepted()) return;
 
     if (active) scrub.maybePauseOnMove(mx);
@@ -96,9 +130,11 @@ export function Waveform({ peaks, currentTime, duration, onSeek, disabled }: Wav
     const rect = el.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (x - rect.left) / rect.width));
     const targetTime = pct * duration;
-    onSeek(targetTime);
+    setScrubTime(targetTime);
 
     if (last) {
+      onSeek(targetTime);
+      setWaitingForCatchup(true);
       scrub.endScrub();
       setTooltip(null);
     } else if (active && Math.abs(mx) > 4) {

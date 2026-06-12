@@ -237,15 +237,18 @@ export function FullPlayer({
         </div>
 
         {/* Share + open-set-details stacked. Stacking reads cleaner across
-            screen widths than the inline-wrap row did on Android. The Link's
-            onClick is redundant with the pathname effect inside
-            useFullPlayerLifecycle but fires faster, which makes the dismiss
-            feel responsive. */}
+            screen widths than the inline-wrap row did on Android. Closing the
+            overlay is deliberately left to the pathname-change effect in
+            useFullPlayerLifecycle — calling closeFullPlayer in the Link's
+            onClick races TanStack Router's history.pushState, which causes
+            useFullPlayerLifecycle's cleanup to see the marker still on top,
+            fire history.back(), and undo the navigation. The route effect
+            fires only after the URL has actually changed, so its close cycle
+            sees the new history entry and skips back(). */}
         <div className="flex flex-col items-center gap-3">
           <Link
             to="/sets/$setId"
             params={{ setId: nowPlaying.id }}
-            onClick={closeFullPlayer}
             className="text-sm text-grey hover:text-white transition-colors tracking-widest"
           >
             [ open_set_details ]
