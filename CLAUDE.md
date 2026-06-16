@@ -78,7 +78,8 @@ Community features will be gated behind **Better Auth** (self-hosted, open sourc
 
 ## Principles
 
-- **Keep it simple.** Don't add abstractions until there's a clear need. Three similar lines beats a premature helper.
+- **Top-notch quality is the priority.** This is meant to be a polished, professional app — not a quick prototype or hobby project. When a trade-off comes up between speed and quality, default to quality. Choose the cleaner abstraction over the cheapest one, the correct pattern over the shortcut, the proper UX over "good enough." Don't be cheap with engineering time, refactors, or polish: invest the effort to do things properly the first time. If a suggestion sounds "easier but worse," flag it and propose the better path.
+- **Keep it simple.** Within the quality bar above, prefer the simplest implementation that does the job well. Don't add abstractions until there's a clear need. Three similar lines beats a premature helper — but two coexisting half-built abstractions is *not* simple, it's debt. Simple ≠ shortcut.
 - **No comments that explain what the code does** — names do that. Only comment the non-obvious *why*.
 - **Biome only** — no Prettier, no ESLint. Run `pnpm check` to lint and format everything.
 - **Shared config in `packages/`** — each app extends `@form-at/tsconfig` via `workspace:*`.
