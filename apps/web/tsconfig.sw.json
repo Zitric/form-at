@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../packages/tsconfig/tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "WebWorker"],
+    "types": [],
+    "noEmit": true,
+    "paths": {
+      "~/*": ["./app/*"]
+    }
+  },
+  "include": ["app/sw.ts"]
+}

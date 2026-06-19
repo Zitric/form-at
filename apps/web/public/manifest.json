@@ -1,12 +1,18 @@
 {
+  "id": "/?source=pwa",
   "name": "Form:at",
   "short_name": "Form:at",
   "description": "Techno collective from Glasgow",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#161615",
   "theme_color": "#161615",
   "orientation": "portrait-primary",
+  "categories": ["music", "entertainment"],
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
   "icons": [
     {
       "src": "/icon-192.png",
@@ -19,6 +25,22 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/narrow.png",
+      "sizes": "1080x1440",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Form:at home with audio player loaded"
+    },
+    {
+      "src": "/screenshots/wide.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Form:at sets archive with two-row player"
     }
   ]
 }

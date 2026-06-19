@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { BookingsButton } from "~/components/BookingsButton";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
+import { InstallCta } from "~/components/InstallCta";
 import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
 import { SocialLink } from "~/components/SocialLink";
@@ -98,6 +99,14 @@ function Home() {
             [ instagram ]
           </SocialLink>
           <BookingsButton className="text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer" />
+        </div>
+
+        {/* PWA install CTA — renders only when Chromium fires
+            beforeinstallprompt (post-engagement + manifest + SW). Lives
+            below the socials so it doesn't compete with the primary CTA but
+            stays discoverable. iOS / Firefox: no event = nothing renders. */}
+        <div className="flex justify-center -mt-4 mb-8">
+          <InstallCta />
         </div>
       </div>
     </PageLayout>

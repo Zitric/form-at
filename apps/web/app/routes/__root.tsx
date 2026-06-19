@@ -40,7 +40,12 @@ export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      // `viewport-fit=cover` lets `env(safe-area-inset-*)` resolve to real
+      // values on iOS, which we already rely on for BottomNav padding +
+      // FullPlayer header. Also a prerequisite for the Phase 4.5 PWA-mode
+      // Dynamic Island layout — without `cover`, iOS clamps the page width
+      // to the safe area and the standalone header can't reach the edges.
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { name: "author", content: "Form:at" },
       { title: "Form:at" },
       {
