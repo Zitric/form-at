@@ -122,6 +122,20 @@ export const Route = createRootRoute({
     scripts: [
       // Cloudflare Web Analytics — replace token after adding site in CF dashboard → Web Analytics
       // { src: "https://static.cloudflareinsights.com/beacon.min.js", defer: true, "data-cf-beacon": '{"token":"REPLACE_WITH_YOUR_TOKEN"}' },
+      // Service worker registration. Inline rather than external because the
+      // file is tiny and we don't want a second round-trip on every cold
+      // start just to fetch a 4-line snippet. Classic worker (no
+      // `{ type: "module" }`) — matches the iife build in vite.config.ts and
+      // keeps Safari < 15.4 compatible. Errors land in the console so a
+      // misdeployed `/sw.js` is loud rather than silent.
+      {
+        children: `if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .catch((err) => console.warn('[sw] registration failed:', err));
+  });
+}`,
+      },
     ],
   }),
   component: Root,
