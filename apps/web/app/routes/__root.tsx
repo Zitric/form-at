@@ -2,6 +2,7 @@ import { HeadContent, Link, Scripts, createRootRoute } from "@tanstack/react-rou
 import { useEffect } from "react";
 import { BottomNav } from "~/components/BottomNav";
 import { Header } from "~/components/Header";
+import { InAppBrowserBanner } from "~/components/InAppBrowserBanner";
 import { PageLayout } from "~/components/PageLayout";
 import { ShareModal } from "~/components/ShareModal";
 import { SwipeNavigator } from "~/components/SwipeNavigator";
@@ -198,6 +199,7 @@ function Root() {
         <PlaybackErrorToast />
         <Toast />
         <ShareModal />
+        <InAppBrowserBanner />
         <BottomNav />
         <Scripts />
       </body>
