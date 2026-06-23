@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { getSet } from "~/data/sets";
@@ -19,21 +20,52 @@ export const useStore = create<AppStore>()(
       positions: state.positions,
       peaksCache: state.peaksCache,
       durations: state.durations,
+      // PWA install state — both booleans persisted so a returning user is
+      // remembered as installed-or-dismissed across visits. `deferredPrompt`
+      // is DELIBERATELY OMITTED: it's a non-serializable BeforeInstallPrompt
+      // event with native methods (`.prompt()`, `.userChoice`) that would
+      // either crash JSON.parse or yield a useless plain object on rehydrate.
+      // The event is re-captured each page load when Chrome fires it.
+      pwaInstalled: state.pwaInstalled,
+      pwaInstallDismissed: state.pwaInstallDismissed,
     }),
     merge: (persisted, current) => {
-      const { nowPlayingId, positions, peaksCache, durations } = persisted as {
-        nowPlayingId: string | null;
-        positions: Record<string, number>;
-        peaksCache: Record<string, number[]>;
-        durations: Record<string, number>;
-      };
+      const { nowPlayingId, positions, peaksCache, durations, pwaInstalled, pwaInstallDismissed } =
+        persisted as {
+          nowPlayingId: string | null;
+          positions: Record<string, number>;
+          peaksCache: Record<string, number[]>;
+          durations: Record<string, number>;
+          pwaInstalled?: boolean;
+          pwaInstallDismissed?: boolean;
+        };
       return {
         ...current,
         nowPlaying: nowPlayingId ? (getSet(nowPlayingId) ?? null) : null,
         positions: positions ?? {},
         peaksCache: peaksCache ?? {},
         durations: durations ?? {},
+        pwaInstalled: pwaInstalled ?? false,
+        pwaInstallDismissed: pwaInstallDismissed ?? false,
       };
     },
   }),
 );
+
+// Returns `true` once Zustand's persist middleware has finished rehydrating
+// from localStorage, `false` before that. Use for components that gate
+// rendering on persisted state (e.g. <InstallCta> checking pwaInstallDismissed)
+// so they don't flash the wrong UI for one frame between mount and the
+// `HydrateStore` effect firing `persist.rehydrate()`.
+//
+// Implemented via `useSyncExternalStore` so the React 19 compiler treats it
+// as a proper external subscription — no stale-closure pitfalls, SSR-safe
+// (returns false on the server), and re-renders any consumer the moment
+// `onFinishHydration` fires.
+export function useStoreHydrated(): boolean {
+  return useSyncExternalStore(
+    (cb) => useStore.persist.onFinishHydration(cb),
+    () => useStore.persist.hasHydrated(),
+    () => false,
+  );
+}

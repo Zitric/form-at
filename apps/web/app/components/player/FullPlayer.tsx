@@ -253,7 +253,7 @@ export function FullPlayer({
           >
             [ open_set_details ]
           </Link>
-          <ShareSetButton set={nowPlaying} className="mb-0" />
+          <ShareSetButton set={nowPlaying} />
         </div>
       </div>
     </div>

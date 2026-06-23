@@ -4,6 +4,7 @@ import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { Image } from "~/components/Image";
 import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
+import { SaveForOfflineButton } from "~/components/SaveForOfflineButton";
 import { ShareSetButton } from "~/components/ShareSetButton";
 import { TerminalRow } from "~/components/TerminalRow";
 import { Label, PageTitle } from "~/components/Text";
@@ -166,7 +167,13 @@ function SetDetail() {
           {playButtonLabel}
         </button>
 
-        <ShareSetButton set={set} />
+        {/* Share + save-for-offline share a centred row. ShareSetButton lost
+            its own `mb-6!` wrapper as part of Phase 3 so layout is owned
+            here, at the call site, rather than inside the button. */}
+        <div className="flex justify-center items-center gap-6 mb-6">
+          <ShareSetButton set={set} />
+          <SaveForOfflineButton />
+        </div>
 
         {/* Description — moved above meta so the "what is this set" payload
             isn't buried below dim metadata rows. */}

@@ -11,6 +11,7 @@ import { Body } from "~/components/Text";
 import { Toast } from "~/components/Toast";
 import { PlaybackErrorToast, Player } from "~/components/player";
 import { useStore } from "~/store";
+import type { BeforeInstallPromptEvent } from "~/store/uiSlice";
 import "~/styles/global.css";
 
 function RootNotFound() {
@@ -183,6 +184,56 @@ function HydrateStore() {
   return null;
 }
 
+// Global capture of the two PWA install lifecycle events. Sibling to
+// HydrateStore — null render, just runs effects on mount.
+//
+// Why one listener pair globally (not per-component): both <InstallCta> (home)
+// and Phase 3's <SaveForOfflineButton> (/sets/:setId) need the captured
+// `beforeinstallprompt` event to call `.prompt()` on. Capturing it twice in
+// two components would mean only whichever mounted second sees it — the
+// first listener consumed-and-stored it locally. Capturing once into the
+// store and reading from both consumers keeps them in sync.
+//
+// Also performs a one-time migration of Phase 1's localStorage dismiss key
+// into the new persisted `pwaInstallDismissed` flag so a returning user who
+// said "not now" before isn't re-prompted after this refactor lands.
+function InstallEventsListener() {
+  const setDeferredPrompt = useStore((s) => s.setDeferredPrompt);
+  const setPwaInstalled = useStore((s) => s.setPwaInstalled);
+  const setPwaInstallDismissed = useStore((s) => s.setPwaInstallDismissed);
+
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem("install-dismissed") === "1") {
+        setPwaInstallDismissed(true);
+        window.localStorage.removeItem("install-dismissed");
+      }
+    } catch {
+      // localStorage can throw in private-mode Safari / cross-site iframes.
+      // Silent skip — worst case is the user sees the install button once more.
+    }
+
+    const onBeforeInstall = (e: Event) => {
+      // Chrome would otherwise show its own mini-infobar; we want control.
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    };
+    const onInstalled = () => {
+      setPwaInstalled(true);
+      setDeferredPrompt(null);
+    };
+
+    window.addEventListener("beforeinstallprompt", onBeforeInstall);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBeforeInstall);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, [setDeferredPrompt, setPwaInstalled, setPwaInstallDismissed]);
+
+  return null;
+}
+
 function Root() {
   return (
     <html lang="en">
@@ -193,6 +244,7 @@ function Root() {
       </head>
       <body className="bg-black text-white font-mono antialiased">
         <HydrateStore />
+        <InstallEventsListener />
         <Header />
         <SwipeNavigator />
         <Player />
