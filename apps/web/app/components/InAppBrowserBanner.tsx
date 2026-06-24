@@ -4,6 +4,7 @@ import { useStore } from "~/store";
 import { ABOVE_CHROME_BOTTOM, ABOVE_NAV_BOTTOM } from "~/styles/layout";
 import { Z } from "~/styles/z";
 import { isInAppBrowser } from "~/utils/inAppBrowser";
+import { safeSession } from "~/utils/safeStorage";
 
 const DISMISS_KEY = "iab-dismissed";
 const INSTRUCTION = "for full audio: tap ⋯ and open in safari";
@@ -44,7 +45,7 @@ export function InAppBrowserBanner() {
   useEffect(() => {
     const detected = isInAppBrowser();
     if (!detected) return;
-    if (sessionStorage.getItem(DISMISS_KEY) === "1") return;
+    if (safeSession.get(DISMISS_KEY) === "1") return;
     setShow(true);
   }, []);
 
@@ -63,7 +64,7 @@ export function InAppBrowserBanner() {
       <button
         type="button"
         onClick={() => {
-          sessionStorage.setItem(DISMISS_KEY, "1");
+          safeSession.set(DISMISS_KEY, "1");
           setShow(false);
         }}
         aria-label="Dismiss in-app browser banner"

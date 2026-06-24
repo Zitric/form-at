@@ -12,6 +12,7 @@ import { Toast } from "~/components/Toast";
 import { PlaybackErrorToast, Player } from "~/components/player";
 import { useStore } from "~/store";
 import type { BeforeInstallPromptEvent } from "~/store/uiSlice";
+import { safeLocal } from "~/utils/safeStorage";
 import "~/styles/global.css";
 
 function RootNotFound() {
@@ -203,14 +204,14 @@ function InstallEventsListener() {
   const setPwaInstallDismissed = useStore((s) => s.setPwaInstallDismissed);
 
   useEffect(() => {
-    try {
-      if (window.localStorage.getItem("install-dismissed") === "1") {
-        setPwaInstallDismissed(true);
-        window.localStorage.removeItem("install-dismissed");
-      }
-    } catch {
-      // localStorage can throw in private-mode Safari / cross-site iframes.
-      // Silent skip — worst case is the user sees the install button once more.
+    // safeLocal handles private-mode Safari / partitioned-iframe throws
+    // internally with a silent fallback. If the read throws → returns null →
+    // comparison fails → migration skipped. If the remove throws → no-op.
+    // Either way no crash, worst case is the user sees the install button
+    // once more (the migration just retries on next load and likely succeeds).
+    if (safeLocal.get("install-dismissed") === "1") {
+      setPwaInstallDismissed(true);
+      safeLocal.remove("install-dismissed");
     }
 
     const onBeforeInstall = (e: Event) => {
