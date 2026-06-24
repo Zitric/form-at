@@ -118,6 +118,7 @@ JSX should describe **what** the UI is, not **how** it's computed. When an inlin
 - Design tokens are in `apps/web/app/styles/tokens.ts` (JS/canvas use) and mirrored in the `@theme` block of `global.css` (Tailwind use). Keep them in sync.
 - Brand colours: `bg-black` (`#161615`), `text-gold` (`#c58538`), `text-purple` (`#43437a`), `text-grey` (`#cbcbcb`), `font-mono` (Space Mono).
 - **Edges.** Sharp by default — terminal rows, the player bar, headers, status pills, CTA buttons, and structural borders (`border-t`, `border-l`) stay square. Use `rounded-card` (single 4px token, defined in `global.css`) only for **content surfaces the user taps into**: list cards, content images (artwork, flyers). Use `rounded-full` only for genuinely circular elements (e.g. the play button). Never use the freeform Tailwind radius scale (`rounded-md`, `rounded-lg`, `rounded-xl`) — only the two tokens above.
+- **Bracket labels never wrap mid-bracket.** Terminal-style `[ label ]` buttons must keep the whole bracket pair on one line — an orphaned `]` on the next line breaks the visual convention and reads as a layout bug. When a bracket button lives in a flex row that gets tight at narrow viewports (iPhone SE 375px is the test case), add `whitespace-nowrap` to the button class. If the label is long enough that nowrap forces overflow, shorten the label — never let the bracket split. This has bitten us repeatedly (Phase 2 banner `[ × ]`, Phase 3 `[ share_set ]` / `[ save_for_offline ]` row); the rule exists so it stops.
 
 ## Commands
 
