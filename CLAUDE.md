@@ -84,6 +84,15 @@ Community features will be gated behind **Better Auth** (self-hosted, open sourc
 - **Biome only** — no Prettier, no ESLint. Run `pnpm check` to lint and format everything.
 - **Shared config in `packages/`** — each app extends `@form-at/tsconfig` via `workspace:*`.
 
+## Git workflow
+
+The user owns commits — you do not create them. The user is the repo owner and wants to review the staged diff before each commit; auto-commits remove that checkpoint.
+
+- **Read-only git is fine, freely.** `git status`, `git diff`, `git log`, `git show` for diagnosis or to surface what's staged / changed.
+- **Staging:** you MAY `git add <specific files>` when explicitly asked. Otherwise default to *telling the user which files to stage* rather than staging silently. Never `git add -A` or `git add .` — only named paths.
+- **Never** run `git commit` (or any variant — `-am`, `--amend`, `commit -m`, etc.) or `git push`. No exceptions.
+- **When a unit of work is complete and tests pass:** stop, summarise what changed and which files, and hand off. The user makes the commit themselves.
+
 ## Code standards
 
 ### Reusable components
