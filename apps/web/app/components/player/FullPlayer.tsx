@@ -119,7 +119,11 @@ export function FullPlayer({
         // Only the *bottom* safe area gets padding on the container; the
         // *top* is intentionally not padded so `bg-black` extends behind the
         // notch / dynamic island. The header below pads itself for clearance.
-        paddingBottom: "env(safe-area-inset-bottom)",
+        // +1.5rem breathing room mirrors the header's
+        // `calc(env(safe-area-inset-top) + 1.5rem)` pattern — without it,
+        // the share / open-set-details stack sits flush against the bottom
+        // on iPhone SE (no home indicator → safe-area-inset-bottom is 0).
+        paddingBottom: "calc(env(safe-area-inset-bottom) + 1.5rem)",
       }}
       aria-hidden={!isOpen}
     >
@@ -249,11 +253,11 @@ export function FullPlayer({
           <Link
             to="/sets/$setId"
             params={{ setId: nowPlaying.id }}
-            className="text-sm text-grey hover:text-white transition-colors tracking-widest"
+            className="text-sm text-grey hover:text-white transition-colors tracking-widest whitespace-nowrap"
           >
             [ open_set_details ]
           </Link>
-          <ShareSetButton set={nowPlaying} />
+          <ShareSetButton set={nowPlaying} className="whitespace-nowrap" />
         </div>
       </div>
     </div>

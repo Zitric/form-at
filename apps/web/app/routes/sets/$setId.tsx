@@ -167,12 +167,14 @@ function SetDetail() {
           {playButtonLabel}
         </button>
 
-        {/* Share + save-for-offline share a centred row. ShareSetButton lost
-            its own `mb-6!` wrapper as part of Phase 3 so layout is owned
-            here, at the call site, rather than inside the button. */}
-        <div className="flex justify-center items-center gap-6 mb-6">
-          <ShareSetButton set={set} />
+        {/* Stack save-for-offline + share vertically — the two bracket
+            labels don't fit in a single row at iPhone SE 375 without
+            wrapping mid-bracket. Save-for-offline first (the promoted
+            Phase 3 action), share below. ShareSetButton owns no margin
+            of its own; layout lives here at the call site. */}
+        <div className="flex flex-col sm:flex-row sm:justify-center items-center gap-3 mb-6">
           <SaveForOfflineButton />
+          <ShareSetButton set={set} />
         </div>
 
         {/* Description — moved above meta so the "what is this set" payload
