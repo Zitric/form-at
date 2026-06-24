@@ -1,5 +1,6 @@
 import { memo } from "react";
-import { NextIcon, PrevIcon } from "~/components/player/PlayerIcons";
+import { NextIcon } from "~/components/icons/NextIcon";
+import { PrevIcon } from "~/components/icons/PrevIcon";
 import { playToggleIcon } from "~/components/player/playerCommon";
 
 const skipBtnClass =

@@ -1,3 +1,4 @@
+import { ShareIcon } from "~/components/icons/ShareIcon";
 import type { MusicSet } from "~/data/sets";
 import { useStore } from "~/store";
 
@@ -17,20 +18,7 @@ export function ShareIconButton({ set }: { set: MusicSet }) {
       aria-label={`Share ${set.artist} — ${set.title}`}
       className="flex items-center justify-center shrink-0 w-10 h-10 sm:w-14 sm:h-14 text-grey transition-all duration-300 cursor-pointer hover:scale-110 hover:text-gold"
     >
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="square"
-        strokeLinejoin="miter"
-        aria-hidden="true"
-        className="w-5 h-5"
-      >
-        <path d="M12 3v12" />
-        <path d="M7 8l5-5 5 5" />
-        <path d="M5 14v6h14v-6" />
-      </svg>
+      <ShareIcon className="w-5 h-5" />
     </button>
   );
 }

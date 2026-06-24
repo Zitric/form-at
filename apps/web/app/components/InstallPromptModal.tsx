@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Modal } from "~/components/Modal";
+import { InstallIcon } from "~/components/icons/InstallIcon";
 import { useInstallCapability, useTriggerInstallPrompt } from "~/hooks/useInstallCapability";
 import { useStore } from "~/store";
 import { type FormFactor, detectFormFactor } from "~/utils/deviceFormFactor";
@@ -40,7 +41,10 @@ export function InstallPromptModal({ open, onClose }: Props) {
         open your browser menu (⋮) and tap <span className="text-white">install app</span>.
       </>
     ) : (
-      <>tap the install icon at the right end of your address bar.</>
+      <>
+        tap the install icon <InstallIcon className="inline-block align-[-0.15em]" /> at the right
+        end of your address bar.
+      </>
     );
 
   const handleClose = () => {
