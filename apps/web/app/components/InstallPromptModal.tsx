@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Modal } from "~/components/Modal";
-import { InstallIcon } from "~/components/icons/InstallIcon";
+import { InstallIcon } from "~/components/icons";
 import { useInstallCapability, useTriggerInstallPrompt } from "~/hooks/useInstallCapability";
 import { useStore } from "~/store";
 import { type FormFactor, detectFormFactor } from "~/utils/deviceFormFactor";

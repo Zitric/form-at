@@ -1,4 +1,4 @@
-import { ShareIcon } from "~/components/icons/ShareIcon";
+import { ShareIcon } from "~/components/icons";
 import type { MusicSet } from "~/data/sets";
 import { useStore } from "~/store";
 
