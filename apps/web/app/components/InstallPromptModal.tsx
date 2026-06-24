@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Modal } from "~/components/Modal";
 import { useInstallCapability, useTriggerInstallPrompt } from "~/hooks/useInstallCapability";
 import { useStore } from "~/store";
+import { type FormFactor, detectFormFactor } from "~/utils/deviceFormFactor";
 
 const linkClass =
   "text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer text-left";
@@ -18,6 +20,28 @@ export function InstallPromptModal({ open, onClose }: Props) {
   const triggerInstall = useTriggerInstallPrompt();
   const setPwaInstalled = useStore((s) => s.setPwaInstalled);
   const setPwaInstallDismissed = useStore((s) => s.setPwaInstallDismissed);
+
+  // Form-factor evaluated once at modal mount via lazy useState — no
+  // subscription, no resize listener. Modal is short-lived and the user isn't
+  // going to swap devices between open and read. SSR-safe default = "desktop"
+  // (matches detectFormFactor's empty-UA fallback). Only consumed by the
+  // chromium-manual branch; harmless overhead for other capability branches.
+  const [formFactor] = useState<FormFactor>(() =>
+    typeof window !== "undefined" ? detectFormFactor() : "desktop",
+  );
+
+  // Single sentence with a shared lead and a form-factor-branched tail. The
+  // mobile path highlights `install app` (the menu label the user is hunting);
+  // the desktop path has a natural insertion point between "install icon" and
+  // "at" where the real Chrome install-icon SVG will slot in.
+  const manualInstructionTail =
+    formFactor === "mobile" ? (
+      <>
+        open your browser menu (⋮) and tap <span className="text-white">install app</span>.
+      </>
+    ) : (
+      <>tap the install icon at the right end of your address bar.</>
+    );
 
   const handleClose = () => {
     // Passive dismiss — closing the modal without engaging. Hide the home
@@ -63,21 +87,9 @@ export function InstallPromptModal({ open, onClose }: Props) {
       )}
 
       {capability === "chromium-manual" && (
-        <div className="flex flex-col gap-4">
-          <p className="text-sm text-grey leading-relaxed">
-            install Form:at to download sets and listen offline:
-          </p>
-          <ol className="text-xs text-grey leading-relaxed space-y-2 pl-5 list-decimal">
-            <li>
-              <span className="text-white">mobile:</span> open the browser menu (⋮) and tap{" "}
-              <span className="text-white">install app</span>
-            </li>
-            <li>
-              <span className="text-white">desktop:</span> tap the install icon at the right end of
-              your address bar
-            </li>
-          </ol>
-        </div>
+        <p className="text-sm text-grey leading-relaxed">
+          install Form:at to download sets and listen offline — {manualInstructionTail}
+        </p>
       )}
 
       {capability === "ios-safari" && (
