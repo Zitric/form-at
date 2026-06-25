@@ -152,4 +152,18 @@ What's missing is a proper visual pass to match the Form:at aesthetic — typogr
 
 ---
 
+## 8. `artwork-v1` cache bounds — add `workbox-expiration` if storage pressure observed
+
+Phase 4 chunk 2 (2026-06-25) ships artwork runtime SWR against an `artwork-v1` cache with **no expiration policy** — entries accumulate without explicit bound. Justification: each variant is a few KB to a few hundred KB; rough ceiling is ~50 sets × 4 variants × ~200 KB ≈ 40 MB, well within typical per-origin quota. Browser storage-pressure eviction handles the long tail.
+
+**When to act:**
+
+- User reports of artwork failing to load alongside other quota-exhaustion symptoms.
+- DevTools storage panel shows `artwork-v1` over ~100 MB in real usage.
+- Either signal: add `workbox-expiration` as a `plugins` entry on the existing artwork route in `apps/web/app/sw.ts`, with `maxEntries: 200` and `maxAgeSeconds: 90 * 24 * 60 * 60` as starting bounds. Tune from telemetry.
+
+**Don't act prematurely:** premature bounds churn the cache (LRU eviction triggers re-downloads), which is worse for offline reliability than letting the cache grow naturally.
+
+---
+
 _Last updated: 2026-06-25_
