@@ -55,6 +55,22 @@ registerRoute(
   new StaleWhileRevalidate({ cacheName: "pages-v1" }),
 );
 
+// Artwork: same-origin `/images/*` — serve from cache instantly, revalidate
+// in the background. Artwork URLs aren't content-hashed (`sets/002-1080.avif`
+// stays stable across deploys even if we re-export), so SWR lets us pick up
+// new exports on the next visit without breaking offline access in the
+// meantime. Cache `artwork-v1` survives deploys — artwork rarely changes and
+// a stale-for-one-visit image is fine, none of the JS-version-coupling that
+// motivated `pages-v1`'s activate-clear applies here.
+//
+// Bounds: deliberately unbounded — see TECH_DEBT.md item 8. Worst case is
+// ~40MB (50 sets × 4 variants × ~200KB), well within per-origin quota.
+// Browser pruning under storage pressure is acceptable until observed.
+registerRoute(
+  ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith("/images/"),
+  new StaleWhileRevalidate({ cacheName: "artwork-v1" }),
+);
+
 // Cross-deploy safety: clear the navigation cache on activate so we never
 // serve cached HTML referencing hashed JS chunks the new deploy no longer
 // ships. Without this, the first post-deploy visit would fetch JS 404s and
