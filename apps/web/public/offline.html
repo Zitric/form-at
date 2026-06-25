@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Form:at — offline</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      :root { color-scheme: dark; }
+      html, body {
+        margin: 0;
+        height: 100%;
+        background: #161615;
+        color: #cbcbcb;
+        font-family: "Space Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        text-align: center;
+        gap: 1.5rem;
+      }
+      h1 {
+        font-size: 1rem;
+        font-weight: 400;
+        letter-spacing: 0.15em;
+        color: #c58538;
+        margin: 0;
+      }
+      p {
+        font-size: 0.875rem;
+        line-height: 1.6;
+        max-width: 28rem;
+        margin: 0;
+      }
+      .actions {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      a, button {
+        background: transparent;
+        border: 0;
+        padding: 0;
+        color: #cbcbcb;
+        font: inherit;
+        cursor: pointer;
+        text-decoration: none;
+        letter-spacing: 0.15em;
+        white-space: nowrap;
+      }
+      a:hover, button:hover { color: #ffffff; }
+    </style>
+  </head>
+  <body>
+    <h1>› offline</h1>
+    <p>no network connection. saved sets remain playable from the library.</p>
+    <div class="actions">
+      <a href="/sets">[ ↻ library ]</a>
+      <button type="button" onclick="location.reload()">[ retry ]</button>
+    </div>
+  </body>
+</html>

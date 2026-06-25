@@ -36,6 +36,7 @@ function buildServiceWorker(): Plugin {
     if (rel === "icon-192.png" || rel === "icon-512.png") return true;
     if (rel === "wordmark.png" || rel === "logo.png") return true;
     if (rel === "index.html") return true;
+    if (rel === "offline.html") return true;
     if (rel.startsWith("assets/") && /\.(js|css)$/.test(rel)) return true;
     if (rel.startsWith("fonts/")) return true;
     return false;

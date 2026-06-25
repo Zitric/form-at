@@ -17,7 +17,9 @@
 // can't touch the DOM and we'd rather fail at typecheck than at runtime.
 
 import { clientsClaim } from "workbox-core";
-import { precacheAndRoute } from "workbox-precaching";
+import { matchPrecache, precacheAndRoute } from "workbox-precaching";
+import { registerRoute, setCatchHandler } from "workbox-routing";
+import { StaleWhileRevalidate } from "workbox-strategies";
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ revision: string | null; url: string }>;
@@ -42,3 +44,36 @@ self.skipWaiting();
 // versioning by URL revision — old entries are pruned on activate, so we
 // don't leak storage across builds.
 precacheAndRoute(self.__WB_MANIFEST);
+
+// Navigation requests (SSR'd HTML): serve from cache instantly, revalidate
+// in the background. Form:at's content is stable enough that "one visit
+// behind" on a new set is fine, and instant loads beat fresh-on-every-nav.
+// SSR semantics are preserved — these are still server-rendered docs, just
+// possibly from one visit ago. Cache populates per-URL on first online visit.
+registerRoute(
+  ({ request }) => request.mode === "navigate",
+  new StaleWhileRevalidate({ cacheName: "pages-v1" }),
+);
+
+// Cross-deploy safety: clear the navigation cache on activate so we never
+// serve cached HTML referencing hashed JS chunks the new deploy no longer
+// ships. Without this, the first post-deploy visit would fetch JS 404s and
+// fail to hydrate. The precache itself is versioned by Workbox so only
+// `pages-v1` needs explicit clearing.
+self.addEventListener("activate", (event) => {
+  event.waitUntil(caches.delete("pages-v1"));
+});
+
+// Last-resort fallback when nothing else handled the request — no cached
+// entry AND network failed. Use `matchPrecache` instead of
+// `createHandlerBoundToURL`: the latter runs the PrecacheStrategy which has
+// `fallbackToNetwork: true` by default, so a cache miss triggers a network
+// fetch that fails offline — defeating the whole point of an offline
+// fallback. `matchPrecache` is a direct cache lookup, no network involved.
+setCatchHandler(async (options) => {
+  if (options.request.mode === "navigate") {
+    const cached = await matchPrecache("/offline.html");
+    if (cached) return cached;
+  }
+  return Response.error();
+});
