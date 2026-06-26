@@ -18,6 +18,7 @@
 
 import { clientsClaim } from "workbox-core";
 import { matchPrecache, precacheAndRoute } from "workbox-precaching";
+import { createPartialResponse } from "workbox-range-requests";
 import { registerRoute, setCatchHandler } from "workbox-routing";
 import { StaleWhileRevalidate } from "workbox-strategies";
 
@@ -69,6 +70,58 @@ registerRoute(
 registerRoute(
   ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith("/images/"),
   new StaleWhileRevalidate({ cacheName: "artwork-v1" }),
+);
+
+// Audio: cross-origin R2 MP3 + peaks JSON — read-only from `audio-v1`. Pass
+// through to network on miss; the download flow (chunk 3b) is the only
+// writer to `audio-v1`. Workbox's CacheFirst would auto-cache the response
+// on miss — silently saving every played set, which we explicitly don't
+// want. `save_for_offline` must be a deliberate user action, not a
+// playback side effect.
+//
+// Range handling: `<audio>` issues `Range: bytes=N-` for seek and for
+// incremental playback. `createPartialResponse` slices the cached full
+// 200 Response into a 206 Partial Content. Only call it when a Range
+// header is present — without one it throws → catches → returns a
+// misleading 416. Plain GETs (no Range) return the cached response as-is.
+//
+// === Cached-Response contract (the chunk-3 §3 lock) ===
+// The write-path (chunk 3b) MUST produce Responses matching this exact
+// shape; otherwise Range slicing breaks silently. Five properties:
+//   status:         200  (NOT 206 — slicing a partial response would fail)
+//   body:           full blob, complete bytes
+//   Content-Type:   "audio/mpeg" for .mp3, "application/json" for peaks
+//   Content-Length: String(blob.size)  (explicit, not the upstream header)
+//   Accept-Ranges:  "bytes"
+//
+// === Hand-seed (paste in DevTools console to populate audio-v1) ===
+// Produces a Response that satisfies the contract above. Use this for
+// chunk 3a verification: seed, go offline, play the set, seek mid-track.
+//
+//   const url = "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20t.i.l.mp3";
+//   const r = await fetch(url);
+//   const blob = await r.blob();
+//   const cache = await caches.open("audio-v1");
+//   await cache.put(url, new Response(blob, {
+//     status: 200,
+//     headers: {
+//       "Content-Type": "audio/mpeg",
+//       "Content-Length": String(blob.size),
+//       "Accept-Ranges": "bytes",
+//     },
+//   }));
+//   console.log("seeded", blob.size, "bytes for", url);
+registerRoute(
+  ({ url }) =>
+    url.hostname === "pub-e15e86da649d4c91b6666141bfe67664.r2.dev" &&
+    (url.pathname.endsWith(".mp3") || url.pathname.endsWith(".json")),
+  async ({ request }) => {
+    const cache = await caches.open("audio-v1");
+    const cached = await cache.match(request.url);
+    if (!cached) return fetch(request);
+    if (!request.headers.has("range")) return cached;
+    return createPartialResponse(request, cached);
+  },
 );
 
 // Cross-deploy safety: clear the navigation cache on activate so we never

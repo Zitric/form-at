@@ -50,6 +50,9 @@ importers:
       typewriter-effect:
         specifier: ^2.22.0
         version: 2.22.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      workbox-range-requests:
+        specifier: ^7.4.1
+        version: 7.4.1
       workbox-routing:
         specifier: ^7.4.1
         version: 7.4.1
@@ -2627,6 +2630,9 @@ packages:
   workbox-precaching@7.4.1:
     resolution: {integrity: sha512-cdr/9qByww7yzEp7zg/qI4ukUrrNjQLgN+ONQRpjy/VqGQXwkgHwr00KksGJK8v0VifwDXBb8a4cWNZH71jn3Q==}
 
+  workbox-range-requests@7.4.1:
+    resolution: {integrity: sha512-7i2oxAUE82gHdAJBCAQ04JzNOdRPqzuOzGfoUyJpFSmeqBNYGPrAH8GPoPjUQTfp+NycwrD2H68VtuF8qxv0vQ==}
+
   workbox-routing@7.4.1:
     resolution: {integrity: sha512-yubJGErZOusuidAenaL5ypfhQOa7urxP/f8E0ws7FPb4039RiWXUWBAyUkmUoOL/BcQGen3h0J8872d51IYxtA==}
 
@@ -4912,6 +4918,10 @@ snapshots:
       workbox-core: 7.4.1
       workbox-routing: 7.4.1
       workbox-strategies: 7.4.1
+
+  workbox-range-requests@7.4.1:
+    dependencies:
+      workbox-core: 7.4.1
 
   workbox-routing@7.4.1:
     dependencies:
