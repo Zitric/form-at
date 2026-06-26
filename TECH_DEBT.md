@@ -166,4 +166,75 @@ Phase 4 chunk 2 (2026-06-25) ships artwork runtime SWR against an `artwork-v1` c
 
 ---
 
-_Last updated: 2026-06-25_
+## 9. Waveform flick on load
+
+**Preexisting bug, affects production** (predates Phase 4). When a set starts playing, the player briefly shows the simple progress bar before the waveform component renders — a flash of fallback content while the waveform JSON loads and computes.
+
+**Scope:** investigate how the waveform component decides to mount the real waveform vs the fallback bar. Likely a brief window between "currentSrc set" and "peaks data ready" where the fallback wins. Fix: either reserve the layout space so the waveform pops in without moving siblings, or hold the fallback state explicitly until the waveform is mount-ready (no race).
+
+**Verification:** start playing a fresh set on a slow network throttle (DevTools → Network → Slow 3G). The transition should be visually stable — no flash, no layout shift.
+
+---
+
+## 10. Waveform gold progress doesn't advance
+
+**Preexisting bug, NOT chunk-3 related.** Reported by a real user — happens online AND offline. The gold "played" overlay on the waveform stays at 0% even though audio is playing and the time counter advances normally.
+
+**Scope:** investigate how the waveform receives `currentTime` / `duration` from the audio element, and how it computes the gold proportion. Likely candidates:
+- Stale closure in a `useEffect` capturing the initial 0 value.
+- Missing subscription to player state updates (Zustand subscribe vs static read).
+- Audio element's `timeupdate` event not propagating to the waveform.
+- The gold-overlay width style isn't reading from the right state.
+
+**Verification:** play any set, watch the gold portion grow with playback progress, both online and offline. Should also track seek operations.
+
+---
+
+## 11. Audio retry storm on offline playback of unsaved sets — chunk 3c UX gate
+
+When the user attempts to play a NOT-saved set while offline, the `<audio>` element retries the failed MP3 fetch dozens of times — dozens of `net::ERR_FAILED` requests pile up in the Network panel. The SW read-path (chunk 3a) correctly passes through to network and fails; the symptom is at the player layer, where `<audio>` hammers the failed source.
+
+**This is NOT a chunk 3a bug to fix in the SW.** The read-path is doing its honest job (no cache → network → fail). The fix belongs at the UI layer in chunk 3c, before users can trigger the situation in the first place.
+
+**Chunk 3c gate:** when the user taps `play_set` on a set whose offline state is not `saved`, AND `navigator.onLine` is false, show a clear message — `[ ✗ not saved for offline listening ]` — and DO NOT attach the source to the `<audio>` element. The retry storm only happens if the element is given a source it can't fetch. Refuse to set `audio.src` in that case; surface the reason inline.
+
+**Verification:** offline, attempt to play an unsaved set. UI shows the "not saved" message, no `net::ERR_FAILED` requests in Network panel, no audio element activity.
+
+---
+
+## 12. Audio download memory peak — iOS validation pass
+
+Chunk 3b (2026-06-26) ships `startDownload` with a deliberate memory-peak-reduction design: preallocate `new Uint8Array(bytesTotal)`, write chunks into it at offset, wrap once in `new Blob([buffer], { type })`, drop the buffer reference before the IDB put. This avoids the obvious anti-pattern (accumulating a `Uint8Array[]` then `new Blob(chunks)` while keeping the array alive) which would peak at ~2× total bytes sustained.
+
+Residual ambiguity: `new Blob([Uint8Array])` may alias or copy at the engine's discretion. Chrome/V8 aliases in practice; WebKit's behaviour at the time of writing is not documented either way. Worst case during the Blob wrap step is one transient additional copy (~total bytes) before the buffer reference is dropped — that's ~2× peak briefly, vs. ~1× steady.
+
+**When to act:** the moment any iOS access exists (real iPhone, iOS Simulator on the Mac, BrowserStack — whichever comes first), download a large set (e.g. Brandon Lee Vear ~150 MB) on an installed iOS PWA and watch for:
+
+- Tab crash / "A problem repeatedly occurred" Safari dialog.
+- Web Inspector → Memory tab showing a JS heap spike near 2× the file size during the download.
+- Silent `unhandledrejection` from `startDownload` with no `failed` state transition.
+
+If any of those reproduce, the mitigation is to stream chunks directly into IDB (one IDB `put` per chunk into a parallel chunk store), reassembling at SW-handler read time. Significant complexity (~+100 lines, chunk reassembly in the handler, schema migration). Defer until empirically required.
+
+**Don't act prematurely:** the preallocation already eliminates the obvious double-allocation. Adding chunk-store complexity without measured iOS evidence would trade real maintenance burden for a hypothetical fix.
+
+---
+
+## 13. Orphan offline entries for catalogue-removed sets — behaviour locked, may want UI later
+
+`reconcileFromIdb` (chunk 3b) handles three IDB-vs-state cases:
+1. Persisted-saved entry that's still in IDB → confirm `saved` state.
+2. Persisted-saved entry whose IDB blobs are gone → transition to `evicted`.
+3. IDB entry with no persisted state → adopt as `saved` (orphan recovery).
+
+There's a fourth case the current code handles silently with auto-purge: **IDB entries whose `setId` is no longer in `sets.ts`**. Reconciliation deletes both the MP3 and peaks blobs in a single readwrite transaction, removes the entry from state, and `console.warn`s the purged set IDs. Rationale: if `sets.ts` doesn't list the set, no UI path exists for the user to play it offline — keeping ~100 MB of blobs is dead storage.
+
+**When to revisit:** if `sets.ts` ever gains an "archived" status (set hidden from listings but technically still in the catalogue), the auto-purge rule needs revising to NOT purge archived sets. At that point, either:
+- Filter `getSet()` to exclude archived from listings but include from reconciliation lookups, OR
+- Surface orphans in a "Manage offline sets" view (Phase 4 polish) instead of auto-purging, giving the user a "this set is no longer in the catalogue — remove from library?" prompt.
+
+Current behaviour is intentional and load-bearing; this entry exists so a future "archived sets" feature doesn't accidentally lose data.
+
+---
+
+_Last updated: 2026-06-26_
