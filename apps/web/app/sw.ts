@@ -21,6 +21,7 @@ import { matchPrecache, precacheAndRoute } from "workbox-precaching";
 import { createPartialResponse } from "workbox-range-requests";
 import { registerRoute, setCatchHandler } from "workbox-routing";
 import { StaleWhileRevalidate } from "workbox-strategies";
+import { getOfflineAudio } from "~/data/offline-audio";
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ revision: string | null; url: string }>;
@@ -72,53 +73,47 @@ registerRoute(
   new StaleWhileRevalidate({ cacheName: "artwork-v1" }),
 );
 
-// Audio: cross-origin R2 MP3 + peaks JSON — read-only from `audio-v1`. Pass
-// through to network on miss; the download flow (chunk 3b) is the only
-// writer to `audio-v1`. Workbox's CacheFirst would auto-cache the response
-// on miss — silently saving every played set, which we explicitly don't
-// want. `save_for_offline` must be a deliberate user action, not a
-// playback side effect.
+// Audio: cross-origin R2 MP3 + peaks JSON — read-only from IDB (`audio-v1`
+// database). Pass through to network on miss; the download flow in
+// `offlineSlice.startDownload` is the only writer. Auto-caching is
+// deliberately absent — `save_for_offline` must be an explicit user action,
+// not a playback side effect.
+//
+// Why IDB and not Cache Storage: WebKit / iOS Safari is reliably quirky with
+// large blob entries in Cache Storage. IDB has the same origin-level quota,
+// no documented per-entry cap, and is the workaround the Workbox community
+// recommends (GoogleChrome/workbox#3004). The synthetic Response built below
+// satisfies the same Range-slicing contract regardless of storage location.
 //
 // Range handling: `<audio>` issues `Range: bytes=N-` for seek and for
-// incremental playback. `createPartialResponse` slices the cached full
-// 200 Response into a 206 Partial Content. Only call it when a Range
-// header is present — without one it throws → catches → returns a
-// misleading 416. Plain GETs (no Range) return the cached response as-is.
+// incremental playback. `createPartialResponse` calls `response.blob()` then
+// `Blob.slice()` — slicing operates on the Blob, indifferent to how the
+// Response was constructed. Only call it when a Range header is present;
+// without one it throws → catches → returns a misleading 416.
 //
 // === Cached-Response contract (the chunk-3 §3 lock) ===
-// The write-path (chunk 3b) MUST produce Responses matching this exact
-// shape; otherwise Range slicing breaks silently. Five properties:
+// The synthetic Response built here MUST have these five properties or Range
+// slicing breaks silently:
 //   status:         200  (NOT 206 — slicing a partial response would fail)
-//   body:           full blob, complete bytes
-//   Content-Type:   "audio/mpeg" for .mp3, "application/json" for peaks
-//   Content-Length: String(blob.size)  (explicit, not the upstream header)
+//   body:           full blob from IDB
+//   Content-Type:   from `entry.contentType` ("audio/mpeg" / "application/json")
+//   Content-Length: String(entry.bytesTotal)  (explicit, not the upstream header)
 //   Accept-Ranges:  "bytes"
-//
-// === Hand-seed (paste in DevTools console to populate audio-v1) ===
-// Produces a Response that satisfies the contract above. Use this for
-// chunk 3a verification: seed, go offline, play the set, seek mid-track.
-//
-//   const url = "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20t.i.l.mp3";
-//   const r = await fetch(url);
-//   const blob = await r.blob();
-//   const cache = await caches.open("audio-v1");
-//   await cache.put(url, new Response(blob, {
-//     status: 200,
-//     headers: {
-//       "Content-Type": "audio/mpeg",
-//       "Content-Length": String(blob.size),
-//       "Accept-Ranges": "bytes",
-//     },
-//   }));
-//   console.log("seeded", blob.size, "bytes for", url);
 registerRoute(
   ({ url }) =>
     url.hostname === "pub-e15e86da649d4c91b6666141bfe67664.r2.dev" &&
     (url.pathname.endsWith(".mp3") || url.pathname.endsWith(".json")),
   async ({ request }) => {
-    const cache = await caches.open("audio-v1");
-    const cached = await cache.match(request.url);
-    if (!cached) return fetch(request);
+    const entry = await getOfflineAudio(request.url);
+    if (!entry) return fetch(request);
+    const cached = new Response(entry.blob, {
+      status: 200,
+      headers: {
+        "Content-Type": entry.contentType,
+        "Content-Length": String(entry.bytesTotal),
+        "Accept-Ranges": "bytes",
+      },
+    });
     if (!request.headers.has("range")) return cached;
     return createPartialResponse(request, cached);
   },
@@ -129,8 +124,14 @@ registerRoute(
 // ships. Without this, the first post-deploy visit would fetch JS 404s and
 // fail to hydrate. The precache itself is versioned by Workbox so only
 // `pages-v1` needs explicit clearing.
+//
+// Legacy cleanup: chunk 3a briefly used `caches.open("audio-v1")` for the
+// audio read-path before chunk 3b moved storage to IDB. That left an empty
+// Cache Storage cache on users running 3a — harmless but confusing in
+// DevTools. Delete it on activate so post-3b installs see only the actual
+// runtime caches.
 self.addEventListener("activate", (event) => {
-  event.waitUntil(caches.delete("pages-v1"));
+  event.waitUntil(Promise.all([caches.delete("pages-v1"), caches.delete("audio-v1")]));
 });
 
 // Last-resort fallback when nothing else handled the request — no cached

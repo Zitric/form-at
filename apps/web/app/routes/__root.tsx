@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { BottomNav } from "~/components/BottomNav";
 import { Header } from "~/components/Header";
 import { InAppBrowserBanner } from "~/components/InAppBrowserBanner";
+import { OfflineReconciler } from "~/components/OfflineReconciler";
 import { PageLayout } from "~/components/PageLayout";
 import { ShareModal } from "~/components/ShareModal";
 import { SwipeNavigator } from "~/components/SwipeNavigator";
@@ -246,6 +247,7 @@ function Root() {
       <body className="bg-black text-white font-mono antialiased">
         <HydrateStore />
         <InstallEventsListener />
+        <OfflineReconciler />
         <Header />
         <SwipeNavigator />
         <Player />
