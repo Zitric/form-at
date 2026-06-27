@@ -60,15 +60,36 @@ function percentBucket(downloaded: number, total: number): number {
   return Math.floor((downloaded * 100) / total);
 }
 
+// Streaming GET with progress callback. Reads the actual `Content-Length`
+// from the response headers (R2 exposes it via `Access-Control-Expose-Headers`)
+// for buffer preallocation, so the size is always the truth from the wire,
+// not the possibly-stale `sizeBytes` hint from `sets.ts`. Returns the size as
+// an extra value so the caller can update the UI's `bytesTotal` once we
+// actually know it.
+//
+// Why we don't HEAD first: a browser-side `fetch(url, { method: "HEAD" })`
+// against the R2 bucket fails with `net::ERR_FAILED` at the network layer in
+// real-world Chrome at 4173, even though curl HEAD returns proper CORS
+// headers (`Access-Control-Allow-Origin: *` + `Vary: Origin`) and the
+// OPTIONS preflight advertises `Access-Control-Allow-Methods: GET, HEAD`.
+// The cause is unidentified; chasing it would burn time without product
+// payoff. GET is empirically known to work (chunks 3a + 3b's offline 206
+// playback proves it). So we skip HEAD entirely and let the GET response
+// tell us the size as a byproduct.
 async function streamWithProgress(
   url: string,
   signal: AbortSignal,
-  bytesTotal: number,
-  onProgress: (downloaded: number) => void,
-): Promise<Blob> {
+  onProgress: (downloaded: number, total: number) => void,
+): Promise<{ blob: Blob; bytesTotal: number }> {
   const response = await fetch(url, { signal });
   if (!response.ok) throw new Error(`fetch ${url}: HTTP ${response.status}`);
   if (!response.body) throw new Error(`fetch ${url}: no response body`);
+
+  const clHeader = response.headers.get("Content-Length");
+  const bytesTotal = clHeader ? Number(clHeader) : Number.NaN;
+  if (!Number.isFinite(bytesTotal) || bytesTotal <= 0) {
+    throw new Error(`fetch ${url}: no usable Content-Length in response`);
+  }
 
   // Single preallocated buffer (chunk 3b option A): avoids the double-retention
   // of `chunks: Uint8Array[]` + `new Blob(chunks)` aliasing/copying. Peak is
@@ -84,8 +105,9 @@ async function streamWithProgress(
     const { done, value } = await reader.read();
     if (done) break;
     if (offset + value.byteLength > bytesTotal) {
-      // Server lied about Content-Length, or the URL serves more bytes than
-      // HEAD advertised. Refuse rather than overflowing the buffer.
+      // Server response exceeded its own declared Content-Length. Refuse
+      // rather than overflowing the buffer — this means the server is
+      // misbehaving, not the client.
       throw new Error(`fetch ${url}: response exceeded declared Content-Length`);
     }
     buffer.set(value, offset);
@@ -93,23 +115,17 @@ async function streamWithProgress(
     const bucket = percentBucket(offset, bytesTotal);
     if (bucket > lastBucket) {
       lastBucket = bucket;
-      onProgress(offset);
+      onProgress(offset, bytesTotal);
     }
   }
 
   // One Blob wrap, then we let `buffer` go out of scope at function return.
   // The Blob aliases or copies internally; either way we don't keep a
   // second JS-visible reference to the bytes.
-  return new Blob([buffer], { type: response.headers.get("Content-Type") ?? "" });
-}
-
-async function headContentLength(url: string, signal: AbortSignal): Promise<number> {
-  const response = await fetch(url, { method: "HEAD", signal });
-  if (!response.ok) throw new Error(`HEAD ${url}: HTTP ${response.status}`);
-  const cl = response.headers.get("Content-Length");
-  const n = cl ? Number(cl) : Number.NaN;
-  if (!Number.isFinite(n) || n <= 0) throw new Error(`HEAD ${url}: no usable Content-Length`);
-  return n;
+  return {
+    blob: new Blob([buffer], { type: response.headers.get("Content-Type") ?? "" }),
+    bytesTotal,
+  };
 }
 
 export const createOfflineSlice: StateCreator<OfflineSlice, [], [], OfflineSlice> = (set, get) => ({
@@ -124,23 +140,30 @@ export const createOfflineSlice: StateCreator<OfflineSlice, [], [], OfflineSlice
     if (get().activeDownloadId) throw new Error("ONE_DOWNLOAD_AT_A_TIME");
     const musicSet = getSet(setId);
     if (!musicSet) throw new Error(`UNKNOWN_SET: ${setId}`);
+    // sizeBytes is the source of size truth for the QUOTA pre-flight (display
+    // hint + quota check). The actual buffer preallocation reads the real
+    // Content-Length from the GET response — see `streamWithProgress`. If a
+    // set has no hint, we refuse explicitly rather than silently falling
+    // back to HEAD (which currently fails in the browser for unidentified
+    // reasons — see the `streamWithProgress` comment for the curl-vs-browser
+    // discrepancy).
+    if (musicSet.sizeBytes === undefined) {
+      throw new Error(`SIZE_NOT_CONFIGURED: ${setId}`);
+    }
 
     const controller = new AbortController();
     activeControllers.set(setId, controller);
     set({ activeDownloadId: setId });
 
     try {
-      // HEAD both URLs (peaks optional) so we know the total size BEFORE the
-      // quota check. Skip peaks if the set doesn't declare one.
-      const mp3Bytes = await headContentLength(musicSet.src, controller.signal);
-      const peaksBytes = musicSet.peaks
-        ? await headContentLength(musicSet.peaks, controller.signal)
-        : 0;
-      const totalBytes = mp3Bytes + peaksBytes;
-
-      // Honest quota pre-flight — no paternalism, just refuse cleanly if
-      // there isn't room. `× 1.5` headroom avoids mid-download
-      // QuotaExceededError when `estimate()` underestimates available space.
+      // Quota pre-flight uses `sizeBytes` as a generous-enough estimate of
+      // total disk needed. The peaks JSON (~few hundred KB) is absorbed by
+      // the `× 1.5` headroom — well within tolerance. If sizeBytes is
+      // slightly stale (R2 file changed), the headroom also absorbs that;
+      // the buffer preallocation inside `streamWithProgress` reads the real
+      // Content-Length from the response, so the download itself stays
+      // correct regardless of hint drift.
+      const totalBytes = musicSet.sizeBytes;
       const { quota, usage } = await navigator.storage.estimate();
       const available = (quota ?? 0) - (usage ?? 0);
       const requiredWithHeadroom = totalBytes * QUOTA_SAFETY_MULTIPLIER;
@@ -159,7 +182,10 @@ export const createOfflineSlice: StateCreator<OfflineSlice, [], [], OfflineSlice
         return;
       }
 
-      // Transition to downloading; progress starts at 0.
+      // Transition to downloading; progress starts at 0. `bytesTotal` here
+      // is the hint — `streamWithProgress` corrects it from the response's
+      // real Content-Length on its first progress callback, so any hint
+      // drift self-corrects within the first 1% bucket.
       set((s) => ({
         offlineSets: {
           ...s.offlineSets,
@@ -172,39 +198,34 @@ export const createOfflineSlice: StateCreator<OfflineSlice, [], [], OfflineSlice
         },
       }));
 
-      const mp3Blob = await streamWithProgress(
+      const { blob: mp3Blob } = await streamWithProgress(
         musicSet.src,
         controller.signal,
-        mp3Bytes,
-        (downloaded) => {
+        (downloaded, total) => {
           const cur = get().offlineSets[setId];
           if (cur?.status !== "downloading") return;
           set((s) => ({
             offlineSets: {
               ...s.offlineSets,
-              [setId]: { ...cur, bytesDownloaded: downloaded },
+              [setId]: { ...cur, bytesDownloaded: downloaded, bytesTotal: total },
             },
           }));
         },
       );
 
+      // Peaks JSON: small (~few hundred KB), so we don't bother with streaming
+      // progress — a plain fetch + blob is simpler and the download UI is
+      // already showing the MP3's 100% by the time this runs. Failure here
+      // throws and lands in the outer catch → `failed/network` state, which
+      // means atomic semantics are preserved (no half-saved entry: the IDB
+      // write below never runs).
       let peaksBlob: Blob | null = null;
       if (musicSet.peaks) {
-        peaksBlob = await streamWithProgress(
-          musicSet.peaks,
-          controller.signal,
-          peaksBytes,
-          (downloaded) => {
-            const cur = get().offlineSets[setId];
-            if (cur?.status !== "downloading") return;
-            set((s) => ({
-              offlineSets: {
-                ...s.offlineSets,
-                [setId]: { ...cur, bytesDownloaded: mp3Bytes + downloaded },
-              },
-            }));
-          },
-        );
+        const peaksResp = await fetch(musicSet.peaks, { signal: controller.signal });
+        if (!peaksResp.ok) {
+          throw new Error(`fetch peaks ${musicSet.peaks}: HTTP ${peaksResp.status}`);
+        }
+        peaksBlob = await peaksResp.blob();
       }
 
       const now = Date.now();

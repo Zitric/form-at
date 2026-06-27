@@ -173,7 +173,7 @@ function SetDetail() {
             Phase 3 action), share below. ShareSetButton owns no margin
             of its own; layout lives here at the call site. */}
         <div className="flex flex-col sm:flex-row sm:justify-center items-center gap-3 mb-6">
-          <SaveForOfflineButton />
+          <SaveForOfflineButton set={set} />
           <ShareSetButton set={set} />
         </div>
 

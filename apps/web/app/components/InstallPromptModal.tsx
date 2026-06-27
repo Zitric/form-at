@@ -99,7 +99,9 @@ export function InstallPromptModal({ open, onClose }: Props) {
       {capability === "ios-safari" && (
         <div className="flex flex-col gap-4">
           <p className="text-sm text-grey leading-relaxed">
-            install Form:at to download sets and listen offline. iOS needs two taps from Safari's
+            install Form:at so saved sets stay on your device. otherwise iOS Safari clears any
+            offline downloads after about a week of not visiting the site —{" "}
+            <span className="text-white">installing skips that rule</span>. two taps from Safari's
             share menu:
           </p>
           <ol className="text-xs text-grey leading-relaxed space-y-2 pl-5 list-decimal">
@@ -117,21 +119,11 @@ export function InstallPromptModal({ open, onClose }: Props) {
         </div>
       )}
 
-      {capability === "installed" && (
-        <p className="text-sm text-grey leading-relaxed">
-          thanks — offline download is coming soon. you're already set up to receive it the moment
-          we ship the next update.
-        </p>
-      )}
-
-      {capability === "unsupported" && (
-        // Defensive — SaveForOfflineButton hides itself for unsupported,
-        // so this branch shouldn't normally render.
-        <p className="text-sm text-grey leading-relaxed">
-          offline download isn't available in this browser. open Form:at in Chrome on Android, or
-          Safari on iOS, to install.
-        </p>
-      )}
+      {/* `installed` and `unsupported` branches deliberately removed in
+          chunk 3c: when installed, the button bypasses the modal and goes
+          straight to the state machine; when unsupported, the button hides
+          itself entirely so the modal is unreachable. Keeping defensive
+          branches here would be dead UI debt. */}
     </Modal>
   );
 }
