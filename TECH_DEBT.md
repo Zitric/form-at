@@ -237,4 +237,37 @@ Current behaviour is intentional and load-bearing; this entry exists so a future
 
 ---
 
-_Last updated: 2026-06-26_
+## 14. Brandon Lee Vear R2 object has a double `.mp3` extension
+
+`apps/web/app/data/sets.ts` references the MP3 + peaks for the Brandon Lee Vear set with a stuttered extension in the URL path:
+
+```
+https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20Brandon%20Lee%20Vear.mp3.mp3
+https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20Brandon%20Lee%20Vear.mp3.json
+```
+
+The R2 object itself was uploaded with the wrong name (`.mp3.mp3` instead of `.mp3`). Cosmetic — playback and download work fine because the SW matches on `.endsWith(".mp3")` which still passes. Discovered during chunk 3c CORS diagnosis (and ruled out as the cause: the t.i.l. set has a clean URL and failed identically).
+
+**Fix when convenient:** rename the R2 object (Cloudflare R2 dashboard → bucket → rename, or re-upload and delete the old key), then update the `src` and `peaks` URLs in `sets.ts` to match. Out of scope for chunk 3 work — does not affect any user-visible behaviour.
+
+---
+
+## 15. Browser `fetch(url, { method: "HEAD" })` against R2 fails with `net::ERR_FAILED`
+
+Discovered during chunk 3c verification. The pre-3c-Option-B `startDownload` did a HEAD pre-flight for size + quota math. The HEAD fails in Chrome at `http://localhost:4173` with `net::ERR_FAILED` + "No 'Access-Control-Allow-Origin' header is present", **despite** R2 being correctly configured:
+
+- `curl -X HEAD -H "Origin: http://localhost:4173" <r2-url>` returns `200 OK` with `Access-Control-Allow-Origin: *` and `Vary: Origin`.
+- `curl -X OPTIONS ... -H "Access-Control-Request-Method: HEAD"` returns `204` with `Access-Control-Allow-Methods: GET, HEAD`.
+- The browser request shows `Provisional headers are shown` in DevTools, meaning the request fails before getting a response — not a CORS rejection on the response side.
+
+**Mitigation in place (chunk 3c Option B):** the download flow no longer uses HEAD at all — quota pre-flight reads the `sizeBytes` hint from `sets.ts`, buffer preallocation reads `Content-Length` from the streaming GET response. The mystery is sidestepped, not solved.
+
+**When to revisit:**
+- If we ever want to add a server-fresh size read for the UI (e.g., to validate `sizeBytes` is in sync), HEAD is the natural primitive — we'd need to figure out the browser failure first.
+- Likely candidates: a Chromium-specific privacy filter, a corporate proxy injecting headers that bump it out of "simple request" territory, or an interaction with R2's `Vary: Origin` caching that Chrome handles differently than curl.
+
+Not blocking anything currently. Filed for visibility.
+
+---
+
+_Last updated: 2026-06-27_
