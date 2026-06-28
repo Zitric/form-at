@@ -5,7 +5,7 @@ import {
   getAllOfflineEntries,
   putOfflineAudioPair,
 } from "~/data/offline-audio";
-import { getSet } from "~/data/sets";
+import { type MusicSet, getSet } from "~/data/sets";
 
 // Phase 4 chunk 3b — offline audio download + IDB-backed state.
 //
@@ -126,6 +126,27 @@ async function streamWithProgress(
     blob: new Blob([buffer], { type: response.headers.get("Content-Type") ?? "" }),
     bytesTotal,
   };
+}
+
+// Warm `artwork-v1` for a saved set so the detail page and FullPlayer render
+// images offline even if the user never visited those pages online first.
+// Fires plain GETs through the SW, which the artwork-v1 SWR route handles —
+// single writer for that cache (route shape + future expiration plugin stay
+// canonical there). Variants mirror `components/Image.tsx`: 640/1080 ×
+// avif/webp. All 4 are warmed: avif is what modern browsers actually pick,
+// webp is bulletproof safety for the rare UA/older WebKit fallback. Sub-1MB
+// total per set; multiple sets sharing one `artwork` path collapse to a
+// single fetch on the second save (cache hit).
+//
+// Best-effort: all errors swallowed per-URL so a single 404 / offline blip
+// can't fail the warm batch; the outer call site also `.catch(() => {})`s.
+// See TECH_DEBT 16 for the orphan-on-removal behaviour (intentional).
+async function warmArtwork(musicSet: MusicSet): Promise<void> {
+  if (!musicSet.artwork) return;
+  const variants = ["640.avif", "1080.avif", "640.webp", "1080.webp"];
+  await Promise.all(
+    variants.map((suffix) => fetch(`/images/${musicSet.artwork}-${suffix}`).catch(() => {})),
+  );
 }
 
 export const createOfflineSlice: StateCreator<OfflineSlice, [], [], OfflineSlice> = (set, get) => ({
@@ -263,6 +284,12 @@ export const createOfflineSlice: StateCreator<OfflineSlice, [], [], OfflineSlice
           },
         },
       }));
+
+      // Warm artwork-v1 so the saved set looks complete offline. Strictly
+      // post-IDB-commit + post-state-transition: image errors must not flip
+      // the audio's state back to failed. Fire-and-forget so the button hits
+      // [ saved ] instantly; warming runs in the background.
+      warmArtwork(musicSet).catch(() => {});
 
       // First-ever save: request persistent storage (eviction-resistant under
       // disk pressure on Chrome/Android; iOS ignores). Fire-and-forget — the

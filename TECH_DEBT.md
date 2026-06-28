@@ -270,4 +270,18 @@ Not blocking anything currently. Filed for visibility.
 
 ---
 
-_Last updated: 2026-06-27_
+## 16. Orphan artwork in `artwork-v1` after offline-set removal
+
+Chunk 1.5 follow-up (2026-06-28) ships `warmArtwork` inside `startDownload`: after the audio IDB commit + `saved` state transition, the four `<Image>` variants for `set.artwork` (`640.avif`, `1080.avif`, `640.webp`, `1080.webp`) are fetched fire-and-forget so the artwork-v1 SWR route populates them. Result: a saved set renders complete offline on both `/sets/$setId` and the FullPlayer, even if the user never visited those pages online first.
+
+The symmetric path is NOT implemented: warmed variants stay in `artwork-v1` when `removeOfflineSet(setId)` runs, and likewise when reconciliation auto-purges a catalogue-orphaned set. Intentional for three reasons:
+
+1. **Variants are KB-scale.** Per-set warm is sub-1MB. The orphan cost is bounded and tiny.
+2. **The same `artwork` path is shared across sets.** All four shipping sets use `artwork: "sets/002"`, so per-set deletion is ambiguous — removing variants for one would break offline display for another saved set sharing the path. NOT deleting isn't just simpler, it's more correct.
+3. **The opportunistic SWR path repopulates** on next online visit anyway, so the worst-case offline experience for a removed-then-re-saved set is one online visit away from being right.
+
+**When to revisit:** when the future "Manage offline sets" view ships (Phase 4 polish), it can sweep `artwork-v1` by computing the union of `artwork` paths across currently-saved sets and pruning anything outside that set. That gives a precise, shared-path-safe cleanup without the per-set ambiguity.
+
+---
+
+_Last updated: 2026-06-28_
