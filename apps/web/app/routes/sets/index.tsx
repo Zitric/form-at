@@ -17,7 +17,12 @@ import { pageHead } from "~/utils/head";
 // resolves immediately; the OverallMetrics component reads it via <Await>
 // inside Suspense so the cards never wait on stats.
 export const Route = createFileRoute("/sets/")({
-  loader: () => ({ overallStats: defer(fetchOverallStats()) }),
+  // `.catch(() => null)` degrades the deferred server-fn to the designed
+  // `null` fallback offline. Without it, an offline click-nav to /sets/
+  // rejects the loader → "Something went wrong" error boundary. The reload
+  // path works because `pages-v1` SWR serves the SSR'd HTML; only client
+  // loaders run on link-click navigation.
+  loader: () => ({ overallStats: defer(fetchOverallStats().catch(() => null)) }),
   staleTime: 5 * 60 * 1000,
   gcTime: 30 * 60 * 1000,
   head: () =>

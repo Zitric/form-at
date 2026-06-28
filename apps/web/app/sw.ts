@@ -73,6 +73,28 @@ registerRoute(
   new StaleWhileRevalidate({ cacheName: "artwork-v1" }),
 );
 
+// TanStack Start server-function calls (`/_serverFn/*`): SWR so previously-
+// visited route loader data survives offline. Without this, client-side
+// click-nav offline rejects the loader (`fetch` fails with
+// `ERR_INTERNET_DISCONNECTED`) and the route hits the error boundary —
+// even though direct reloads work fine via `pages-v1`.
+//
+// GET only: POSTs (e.g. `/api/signal`) must fail cleanly offline until the
+// Phase 4.5 beacon queue lands (TECH_DEBT 4); caching a POST response would
+// be incorrect (mutation semantics) and Workbox refuses non-GET by default
+// anyway.
+//
+// NOT cleared on activate — opposite of `pages-v1`. Reason: cached HTML can
+// reference purged hashed JS chunks (hydration risk if not cleared);
+// `_serverFn` data is small JSON with no asset coupling. Wiping every deploy
+// would erase offline access to recently-visited pages — the wrong
+// direction. URLs carry build hashes so stale entries go inert naturally.
+// Same reasoning as `audio-v1` and `artwork-v1`: stable URL → don't clear.
+registerRoute(
+  ({ url, request }) => request.method === "GET" && url.pathname.startsWith("/_serverFn/"),
+  new StaleWhileRevalidate({ cacheName: "route-data-v1" }),
+);
+
 // Audio: cross-origin R2 MP3 + peaks JSON — read-only from IDB (`audio-v1`
 // database). Pass through to network on miss; the download flow in
 // `offlineSlice.startDownload` is the only writer. Auto-caching is
