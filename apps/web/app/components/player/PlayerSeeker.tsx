@@ -36,12 +36,23 @@ export const PlayerSeeker = memo(function PlayerSeeker({
   const currentTime = audioCurrentTime !== null ? audioCurrentTime : (savedPosition ?? 0);
   const peaks = cachedPeaks ?? [];
 
+  // Tracks the lifecycle of the peaks fetch so we can distinguish "haven't
+  // got peaks yet" (pending — render a transparent 56px spacer) from "peaks
+  // genuinely won't load" (failed — fall back to the native `<input>` so the
+  // user can still seek). Without this, the fetch-in-flight window briefly
+  // renders the fallback slider, producing the first-play widget swap +
+  // height jump (TECH_DEBT 9). The `peaks.length > 0` render branch is the
+  // authoritative "ready" signal — `"ready"` here is set for completeness
+  // but never consulted, since cached peaks always win the render branch.
+  const [peaksFetchState, setPeaksFetchState] = useState<"pending" | "ready" | "failed">("pending");
+
   // Reset audio-derived values on track change. Cached duration/peaks/position
   // fill the gap until the new track's metadata and peaks fetch resolve.
   // biome-ignore lint/correctness/useExhaustiveDependencies: nowPlaying?.id is the trigger; the body uses store setters
   useEffect(() => {
     setAudioDuration(0);
     setAudioCurrentTime(null);
+    setPeaksFetchState("pending");
   }, [nowPlaying?.id]);
 
   // Subscribe to audio events directly — isolated from the main Player render cycle
@@ -82,14 +93,28 @@ export const PlayerSeeker = memo(function PlayerSeeker({
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then((d) => setCachedPeaks(trackId, (d as { peaks: number[] }).peaks))
+      .then((d) => {
+        setCachedPeaks(trackId, (d as { peaks: number[] }).peaks);
+        setPeaksFetchState("ready");
+      })
       .catch((err) => {
+        setPeaksFetchState("failed");
         if (process.env.NODE_ENV === "development") {
           console.warn(`[player] peaks fetch failed for ${trackId} (${peaksUrl}):`, err);
         }
       });
   }, [nowPlaying?.peaks, nowPlaying?.id, cachedPeaks, setCachedPeaks]);
 
+  // Three-state render so we never swap widgets mid-play:
+  //   - peaks cached / loaded → Waveform (the normal case after first play)
+  //   - no peaks URL OR fetch failed → native <input> fallback so the user
+  //     can still seek (intended use: peaks genuinely won't load)
+  //   - otherwise (fetch in flight) → invisible 56px-tall spacer that
+  //     reserves the same layout the Waveform will take
+  // Fixes TECH_DEBT 9: the previous two-branch render flashed the native
+  // slider during the fetch RTT (~50-300ms on first play), then jumped
+  // ~30px in height when the canvas mounted. The spacer kills both.
+  const showFallback = !nowPlaying?.peaks || peaksFetchState === "failed";
   const seeker =
     peaks.length > 0 ? (
       <Waveform
@@ -99,7 +124,7 @@ export const PlayerSeeker = memo(function PlayerSeeker({
         onSeek={seek}
         disabled={disabled}
       />
-    ) : (
+    ) : showFallback ? (
       <input
         type="range"
         min={0}
@@ -110,6 +135,8 @@ export const PlayerSeeker = memo(function PlayerSeeker({
         className="flex-1 accent-gold cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
         aria-label="Seek"
       />
+    ) : (
+      <div className="flex-1" style={{ height: "56px" }} aria-hidden="true" />
     );
 
   return (
