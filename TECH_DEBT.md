@@ -4,6 +4,13 @@ Engineering-side cleanup and infrastructure items deferred from active work. Pro
 
 Each item is written to be picked up cold — no conversation context required.
 
+## Status at a glance
+
+- **Open:** 1, 2, 3, 4, 5, 6, 7, 8, 12, 13, 14, 15, 16
+- **Resolved:** 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (2026-06-27, `718ead3`)
+
+Resolved items keep their original section in place with a `✅ Resolved` stamp at the top, so the historical context (cause + fix path) stays readable. Search for `✅ Resolved` to skip to / past them.
+
 ---
 
 ## 1. Delete dead code flagged by knip
@@ -168,6 +175,10 @@ Phase 4 chunk 2 (2026-06-25) ships artwork runtime SWR against an `artwork-v1` c
 
 ## 9. Waveform flick on load
 
+**✅ Resolved 2026-06-29 in `e2b5f57`.** Root cause: PlayerSeeker's two-branch render (`peaks.length > 0 ? Waveform : <input>`) collapsed "fetch in flight" and "fetch failed" into one fallback path, so the native slider rendered during the peaks-JSON RTT (~50–300ms on first-ever play) and then jumped ~30px in height when the canvas mounted. Fix: added a `peaksFetchState: "pending" | "ready" | "failed"` local state; render branch is now 3-way: Waveform when peaks are loaded, native `<input>` only when there's no peaks URL or fetch genuinely failed, otherwise an invisible 56px-tall `flex-1` spacer that reserves the layout. Kills both the widget swap and the height jump in one move. Diagnosis + fix preserved below for context.
+
+---
+
 **Preexisting bug, affects production** (predates Phase 4). When a set starts playing, the player briefly shows the simple progress bar before the waveform component renders — a flash of fallback content while the waveform JSON loads and computes.
 
 **Scope:** investigate how the waveform component decides to mount the real waveform vs the fallback bar. Likely a brief window between "currentSrc set" and "peaks data ready" where the fallback wins. Fix: either reserve the layout space so the waveform pops in without moving siblings, or hold the fallback state explicitly until the waveform is mount-ready (no race).
@@ -177,6 +188,10 @@ Phase 4 chunk 2 (2026-06-25) ships artwork runtime SWR against an `artwork-v1` c
 ---
 
 ## 10. Waveform gold progress doesn't advance
+
+**✅ Resolved 2026-06-29 in `da90a12`.** Root cause: a browser compositing quirk. The clip div that animates its width (`clipRef.current.style.width = "X%"` on every timeupdate) also carried `filter: drop-shadow(...)`. `filter` creates a paint layer keyed to the filtered element's geometry; on some loads the browser doesn't re-rasterize the layer when its width changes, so the visible gold stays frozen at its first-paint state (0%). Toggling the filter in DevTools forced a one-shot repaint that masked the bug after first load — that intermittency was itself the proof. Fix by construction: moved the `filter` onto a new STATIC outer wrapper (`position: absolute; inset: 0; pointerEvents: none`) whose dimensions never change; the inner clip div stays plain `overflow: hidden` with the width animation. The filter's compositing layer is now stable, descendants repaint via standard child-paint invalidation, and the trigger condition (filter + width change on same element) is structurally absent. Diagnosis + fix preserved below for context.
+
+---
 
 **Preexisting bug, NOT chunk-3 related.** Reported by a real user — happens online AND offline. The gold "played" overlay on the waveform stays at 0% even though audio is playing and the time counter advances normally.
 
@@ -191,6 +206,10 @@ Phase 4 chunk 2 (2026-06-25) ships artwork runtime SWR against an `artwork-v1` c
 ---
 
 ## 11. Audio retry storm on offline playback of unsaved sets — chunk 3c UX gate
+
+**✅ Resolved 2026-06-27 in `718ead3` (Phase 4 chunk 3c).** The gate landed in `playerSlice.playTrack` exactly as scoped: if `!navigator.onLine && offlineSetState !== "saved"`, refuse to attach `audio.src` and surface the reason via the `PlaybackErrorToast`'s `playbackBlockedReason: "not-saved-offline"` branch. Verified through the real UI — `[ ✗ not saved for offline listening ]` toast, zero `net::ERR_FAILED` requests in the Network panel. Diagnosis + fix preserved below for context.
+
+---
 
 When the user attempts to play a NOT-saved set while offline, the `<audio>` element retries the failed MP3 fetch dozens of times — dozens of `net::ERR_FAILED` requests pile up in the Network panel. The SW read-path (chunk 3a) correctly passes through to network and fails; the symptom is at the player layer, where `<audio>` hammers the failed source.
 
@@ -284,4 +303,4 @@ The symmetric path is NOT implemented: warmed variants stay in `artwork-v1` when
 
 ---
 
-_Last updated: 2026-06-28_
+_Last updated: 2026-06-29_
