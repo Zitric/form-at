@@ -60,7 +60,17 @@ export function Modal({ open, onClose, title, ariaLabel, children }: Props) {
 
   // Backdrop clicks bubble up to the <dialog> itself with target === currentTarget.
   // Clicks inside the content land on descendants, so they don't match.
+  //
+  // stopPropagation is the modal's event-boundary contract: clicks anywhere
+  // inside (content OR backdrop) must NOT leak out to React parents. Native
+  // <dialog> + showModal() puts us in the top layer visually, but in the React
+  // tree we still sit wherever the consumer mounted us — including inside a
+  // clickable parent like <Card>. Without this, the close button's click
+  // bubbles up the React tree to the card's onClick and navigates away.
+  // Placed BEFORE the backdrop check so backdrop-click-to-close still works
+  // (the two are independent).
   const handleClick = (e: React.MouseEvent<HTMLDialogElement>) => {
+    e.stopPropagation();
     if (e.target === e.currentTarget) onClose();
   };
 
