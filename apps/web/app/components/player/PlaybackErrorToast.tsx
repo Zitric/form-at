@@ -1,3 +1,4 @@
+import { BracketLabel } from "~/components/BracketLabel";
 import { useStore } from "~/store";
 import { Z } from "~/styles/z";
 
@@ -46,7 +47,7 @@ export function PlaybackErrorToast() {
             onClick={dismiss}
             className="px-4 py-2 hover:text-red-300 transition-colors text-left whitespace-nowrap"
           >
-            [ ✗ not saved for offline listening ]
+            <BracketLabel tone="red">✗ not saved for offline listening</BracketLabel>
           </button>
         ) : isTabOfflineGate ? (
           <button
@@ -54,7 +55,9 @@ export function PlaybackErrorToast() {
             onClick={dismiss}
             className="px-4 py-2 hover:text-red-300 transition-colors text-left"
           >
-            [ ✗ playback needs connection — open the app to listen offline ]
+            <BracketLabel tone="red">
+              ✗ playback needs connection — open the app to listen offline
+            </BracketLabel>
           </button>
         ) : (
           <button
@@ -62,7 +65,7 @@ export function PlaybackErrorToast() {
             onClick={() => playTrack(nowPlaying)}
             className="px-4 py-2 hover:text-red-300 transition-colors text-left"
           >
-            [ playback_error :: tap to retry ]
+            <BracketLabel tone="red">playback_error :: tap to retry</BracketLabel>
           </button>
         )}
         <button
@@ -71,7 +74,7 @@ export function PlaybackErrorToast() {
           aria-label="Dismiss"
           className="px-3 py-2 border-l border-red-400/30 hover:text-red-300 transition-colors"
         >
-          [ x ]
+          <BracketLabel tone="red">x</BracketLabel>
         </button>
       </div>
     </div>

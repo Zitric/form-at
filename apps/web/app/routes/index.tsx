@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { BookingsButton } from "~/components/BookingsButton";
+import { BracketLabel } from "~/components/BracketLabel";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { InstallCta } from "~/components/InstallCta";
 import { JsonLd } from "~/components/JsonLd";
@@ -96,7 +97,7 @@ function Home() {
             androidPackage="com.instagram.android"
             className="text-sm text-grey hover:text-white transition-colors tracking-widest"
           >
-            [ instagram ]
+            <BracketLabel>instagram</BracketLabel>
           </SocialLink>
           <BookingsButton className="text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer" />
         </div>

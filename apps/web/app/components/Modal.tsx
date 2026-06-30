@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { BracketLabel } from "~/components/BracketLabel";
 
 // Matches the duration on `@utility animate-fade-out` in global.css. We stay
 // mounted just long enough for that animation to finish before unmounting.
@@ -110,7 +111,7 @@ export function Modal({ open, onClose, title, ariaLabel, children }: Props) {
           aria-label="Close"
           className="shrink-0 text-grey hover:text-white text-xs tracking-widest cursor-pointer"
         >
-          [ x ]
+          <BracketLabel>x</BracketLabel>
         </button>
       </div>
       {children}

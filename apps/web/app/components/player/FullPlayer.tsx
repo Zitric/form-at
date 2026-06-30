@@ -149,7 +149,7 @@ export function FullPlayer({
           aria-label="Close now playing"
           className="text-base text-grey hover:text-white tracking-widest cursor-pointer p-2 -mr-2"
         >
-          [ × ]
+          <BracketLabel>×</BracketLabel>
         </button>
       </div>
 

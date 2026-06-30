@@ -1,4 +1,5 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { BracketLabel } from "~/components/BracketLabel";
 import { PageLayout } from "~/components/PageLayout";
 
 export const Route = createFileRoute("/$")({
@@ -10,7 +11,7 @@ function NotFound() {
     <PageLayout>
       <div className="flex-1 flex flex-col justify-center">
         <p className="text-xs text-grey mb-4">
-          <span className="text-gold mr-2">›</span>status: [ 404 ]
+          <span className="text-gold mr-2">›</span>status: <BracketLabel>404</BracketLabel>
         </p>
         <h1 className="text-5xl sm:text-7xl font-bold leading-none tracking-tighter mb-6">
           SIGNAL_LOST

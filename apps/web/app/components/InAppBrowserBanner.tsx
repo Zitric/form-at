@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BracketLabel } from "~/components/BracketLabel";
 import { useNavReady } from "~/hooks/useNavReady";
 import { useStore } from "~/store";
 import { ABOVE_CHROME_BOTTOM, ABOVE_NAV_BOTTOM } from "~/styles/layout";
@@ -68,9 +69,9 @@ export function InAppBrowserBanner() {
           setShow(false);
         }}
         aria-label="Dismiss in-app browser banner"
-        className="shrink-0 text-grey hover:text-gold px-1 -my-1 py-2 cursor-pointer transition-colors"
+        className="shrink-0 text-grey hover:text-white px-1 -my-1 py-2 cursor-pointer transition-colors"
       >
-        [ × ]
+        <BracketLabel>×</BracketLabel>
       </button>
     </div>
   );

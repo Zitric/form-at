@@ -1,3 +1,4 @@
+import { BracketLabel } from "~/components/BracketLabel";
 import { Modal } from "~/components/Modal";
 import { TerminalRow } from "~/components/TerminalRow";
 import { useStore } from "~/store";
@@ -93,11 +94,11 @@ export function ShareModal() {
           <div className={sectionLabelClass}>link:</div>
           <div className="flex flex-col">
             <button type="button" onClick={() => copy()} className={rowClass}>
-              [ copy_link ]
+              <BracketLabel>copy_link</BracketLabel>
             </button>
             {isCurrent && currentTime > 3 && (
               <button type="button" onClick={() => copy(currentTime)} className={rowClass}>
-                [ copy @ {fmtTimestamp(currentTime)} ]
+                <BracketLabel>copy @ {fmtTimestamp(currentTime)}</BracketLabel>
               </button>
             )}
           </div>
@@ -107,7 +108,7 @@ export function ShareModal() {
           <div className="flex flex-col">
             {hasNativeShare && (
               <button type="button" onClick={shareViaApps} className={rowClass}>
-                [ apps ]
+                <BracketLabel>apps</BracketLabel>
               </button>
             )}
             <a
@@ -117,7 +118,7 @@ export function ShareModal() {
               onClick={closeShareModal}
               className={rowClass}
             >
-              [ whatsapp ]
+              <BracketLabel>whatsapp</BracketLabel>
             </a>
             <a
               href={tgHref}
@@ -126,7 +127,7 @@ export function ShareModal() {
               onClick={closeShareModal}
               className={rowClass}
             >
-              [ telegram ]
+              <BracketLabel>telegram</BracketLabel>
             </a>
           </div>
         </div>

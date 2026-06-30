@@ -1,6 +1,7 @@
 import { HeadContent, Link, Scripts, createRootRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { BottomNav } from "~/components/BottomNav";
+import { BracketLabel } from "~/components/BracketLabel";
 import { Header } from "~/components/Header";
 import { InAppBrowserBanner } from "~/components/InAppBrowserBanner";
 import { OfflineReconciler } from "~/components/OfflineReconciler";
@@ -20,7 +21,7 @@ function RootNotFound() {
   return (
     <PageLayout>
       <div className="flex-1 flex flex-col justify-center">
-        <TerminalRow label="status" value="[ 404 ]" className="mb-4" />
+        <TerminalRow label="status" value={<BracketLabel>404</BracketLabel>} className="mb-4" />
         <h1 className="text-5xl sm:text-7xl font-bold leading-none tracking-tighter mb-6">
           SIGNAL_LOST
         </h1>
