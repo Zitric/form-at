@@ -5,15 +5,9 @@ import { QuotaInfoModal } from "~/components/QuotaInfoModal";
 import { SavedManageModal } from "~/components/SavedManageModal";
 import { type MusicSet, getSet } from "~/data/sets";
 import { useInstallCapability } from "~/hooks/useInstallCapability";
+import { useOfflineStateFor, useTriggerDownload } from "~/hooks/useOfflineDownload";
 import { useStore } from "~/store";
-import type { OfflineSetState } from "~/store/offlineSlice";
 import { fmtBytes } from "~/utils/fmt";
-
-// Stable fallback reference for sets with no entry in `offlineSets` yet.
-// MUST be module-level: a fresh object literal inside the selector would
-// fail Zustand's `Object.is` equality check and trigger an infinite render
-// loop. Frozen so callers can't accidentally mutate the shared sentinel.
-const NOT_SAVED: OfflineSetState = Object.freeze({ status: "not-saved" });
 
 // `save_for_offline` trigger on the set detail page.
 //
@@ -43,12 +37,12 @@ const buttonClassFail =
 
 export function SaveForOfflineButton({ set }: Props) {
   const capability = useInstallCapability();
-  const offlineState = useStore((s) => s.offlineSets[set.id] ?? NOT_SAVED);
+  const offlineState = useOfflineStateFor(set.id);
   const activeDownloadId = useStore((s) => s.activeDownloadId);
-  const startDownload = useStore((s) => s.startDownload);
   const cancelDownload = useStore((s) => s.cancelDownload);
   const removeOfflineSet = useStore((s) => s.removeOfflineSet);
   const setToast = useStore((s) => s.setToast);
+  const triggerDownload = useTriggerDownload(set.id);
 
   const [installOpen, setInstallOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -59,33 +53,6 @@ export function SaveForOfflineButton({ set }: Props) {
   // macOS Safari, Chromium-pre-engagement). No point teasing a flow that
   // can't complete.
   if (capability === "unsupported") return null;
-
-  // Wrap startDownload to surface the synchronous throws as toasts.
-  // `startDownload` throws three sentinels before entering its try/catch:
-  //   ONE_DOWNLOAD_AT_A_TIME — another download in flight
-  //   UNKNOWN_SET            — getSet(setId) returned undefined (shouldn't
-  //                            happen here, we have the set in props)
-  //   SIZE_NOT_CONFIGURED    — set.sizeBytes hint missing (data error in
-  //                            sets.ts; explicit failure is better than a
-  //                            silent fallback to a HEAD that doesn't work)
-  // Network / fetch failures during the actual download land in the slice's
-  // own try/catch → `failed` state, surfaced via the button's state-machine
-  // branches below.
-  const triggerDownload = () => {
-    startDownload(set.id).catch((e: unknown) => {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg === "ONE_DOWNLOAD_AT_A_TIME") {
-        setToast("one download at a time — finish current first");
-        return;
-      }
-      if (msg.startsWith("SIZE_NOT_CONFIGURED")) {
-        setToast("size not configured for this set — flag it to the team");
-        return;
-      }
-      // UNKNOWN_SET and other unexpected throws — log silently. Shouldn't
-      // happen with a valid set passed via props.
-    });
-  };
 
   // Pre-installed path: any tap opens InstallPromptModal. The set's offline
   // state is irrelevant here — without install we can't keep the bytes alive
