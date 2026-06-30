@@ -27,7 +27,7 @@ priority polish + the deploy gate, not feature work.
 | 3c — UI: button state machine + retry-storm gate + size hint | ✅ committed | `718ead3` | Closed out TECH_DEBT 11 (retry storm). HEAD-free download via Option B (TECH_DEBT 15 captures the HEAD mystery) |
 | Waveform — gold-progress freeze | ✅ committed | `da90a12` | TECH_DEBT 10. Preexisting bug, not Phase 4 — fixed during the cleanup pass before PR. `filter` moved off the width-animated layer |
 | Waveform — load flick | ✅ committed | `e2b5f57` | TECH_DEBT 9. Preexisting bug. Three-state render (pending spacer / Waveform / fallback) eliminates first-play widget swap + height jump |
-| 4 — List-card download icon | not started | — | Optional polish; reuses the 3c slice + button infra |
+| 4 — List-card save-for-offline icon button | ✅ committed | `7649abc` | Compact icon button in the card action slot (floppy / progress ring / check / red retry). Shares state with `SaveForOfflineButton` via new `useOfflineDownload` hook. Saves directly from `/sets/` without opening detail; closes the chunk-1.6 warming story through the card path |
 | 4.5 — Beacon queue (Background Sync) | deferred — polish | TECH_DEBT 4 | Independent infra, lower stakes |
 
 ---
@@ -36,17 +36,28 @@ priority polish + the deploy gate, not feature work.
 
 Engineering-wise, the branch is shippable. Items below are the punch list:
 
-### Higher-impact polish (consider before PR to main)
+### Pre-deploy polish
 
-- **Phase 4 polish** (TECH_DEBT 7) — visual pass on `offline.html` (currently
-  functional-minimal). Zero-bundle constraint applies.
+- **`offline.html` visual pass** (TECH_DEBT 7) — currently functional-minimal;
+  needs a typographic + terminal-aesthetic pass to match the rest of the
+  site. Zero-bundle constraint applies (no external CSS/JS, inline `<style>`
+  only). **This is the last item before the deploy gate.**
+
+### Deferred — post-2026-07-24 (coupled, ship together)
+
 - **Manage offline sets view** — list of saved sets with remove + storage
-  totals. The slice + `removeOfflineSet` are already wired in 3c; this is
-  pure UI. Would also enable proper artwork-v1 union-prune cleanup
-  (TECH_DEBT 16).
-- **List-card download icon** (chunk 4) — a save indicator on `/sets/`
-  cards so users can save without opening the detail page. Cheap with the
-  existing infra.
+  totals. The slice + `removeOfflineSet` are wired (chunk 3c), so this is
+  pure UI. **Earned its place later**: at 4 sets, the per-card save-icon
+  state (chunk 4) already gives at-a-glance management of what's saved;
+  the dedicated view starts paying off once the catalogue grows past
+  ~10-15 sets where scanning every card becomes a chore. Revisit after
+  the next batch of sets lands (target: post 2026-07-24).
+- **TECH_DEBT 16 — orphan artwork prune** — currently warmed `artwork-v1`
+  variants are NOT cleaned up on `removeOfflineSet`. The correct prune
+  algorithm (union of `artwork` paths across saved sets, drop the rest)
+  naturally lives inside the manage-view's remove flow. **Ship the prune
+  with the manage view, not before.** Standalone earlier would duplicate
+  the iteration logic.
 
 ### Validation deferred until access exists
 
@@ -65,8 +76,8 @@ Engineering-wise, the branch is shippable. Items below are the punch list:
 - **TECH_DEBT 14** — Brandon Lee Vear R2 object has `.mp3.mp3`. Cosmetic.
 - **TECH_DEBT 15** — browser-side HEAD against R2 fails mysteriously.
   Sidestepped by Option B; only chase if a future feature needs HEAD.
-- **TECH_DEBT 16** — orphan artwork in `artwork-v1` after `removeOfflineSet`.
-  Intentional; revisit when the manage-offline view ships.
+- **TECH_DEBT 16** — orphan artwork prune. Coupled with the deferred manage
+  offline sets view above; not a standalone item.
 
 ### Deploy gate
 

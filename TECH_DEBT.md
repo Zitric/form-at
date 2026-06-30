@@ -6,8 +6,9 @@ Each item is written to be picked up cold — no conversation context required.
 
 ## Status at a glance
 
-- **Open:** 1, 2, 3, 4, 5, 6, 7, 8, 12, 13, 14, 15, 16
-- **Resolved:** 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (2026-06-27, `718ead3`)
+- **Open:** 1, 2, 3, 4, 5, 7, 8, 12, 13, 14, 15
+- **Deferred (coupled, ship together post-2026-07-24):** 16 (orphan artwork prune) — waits for the deferred manage-offline-sets view; the prune naturally lives in that view's remove flow. See PWA_PROGRESS.md for the deferral rationale.
+- **Resolved:** 6 (2026-06-28, `10811a4`), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (2026-06-27, `718ead3`)
 
 Resolved items keep their original section in place with a `✅ Resolved` stamp at the top, so the historical context (cause + fix path) stays readable. Search for `✅ Resolved` to skip to / past them.
 
@@ -121,6 +122,10 @@ Fail: no ACL headers → configure CORS in Cloudflare dashboard → R2 → bucke
 ---
 
 ## 6. Chunk 1.5 — Offline navigation for client-side click-through (polish)
+
+**✅ Resolved 2026-06-28 in `10811a4`.** Two-layer fix shipped as Phase 4 chunk 1.5: (Layer A) `/sets/` deferred loader wraps `fetchOverallStats()` with `.catch(() => null)` so offline click-nav degrades to the designed `null` fallback instead of rejecting; (Layer B) new SW route caches `GET /_serverFn/*` with StaleWhileRevalidate in `route-data-v1`, NOT cleared on activate (URLs build-hashed → stale entries go inert naturally). Two-set collision check at gate time confirmed the `/_serverFn/<hash>` URLs differ per input, so no `cacheKeyWillBeUsed` plugin needed. Diagnosis + design preserved below for context.
+
+---
 
 **Scope downgraded after the 2026-06-25 hard-reload test.** Direct visits and reloads of previously-visited detail pages render cleanly offline — confirmed empirically. This works because:
 
@@ -299,8 +304,8 @@ The symmetric path is NOT implemented: warmed variants stay in `artwork-v1` when
 2. **The same `artwork` path is shared across sets.** All four shipping sets use `artwork: "sets/002"`, so per-set deletion is ambiguous — removing variants for one would break offline display for another saved set sharing the path. NOT deleting isn't just simpler, it's more correct.
 3. **The opportunistic SWR path repopulates** on next online visit anyway, so the worst-case offline experience for a removed-then-re-saved set is one online visit away from being right.
 
-**When to revisit:** when the future "Manage offline sets" view ships (Phase 4 polish), it can sweep `artwork-v1` by computing the union of `artwork` paths across currently-saved sets and pruning anything outside that set. That gives a precise, shared-path-safe cleanup without the per-set ambiguity.
+**When to revisit:** coupled with the deferred "Manage offline sets" view (see PWA_PROGRESS.md → "Deferred — post-2026-07-24"). The prune algorithm — sweep `artwork-v1` by computing the union of `artwork` paths across currently-saved sets and dropping anything outside that set — naturally lives inside the manage-view's remove flow. Ship the prune with the manage view; standalone earlier would duplicate the iteration logic. Both items earn their place once the catalogue grows past ~10-15 sets.
 
 ---
 
-_Last updated: 2026-06-29_
+_Last updated: 2026-06-30_
