@@ -308,4 +308,4 @@ The symmetric path is NOT implemented: warmed variants stay in `artwork-v1` when
 
 ---
 
-_Last updated: 2026-06-30_
+_Last updated: 2026-06-30 (chunk 5: strict standalone gate)_

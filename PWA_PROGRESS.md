@@ -28,6 +28,7 @@ priority polish + the deploy gate, not feature work.
 | Waveform — gold-progress freeze | ✅ committed | `da90a12` | TECH_DEBT 10. Preexisting bug, not Phase 4 — fixed during the cleanup pass before PR. `filter` moved off the width-animated layer |
 | Waveform — load flick | ✅ committed | `e2b5f57` | TECH_DEBT 9. Preexisting bug. Three-state render (pending spacer / Waveform / fallback) eliminates first-play widget swap + height jump |
 | 4 — List-card save-for-offline icon button | ✅ committed | `7649abc` | Compact icon button in the card action slot (floppy / progress ring / check / red retry). Shares state with `SaveForOfflineButton` via new `useOfflineDownload` hook. Saves directly from `/sets/` without opening detail; closes the chunk-1.6 warming story through the card path |
+| 5 — Strict standalone gate (web/app divide) | ✅ committed | `fbbdd4d` | `useInstallCapability` → `useSaveGate`, `InstallPromptModal` → `SaveGateModal`. Tabs NEVER read IDB; standalone-only `?ctx=app` URL marker (`withAppContext`) drives the SW audio handler. Three-branch modal (needs-install / open-app / cannot-install) with mutual escape-hatches via the persisted `pwaInstalled` positive-only signal. PlaybackErrorToast gains a `tab-offline-needs-network` reason. |
 | 4.5 — Beacon queue (Background Sync) | deferred — polish | TECH_DEBT 4 | Independent infra, lower stakes |
 
 ---
@@ -113,13 +114,25 @@ Engineering-wise, the branch is shippable. Items below are the punch list:
   each — never `cache.open().put(...)` from app code (would drift the
   cache-name + response-shape contract).
 
-### Install gating
+### Save gate — strict standalone rule (chunk 5)
 
-The `save_for_offline` flow requires `pwaInstalled === true` before download
-fires. Capable-but-not-installed branches always open `InstallPromptModal`.
-Reason: iOS WebKit's 7-day ITP eviction rule — standalone PWAs are exempt,
-plain Safari tabs aren't. An in-tab download would evaporate after ~7 days
-of no visits, breaking the feature's promise.
+The `save_for_offline` flow fires download ONLY when running in standalone
+display-mode (`matchMedia('(display-mode: standalone)').matches ||
+navigator.standalone === true`). Every browser tab — including a tab on a
+device where the PWA is installed — opens `SaveGateModal` instead.
+
+Why "standalone" not "installed": iOS WebKit's 7-day ITP eviction rule
+exempts standalone PWAs but not plain Safari tabs, so in-tab downloads would
+evaporate; equally important, an "installed but currently in a tab" session
+should behave like the web (stream, no IDB read) so the web/app divide is
+coherent. The matching playback-side signal is the `?ctx=app` URL marker
+appended by `withAppContext` only in standalone — the SW audio handler in
+`sw.ts` reads it and serves from IDB only when present.
+
+`pwaInstalled` (persisted) is a POSITIVE-ONLY signal used by the modal to
+pick "open it from your home screen" (case b) vs "install the app" (case a).
+`SaveGateModal` includes mutual escape-hatches so a misclassified user can
+flip themselves into the right case manually.
 
 ### Retry-storm gate
 
