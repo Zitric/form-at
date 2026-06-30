@@ -1,40 +1,30 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { InstallPromptModal } from "~/components/InstallPromptModal";
+import { SaveGateModal } from "~/components/SaveGateModal";
 import { DownloadIcon, SavedIcon } from "~/components/icons";
 import type { MusicSet } from "~/data/sets";
-import { useInstallCapability } from "~/hooks/useInstallCapability";
 import { useOfflineStateFor, useTriggerDownload } from "~/hooks/useOfflineDownload";
+import { useSaveGate } from "~/hooks/useSaveGate";
 import { useStore } from "~/store";
 import { cn } from "~/utils/cn";
 
 // Compact save-for-offline indicator + action for set-list cards. Sibling
 // of <ShareIconButton> + <CirclePlayButton> in the card's action slot.
 //
-// Behaviour rule (chunk-4 lock): actionable states act on the card,
-// needs-context states navigate to detail (where the full state-machine
-// surface — cancel modal, quota modal, manage modal — already lives).
-// Mapping per offline state:
-//   not-saved          → DownloadIcon, grey, tap = start download
-//   downloading (this) → progress ring, gold, tap = navigate to detail
-//   downloading (other)→ DownloadIcon, grey, tap = toast "one at a time"
-//   saved              → SavedIcon, gold, tap = navigate to detail
-//   failed/network     → DownloadIcon, red, tap = retry in-place
-//   failed/aborted     → DownloadIcon, red, tap = retry in-place
-//   failed/quota       → DownloadIcon, red, tap = navigate to detail
-//   evicted            → DownloadIcon, grey, tap = re-download in-place
-//   ≠ installed        → DownloadIcon, grey, tap = InstallPromptModal
-//   unsupported        → hidden
+// Gate semantics (locked 2026-06-30): identical to <SaveForOfflineButton> —
+// per-state UI (saved tick, progress ring, quota red) renders ONLY when
+// `allow: true` (running standalone). In a browser tab the icon always shows
+// the plain grey download glyph; tap opens <SaveGateModal>, never starts a
+// download. A tab user has no concept of "downloaded" or "evicted", so we
+// don't show those states.
 //
-// Install gate runs FIRST, before any per-state branch — same rule as
-// SaveForOfflineButton (chunk 3c Q1: iOS WebKit's 7-day ITP eviction
-// makes non-installed downloads unreliable, so we never bypass install).
+// Behaviour rule (chunk-4 lock, unchanged): actionable states act on the
+// card, needs-context states navigate to detail (where the full state-
+// machine surface — cancel modal, quota modal, manage modal — already lives).
 //
 // `e.stopPropagation()` on every tap handler — the parent <Card> has its
 // own onClick that navigates to detail; the icon's actions must not also
-// trigger that. (Saved + downloading-this + failed-quota DO navigate to
-// detail, but via useNavigate so the destination is explicit; we don't
-// want to rely on bubbling for that.)
+// trigger that.
 type Props = { set: MusicSet };
 
 const buttonBase =
@@ -42,34 +32,36 @@ const buttonBase =
 
 export function SaveForOfflineIconButton({ set }: Props) {
   const navigate = useNavigate();
-  const capability = useInstallCapability();
+  const gate = useSaveGate();
   const offlineState = useOfflineStateFor(set.id);
   const activeDownloadId = useStore((s) => s.activeDownloadId);
   const triggerDownload = useTriggerDownload(set.id);
 
-  const [installOpen, setInstallOpen] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
 
-  if (capability === "unsupported") return null;
+  // Pre-hydration: hide rather than flash an icon that will disappear.
+  if (gate.allow === false && gate.reason === "pending") return null;
 
   const goToDetail = () => navigate({ to: "/sets/$setId", params: { setId: set.id } });
 
-  // Pre-installed path: any tap opens InstallPromptModal. Identical to
-  // SaveForOfflineButton's pre-installed branch.
-  if (capability !== "installed") {
+  // Tab / non-standalone: always show the plain download icon. Tap opens the
+  // gate modal. No per-state branching — "saved", "downloading", etc. are
+  // app-only concepts and showing them in a tab would be a lie.
+  if (gate.allow === false) {
     return (
       <>
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            setInstallOpen(true);
+            setGateOpen(true);
           }}
           aria-label={`Save "${set.artist} — ${set.title}" for offline listening`}
           className={cn(buttonBase, "text-grey hover:text-gold")}
         >
           <DownloadIcon className="w-5 h-5" />
         </button>
-        <InstallPromptModal open={installOpen} onClose={() => setInstallOpen(false)} />
+        <SaveGateModal open={gateOpen} onClose={() => setGateOpen(false)} gate={gate} />
       </>
     );
   }

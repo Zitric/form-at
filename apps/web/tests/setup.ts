@@ -27,6 +27,27 @@ if (dialogProto && typeof dialogProto.showModal !== "function") {
   };
 }
 
+// jsdom doesn't implement `window.matchMedia`. `isStandalone()` calls it on
+// every playback URL build via `withAppContext`. Stub a non-matching result
+// so tests register as "browser tab" and URLs stay bare — which matches
+// what existing assertions expect (audio.src === bare R2 URL).
+if (typeof window.matchMedia !== "function") {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
 // jsdom returns undefined from HTMLMediaElement.prototype.play() — replace it
 // with a Promise-returning stub plus a pause()/load() that mirror what
 // useAudioPlayer / playerSlice expect from a real audio element.

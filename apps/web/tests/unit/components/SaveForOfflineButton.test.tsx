@@ -3,12 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SaveForOfflineButton } from "~/components/SaveForOfflineButton";
 import type { MusicSet } from "~/data/sets";
+import type { SaveGate } from "~/hooks/useSaveGate";
 
-// Mock the capability hook to drive each branch. The InstallPromptModal it
-// renders internally is exercised via "modal opened" assertions only — its
-// platform-specific content has its own coverage if we add it later.
-vi.mock("~/hooks/useInstallCapability", () => ({
-  useInstallCapability: vi.fn(() => "native"),
+// Mock the gate hook to drive each branch. The SaveGateModal it renders
+// internally is exercised via "modal opened" assertions only — its platform-
+// specific content has its own coverage if we add it later.
+vi.mock("~/hooks/useSaveGate", () => ({
+  useSaveGate: vi.fn<() => SaveGate>(() => ({ allow: true })),
   useTriggerInstallPrompt: vi.fn(() => async () => "no-prompt" as const),
 }));
 
@@ -29,15 +30,13 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-async function withCapability(
-  cap: "native" | "chromium-manual" | "ios-safari" | "installed" | "unsupported",
-) {
-  const mod = await import("~/hooks/useInstallCapability");
-  vi.mocked(mod.useInstallCapability).mockReturnValue(cap);
+async function withGate(gate: SaveGate) {
+  const mod = await import("~/hooks/useSaveGate");
+  vi.mocked(mod.useSaveGate).mockReturnValue(gate);
 }
 
 // Fixture matching the real sets.ts shape — sizeBytes mirrors the t.i.l. set
-// so the `installed + not-saved` branch renders a real-looking label.
+// so the `allow: true + not-saved` branch renders a real-looking label.
 const fixture: MusicSet = {
   id: "test-set",
   title: "Test Set",
@@ -48,26 +47,42 @@ const fixture: MusicSet = {
 };
 
 describe("SaveForOfflineButton", () => {
-  it("renders the button on Chromium with native install available", async () => {
-    await withCapability("native");
+  it("renders the button in a Chromium tab needing install (case a)", async () => {
+    await withGate({
+      allow: false,
+      reason: "needs-install",
+      platform: "chromium",
+      canPrompt: true,
+    });
     render(<SaveForOfflineButton set={fixture} />);
     expect(screen.getByRole("button", { name: /save_for_offline/ })).toBeInTheDocument();
   });
 
-  it("renders the button on iOS Safari (manual install path)", async () => {
-    await withCapability("ios-safari");
+  it("renders the button on iOS Safari tab needing install (case a, manual path)", async () => {
+    await withGate({
+      allow: false,
+      reason: "needs-install",
+      platform: "ios-safari",
+      canPrompt: false,
+    });
     render(<SaveForOfflineButton set={fixture} />);
     expect(screen.getByRole("button", { name: /save_for_offline/ })).toBeInTheDocument();
   });
 
-  it("renders the button on Chromium without a captured prompt (engagement heuristic not met yet)", async () => {
-    await withCapability("chromium-manual");
+  it("renders the button on a tab where the PWA is already installed (case b)", async () => {
+    await withGate({ allow: false, reason: "open-app" });
     render(<SaveForOfflineButton set={fixture} />);
     expect(screen.getByRole("button", { name: /save_for_offline/ })).toBeInTheDocument();
   });
 
-  it("renders the size hint in the label when installed + not-saved (3c state machine)", async () => {
-    await withCapability("installed");
+  it("renders the button on a browser that cannot install (case c)", async () => {
+    await withGate({ allow: false, reason: "cannot-install" });
+    render(<SaveForOfflineButton set={fixture} />);
+    expect(screen.getByRole("button", { name: /save_for_offline/ })).toBeInTheDocument();
+  });
+
+  it("renders the size hint in the label when allowed + not-saved (standalone state machine)", async () => {
+    await withGate({ allow: true });
     render(<SaveForOfflineButton set={fixture} />);
     // 108_761_280 bytes → ~109MB (rounded). Asserting via regex on the
     // bracketed label so future label tweaks don't break the test if the
@@ -75,19 +90,25 @@ describe("SaveForOfflineButton", () => {
     expect(screen.getByRole("button", { name: /save_for_offline · \d+MB/ })).toBeInTheDocument();
   });
 
-  it("hides itself entirely when capability is 'unsupported'", async () => {
-    await withCapability("unsupported");
+  it("hides itself entirely while the gate is pre-hydration (pending)", async () => {
+    await withGate({ allow: false, reason: "pending" });
     const { container } = render(<SaveForOfflineButton set={fixture} />);
     // Component returns null — nothing renders.
     expect(container.firstChild).toBeNull();
   });
 
-  it("opens the install modal on click when capable-but-not-installed (install gates download)", async () => {
-    await withCapability("native");
+  it("opens the gate modal on click in a tab (gate blocks the download path)", async () => {
+    await withGate({
+      allow: false,
+      reason: "needs-install",
+      platform: "chromium",
+      canPrompt: true,
+    });
     render(<SaveForOfflineButton set={fixture} />);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /save_for_offline/ }));
-    // Modal renders its `install_for_offline` title once open.
-    expect(await screen.findByText(/install_for_offline/)).toBeInTheDocument();
+    // Modal renders its `save_for_offline` title once open.
+    const headings = await screen.findAllByText(/save_for_offline/);
+    expect(headings.length).toBeGreaterThan(1); // button + modal title
   });
 });

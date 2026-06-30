@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { type MusicSet, sets } from "~/data/sets";
 import { useStore } from "~/store";
+import { withAppContext } from "~/utils/audioUrl";
 
 type AudioProps = {
   onPlay: () => void;
@@ -107,7 +108,11 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     //      (preserves mobile user-gesture token). Detect via src match and skip.
     //   2) Persisted nowPlaying restored on reload → no user gesture, can't auto-play.
     //      Just set src and seek to saved position; user has to click to start.
-    const trackUrl = new URL(nowPlaying.src, window.location.href).href;
+    // Both sides go through `withAppContext` so the `?ctx=app` marker that
+    // playTrack appended in standalone mode lines up with the value the
+    // audio element's `.src` getter reports back.
+    const markedSrc = withAppContext(nowPlaying.src);
+    const trackUrl = new URL(markedSrc, window.location.href).href;
     if (audio.src === trackUrl || audio.currentSrc === trackUrl) {
       // Click path already handled it
       return;
@@ -120,7 +125,7 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
 
     setHasError(false);
 
-    audio.src = nowPlaying.src;
+    audio.src = markedSrc;
     audio.load();
 
     const seekWhenReady = () => {

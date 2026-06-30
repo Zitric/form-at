@@ -2,6 +2,7 @@ import { memo, useEffect, useState } from "react";
 import { Waveform } from "~/components/player/Waveform";
 import type { MusicSet } from "~/data/sets";
 import { useStore } from "~/store";
+import { withAppContext } from "~/utils/audioUrl";
 import { fmtTimestamp } from "~/utils/fmt";
 
 // Owns currentTime / duration / peaks state and subscribes to <audio> events
@@ -88,7 +89,9 @@ export const PlayerSeeker = memo(function PlayerSeeker({
     if (cachedPeaks && cachedPeaks.length > 0) return;
     const trackId = nowPlaying.id;
     const peaksUrl = nowPlaying.peaks;
-    fetch(peaksUrl)
+    // Wrap with the standalone-context marker so the SW serves peaks from
+    // IDB in the app and pure-streams them in a tab. Same rule as audio.src.
+    fetch(withAppContext(peaksUrl))
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();

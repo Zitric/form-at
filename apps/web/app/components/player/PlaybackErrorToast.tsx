@@ -3,17 +3,23 @@ import { Z } from "~/styles/z";
 
 // Surfaces a play() failure visibly so users (and the team debugging on Discord)
 // notice when audio silently fails to start. Sits above the player + bottom nav
-// on mobile, above the player on desktop. Two variants:
+// on mobile, above the player on desktop. Three variants:
 //
 //   - Generic playback failure (`playbackBlockedReason === null`): the audio
 //     element rejected play(). Tap to retry, [ x ] to dismiss.
-//   - Offline-unsaved gate (`playbackBlockedReason === "not-saved-offline"`):
-//     fired by `playerSlice.playTrack` when the user tapped play on a set
-//     that isn't in IDB while `!navigator.onLine`. No retry — retrying would
-//     just hit the same gate. Honest copy explaining why nothing happened,
-//     plus a dismiss. The save-this-set affordance lives on the detail page
-//     (`SaveForOfflineButton`); pointing them there would mean cross-route
-//     navigation from a transient toast, which we don't currently support.
+//   - Offline-unsaved gate, standalone (`"not-saved-offline"`): fired by
+//     `playerSlice.playTrack` when the user tapped play on a set that isn't
+//     in IDB while `!navigator.onLine` AND we're running standalone. The
+//     app user has the language of "saved"; surface that directly.
+//   - Offline-unsaved gate, browser tab (`"tab-offline-needs-network"`):
+//     same gate, but in a tab tabs never read IDB (the SW pure-passes on a
+//     missing `?ctx=app` marker — see sw.ts) so EVERY offline play in a tab
+//     hits this branch. Tab users have no concept of "saved" — point them
+//     at the app instead.
+// No retry for either gate variant — retrying lands on the same condition.
+// The save-this-set affordance lives on the detail page; pointing the user
+// there would mean cross-route navigation from a transient toast, which we
+// don't currently support.
 export function PlaybackErrorToast() {
   const hasError = useStore((s) => s.hasError);
   const nowPlaying = useStore((s) => s.nowPlaying);
@@ -23,7 +29,8 @@ export function PlaybackErrorToast() {
 
   if (!hasError || !nowPlaying) return null;
 
-  const isOfflineGate = playbackBlockedReason === "not-saved-offline";
+  const isAppOfflineGate = playbackBlockedReason === "not-saved-offline";
+  const isTabOfflineGate = playbackBlockedReason === "tab-offline-needs-network";
 
   const dismiss = () => setHasError(false);
 
@@ -33,15 +40,21 @@ export function PlaybackErrorToast() {
       className={`fixed inset-x-0 ${Z.toast} flex items-center justify-center pointer-events-none px-4 bottom-[calc(105px+env(safe-area-inset-bottom)+12px)] sm:bottom-[100px]`}
     >
       <div className="pointer-events-auto bg-black border border-red-400/40 text-red-400 text-xs font-mono flex items-center max-w-sm">
-        {isOfflineGate ? (
-          // No retry button — retrying lands on the same gate. Whole label
-          // dismissable on tap so it feels actionable rather than scolding.
+        {isAppOfflineGate ? (
           <button
             type="button"
             onClick={dismiss}
             className="px-4 py-2 hover:text-red-300 transition-colors text-left whitespace-nowrap"
           >
             [ ✗ not saved for offline listening ]
+          </button>
+        ) : isTabOfflineGate ? (
+          <button
+            type="button"
+            onClick={dismiss}
+            className="px-4 py-2 hover:text-red-300 transition-colors text-left"
+          >
+            [ ✗ playback needs connection — open the app to listen offline ]
           </button>
         ) : (
           <button

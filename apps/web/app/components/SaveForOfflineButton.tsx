@@ -1,37 +1,35 @@
 import { useState } from "react";
 import { Button } from "~/components/Button";
 import { CancelDownloadModal } from "~/components/CancelDownloadModal";
-import { InstallPromptModal } from "~/components/InstallPromptModal";
 import { QuotaInfoModal } from "~/components/QuotaInfoModal";
+import { SaveGateModal } from "~/components/SaveGateModal";
 import { SavedManageModal } from "~/components/SavedManageModal";
 import { type MusicSet, getSet } from "~/data/sets";
-import { useInstallCapability } from "~/hooks/useInstallCapability";
 import { useOfflineStateFor, useTriggerDownload } from "~/hooks/useOfflineDownload";
+import { useSaveGate } from "~/hooks/useSaveGate";
 import { useStore } from "~/store";
 import { fmtBytes } from "~/utils/fmt";
 
 // `save_for_offline` trigger on the set detail page.
 //
-// Two-axis state machine: install capability × per-set offline state.
+// Two-axis state machine: save-gate × per-set offline state.
 //
-// Capability gate (Q1 — locked 2026-06-27): install IS required to download.
-// Justification is the iOS WebKit 7-day ITP eviction rule — standalone PWAs
-// are exempt, plain Safari tabs are not (see PWA_PROGRESS.md + the canonical
-// WebKit pages). An in-tab download would silently evaporate after ~7 days
-// of no visits, breaking the feature's promise. So when the user is on a
-// capable-but-not-installed platform, the button keeps its current behaviour
-// (open InstallPromptModal); only once `capability === "installed"` does the
-// per-state matrix kick in.
+// Gate (locked 2026-06-30 — strict standalone rule): download fires ONLY when
+// running in standalone display-mode. Any browser tab — including a tab on a
+// device where the PWA IS installed — gets the <SaveGateModal> instead. This
+// keeps the web/app divide coherent with the SW read-path: tabs always stream
+// from network and never read IDB, the app does both. See `withAppContext`
+// for the matching playback-side signal.
 //
-// Dismiss semantic (DIFFERENT from <InstallCta>):
-//   - This button stays VISIBLE and TAPPABLE regardless of pwaInstallDismissed.
+// Dismiss semantic (unchanged from chunk 3c):
+//   - This button stays VISIBLE and TAPPABLE in every gate branch.
 //   - A user tap ALWAYS opens the relevant modal / triggers the relevant action.
-//   - The dismissed flag only suppresses passive prompting (i.e. <InstallCta>
-//     on home), not user-initiated taps.
+//   - `pwaInstallDismissed` only suppresses passive prompting (the home
+//     <InstallCta>), not user-initiated taps here.
 type Props = { set: MusicSet };
 
 export function SaveForOfflineButton({ set }: Props) {
-  const capability = useInstallCapability();
+  const gate = useSaveGate();
   const offlineState = useOfflineStateFor(set.id);
   const activeDownloadId = useStore((s) => s.activeDownloadId);
   const cancelDownload = useStore((s) => s.cancelDownload);
@@ -39,33 +37,33 @@ export function SaveForOfflineButton({ set }: Props) {
   const setToast = useStore((s) => s.setToast);
   const triggerDownload = useTriggerDownload(set.id);
 
-  const [installOpen, setInstallOpen] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [quotaOpen, setQuotaOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
 
-  // Hidden for browsers without an install path (Firefox, iOS non-Safari,
-  // macOS Safari, Chromium-pre-engagement). No point teasing a flow that
-  // can't complete.
-  if (capability === "unsupported") return null;
+  // Pre-hydration we can't decide which branch to render — keep the button
+  // out of the DOM rather than flash an "install" path that flips to the
+  // state machine a frame later.
+  if (gate.allow === false && gate.reason === "pending") return null;
 
-  // Pre-installed path: any tap opens InstallPromptModal. The set's offline
-  // state is irrelevant here — without install we can't keep the bytes alive
-  // long enough for "saved" to mean anything (see capability-gate comment).
-  if (capability !== "installed") {
+  // Tab / non-standalone: the button is visible (we want users to discover
+  // the feature), but tap opens the guidance modal. No size hint, no per-
+  // state surfaces — those are app concepts.
+  if (gate.allow === false) {
     return (
       <>
-        <Button variant="secondary" onClick={() => setInstallOpen(true)}>
+        <Button variant="secondary" onClick={() => setGateOpen(true)}>
           save_for_offline
         </Button>
-        <InstallPromptModal open={installOpen} onClose={() => setInstallOpen(false)} />
+        <SaveGateModal open={gateOpen} onClose={() => setGateOpen(false)} gate={gate} />
       </>
     );
   }
 
-  // Installed + per-state machine. Each branch derives its label and onTap
-  // from `offlineState.status`. Modals are state-bound — only one can be
-  // open at a time per branch, so the boolean-per-modal approach is clean
+  // Standalone — full per-state machine. Each branch derives its label and
+  // onTap from `offlineState.status`. Modals are state-bound — only one can
+  // be open at a time per branch, so the boolean-per-modal approach is clean
   // without a reducer.
   switch (offlineState.status) {
     case "not-saved": {

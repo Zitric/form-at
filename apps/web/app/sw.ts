@@ -113,7 +113,19 @@ registerRoute(
 // Response was constructed. Only call it when a Range header is present;
 // without one it throws → catches → returns a misleading 416.
 //
-// === Cached-Response contract (the chunk-3 §3 lock) ===
+// === Tab vs app display-mode gate (the chunk-5 lock) ===
+// The page tags playback URLs with `?ctx=app` via `withAppContext` ONLY when
+// running in standalone display-mode. The marker is the SW's single source
+// of truth for "is the requester a standalone PWA?":
+//   - missing marker (browser tab) → pure pass-through to network. Never
+//     reads IDB. A downloaded set in a tab still streams from R2.
+//   - `ctx=app` (standalone) → read IDB; fall through to network on miss.
+// The marker is stripped before BOTH the IDB key and any network fetch so
+// the IDB lookup matches the bare URL the download flow stored, and R2 sees
+// the canonical URL exactly as if no SW were involved. `searchParams.delete`
+// + `toString()` emits no trailing `?` when the search becomes empty.
+//
+// === Cached-Response contract (the chunk-3 §3 lock — preserved) ===
 // The synthetic Response built here MUST have these five properties or Range
 // slicing breaks silently:
 //   status:         200  (NOT 206 — slicing a partial response would fail)
@@ -125,9 +137,24 @@ registerRoute(
   ({ url }) =>
     url.hostname === "pub-e15e86da649d4c91b6666141bfe67664.r2.dev" &&
     (url.pathname.endsWith(".mp3") || url.pathname.endsWith(".json")),
-  async ({ request }) => {
-    const entry = await getOfflineAudio(request.url);
-    if (!entry) return fetch(request);
+  async ({ request, url }) => {
+    const ctxIsApp = url.searchParams.get("ctx") === "app";
+
+    // Strip the marker for both the IDB key and any network fetch. Build a
+    // fresh Request because Request URLs are immutable once constructed.
+    const cleanUrl = new URL(url.toString());
+    cleanUrl.searchParams.delete("ctx");
+    const cleanUrlString = cleanUrl.toString();
+    const cleanReq = new Request(cleanUrlString, {
+      method: request.method,
+      headers: request.headers,
+    });
+
+    // Tab semantics: pure pass-through, no IDB read even if an entry exists.
+    if (!ctxIsApp) return fetch(cleanReq);
+
+    const entry = await getOfflineAudio(cleanUrlString);
+    if (!entry) return fetch(cleanReq);
     const cached = new Response(entry.blob, {
       status: 200,
       headers: {

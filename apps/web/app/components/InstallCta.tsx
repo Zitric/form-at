@@ -1,19 +1,19 @@
 import { Button } from "~/components/Button";
-import { useTriggerInstallPrompt } from "~/hooks/useInstallCapability";
+import { useTriggerInstallPrompt } from "~/hooks/useSaveGate";
 import { useStore, useStoreHydrated } from "~/store";
 
 // "Install Form:at" CTA on the home route.
 //
 // Reads the captured `beforeinstallprompt` event + dismiss flag from the store
 // (populated by <InstallEventsListener> in __root). The prompt-and-cleanup
-// flow lives in `useTriggerInstallPrompt`, shared with <InstallPromptModal>
-// so both surfaces have identical accept/dismiss handling.
+// flow lives in `useTriggerInstallPrompt`, shared with <SaveGateModal> so
+// both surfaces have identical accept/dismiss handling.
 //
 // Platform reality (unchanged from Phase 1):
 //   - Chromium (Android/desktop Chrome, Edge, Samsung, Opera, Brave):
 //     `beforeinstallprompt` fires → captured → button appears → tap → native dialog.
 //   - iOS Safari: no `beforeinstallprompt` event exists. CTA stays hidden;
-//     iOS install lives in <SaveForOfflineButton>'s modal as manual instructions.
+//     iOS install lives in <SaveGateModal> (reachable via the save button) as manual instructions.
 //   - Firefox / iOS non-Safari browsers: no event API → CTA stays hidden.
 //
 // DISMISS SEMANTIC — different from <SaveForOfflineButton>:

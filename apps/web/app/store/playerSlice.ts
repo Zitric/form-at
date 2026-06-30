@@ -1,5 +1,7 @@
 import type { StateCreator } from "zustand";
 import type { MusicSet } from "~/data/sets";
+import { withAppContext } from "~/utils/audioUrl";
+import { isStandalone } from "~/utils/installCapability";
 // Type-only — no runtime import. Lets the gate in `playTrack` read
 // `state.offlineSets` without casting or going through `useStore.getState()`
 // (which would be a circular import via `~/store`).
@@ -20,10 +22,18 @@ export function getAudioCurrentTime() {
 
 // Distinguishes "audio element rejected play()" (the existing `hasError` flag)
 // from "we deliberately refused to start playback because the bytes aren't
-// available offline" (this reason). The retry-storm gate in `playTrack`
-// surfaces the latter; `PlaybackErrorToast` branches on it for the right copy.
-// `null` when the error is the generic playback failure.
-export type PlaybackBlockedReason = "not-saved-offline" | null;
+// available offline" (these reasons). The retry-storm gate in `playTrack`
+// surfaces the latter; `PlaybackErrorToast` branches for the right copy.
+//
+//   not-saved-offline       — standalone PWA, offline, set not in IDB. App
+//                             user understands "saved", so we say so.
+//   tab-offline-needs-network — browser tab (no IDB read-path active), offline.
+//                             Tab users have no concept of "saved" — point
+//                             them at the app instead.
+//   null                    — generic playback failure (audio element rejected
+//                             play() for some other reason — network blip on
+//                             a streamable set, decode error, etc.).
+export type PlaybackBlockedReason = "not-saved-offline" | "tab-offline-needs-network" | null;
 
 export type PlayerSlice = {
   nowPlaying: MusicSet | null;
@@ -94,7 +104,15 @@ export const createPlayerSlice: StateCreator<PlayerSlice & OfflineSlice, [], [],
     // crash here — in real prod use the slice is always composed.
     const offlineStatus = state.offlineSets?.[track.id]?.status;
     if (isOffline && offlineStatus !== "saved") {
-      set({ hasError: true, playbackBlockedReason: "not-saved-offline", isPlaying: false });
+      // Tabs never read IDB (SW gates on `?ctx=app` — see `withAppContext`),
+      // so offline playback in a tab fails by construction. We branch the
+      // reason here so PlaybackErrorToast can show app-aware copy
+      // ("not saved for offline listening") in standalone and tab-aware
+      // copy ("open the app to listen offline") in a browser tab.
+      const reason: PlaybackBlockedReason = isStandalone()
+        ? "not-saved-offline"
+        : "tab-offline-needs-network";
+      set({ hasError: true, playbackBlockedReason: reason, isPlaying: false });
       return;
     }
 
@@ -104,7 +122,9 @@ export const createPlayerSlice: StateCreator<PlayerSlice & OfflineSlice, [], [],
     // overrides the saved position so timestamp deeplinks (?t=...) work.
     if (audio) {
       const startPos = override ?? state.positions[track.id] ?? 0;
-      audio.src = track.src;
+      // `withAppContext` re-reads `isStandalone()` per call, so a display-
+      // mode flip between tracks is naturally reflected on the next play.
+      audio.src = withAppContext(track.src);
       if (startPos > 0) {
         const applySeek = () => {
           if (get().nowPlaying?.id === track.id) {
