@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BracketLabel } from "~/components/BracketLabel";
 import { useStore } from "~/store";
 import { Z } from "~/styles/z";
 
@@ -42,7 +43,7 @@ export function Toast() {
       }}
     >
       <div className="bg-black border border-gold/60 text-white text-xs font-mono px-4 py-2">
-        [ {toast} ]
+        <BracketLabel>{toast}</BracketLabel>
       </div>
     </div>
   );

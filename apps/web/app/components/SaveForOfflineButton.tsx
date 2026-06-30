@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button } from "~/components/Button";
 import { CancelDownloadModal } from "~/components/CancelDownloadModal";
 import { InstallPromptModal } from "~/components/InstallPromptModal";
 import { QuotaInfoModal } from "~/components/QuotaInfoModal";
@@ -29,12 +30,6 @@ import { fmtBytes } from "~/utils/fmt";
 //     on home), not user-initiated taps.
 type Props = { set: MusicSet };
 
-const buttonClass =
-  "text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer text-left";
-
-const buttonClassFail =
-  "text-sm text-red-400 hover:text-red-300 transition-colors tracking-widest cursor-pointer text-left";
-
 export function SaveForOfflineButton({ set }: Props) {
   const capability = useInstallCapability();
   const offlineState = useOfflineStateFor(set.id);
@@ -60,9 +55,9 @@ export function SaveForOfflineButton({ set }: Props) {
   if (capability !== "installed") {
     return (
       <>
-        <button type="button" onClick={() => setInstallOpen(true)} className={buttonClass}>
-          [ save_for_offline ]
-        </button>
+        <Button variant="secondary" onClick={() => setInstallOpen(true)}>
+          save_for_offline
+        </Button>
         <InstallPromptModal open={installOpen} onClose={() => setInstallOpen(false)} />
       </>
     );
@@ -75,12 +70,12 @@ export function SaveForOfflineButton({ set }: Props) {
   switch (offlineState.status) {
     case "not-saved": {
       const label = set.sizeBytes
-        ? `[ save_for_offline · ${fmtBytes(set.sizeBytes)} ]`
-        : "[ save_for_offline ]";
+        ? `save_for_offline · ${fmtBytes(set.sizeBytes)}`
+        : "save_for_offline";
       return (
-        <button type="button" onClick={triggerDownload} className={buttonClass}>
+        <Button variant="secondary" onClick={triggerDownload}>
           {label}
-        </button>
+        </Button>
       );
     }
 
@@ -91,15 +86,9 @@ export function SaveForOfflineButton({ set }: Props) {
       const titleForModal = getSet(set.id)?.artist ?? set.artist;
       return (
         <>
-          <button
-            type="button"
-            onClick={() => setCancelOpen(true)}
-            className={buttonClass}
-            // Force the bracket pair onto one line on iPhone SE per CLAUDE.md
-            style={{ whiteSpace: "nowrap" }}
-          >
-            [ downloading · {pct}% ]
-          </button>
+          <Button variant="secondary" onClick={() => setCancelOpen(true)}>
+            downloading · {pct}%
+          </Button>
           <CancelDownloadModal
             open={cancelOpen}
             onClose={() => setCancelOpen(false)}
@@ -114,9 +103,9 @@ export function SaveForOfflineButton({ set }: Props) {
       const { bytesTotal } = offlineState;
       return (
         <>
-          <button type="button" onClick={() => setManageOpen(true)} className={buttonClass}>
-            [ saved · {fmtBytes(bytesTotal)} ]
-          </button>
+          <Button variant="secondary" onClick={() => setManageOpen(true)}>
+            saved · {fmtBytes(bytesTotal)}
+          </Button>
           <SavedManageModal
             open={manageOpen}
             onClose={() => setManageOpen(false)}
@@ -137,14 +126,9 @@ export function SaveForOfflineButton({ set }: Props) {
         const shortfall = offlineState.quotaShortfallBytes ?? 0;
         return (
           <>
-            <button
-              type="button"
-              onClick={() => setQuotaOpen(true)}
-              className={buttonClassFail}
-              style={{ whiteSpace: "nowrap" }}
-            >
-              [ ✗ need {fmtBytes(shortfall)} more ]
-            </button>
+            <Button variant="fail" onClick={() => setQuotaOpen(true)}>
+              ✗ need {fmtBytes(shortfall)} more
+            </Button>
             <QuotaInfoModal
               open={quotaOpen}
               onClose={() => setQuotaOpen(false)}
@@ -157,29 +141,20 @@ export function SaveForOfflineButton({ set }: Props) {
       // Network / aborted — retry is the obvious action. Active download
       // elsewhere still throws ONE_DOWNLOAD_AT_A_TIME which `triggerDownload`
       // handles with a toast (same behaviour as the `not-saved` retry).
-      const retryLabel = activeDownloadId
-        ? "[ retry · waiting ]"
-        : offlineState.reason === "aborted"
-          ? "[ ↻ retry ]"
-          : "[ ↻ retry ]";
+      const retryLabel = activeDownloadId ? "retry · waiting" : "↻ retry";
       return (
-        <button type="button" onClick={triggerDownload} className={buttonClass}>
+        <Button variant="secondary" onClick={triggerDownload}>
           {retryLabel}
-        </button>
+        </Button>
       );
     }
 
     case "evicted": {
       const { lastKnownBytes } = offlineState;
       return (
-        <button
-          type="button"
-          onClick={triggerDownload}
-          className={buttonClass}
-          style={{ whiteSpace: "nowrap" }}
-        >
-          [ ↻ re-save · was {fmtBytes(lastKnownBytes)} ]
-        </button>
+        <Button variant="secondary" onClick={triggerDownload}>
+          ↻ re-save · was {fmtBytes(lastKnownBytes)}
+        </Button>
       );
     }
   }

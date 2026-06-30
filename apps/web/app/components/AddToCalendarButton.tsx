@@ -1,11 +1,16 @@
 import { useState } from "react";
+import { BracketLabel } from "~/components/BracketLabel";
+import { Button } from "~/components/Button";
 import { Modal } from "~/components/Modal";
 import { TerminalRow } from "~/components/TerminalRow";
 import type { Event } from "~/data/events";
 import { isAndroid } from "~/utils/deeplink";
 import { buildGoogleCalendarTargetUrl, buildIcs, buildOutlookCalendarTargetUrl } from "~/utils/ics";
 
-const rowClass =
+// Dropdown anchor row — same visual vocabulary as <Button variant="secondary">
+// but on an <a> because these are navigations, not actions. Bracket rendering
+// comes from <BracketLabel> inside; layout/typography stays here.
+const anchorRowClass =
   "text-left text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer py-1";
 
 // Calendar options that are pure navigation render as <a>. Apple/.ics
@@ -34,8 +39,8 @@ export function AddToCalendarButton({ event }: { event: Event }) {
   };
 
   const links: CalendarLink[] = [
-    { label: "[ google ]", href: buildGoogleCalendarTargetUrl(event) },
-    { label: "[ outlook ]", href: buildOutlookCalendarTargetUrl(event) },
+    { label: "google", href: buildGoogleCalendarTargetUrl(event) },
+    { label: "outlook", href: buildOutlookCalendarTargetUrl(event) },
   ];
 
   return (
@@ -74,9 +79,9 @@ export function AddToCalendarButton({ event }: { event: Event }) {
                 target={isIntent ? undefined : "_blank"}
                 rel={isIntent ? undefined : "noopener noreferrer"}
                 onClick={() => setOpen(false)}
-                className={rowClass}
+                className={anchorRowClass}
               >
-                {label}
+                <BracketLabel>{label}</BracketLabel>
               </a>
             );
           })}
@@ -87,9 +92,9 @@ export function AddToCalendarButton({ event }: { event: Event }) {
               download into the native "Add to Calendar" sheet, so the
               option stays for everyone except Android. */}
           {!isAndroid() && (
-            <button type="button" onClick={downloadIcs} className={rowClass}>
-              [ apple / .ics ]
-            </button>
+            <Button variant="secondary" onClick={downloadIcs} className="text-left py-1">
+              apple / .ics
+            </Button>
           )}
         </div>
       </Modal>

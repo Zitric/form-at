@@ -1,7 +1,5 @@
+import { Button } from "~/components/Button";
 import { Modal } from "~/components/Modal";
-
-const linkClass =
-  "text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer text-left";
 
 type Props = {
   open: boolean;
@@ -38,12 +36,12 @@ export function CancelDownloadModal({ open, onClose, onConfirmCancel, setTitle }
           partial download will be discarded.
         </p>
         <div className="flex flex-col gap-2">
-          <button type="button" onClick={handleCancel} className={linkClass}>
-            [ cancel_download ]
-          </button>
-          <button type="button" onClick={onClose} className={linkClass}>
-            [ keep_downloading ]
-          </button>
+          <Button variant="secondary" onClick={handleCancel} className="text-left">
+            cancel_download
+          </Button>
+          <Button variant="secondary" onClick={onClose} className="text-left">
+            keep_downloading
+          </Button>
         </div>
       </div>
     </Modal>

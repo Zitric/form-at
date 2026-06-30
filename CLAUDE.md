@@ -99,6 +99,7 @@ The user owns commits — you do not create them. The user is the repo owner and
 - Extract a component when the same UI or behaviour appears in more than one place, or when a single file is getting hard to scan.
 - Components live in `apps/web/app/components/`. Name them after what they *are*, not where they're used (`TrackRow`, not `SetsPageTrackRow`).
 - Keep props minimal and typed. Prefer explicit prop interfaces over spreading unknown objects.
+- **Bracket buttons live in `Button.tsx` (variants: `primary` / `secondary` / `fail`); bracket rendering itself lives in `BracketLabel.tsx` for non-button surfaces (`Link`, `<a>`, Toast, NavLinks).** Never hand-roll a `[ label ]` button with inline classes — use `<Button variant="secondary">label</Button>` and let the design system own the bracket colouring.
 
 ### Modern patterns
 - **TypeScript strict mode** — no `any` unless there is a documented reason (e.g. CF env casting). Use `unknown` + narrowing instead.

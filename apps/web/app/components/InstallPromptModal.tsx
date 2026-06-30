@@ -1,12 +1,10 @@
 import { useState } from "react";
+import { Button } from "~/components/Button";
 import { Modal } from "~/components/Modal";
 import { InstallIcon } from "~/components/icons";
 import { useInstallCapability, useTriggerInstallPrompt } from "~/hooks/useInstallCapability";
 import { useStore } from "~/store";
 import { type FormFactor, detectFormFactor } from "~/utils/deviceFormFactor";
-
-const linkClass =
-  "text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer text-left";
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -84,9 +82,9 @@ export function InstallPromptModal({ open, onClose }: Props) {
             install Form:at to download sets and listen offline. lands on your home screen with our
             icon — fullscreen, no browser chrome.
           </p>
-          <button type="button" onClick={handleNativeInstall} className={linkClass}>
-            [ install ]
-          </button>
+          <Button variant="secondary" onClick={handleNativeInstall} className="text-left">
+            install
+          </Button>
         </div>
       )}
 
@@ -113,9 +111,9 @@ export function InstallPromptModal({ open, onClose }: Props) {
               tap <span className="text-white">Add</span> in the top right
             </li>
           </ol>
-          <button type="button" onClick={handleAlreadyInstalled} className={linkClass}>
-            [ ✓ already installed ]
-          </button>
+          <Button variant="secondary" onClick={handleAlreadyInstalled} className="text-left">
+            ✓ already installed
+          </Button>
         </div>
       )}
 

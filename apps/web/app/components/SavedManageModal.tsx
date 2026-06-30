@@ -1,8 +1,6 @@
+import { Button } from "~/components/Button";
 import { Modal } from "~/components/Modal";
 import { fmtBytes } from "~/utils/fmt";
-
-const linkClass =
-  "text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer text-left";
 
 type Props = {
   open: boolean;
@@ -40,12 +38,12 @@ export function SavedManageModal({ open, onClose, onRemove, setTitle, bytesTotal
           network connection.
         </p>
         <div className="flex flex-col gap-2">
-          <button type="button" onClick={handleRemove} className={linkClass}>
-            [ remove_from_library ]
-          </button>
-          <button type="button" onClick={onClose} className={linkClass}>
-            [ keep ]
-          </button>
+          <Button variant="secondary" onClick={handleRemove} className="text-left">
+            remove_from_library
+          </Button>
+          <Button variant="secondary" onClick={onClose} className="text-left">
+            keep
+          </Button>
         </div>
       </div>
     </Modal>

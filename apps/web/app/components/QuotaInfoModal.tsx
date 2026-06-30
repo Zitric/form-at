@@ -1,8 +1,6 @@
+import { Button } from "~/components/Button";
 import { Modal } from "~/components/Modal";
 import { fmtBytes } from "~/utils/fmt";
-
-const linkClass =
-  "text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer text-left";
 
 type Props = {
   open: boolean;
@@ -45,12 +43,12 @@ export function QuotaInfoModal({ open, onClose, onRetry, shortfallBytes }: Props
           free up space and try again, or save a smaller set instead.
         </p>
         <div className="flex flex-col gap-2">
-          <button type="button" onClick={handleRetry} className={linkClass}>
-            [ try_again ]
-          </button>
-          <button type="button" onClick={onClose} className={linkClass}>
-            [ close ]
-          </button>
+          <Button variant="secondary" onClick={handleRetry} className="text-left">
+            try_again
+          </Button>
+          <Button variant="secondary" onClick={onClose} className="text-left">
+            close
+          </Button>
         </div>
       </div>
     </Modal>

@@ -90,7 +90,7 @@ function EventDetail() {
           <div className="mb-10">
             <PageTitle>lineup</PageTitle>
             <p className="text-sm sm:text-base text-grey leading-relaxed">
-              [ lineup will be released soon ]
+              lineup will be released soon !
             </p>
           </div>
         ) : null}

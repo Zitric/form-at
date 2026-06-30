@@ -1,3 +1,4 @@
+import { Button } from "~/components/Button";
 import { useTriggerInstallPrompt } from "~/hooks/useInstallCapability";
 import { useStore, useStoreHydrated } from "~/store";
 
@@ -36,15 +37,8 @@ export function InstallCta({ className }: { className?: string }) {
   if (!hydrated || !deferredPrompt || pwaInstallDismissed) return null;
 
   return (
-    <button
-      type="button"
-      onClick={() => triggerInstall()}
-      className={
-        className ??
-        "text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer"
-      }
-    >
-      [ install_form:at ]
-    </button>
+    <Button variant="secondary" onClick={() => triggerInstall()} className={className}>
+      install_form:at
+    </Button>
   );
 }

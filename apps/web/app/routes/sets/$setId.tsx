@@ -1,5 +1,6 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { Button } from "~/components/Button";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { Image } from "~/components/Image";
 import { JsonLd } from "~/components/JsonLd";
@@ -157,15 +158,14 @@ function SetDetail() {
         </p>
 
         {/* Primary action */}
-        <button
-          type="button"
+        <Button
+          variant="primary"
           onClick={() => playTrack(set, playTrackOptions)}
-          className="flex items-center justify-center gap-4 w-full sm:min-w-[280px] border-2 border-gold px-6 py-4 mb-6! text-sm text-grey shadow-[0_0_15px_rgba(197,133,56,0.2)] hover:shadow-[0_0_25px_rgba(197,133,56,0.4)] hover:cursor-pointer  transition-all group"
-          style={{ animation: "border-pulse 2s infinite" }}
+          className="w-full sm:min-w-[280px] mb-6!"
         >
           <span className="text-gold">{isThisPlaying ? <PauseIcon /> : <PlayIcon />}</span>
           {playButtonLabel}
-        </button>
+        </Button>
 
         {/* Stack save-for-offline + share vertically — the two bracket
             labels don't fit in a single row at iPhone SE 375 without
