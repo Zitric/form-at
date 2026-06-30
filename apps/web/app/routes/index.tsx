@@ -80,7 +80,7 @@ function Home() {
           suppressHydrationWarning
         >
           <span className="text-gold">›</span>
-          <span>{nowPlaying && !isPlaying ? "resume_signal" : "access_audio [ listen ]"}</span>
+          <span>{nowPlaying && !isPlaying ? "resume_signal" : "access_audio "}</span>
         </button>
 
         <div

@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 @theme {
+  --breakpoint-2xs: 24rem;
+  --breakpoint-xs: 27rem;
+
   --color-gold: #c58538;
   --color-black: #161615;
   --color-purple: #43437a;

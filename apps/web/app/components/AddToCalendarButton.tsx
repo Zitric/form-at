@@ -43,9 +43,9 @@ export function AddToCalendarButton({ event }: { event: Event }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex items-center justify-center w-full sm:w-auto sm:min-w-[280px] border border-gold/60 hover:border-gold px-6 py-3 text-sm text-grey hover:text-white transition-colors cursor-pointer tracking-widest"
+        className="flex items-center justify-center gap-4 w-full sm:w-auto sm:min-w-[280px] border border-gold/60 hover:border-gold px-6 py-3 text-sm text-grey hover:text-white transition-colors cursor-pointer tracking-widest"
       >
-        [ add_to_calendar ]
+        <span className="text-gold">›</span> <span>add_to_calendar </span>
       </button>
       <Modal
         open={open}
