@@ -104,13 +104,25 @@ export const createPlayerSlice: StateCreator<PlayerSlice & OfflineSlice, [], [],
     // createPlayerSlice in isolation (without composing offlineSlice) don't
     // crash here — in real prod use the slice is always composed.
     const offlineStatus = state.offlineSets?.[track.id]?.status;
-    const cannotFetch = isOffline && offlineStatus !== "saved";
+    // Web tabs never read IDB (SW gates on `?ctx=app` — see `withAppContext`),
+    // so a "saved" set is still unreachable offline in a tab. Only a
+    // standalone PWA can serve saved bytes from IDB. `canReadOfflineBytes`
+    // names that exact invariant so a future reader can't confuse "the set
+    // is persisted saved in state" with "the current context can actually
+    // read it." A previous revision let tab+saved+offline skip the gate,
+    // which fell through to `audio.play()` → network fetch fails → generic
+    // playback_error — telling a web user "tap to retry" for a set the tab
+    // can never load offline. Blocking here shows the correct "open the app"
+    // message via the reason branch below.
+    const canReadOfflineBytes = isStandalone() && offlineStatus === "saved";
+    const cannotFetch = isOffline && !canReadOfflineBytes;
     if (cannotFetch && !isPauseAction) {
-      // Tabs never read IDB (SW gates on `?ctx=app` — see `withAppContext`),
-      // so offline playback in a tab fails by construction. We branch the
-      // reason here so PlaybackErrorToast can show app-aware copy
-      // ("not saved for offline listening") in standalone and tab-aware
-      // copy ("open the app to listen offline") in a browser tab.
+      // App-aware copy ("not saved for offline listening") in standalone
+      // — the app user has the vocabulary of "saved." Tab-aware copy
+      // ("open the app to listen offline") in a browser tab, uniform
+      // across downloaded-in-the-app and never-downloaded sets: from the
+      // web, downloaded-vs-not is irrelevant because the tab can't read
+      // IDB either way.
       const reason: PlaybackBlockedReason = isStandalone()
         ? "not-saved-offline"
         : "tab-offline-needs-network";

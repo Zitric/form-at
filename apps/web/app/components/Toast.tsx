@@ -8,7 +8,10 @@ const EXIT_MS = 250;
 
 // Lightweight transient message above the player/nav. Used by share buttons and
 // anything else that needs a "copied / saved / done" confirmation. Slides up on
-// enter, slides down on exit (250ms each), tap to dismiss immediately.
+// enter, slides down on exit; auto-fades after VISIBLE_MS. The whole surface
+// is click-to-dismiss (the `[ x ]` on the right is a visual affordance, not a
+// separate button) so a user can clear it before the auto-timer fires. Message
+// text runs plain; brackets live only on the `x` per the design-system rules.
 export function Toast() {
   const toast = useStore((s) => s.toast);
   const setToast = useStore((s) => s.setToast);
@@ -42,9 +45,15 @@ export function Toast() {
           : `fadeInUp ${EXIT_MS}ms ease-out`,
       }}
     >
-      <div className="bg-black border border-gold/60 text-white text-xs font-mono px-4 py-2">
-        <BracketLabel>{toast}</BracketLabel>
-      </div>
+      <button
+        type="button"
+        onClick={() => setExiting(true)}
+        aria-label="Dismiss notification"
+        className="pointer-events-auto bg-black border border-gold/60 text-white text-xs font-mono flex items-center gap-3 max-w-sm px-4 py-2 hover:text-gold transition-colors text-left cursor-pointer"
+      >
+        <span className="flex-1">{toast}</span>
+        <BracketLabel>x</BracketLabel>
+      </button>
     </div>
   );
 }

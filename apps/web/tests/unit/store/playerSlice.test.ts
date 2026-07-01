@@ -13,6 +13,17 @@ function setNavigatorOnline(value: boolean) {
   });
 }
 
+// Toggles the standalone signal `isStandalone()` reads. In jsdom the
+// matchMedia stub returns matches:false, so `navigator.standalone` is the
+// only signal that can flip the result to true — perfect for driving the
+// tab-vs-app branch of the offline gate.
+function setStandalone(value: boolean) {
+  Object.defineProperty(window.navigator, "standalone", {
+    configurable: true,
+    get: () => value,
+  });
+}
+
 const trackA: MusicSet = {
   id: "set-a",
   title: "FORM:AT TEST",
@@ -42,8 +53,9 @@ beforeEach(() => {
 
 afterEach(() => {
   registerAudioElement(null);
-  // Restore online so gate tests don't leak into unrelated ones.
+  // Restore online + non-standalone so gate tests don't leak.
   setNavigatorOnline(true);
+  setStandalone(false);
 });
 
 describe("loadTrack", () => {
@@ -115,7 +127,7 @@ describe("playTrack", () => {
 // cases lock the invariant so a future refactor can't drop one branch
 // again.
 describe("playTrack offline gate", () => {
-  it("blocks same-track resume when non-saved (no audio.play, reason set)", async () => {
+  it("blocks same-track resume when non-saved standalone → 'not-saved-offline' reason", async () => {
     const store = makeStore();
     // Simulate the reproducer: played the set online, paused, went offline.
     store.getState().playTrack(trackA);
@@ -123,6 +135,7 @@ describe("playTrack offline gate", () => {
     audio.pause();
     expect(audio.paused).toBe(true);
 
+    setStandalone(true);
     setNavigatorOnline(false);
     const playSpy = vi.spyOn(audio, "play");
 
@@ -130,22 +143,26 @@ describe("playTrack offline gate", () => {
 
     expect(playSpy).not.toHaveBeenCalled();
     expect(audio.paused).toBe(true);
-    expect(store.getState().playbackBlockedReason).not.toBeNull();
+    // App-context reason: the toast will say "not saved for offline listening".
+    expect(store.getState().playbackBlockedReason).toBe("not-saved-offline");
     expect(store.getState().isPlaying).toBe(false);
     expect(store.getState().hasError).toBe(true);
   });
 
-  it("allows same-track resume when saved (plays from IDB)", async () => {
+  it("allows same-track resume when standalone AND saved (plays from IDB)", async () => {
     const store = makeStore();
     store.getState().playTrack(trackA);
     await Promise.resolve();
     audio.pause();
 
+    setStandalone(true);
     setNavigatorOnline(false);
-    // Mark trackA as saved so the gate is bypassed (offlineStatus === "saved").
-    // playerSlice reads `state.offlineSets?.[id]?.status` via optional
-    // chaining — safe to set here even though this test store doesn't
-    // compose OfflineSlice.
+    // The invariant `canReadOfflineBytes = isStandalone && saved` — BOTH
+    // legs required to skip the gate. The standalone flag makes the SW
+    // audio handler honour the `?ctx=app` marker and serve from IDB;
+    // "saved" in offlineSets means the bytes are actually there. Either
+    // leg missing (e.g. tab context, or missing persist entry) has to
+    // block, or `audio.play()` fires a network request that can't succeed.
     store.setState({
       offlineSets: {
         [trackA.id]: { status: "saved", bytesTotal: 1000, savedAt: 0 },
@@ -157,6 +174,32 @@ describe("playTrack offline gate", () => {
 
     expect(playSpy).toHaveBeenCalled();
     expect(store.getState().playbackBlockedReason).toBeNull();
+  });
+
+  it("blocks same-track resume in a TAB even when persisted 'saved' (unified tab-offline message)", async () => {
+    const store = makeStore();
+    store.getState().playTrack(trackA);
+    await Promise.resolve();
+    audio.pause();
+
+    // Not calling setStandalone(true) — this test is the tab context.
+    setNavigatorOnline(false);
+    // Persisted-saved state (from the app on the same origin) is present,
+    // but the tab can't read IDB. Old logic skipped the gate here, letting
+    // audio.play() fall through to a network fetch that then failed with a
+    // misleading "playback_error :: tap to retry". The new gate blocks so
+    // the toast points at the app instead.
+    store.setState({
+      offlineSets: {
+        [trackA.id]: { status: "saved", bytesTotal: 1000, savedAt: 0 },
+      },
+    } as unknown as Parameters<typeof store.setState>[0]);
+    const playSpy = vi.spyOn(audio, "play");
+
+    store.getState().playTrack(trackA);
+
+    expect(playSpy).not.toHaveBeenCalled();
+    expect(store.getState().playbackBlockedReason).toBe("tab-offline-needs-network");
   });
 
   it("still allows pausing a currently-playing non-saved track offline (audio.pause never fetches)", async () => {
