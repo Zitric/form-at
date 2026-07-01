@@ -53,17 +53,25 @@ export function SaveGateModal({ open, onClose, gate }: Props) {
   // Self-report flips us into case (b) on the next render. Used by both
   // case-a paths (chromium-manual and ios-safari) where the user knows the
   // app is already on their device but we never captured the install event.
+  //
+  // MUST NOT call onClose here. The self-report changes `pwaInstalled`,
+  // which changes `gate.reason` via `useSaveGate`, which re-renders THIS
+  // modal with the OTHER case's copy — that's the correction the user
+  // asked for. Closing on top of that would mean the confirmation copy
+  // flashes for one frame before the exit animation runs, which reads as
+  // "did the button do anything?" and hides the mutual escape-hatch pair
+  // that makes misclassification recoverable in both directions.
   const handleAlreadyInstalled = () => {
     setPwaInstalled(true);
-    onClose();
   };
 
   // Inverse self-report — case (b) escape-hatch. Lets a user with a stale
   // `pwaInstalled` flag (deleted the PWA, never re-installed) recover into
   // case (a) instead of being told to open something that isn't there.
+  // Same rule as `handleAlreadyInstalled`: do not close — let the reason
+  // flip re-render this modal with the other case's copy in place.
   const handleNotInstalledAfterAll = () => {
     setPwaInstalled(false);
-    onClose();
   };
 
   // Same form-factor split as the previous InstallPromptModal:
@@ -130,7 +138,10 @@ export function SaveGateModal({ open, onClose, gate }: Props) {
           )}
           <button
             type="button"
-            onClick={handleAlreadyInstalled}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleAlreadyInstalled();
+            }}
             className="text-xs text-grey/70 hover:text-grey underline underline-offset-2 self-start"
           >
             already installed? open it from your home screen
@@ -146,7 +157,10 @@ export function SaveGateModal({ open, onClose, gate }: Props) {
           </p>
           <button
             type="button"
-            onClick={handleNotInstalledAfterAll}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleNotInstalledAfterAll();
+            }}
             className="text-xs text-grey/70 hover:text-grey underline underline-offset-2 self-start"
           >
             not installed? install the app
