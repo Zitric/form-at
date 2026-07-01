@@ -142,12 +142,28 @@ registerRoute(
 
     // Strip the marker for both the IDB key and any network fetch. Build a
     // fresh Request because Request URLs are immutable once constructed.
+    //
+    // MUST preserve `mode`, `credentials`, `redirect` from the original
+    // request. `new Request(url, init)` defaults `mode` to "cors", which
+    // silently flips media-element cross-origin fetches from their native
+    // "no-cors" mode. That's benign for peaks JSON (already cors from JS
+    // fetch) but breaks MP3 streaming: R2's GET responses aren't ACAO-
+    // wrapped in a way that satisfies a cors check on Range, so the
+    // browser blocks the response and `<audio>` can't load.
+    //
+    // Preserving the original mode keeps each request type on its native
+    // path: MP3 stays no-cors (opaque response — safe, we return it
+    // straight through without inspecting), peaks JSON stays cors
+    // (transparent — the JS caller reads .json() as before).
     const cleanUrl = new URL(url.toString());
     cleanUrl.searchParams.delete("ctx");
     const cleanUrlString = cleanUrl.toString();
     const cleanReq = new Request(cleanUrlString, {
       method: request.method,
       headers: request.headers,
+      mode: request.mode,
+      credentials: request.credentials,
+      redirect: request.redirect,
     });
 
     // Tab semantics: pure pass-through, no IDB read even if an entry exists.

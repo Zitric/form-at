@@ -72,12 +72,56 @@ export const createPlayerSlice: StateCreator<PlayerSlice & OfflineSlice, [], [],
     const audio = audioEl;
     const state = get();
     const override = opts?.startTime;
+    if (!audio) return;
 
-    // Same track already loaded — seek if a startTime was provided, otherwise toggle.
-    // Same-track path is always allowed: the src is already attached (from an
-    // online context) and `<audio>` toggling won't spawn the retry storm that
-    // the offline-unsaved gate below exists to prevent.
-    if (state.nowPlaying?.id === track.id && audio) {
+    // Retry-storm gate (TECH_DEBT 11) — unified for BOTH branches below.
+    //
+    // The invariant: if this tap would START or RESUME playback of a track
+    // whose bytes we can't reach offline, refuse. That covers new-track
+    // (would attach a fresh src that can't be fetched) AND same-track
+    // resume (would call audio.play() on a partially-buffered src, spawning
+    // Range fetches that fail → `<audio>` retries dozens of times).
+    //
+    // The one action still allowed when gated: PAUSING a currently-playing
+    // same-track. `audio.pause()` never fetches — blocking it would trap
+    // the user with a stalled stream. Everything else (start new, resume
+    // paused same-track, seek same-track) needs bytes.
+    //
+    // Reactivity to online/offline isn't needed here: a synchronous check
+    // at click time is the right semantics.
+    //
+    // A previous revision put this gate ONLY in the new-track branch. The
+    // same-track branch had no gate, so re-tapping a paused non-saved set
+    // offline (played online, paused, went offline, tapped again) still
+    // spawned the retry storm. The single unified gate below closes that
+    // gap by construction — impossible for one branch to be protected while
+    // the other isn't.
+    const isSameTrack = state.nowPlaying?.id === track.id;
+    const isCurrentlyPlaying = isSameTrack && !audio.paused;
+    const isPauseAction = isCurrentlyPlaying && override === undefined;
+    const isOffline = typeof navigator !== "undefined" && navigator.onLine === false;
+    // `offlineSets?.` rather than `offlineSets.` so tests that instantiate
+    // createPlayerSlice in isolation (without composing offlineSlice) don't
+    // crash here — in real prod use the slice is always composed.
+    const offlineStatus = state.offlineSets?.[track.id]?.status;
+    const cannotFetch = isOffline && offlineStatus !== "saved";
+    if (cannotFetch && !isPauseAction) {
+      // Tabs never read IDB (SW gates on `?ctx=app` — see `withAppContext`),
+      // so offline playback in a tab fails by construction. We branch the
+      // reason here so PlaybackErrorToast can show app-aware copy
+      // ("not saved for offline listening") in standalone and tab-aware
+      // copy ("open the app to listen offline") in a browser tab.
+      const reason: PlaybackBlockedReason = isStandalone()
+        ? "not-saved-offline"
+        : "tab-offline-needs-network";
+      set({ hasError: true, playbackBlockedReason: reason, isPlaying: false });
+      return;
+    }
+
+    // Same track already loaded — seek if a startTime was provided, otherwise
+    // toggle. Reached only when the gate above allowed us through, so any
+    // audio.play() here is safe to attempt.
+    if (isSameTrack) {
       if (override !== undefined) audio.currentTime = override;
       if (audio.paused) {
         audio
@@ -91,57 +135,39 @@ export const createPlayerSlice: StateCreator<PlayerSlice & OfflineSlice, [], [],
       return;
     }
 
-    // Retry-storm gate (TECH_DEBT 11): if we're offline and the track isn't
-    // saved to IDB, refuse to attach `audio.src`. Without this, `<audio>`
-    // fires dozens of retries on the failing source. We don't even flip
-    // `nowPlaying` — the player UI shouldn't promote a track it can't play.
-    // The surfacing happens via `PlaybackErrorToast`'s branch on
-    // `playbackBlockedReason`. Reactivity to online/offline isn't needed
-    // here: a synchronous check at click time is the right semantics.
-    const isOffline = typeof navigator !== "undefined" && navigator.onLine === false;
-    // `offlineSets?.` rather than `offlineSets.` so tests that instantiate
-    // createPlayerSlice in isolation (without composing offlineSlice) don't
-    // crash here — in real prod use the slice is always composed.
-    const offlineStatus = state.offlineSets?.[track.id]?.status;
-    if (isOffline && offlineStatus !== "saved") {
-      // Tabs never read IDB (SW gates on `?ctx=app` — see `withAppContext`),
-      // so offline playback in a tab fails by construction. We branch the
-      // reason here so PlaybackErrorToast can show app-aware copy
-      // ("not saved for offline listening") in standalone and tab-aware
-      // copy ("open the app to listen offline") in a browser tab.
-      const reason: PlaybackBlockedReason = isStandalone()
-        ? "not-saved-offline"
-        : "tab-offline-needs-network";
-      set({ hasError: true, playbackBlockedReason: reason, isPlaying: false });
-      return;
-    }
-
     // New track. Set src + call play() in the SAME synchronous block as the click —
     // this is what preserves the user-gesture token on mobile. Apply the resume
     // position once metadata loads (slightly delayed but seamless). `opts.startTime`
     // overrides the saved position so timestamp deeplinks (?t=...) work.
-    if (audio) {
-      const startPos = override ?? state.positions[track.id] ?? 0;
-      // `withAppContext` re-reads `isStandalone()` per call, so a display-
-      // mode flip between tracks is naturally reflected on the next play.
-      audio.src = withAppContext(track.src);
-      if (startPos > 0) {
-        const applySeek = () => {
-          if (get().nowPlaying?.id === track.id) {
-            audio.currentTime = startPos;
-          }
-        };
-        if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
-          applySeek();
-        } else {
-          audio.addEventListener("loadedmetadata", applySeek, { once: true });
+    const startPos = override ?? state.positions[track.id] ?? 0;
+    // `withAppContext` re-reads `isStandalone()` per call, so a display-
+    // mode flip between tracks is naturally reflected on the next play.
+    audio.src = withAppContext(track.src);
+    // Identity stamp — the invariant `useAudioPlayer`'s main effect keys
+    // on to skip re-loading a track the click path already attached.
+    // Comparing track IDs (rather than URL strings) is immune to the
+    // `?ctx=app` marker AND to any Chrome URL-normalization drift; the
+    // marker-based URL comparison a previous revision used could ping-
+    // pong between marked and unmarked forms on cross-track transitions.
+    // MUST be kept in sync with the same stamp in `useAudioPlayer`'s
+    // restore-path src assignment — both writers, one invariant.
+    audio.dataset.trackId = track.id;
+    if (startPos > 0) {
+      const applySeek = () => {
+        if (get().nowPlaying?.id === track.id) {
+          audio.currentTime = startPos;
         }
+      };
+      if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
+        applySeek();
+      } else {
+        audio.addEventListener("loadedmetadata", applySeek, { once: true });
       }
-      audio
-        .play()
-        .then(() => set({ isPlaying: true, hasError: false, playbackBlockedReason: null }))
-        .catch(() => set({ isPlaying: false, hasError: true }));
     }
+    audio
+      .play()
+      .then(() => set({ isPlaying: true, hasError: false, playbackBlockedReason: null }))
+      .catch(() => set({ isPlaying: false, hasError: true }));
     set({ nowPlaying: track, hasError: false, playbackBlockedReason: null });
   },
 
