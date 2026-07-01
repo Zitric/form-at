@@ -29,6 +29,9 @@ priority polish + the deploy gate, not feature work.
 | Waveform — load flick | ✅ committed | `e2b5f57` | TECH_DEBT 9. Preexisting bug. Three-state render (pending spacer / Waveform / fallback) eliminates first-play widget swap + height jump |
 | 4 — List-card save-for-offline icon button | ✅ committed | `7649abc` | Compact icon button in the card action slot (floppy / progress ring / check / red retry). Shares state with `SaveForOfflineButton` via new `useOfflineDownload` hook. Saves directly from `/sets/` without opening detail; closes the chunk-1.6 warming story through the card path |
 | 5 — Strict standalone gate (web/app divide) | ✅ committed | `fbbdd4d` | `useInstallCapability` → `useSaveGate`, `InstallPromptModal` → `SaveGateModal`. Tabs NEVER read IDB; standalone-only `?ctx=app` URL marker (`withAppContext`) drives the SW audio handler. Three-branch modal (needs-install / open-app / cannot-install) with mutual escape-hatches via the persisted `pwaInstalled` positive-only signal. PlaybackErrorToast gains a `tab-offline-needs-network` reason. |
+| 5.1 — Chunk-5 regression: cross-track loop | ✅ committed 2026-07-01 | `<pending>` | Chunk 5 wrapped both `audio.src` writes AND the `useAudioPlayer` src-match comparison in `withAppContext`. Under specific cross-track transitions (saved A → non-saved B → back to A) Chrome's browsed URL round-trip diverged marginally from the JS-constructed URL, the `===` compare flipped false, useAudioPlayer set src → load → the click-path play() promise raced the bridge effect → infinite request + play/pause loop. Confirmed via Network panel showing alternating `?ctx=app` / bare URL requests. Fix: replaced URL string comparison with an identity stamp — `audio.dataset.trackId = track.id` written at BOTH src-assignment sites (playerSlice.playTrack click path + useAudioPlayer restore path), effect compares `audio.dataset.trackId === nowPlaying.id`. Immune to URL normalization and to the `?ctx=app` marker. Chunk-5 marker-in-URL is still what the SW read-path keys on; only the JS-side comparison stopped depending on URL equality. |
+| 5.2 — Chunk-5 regression: unified offline gate (closes TECH_DEBT 11 fully) | ✅ committed 2026-07-01 | `<pending>` | The retry-storm gate (chunk 3c, `718ead3`) sat in the NEW-TRACK branch of `playerSlice.playTrack` only. The same-track branch had no gate, so re-tapping a paused non-saved set offline (play online → pause → offline → tap same set) bypassed the gate: `<audio>` retried the failing Range dozens of times = the storm the gate was built to prevent. Not a new chunk-5 regression per se — the gap existed since chunk 3c — but surfaced during chunk-5 testing. Fix: single unified gate BEFORE the same-track/new-track split; blocks starting OR resuming a track when `isOffline && offlineStatus !== "saved"`, still permits pausing a currently-playing same-track (`audio.pause()` never fetches). Three new tests in `playerSlice.test.ts` lock: (a) non-saved same-track resume blocked, (b) saved same-track resume allowed, (c) pause of a stalled non-saved stream still works. Old new-track-only gate removed — subsumed. |
+| 5.3 — Chunk-5 regression: SW CORS mode preservation | ✅ committed 2026-07-01 | `<pending>` | Chunk 5 rebuilt the R2 request as `new Request(cleanUrlString, { method, headers })`. `new Request()` init defaults `mode: "cors"`, silently flipping `<audio>`'s native `mode: "no-cors"` (media element cross-origin default per HTML spec) to cors. R2's ACAO doesn't satisfy the CORS check for MP3 Range GETs → browser blocked the response → three non-saved sets failed to stream online from the standalone app; only the saved set (served from IDB, no fetch) played. Fix: preserve `mode`, `credentials`, `redirect` from the original `request` when constructing `cleanReq`. MP3 stays no-cors (opaque response — safe, both `return fetch(cleanReq)` paths pass through without inspecting), peaks JSON stays cors (transparent — the JS caller `.json()`s it). `createPartialResponse` operates only on the synthetic IDB-hit Response, never on the network fetch, so opaque doesn't affect Range slicing. |
 | 4.5 — Beacon queue (Background Sync) | deferred — polish | TECH_DEBT 4 | Independent infra, lower stakes |
 
 ---
@@ -43,6 +46,72 @@ Engineering-wise, the branch is shippable. Items below are the punch list:
   needs a typographic + terminal-aesthetic pass to match the rest of the
   site. Zero-bundle constraint applies (no external CSS/JS, inline `<style>`
   only). **This is the last item before the deploy gate.**
+
+### Open bugs found in testing (2026-07-01) — pending diagnosis
+
+Two bugs surfaced during the chunk-5 verification pass that are NOT yet
+fixed. Both have their own diagnosis plans; documented here so a fresh
+session can pick either up cold.
+
+- **[BUG, priority] Web offline plays a downloaded set** — violates the
+  chunk-5 core rule (web NEVER reads IDB, even for a set that IS downloaded
+  in the app). From a browser tab, offline, a downloaded set currently
+  plays from IndexedDB — it must not. Web must always stream from network
+  and never touch IDB. Possibly related to the `?ctx=app` marker
+  evaluation in the SW handler OR to the chunk-5.3 CORS-mode fix (though
+  that only touched the network fallback, not the IDB read decision).
+  Diagnosis needed: trace why the SW serves from IDB for a tab request
+  when no `?ctx=app` should mean pure network pass-through. Check
+  `sw.ts` audio handler line-by-line: `ctxIsApp = url.searchParams.get("ctx") === "app"`;
+  if `!ctxIsApp` MUST short-circuit to `return fetch(cleanReq)` before
+  IDB is consulted. Verify that path is actually taken for tab-origin
+  requests (and that `withAppContext` in a tab really returns bare URLs).
+- **[BUG] Web offline can't navigate to `/sets`** — offline navigation to
+  `/sets` fails in a tab. Separate system from the audio read-path
+  (playback vs route data). Likely a precache or `route-data-v1` SWR
+  issue, not chunk 5. Diagnosis needed: check `pages-v1` has an entry
+  for `/sets/`; check `route-data-v1` has the `_serverFn` response for
+  the sets loader; check whether the failure is at the HTML fetch or
+  at the loader's `fetchOverallStats`. Chunk 1.5 wraps `fetchOverallStats`
+  in `.catch(() => null)` so a failed server-fn shouldn't reject the
+  route — verify that's still in place.
+
+### Cosmetic backlog — pre-PR polish, no dependencies between items
+
+Batchable in any order; none block the deploy gate on their own but
+worth landing before PR to main so the first public build is polished.
+
+- **Toast redesign** (three toasts: PlaybackErrorToast, generic Toast,
+  any other bracketed toast surface) — remove the `[ ]` brackets from
+  toast MESSAGE text (keep on close `[ x ]` only), remove the vertical
+  separator between message and close, make the entire toast surface
+  click-to-dismiss. Also fixes the iPhone SE 2-line wrap caused by the
+  current message-plus-separator-plus-close width budget.
+- **Web-offline message unification** — from the web tab, offline, a
+  downloaded-in-the-app set shows `[ playback_error :: tap to retry ]`
+  while a non-downloaded set shows `[ ✗ playback needs connection — open
+  the app to listen offline ]`. Both should show the "open the app"
+  message: from the web, downloaded vs not doesn't matter because the
+  web can't touch IDB either way. Fold both into `tab-offline-needs-network`
+  reason at the playerSlice gate level.
+- **SaveGateModal escape-hatches close the modal instead of switching
+  message** — "already installed? open it from your home screen" and
+  "not installed? install the app" links currently close the modal
+  after flipping `pwaInstalled`. Should instead re-render the modal
+  with the OTHER case's copy, so the user sees the confirmation of
+  what they self-reported. Only close on the actual close button or
+  successful install prompt.
+- **DJ page image doesn't load unless navigated-to-first** — the
+  `<Image>` component on `/djs/$djId` fails to load the artwork on
+  direct visit; requires a prior visit to `/sets/` or `/` to warm
+  something (probably the image cache or the `Image` component's
+  intersection observer). Needs its own repro + fix.
+- **Set card abstraction — DJ page card vs `/sets/` card unification**
+  — the set list on `/sets/` and the "played by this DJ" list on
+  `/djs/$djId` currently render very similar cards via two different
+  component paths. Consolidate into one reusable `SetCard` component.
+  Needs its own plan (props shape, action-slot semantics, artwork
+  variant selection) before implementation.
 
 ### Deferred — post-2026-07-24 (coupled, ship together)
 
