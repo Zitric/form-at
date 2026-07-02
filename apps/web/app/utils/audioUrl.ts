@@ -1,3 +1,4 @@
+import { APP_CTX_PARAM, APP_CTX_VALUE } from "~/utils/appContext";
 import { isStandalone } from "~/utils/installCapability";
 
 // Marks a playback URL with the standalone-context signal the SW handler
@@ -15,7 +16,7 @@ export function withAppContext(url: string): string {
   if (!isStandalone()) return url;
   try {
     const u = new URL(url);
-    u.searchParams.set("ctx", "app");
+    u.searchParams.set(APP_CTX_PARAM, APP_CTX_VALUE);
     return u.toString();
   } catch {
     // If URL parsing fails (relative URL, malformed) fall back to the bare
@@ -24,3 +25,7 @@ export function withAppContext(url: string): string {
     return url;
   }
 }
+
+// The inverse (`stripAppContext`, used by the SW audio handler) lives in
+// `utils/appContext.ts` — that module must stay worker-safe, and this one
+// can't (`isStandalone` needs window).
