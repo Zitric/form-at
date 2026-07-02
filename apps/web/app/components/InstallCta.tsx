@@ -1,6 +1,7 @@
 import { Button } from "~/components/Button";
 import { useTriggerInstallPrompt } from "~/hooks/useSaveGate";
 import { useStore, useStoreHydrated } from "~/store";
+import { cn } from "~/utils/cn";
 
 // "Install Form:at" CTA on the home route.
 //
@@ -36,8 +37,18 @@ export function InstallCta({ className }: { className?: string }) {
   // prompt before HydrateStore's rehydrate completes.
   if (!hydrated || !deferredPrompt || pwaInstallDismissed) return null;
 
+  // `animate-fade-in` because this button usually mounts LATE — it appears
+  // when Chromium delivers `beforeinstallprompt`, which can be seconds after
+  // the page entrance animations have finished. A conditional render with no
+  // animation of its own pops in abruptly; the app-standard fade keeps the
+  // late arrival calm. (Reduced-motion is handled globally in global.css by
+  // collapsing animation durations, so the `forwards` end state still lands.)
   return (
-    <Button variant="secondary" onClick={() => triggerInstall()} className={className}>
+    <Button
+      variant="secondary"
+      onClick={() => triggerInstall()}
+      className={cn("animate-fade-in", className)}
+    >
       install_form:at
     </Button>
   );
