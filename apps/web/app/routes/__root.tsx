@@ -1,15 +1,12 @@
-import { HeadContent, Link, Scripts, createRootRoute } from "@tanstack/react-router";
+import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { BottomNav } from "~/components/BottomNav";
-import { BracketLabel } from "~/components/BracketLabel";
 import { Header } from "~/components/Header";
 import { InAppBrowserBanner } from "~/components/InAppBrowserBanner";
+import { NotFoundPage } from "~/components/NotFoundPage";
 import { OfflineReconciler } from "~/components/OfflineReconciler";
-import { PageLayout } from "~/components/PageLayout";
 import { ShareModal } from "~/components/ShareModal";
 import { SwipeNavigator } from "~/components/SwipeNavigator";
-import { TerminalRow } from "~/components/TerminalRow";
-import { Body } from "~/components/Text";
 import { Toast } from "~/components/Toast";
 import { PlaybackErrorToast, Player } from "~/components/player";
 import { useStore } from "~/store";
@@ -17,31 +14,8 @@ import type { BeforeInstallPromptEvent } from "~/store/uiSlice";
 import { safeLocal } from "~/utils/safeStorage";
 import "~/styles/global.css";
 
-function RootNotFound() {
-  return (
-    <PageLayout>
-      <div className="flex-1 flex flex-col justify-center">
-        <TerminalRow label="status" value={<BracketLabel>404</BracketLabel>} className="mb-4" />
-        <h1 className="text-5xl sm:text-7xl font-bold leading-none tracking-tighter mb-6">
-          SIGNAL_LOST
-        </h1>
-        <Body className="mb-10 border-l border-grey/10 pl-4 max-w-sm">
-          transmission not found — this frequency doesn't exist
-        </Body>
-        <Link
-          to="/"
-          className="inline-flex items-center gap-4 self-start border border-grey/20 px-5 py-3 text-sm text-grey hover:border-purple hover:text-white transition-colors"
-        >
-          <span className="text-gold">›</span>
-          return_to_base
-        </Link>
-      </div>
-    </PageLayout>
-  );
-}
-
 export const Route = createRootRoute({
-  notFoundComponent: RootNotFound,
+  notFoundComponent: NotFoundPage,
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -245,7 +219,7 @@ function Root() {
         <style dangerouslySetInnerHTML={{ __html: fontCSS }} suppressHydrationWarning />
         <HeadContent />
       </head>
-      <body className="bg-black text-white font-mono antialiased">
+      <body className="bg-black text-white font-mono antialiased min-h-dvh flex flex-col">
         <HydrateStore />
         <InstallEventsListener />
         <OfflineReconciler />
