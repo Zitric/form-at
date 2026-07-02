@@ -34,13 +34,25 @@ declare const self: ServiceWorkerGlobalScope & {
 // in Phase 4.2.
 clientsClaim();
 
-// Activate this SW the moment it finishes installing, instead of waiting for
-// the old SW's clients to close. Pairs with `clientsClaim` above so updates
-// land immediately. We can revisit this if we ever ship a breaking
-// SW-protocol change and need a controlled rollout, but for an audio app
-// where the worst case is "old cache served for 30 more seconds", immediate
-// activation is the right default.
-self.skipWaiting();
+// NO unconditional `self.skipWaiting()` — deliberately (H2, 2026-07-02
+// review). An immediately-activating SW prunes the previous build's hashed
+// chunks from the precache while old clients are still running them; the old
+// client's next lazy route-load then 404s, because Cloudflare Pages serves
+// only the latest deployment. (The removed call's comment claimed the worst
+// case was "old cache served for 30 more seconds" — the actual worst case
+// was a broken route.) Instead: the new SW sits in `waiting`, the page shows
+// "new build · tap to reload" (<UpdateToast> → useSwUpdate), and activation
+// happens on explicit user consent via the message below, followed by a
+// reload the page itself triggers on `controllerchange`.
+//
+// `clientsClaim()` above STAYS: on first install there is no old client
+// running hashed chunks, so claiming immediately is safe — it's what makes
+// offline capability live without a reload on the very first visit.
+self.addEventListener("message", (event) => {
+  if ((event.data as { type?: string } | null)?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
 
 // Precache everything the build tags into the manifest (HTML, JS, CSS,
 // fonts, the icons referenced by the manifest). Workbox handles cache

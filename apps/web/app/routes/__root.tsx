@@ -9,6 +9,7 @@ import { OfflineReconciler } from "~/components/OfflineReconciler";
 import { ShareModal } from "~/components/ShareModal";
 import { SwipeNavigator } from "~/components/SwipeNavigator";
 import { Toast } from "~/components/Toast";
+import { UpdateToast } from "~/components/UpdateToast";
 import { PlaybackErrorToast, Player } from "~/components/player";
 import { useStore } from "~/store";
 import "~/styles/global.css";
@@ -190,6 +191,7 @@ function Root() {
         <Player />
         <PlaybackErrorToast />
         <Toast />
+        <UpdateToast />
         <ShareModal />
         <InAppBrowserBanner />
         <BottomNav />
