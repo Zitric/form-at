@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { BracketLabel } from "~/components/BracketLabel";
 import { useStore } from "~/store";
 import { Z } from "~/styles/z";
 
@@ -8,10 +7,13 @@ const EXIT_MS = 250;
 
 // Lightweight transient message above the player/nav. Used by share buttons and
 // anything else that needs a "copied / saved / done" confirmation. Slides up on
-// enter, slides down on exit; auto-fades after VISIBLE_MS. The whole surface
-// is click-to-dismiss (the `[ x ]` on the right is a visual affordance, not a
-// separate button) so a user can clear it before the auto-timer fires. Message
-// text runs plain; brackets live only on the `x` per the design-system rules.
+// enter, slides down on exit; auto-fades after VISIBLE_MS. The whole surface is
+// click-to-dismiss so a user can clear it early if they want.
+//
+// No `[ x ]` glyph on purpose — this toast is ephemeral by design (auto-fades),
+// so a close affordance would contradict that "you must dismiss this" reading.
+// PlaybackErrorToast keeps its `[ x ]` because that one persists until the
+// user acts.
 export function Toast() {
   const toast = useStore((s) => s.toast);
   const setToast = useStore((s) => s.setToast);
@@ -49,10 +51,9 @@ export function Toast() {
         type="button"
         onClick={() => setExiting(true)}
         aria-label="Dismiss notification"
-        className="pointer-events-auto bg-black border border-gold/60 text-white text-xs font-mono flex items-center gap-3 max-w-sm px-4 py-2 hover:text-gold transition-colors text-left cursor-pointer"
+        className="pointer-events-auto bg-black border border-gold/60 text-white text-xs font-mono max-w-sm px-4 py-2 hover:text-gold transition-colors text-left cursor-pointer"
       >
-        <span className="flex-1">{toast}</span>
-        <BracketLabel>x</BracketLabel>
+        {toast}
       </button>
     </div>
   );
