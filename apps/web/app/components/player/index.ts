@@ -6,4 +6,3 @@
 export { Player } from "./Player";
 export { PlaybackErrorToast } from "./PlaybackErrorToast";
 export { CirclePlayButton } from "./CirclePlayButton";
-export { NextIcon, PauseIcon, PlayIcon, PrevIcon } from "./PlayerIcons";

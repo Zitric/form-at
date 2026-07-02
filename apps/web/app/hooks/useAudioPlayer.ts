@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { type MusicSet, sets } from "~/data/sets";
 import { useStore } from "~/store";
+import { withAppContext } from "~/utils/audioUrl";
 
 type AudioProps = {
   onPlay: () => void;
@@ -104,11 +105,17 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
 
     // Two cases handle src/play:
     //   1) User clicked → playTrack action already set src + called play() synchronously
-    //      (preserves mobile user-gesture token). Detect via src match and skip.
+    //      (preserves mobile user-gesture token). Detect via the track-id stamp
+    //      playTrack writes onto `audio.dataset.trackId` and skip.
     //   2) Persisted nowPlaying restored on reload → no user gesture, can't auto-play.
     //      Just set src and seek to saved position; user has to click to start.
-    const trackUrl = new URL(nowPlaying.src, window.location.href).href;
-    if (audio.src === trackUrl || audio.currentSrc === trackUrl) {
+    //
+    // Identity comparison — not URL. A previous revision compared
+    // `audio.src === new URL(withAppContext(nowPlaying.src)).href`, which
+    // ping-ponged marked vs unmarked forms on cross-track transitions and
+    // spawned a request/play-pause loop. `track.id` is the actual invariant
+    // we want to test; the URL is just plumbing.
+    if (audio.dataset.trackId === nowPlaying.id) {
       // Click path already handled it
       return;
     }
@@ -120,7 +127,13 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
 
     setHasError(false);
 
-    audio.src = nowPlaying.src;
+    audio.src = withAppContext(nowPlaying.src);
+    // MUST match the stamp in `playerSlice.playTrack` — both writers, one
+    // invariant. Without this, a rehydration-restore src assignment would
+    // leave `dataset.trackId` from a previous track and the next click-
+    // path stamp would still overwrite correctly, but any effect re-run
+    // between the two writes would spuriously reload the src.
+    audio.dataset.trackId = nowPlaying.id;
     audio.load();
 
     const seekWhenReady = () => {

@@ -25,7 +25,14 @@ export function PageLayout({ children }: PageLayoutProps) {
         // Unified value because the two are now close in height; tracking
         // each surface's exact chrome would add responsive complexity for a
         // ~16px difference no one will notice.
-        "flex flex-col px-6 md:px-0 pb-40 font-mono max-w-2xl mx-auto w-full transition-opacity-smooth animate-fade-in",
+        // `flex-1` participates in the app-wide sticky-footer layout: body
+        // is `min-h-dvh flex flex-col` (see __root.tsx), SwipeNavigator's
+        // outer + translated wrappers are `flex-1 flex flex-col`, and this
+        // <main> claims the viewport-minus-header slice they hand down.
+        // Any inner `flex-1` (NotFoundPage's centered wrapper; DJ / sets /
+        // events content columns that already used `flex-1`) resolves to
+        // real space instead of a no-op.
+        "flex-1 flex flex-col px-6 md:px-0 pb-40 font-mono max-w-2xl mx-auto w-full transition-opacity-smooth animate-fade-in",
         !isVisible && "opacity-0",
       )}
       suppressHydrationWarning

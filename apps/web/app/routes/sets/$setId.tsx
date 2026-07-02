@@ -1,13 +1,15 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { Button } from "~/components/Button";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { Image } from "~/components/Image";
 import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
+import { SaveForOfflineButton } from "~/components/SaveForOfflineButton";
 import { ShareSetButton } from "~/components/ShareSetButton";
 import { TerminalRow } from "~/components/TerminalRow";
 import { Label, PageTitle } from "~/components/Text";
-import { PauseIcon, PlayIcon } from "~/components/player";
+import { PauseIcon, PlayIcon } from "~/components/icons";
 import { fetchSetStats } from "~/data/set-stats";
 import type { SetStats } from "~/data/set-stats";
 import { getSet } from "~/data/sets";
@@ -156,17 +158,24 @@ function SetDetail() {
         </p>
 
         {/* Primary action */}
-        <button
-          type="button"
+        <Button
+          variant="primary"
           onClick={() => playTrack(set, playTrackOptions)}
-          className="flex items-center justify-center gap-4 w-full sm:min-w-[280px] border-2 border-gold px-6 py-4 mb-6! text-sm text-grey shadow-[0_0_15px_rgba(197,133,56,0.2)] hover:shadow-[0_0_25px_rgba(197,133,56,0.4)] hover:cursor-pointer  transition-all group"
-          style={{ animation: "border-pulse 2s infinite" }}
+          className="w-full sm:min-w-[280px] mb-6!"
         >
           <span className="text-gold">{isThisPlaying ? <PauseIcon /> : <PlayIcon />}</span>
           {playButtonLabel}
-        </button>
+        </Button>
 
-        <ShareSetButton set={set} />
+        {/* Stack save-for-offline + share vertically — the two bracket
+            labels don't fit in a single row at iPhone SE 375 without
+            wrapping mid-bracket. Save-for-offline first (the promoted
+            Phase 3 action), share below. ShareSetButton owns no margin
+            of its own; layout lives here at the call site. */}
+        <div className="flex flex-col sm:flex-row sm:justify-center items-center gap-3 mb-6">
+          <SaveForOfflineButton set={set} />
+          <ShareSetButton set={set} />
+        </div>
 
         {/* Description — moved above meta so the "what is this set" payload
             isn't buried below dim metadata rows. */}

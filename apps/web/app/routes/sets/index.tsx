@@ -2,6 +2,7 @@ import { Await, createFileRoute, defer, useNavigate } from "@tanstack/react-rout
 import { Suspense } from "react";
 import { Card } from "~/components/Card";
 import { PageLayout } from "~/components/PageLayout";
+import { SaveForOfflineIconButton } from "~/components/SaveForOfflineIconButton";
 import { ShareIconButton } from "~/components/ShareIconButton";
 import { TerminalRow } from "~/components/TerminalRow";
 import { Label, PageTitle } from "~/components/Text";
@@ -17,7 +18,12 @@ import { pageHead } from "~/utils/head";
 // resolves immediately; the OverallMetrics component reads it via <Await>
 // inside Suspense so the cards never wait on stats.
 export const Route = createFileRoute("/sets/")({
-  loader: () => ({ overallStats: defer(fetchOverallStats()) }),
+  // `.catch(() => null)` degrades the deferred server-fn to the designed
+  // `null` fallback offline. Without it, an offline click-nav to /sets/
+  // rejects the loader → "Something went wrong" error boundary. The reload
+  // path works because `pages-v1` SWR serves the SSR'd HTML; only client
+  // loaders run on link-click navigation.
+  loader: () => ({ overallStats: defer(fetchOverallStats().catch(() => null)) }),
   staleTime: 5 * 60 * 1000,
   gcTime: 30 * 60 * 1000,
   head: () =>
@@ -107,6 +113,7 @@ function Sets() {
                       onClick={() => navigate({ to: "/sets/$setId", params: { setId: set.id } })}
                       action={
                         <div className="flex items-center gap-1">
+                          <SaveForOfflineIconButton set={set} />
                           <ShareIconButton set={set} />
                           <CirclePlayButton
                             isThisPlaying={isThisPlaying}
@@ -120,10 +127,22 @@ function Sets() {
                       animationDelay={index}
                     >
                       <div className="flex flex-col gap-1">
-                        <p className="text-sm sm:text-base tracking-tight truncate">
+                        {/* Phone widths (<sm): DJ on row 1, event on row 2 —
+                            no date/location row. Truncation-resistant for
+                            long names like "Brandon Lee Vear" at iPhone SE
+                            375px, where the combined "{artist} @ {title}"
+                            line was getting cut. sm+ keeps the richer
+                            single-line + date/location layout. */}
+                        <p className="text-sm tracking-tight truncate sm:hidden">{set.artist}</p>
+                        <p className="text-xs tracking-tight truncate sm:hidden">
+                          @<span className="pl-1">{set.title}</span>
+                        </p>
+                        <p className="text-xs text-grey truncate sm:hidden"> {set.date}</p>
+
+                        <p className="hidden sm:block sm:text-base tracking-tight truncate">
                           {set.artist} @ {set.title}
                         </p>
-                        <p className="text-xs sm:text-sm text-grey truncate">
+                        <p className="hidden sm:block sm:text-sm text-grey truncate">
                           {set.date}
                           {set.date && " · "}Glasgow
                         </p>

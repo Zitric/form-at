@@ -1,46 +1,30 @@
-import { HeadContent, Link, Scripts, createRootRoute } from "@tanstack/react-router";
+import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { BottomNav } from "~/components/BottomNav";
 import { Header } from "~/components/Header";
-import { PageLayout } from "~/components/PageLayout";
+import { InAppBrowserBanner } from "~/components/InAppBrowserBanner";
+import { NotFoundPage } from "~/components/NotFoundPage";
+import { OfflineReconciler } from "~/components/OfflineReconciler";
 import { ShareModal } from "~/components/ShareModal";
 import { SwipeNavigator } from "~/components/SwipeNavigator";
-import { TerminalRow } from "~/components/TerminalRow";
-import { Body } from "~/components/Text";
 import { Toast } from "~/components/Toast";
 import { PlaybackErrorToast, Player } from "~/components/player";
 import { useStore } from "~/store";
+import type { BeforeInstallPromptEvent } from "~/store/uiSlice";
+import { safeLocal } from "~/utils/safeStorage";
 import "~/styles/global.css";
 
-function RootNotFound() {
-  return (
-    <PageLayout>
-      <div className="flex-1 flex flex-col justify-center">
-        <TerminalRow label="status" value="[ 404 ]" className="mb-4" />
-        <h1 className="text-5xl sm:text-7xl font-bold leading-none tracking-tighter mb-6">
-          SIGNAL_LOST
-        </h1>
-        <Body className="mb-10 border-l border-grey/10 pl-4 max-w-sm">
-          transmission not found — this frequency doesn't exist
-        </Body>
-        <Link
-          to="/"
-          className="inline-flex items-center gap-4 self-start border border-grey/20 px-5 py-3 text-sm text-grey hover:border-purple hover:text-white transition-colors"
-        >
-          <span className="text-gold">›</span>
-          return_to_base
-        </Link>
-      </div>
-    </PageLayout>
-  );
-}
-
 export const Route = createRootRoute({
-  notFoundComponent: RootNotFound,
+  notFoundComponent: NotFoundPage,
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      // `viewport-fit=cover` lets `env(safe-area-inset-*)` resolve to real
+      // values on iOS, which we already rely on for BottomNav padding +
+      // FullPlayer header. Also a prerequisite for the Phase 4.5 PWA-mode
+      // Dynamic Island layout — without `cover`, iOS clamps the page width
+      // to the safe area and the standalone header can't reach the edges.
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { name: "author", content: "Form:at" },
       { title: "Form:at" },
       {
@@ -117,6 +101,20 @@ export const Route = createRootRoute({
     scripts: [
       // Cloudflare Web Analytics — replace token after adding site in CF dashboard → Web Analytics
       // { src: "https://static.cloudflareinsights.com/beacon.min.js", defer: true, "data-cf-beacon": '{"token":"REPLACE_WITH_YOUR_TOKEN"}' },
+      // Service worker registration. Inline rather than external because the
+      // file is tiny and we don't want a second round-trip on every cold
+      // start just to fetch a 4-line snippet. Classic worker (no
+      // `{ type: "module" }`) — matches the iife build in vite.config.ts and
+      // keeps Safari < 15.4 compatible. Errors land in the console so a
+      // misdeployed `/sw.js` is loud rather than silent.
+      {
+        children: `if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .catch((err) => console.warn('[sw] registration failed:', err));
+  });
+}`,
+      },
     ],
   }),
   component: Root,
@@ -163,6 +161,56 @@ function HydrateStore() {
   return null;
 }
 
+// Global capture of the two PWA install lifecycle events. Sibling to
+// HydrateStore — null render, just runs effects on mount.
+//
+// Why one listener pair globally (not per-component): both <InstallCta> (home)
+// and Phase 3's <SaveForOfflineButton> (/sets/:setId) need the captured
+// `beforeinstallprompt` event to call `.prompt()` on. Capturing it twice in
+// two components would mean only whichever mounted second sees it — the
+// first listener consumed-and-stored it locally. Capturing once into the
+// store and reading from both consumers keeps them in sync.
+//
+// Also performs a one-time migration of Phase 1's localStorage dismiss key
+// into the new persisted `pwaInstallDismissed` flag so a returning user who
+// said "not now" before isn't re-prompted after this refactor lands.
+function InstallEventsListener() {
+  const setDeferredPrompt = useStore((s) => s.setDeferredPrompt);
+  const setPwaInstalled = useStore((s) => s.setPwaInstalled);
+  const setPwaInstallDismissed = useStore((s) => s.setPwaInstallDismissed);
+
+  useEffect(() => {
+    // safeLocal handles private-mode Safari / partitioned-iframe throws
+    // internally with a silent fallback. If the read throws → returns null →
+    // comparison fails → migration skipped. If the remove throws → no-op.
+    // Either way no crash, worst case is the user sees the install button
+    // once more (the migration just retries on next load and likely succeeds).
+    if (safeLocal.get("install-dismissed") === "1") {
+      setPwaInstallDismissed(true);
+      safeLocal.remove("install-dismissed");
+    }
+
+    const onBeforeInstall = (e: Event) => {
+      // Chrome would otherwise show its own mini-infobar; we want control.
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    };
+    const onInstalled = () => {
+      setPwaInstalled(true);
+      setDeferredPrompt(null);
+    };
+
+    window.addEventListener("beforeinstallprompt", onBeforeInstall);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBeforeInstall);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, [setDeferredPrompt, setPwaInstalled, setPwaInstallDismissed]);
+
+  return null;
+}
+
 function Root() {
   return (
     <html lang="en">
@@ -171,14 +219,17 @@ function Root() {
         <style dangerouslySetInnerHTML={{ __html: fontCSS }} suppressHydrationWarning />
         <HeadContent />
       </head>
-      <body className="bg-black text-white font-mono antialiased">
+      <body className="bg-black text-white font-mono antialiased min-h-dvh flex flex-col">
         <HydrateStore />
+        <InstallEventsListener />
+        <OfflineReconciler />
         <Header />
         <SwipeNavigator />
         <Player />
         <PlaybackErrorToast />
         <Toast />
         <ShareModal />
+        <InAppBrowserBanner />
         <BottomNav />
         <Scripts />
       </body>

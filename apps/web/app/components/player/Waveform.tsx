@@ -166,22 +166,42 @@ export function Waveform({ peaks, currentTime, duration, onSeek, disabled }: Wav
       <canvas ref={bgRef} style={{ position: "absolute", inset: 0 }} />
 
       {/* Gold bars — same canvas content, clipped to played width via CSS.
-          drop-shadow on the clipped layer puts a soft gold glow only on the
-          played portion, so the played/remaining split reads at a glance and
-          the waveform feels like the focal element instead of decoration. */}
+          The drop-shadow lives on this OUTER wrapper (static `inset: 0`
+          dimensions), NOT on the inner clip div whose width animates.
+          Putting `filter` on a width-animated element triggers a browser
+          compositing bug: the filter creates a paint layer keyed to the
+          filtered element's geometry, and on some loads the browser
+          doesn't re-rasterize the layer when its width changes — so the
+          visible gold stays frozen at whatever it was at the first paint
+          (typically 0%, since clip starts at "0%" in JSX before the
+          effect runs). Toggling the filter in DevTools forces a one-shot
+          repaint that masks the bug after first load. With the filter on
+          a static-dimensions wrapper, the layer geometry never changes;
+          only its descendant content does, which the compositor handles
+          via standard child-paint invalidation. `pointerEvents: none` so
+          the wrapper doesn't intercept the drag gestures bound to the
+          outer container. */}
       <div
-        ref={clipRef}
         style={{
           position: "absolute",
-          top: 0,
-          left: 0,
-          bottom: 0,
-          overflow: "hidden",
-          width: "0%",
+          inset: 0,
+          pointerEvents: "none",
           filter: "drop-shadow(0 0 4px rgba(197, 133, 56, 0.35))",
         }}
       >
-        <canvas ref={fgRef} style={{ position: "absolute", top: 0, left: 0 }} />
+        <div
+          ref={clipRef}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            bottom: 0,
+            overflow: "hidden",
+            width: "0%",
+          }}
+        >
+          <canvas ref={fgRef} style={{ position: "absolute", top: 0, left: 0 }} />
+        </div>
       </div>
 
       {/* Scrub timestamp tooltip — floats 8px above the finger position. Only

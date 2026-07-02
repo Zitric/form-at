@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 @theme {
+  --breakpoint-2xs: 24rem;
+  --breakpoint-xs: 27rem;
+
   --color-gold: #c58538;
   --color-black: #161615;
   --color-purple: #43437a;
@@ -179,7 +182,15 @@
    transition to ~0ms instead of disabling them — animations that drive state
    (e.g. our grid-row slide-in for the player) still fire their listeners and
    leave the element in the correct final state; users just don't see the
-   motion. Using !important so utilities and inline styles can't override. */
+   motion. Using !important so utilities and inline styles can't override.
+
+   DEBUGGING GOTCHA: if you're testing the marquee in MobileMiniPlayer (or any
+   future decorative animation) and it appears not to fire, check the OS
+   "Reduce Motion" setting AND Chrome DevTools → Cmd+Shift+P → "Show
+   Rendering" → "Emulate CSS media feature prefers-reduced-motion". The
+   suppression here is silent — the keyframe still runs, just at 0.01ms
+   duration, so the element looks static. Spent ~an hour chasing a phantom
+   marquee bug in Phase 2 before we figured this out. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

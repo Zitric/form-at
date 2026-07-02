@@ -21,6 +21,17 @@ export function fmtDate(ms: number): string {
   return new Date(ms).toISOString().split("T")[0] ?? "";
 }
 
+// MB-or-GB byte sizes for offline-library labels. Decimal units (MB = 10^6)
+// to match what users see in iOS Settings / Chrome storage panel — binary
+// MiB would confuse the comparison. Rounds to whole numbers under 1 GB, one
+// decimal at or above 1 GB. Returns `0MB` for non-finite / negative inputs
+// rather than throwing — caller is rendering a label, not a precise stat.
+export function fmtBytes(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "0MB";
+  if (n < 1_000_000_000) return `${Math.round(n / 1_000_000)}MB`;
+  return `${(n / 1_000_000_000).toFixed(1)}GB`;
+}
+
 // Renders a list of daily counts as a unicode sparkline (`▁▂▅▇▃▁▁`). The
 // tallest bar represents the max value in the window, every other bar scales
 // proportionally. Empty arrays return "", all-zero arrays return all `▁`.

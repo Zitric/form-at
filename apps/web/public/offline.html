@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Form:at — offline</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      /* Zero-bundle offline fallback. NOTHING imported: no external CSS,
+         no external JS, no Tailwind, no Button / BracketLabel — this page
+         renders when the app bundle isn't available. Design tokens are
+         hand-copied from styles/tokens.ts (#161615 bg, #c58538 gold,
+         #cbcbcb grey, Space Mono font) and MUST stay in sync manually if
+         those brand values ever change.
+         The wordmark.png reference is safe because vite.config.ts
+         precaches it via the `shouldPrecache` allowlist — the SW serves
+         it from precache on this offline render, no network needed. */
+      :root { color-scheme: dark; }
+      html, body {
+        margin: 0;
+        /* `100dvh` (not `100%`) so body actually fills the viewport on
+           mobile — `min-height: 100%` requires the parent chain (html) to
+           have explicit height first, otherwise it resolves to auto and
+           short-content sits at the top. `dvh` matches the app's
+           established viewport unit (used in FullPlayer + home). */
+        min-height: 100dvh;
+        background: #161615;
+        color: #cbcbcb;
+        font-family: "Space Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      body {
+        /* Sticky-footer layout: header pinned at top (matching the app's
+           mobile Header position), content flex-1's to fill the remaining
+           viewport space and centers within it. Same shape as the app's
+           body → SwipeNavigator → main chain in __root.tsx, hand-rolled
+           in plain CSS because this page is zero-bundle. */
+        display: flex;
+        flex-direction: column;
+        text-align: center;
+      }
+
+      /* Header — pinned at top, mirrors components/Header.tsx layout:
+         `pt-10 mb-8 sm:mb-12` padding + margin, `px-6 md:px-0` side padding,
+         `max-w-2xl mx-auto w-full` centered container. Same math ported
+         from Tailwind to plain CSS. Offline has no NavLinks (nothing to
+         navigate to offline), so the wordmark centers alone. */
+      .page-header {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 2.5rem 1.5rem 0;
+        margin: 0 auto 2rem;
+        max-width: 42rem;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      @media (min-width: 640px) {
+        .page-header { margin-bottom: 3rem; }
+      }
+      @media (min-width: 768px) {
+        .page-header { padding-left: 0; padding-right: 0; }
+      }
+
+      /* Wordmark crop + blend — mirrors components/Header.tsx (lines 21-30).
+         The shipped wordmark.png is 1500×1500 with a baked-in solid black
+         background and the FORM:AT glyphs positioned lower-middle-right of
+         the canvas. We reveal only the glyph area via a cropped viewport
+         and hide the black background via `mix-blend-mode: screen` on a
+         `#161615` container. Screen against #161615: black pixels resolve
+         back to #161615 (invisible against page bg); white pixels stay
+         bright. Only works because our brand bg IS near-black — a proper
+         transparent-background PNG variant would be the "clean" fix but
+         doesn't currently exist as an authored asset. If those crop
+         percentages change in Header.tsx, mirror them here (same PNG,
+         same math).
+         POSITION mirrors the Header (top of page, centered), SIZE
+         deliberately smaller — this page is almost always seen on mobile
+         (desktop rarely loses connectivity), and a status page reads
+         better with a modest brand mark than a full-scale one. The
+         crop math (aspect-ratio + inner img width ratio + translate
+         percentages) is preserved — only the container width scale
+         shrinks, so the crop math scales proportionally with it. Header
+         parity is on POSITION, not on SIZE. */
+      .wordmark {
+        width: min(180px, 45vw);
+        aspect-ratio: 280 / 40;
+        overflow: hidden;
+        background: #161615;
+        display: block;
+      }
+      .wordmark img {
+        width: calc(100% * 430 / 280);
+        height: auto;
+        transform: translate(-17.32%, -45.6%);
+        mix-blend-mode: screen;
+        display: block;
+      }
+
+      /* Content — fills the remaining viewport space below the header and
+         centers its children (status + messages + actions) vertically and
+         horizontally. `flex: 1` claims the space handed down by body's
+         flex-col + `min-h: 100dvh`. */
+      .content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2rem;
+        padding: 1rem 2rem;
+        padding-bottom: calc(env(safe-area-inset-bottom) + 2rem);
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      /* Bracket-free status per the design rule: brackets are for CTAs,
+         states go bracket-free. `› offline` reads as terminal prompt +
+         value — prompt in gold, value in white for readability. */
+      .status {
+        font-size: 0.875rem;
+        letter-spacing: 0.15em;
+        margin: 0;
+        font-weight: 400;
+      }
+      .status .prompt { color: #c58538; margin-right: 0.4em; }
+      .status .value { color: #ffffff; }
+      .messages {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        max-width: 28rem;
+      }
+      .messages p {
+        font-size: 0.875rem;
+        line-height: 1.6;
+        margin: 0;
+      }
+      .actions {
+        display: flex;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      /* Hand-rolled secondary-bracket button. Same visual contract as
+         <Button variant="secondary"> in Button.tsx: grey text goes white
+         on hover, gold brackets stay gold. The descendant `.bracket`
+         color rule wins over the parent `:hover` cascade via specificity —
+         no !important needed. */
+      a, button {
+        background: transparent;
+        border: 0;
+        padding: 0.25rem;
+        color: #cbcbcb;
+        font: inherit;
+        font-size: 0.875rem;
+        cursor: pointer;
+        text-decoration: none;
+        letter-spacing: 0.15em;
+        white-space: nowrap;
+        transition: color 150ms;
+      }
+      a:hover, button:hover { color: #ffffff; }
+      .bracket { color: #c58538; }
+    </style>
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="wordmark">
+        <img src="/wordmark.png" alt="Form:at" width="1500" height="1500" />
+      </div>
+    </header>
+    <main class="content">
+      <h1 class="status"><span class="prompt">›</span><span class="value">offline</span></h1>
+      <div class="messages">
+        <p>no connection.</p>
+        <p>this page isn't saved for offline listening.</p>
+      </div>
+      <div class="actions">
+        <a href="/sets"><span class="bracket">[</span> library <span class="bracket">]</span></a>
+        <button type="button" onclick="location.reload()"><span class="bracket">[</span> ↻ retry <span class="bracket">]</span></button>
+      </div>
+    </main>
+  </body>
+</html>

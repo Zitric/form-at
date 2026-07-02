@@ -8,7 +8,7 @@
     "build": "pnpm og && pnpm sitemap && vite build && npx esbuild dist/server/server.js --bundle --format=esm --platform=browser --conditions=workerd --define:process.env.NODE_ENV='\"production\"' --outfile=dist/client/_worker.js --external:node:async_hooks --external:node:stream --external:node:stream/web",
     "start": "vite preview",
     "lint": "biome check app",
-    "tsc": "tsc --noEmit",
+    "tsc": "tsc --noEmit && tsc -p tsconfig.sw.json --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
     "test:ui": "vitest --ui",
@@ -17,6 +17,7 @@
     "optimize-images": "node scripts/optimize-images.mjs",
     "og": "tsx scripts/generate-og.ts",
     "sitemap": "tsx scripts/generate-sitemap.ts",
+    "screenshots": "vite build && tsx scripts/capture-screenshots.ts",
     "stats": "node scripts/stats.mjs",
     "deploy": "pnpm build && npx wrangler pages deploy dist/client --project-name=form-at-web --commit-dirty=true"
   },
@@ -26,10 +27,14 @@
     "@use-gesture/react": "^10.3.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "idb": "^8.0.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "tailwind-merge": "^3.5.0",
     "typewriter-effect": "^2.22.0",
+    "workbox-range-requests": "^7.4.1",
+    "workbox-routing": "^7.4.1",
+    "workbox-strategies": "^7.4.1",
     "zustand": "^5.0.13"
   },
   "devDependencies": {
@@ -55,6 +60,8 @@
     "typescript": "^5.8.0",
     "vite": "^7.0.0",
     "vite-tsconfig-paths": "^5.1.0",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.5",
+    "workbox-core": "^7.4.1",
+    "workbox-precaching": "^7.4.1"
   }
 }

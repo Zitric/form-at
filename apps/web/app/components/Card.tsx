@@ -54,7 +54,13 @@ export function Card({
   hideImageOnMobile = false,
 }: CardProps) {
   const containerClass = cn(
-    "flex items-center gap-4 p-4 transition-all mb-8 rounded-card group text-left w-full",
+    // Mobile drops the inter-child gap to 4px (gap-1) so the text column
+    // gets back the 12px the old gap-4 was eating beside the action
+    // cluster — at iPhone SE widths that 12px is the difference between
+    // "Brandon Lee Vear @ Form:at 002" reading clean vs truncating
+    // mid-name. sm+ keeps gap-4 because DJ cards on tablet/desktop have a
+    // visible image that needs the wider breathing room from the text.
+    "flex items-center gap-1 2xs:gap-4 p-4 transition-all mb-8 rounded-card group text-left w-full",
     variantClass[variant],
     onClick && "cursor-pointer",
     className,

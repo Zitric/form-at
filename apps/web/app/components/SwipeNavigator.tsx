@@ -137,9 +137,23 @@ export function SwipeNavigator() {
       <div
         ref={containerRef}
         {...bind()}
+        // `flex-1 flex flex-col` participates in the app-wide sticky-footer
+        // layout — see body's `min-h-dvh flex flex-col` in __root.tsx. This
+        // wrapper fills the viewport height between header and fixed chrome,
+        // so `flex-1` on PageLayout's <main> (and any inner `flex-1` inside
+        // it) resolves to real space. Without this, no ancestor in the chain
+        // has viewport height and short-content pages (NotFoundPage,
+        // offline.html) can't vertically center.
+        className="flex-1 flex flex-col"
         style={{ touchAction: "pan-y", overflowX: "hidden", position: "relative" }}
       >
         <div
+          // `flex-1 flex flex-col` propagates the viewport-remaining space
+          // down to the <Outlet />'s <main>. Without it, this translated
+          // wrapper is content-sized and `flex-1` on PageLayout's <main>
+          // has no space to consume — see the SwipeNavigator outer div's
+          // comment for the full sticky-footer chain.
+          className="flex-1 flex flex-col"
           style={{
             transform: `translateX(${offset}px)`,
             transition: transitioning ? `transform ${DURATION}ms ease` : "none",

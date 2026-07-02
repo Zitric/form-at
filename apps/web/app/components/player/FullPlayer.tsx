@@ -1,10 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { useDrag } from "@use-gesture/react";
 import { useRef } from "react";
+import { BracketLabel } from "~/components/BracketLabel";
 import { Image } from "~/components/Image";
 import { ShareSetButton } from "~/components/ShareSetButton";
+import { NextIcon, PrevIcon } from "~/components/icons";
 import { CirclePlayButton } from "~/components/player/CirclePlayButton";
-import { NextIcon, PrevIcon } from "~/components/player/PlayerIcons";
 import { PlayerSeeker } from "~/components/player/PlayerSeeker";
 import { useFullPlayerLifecycle } from "~/hooks/useFullPlayerLifecycle";
 import { useStore } from "~/store";
@@ -119,7 +120,11 @@ export function FullPlayer({
         // Only the *bottom* safe area gets padding on the container; the
         // *top* is intentionally not padded so `bg-black` extends behind the
         // notch / dynamic island. The header below pads itself for clearance.
-        paddingBottom: "env(safe-area-inset-bottom)",
+        // +1.5rem breathing room mirrors the header's
+        // `calc(env(safe-area-inset-top) + 1.5rem)` pattern — without it,
+        // the share / open-set-details stack sits flush against the bottom
+        // on iPhone SE (no home indicator → safe-area-inset-bottom is 0).
+        paddingBottom: "calc(env(safe-area-inset-bottom) + 1.5rem)",
       }}
       aria-hidden={!isOpen}
     >
@@ -144,7 +149,7 @@ export function FullPlayer({
           aria-label="Close now playing"
           className="text-base text-grey hover:text-white tracking-widest cursor-pointer p-2 -mr-2"
         >
-          [ × ]
+          <BracketLabel>×</BracketLabel>
         </button>
       </div>
 
@@ -249,11 +254,11 @@ export function FullPlayer({
           <Link
             to="/sets/$setId"
             params={{ setId: nowPlaying.id }}
-            className="text-sm text-grey hover:text-white transition-colors tracking-widest"
+            className="text-sm text-grey hover:text-white transition-colors tracking-widest whitespace-nowrap"
           >
-            [ open_set_details ]
+            <BracketLabel>open_set_details</BracketLabel>
           </Link>
-          <ShareSetButton set={nowPlaying} className="mb-0" />
+          <ShareSetButton set={nowPlaying} className="whitespace-nowrap" />
         </div>
       </div>
     </div>

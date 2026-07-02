@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { BracketLabel } from "~/components/BracketLabel";
+import { Button } from "~/components/Button";
 import { Modal } from "~/components/Modal";
 import { TerminalRow } from "~/components/TerminalRow";
 import { useStore } from "~/store";
@@ -15,7 +17,10 @@ function maybeWrapForAndroid(webUrl: string, pkg: string): string {
   return isAndroid() ? buildAndroidIntent(webUrl, pkg) : webUrl;
 }
 
-const rowClass =
+// Dropdown anchor row — same visual vocabulary as <Button variant="secondary">
+// but on an <a> because these are navigations, not actions. Bracket rendering
+// comes from <BracketLabel> inside; layout/typography stays here.
+const anchorRowClass =
   "text-left text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer py-1 whitespace-nowrap";
 
 /** `mailto:` alone is brittle — many users don't have a default mail client
@@ -51,15 +56,9 @@ export function BookingsButton({ className }: { className?: string }) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={
-          className ?? "text-sm text-grey hover:text-white transition-colors tracking-widest"
-        }
-      >
-        [ bookings ]
-      </button>
+      <Button variant="secondary" onClick={() => setOpen(true)} className={className}>
+        bookings
+      </Button>
       <Modal
         open={open}
         onClose={() => setOpen(false)}
@@ -75,29 +74,29 @@ export function BookingsButton({ className }: { className?: string }) {
             doubles as a "you're about to email this" confirmation. */}
         <TerminalRow label="target" value={BOOKINGS_EMAIL} className="mb-6" />
         <div className="flex flex-col">
-          <button type="button" onClick={copyEmail} className={rowClass}>
-            [ copy_email ]
-          </button>
+          <Button variant="secondary" onClick={copyEmail} className="text-left py-1">
+            copy_email
+          </Button>
           <a
             href={gmailUrl}
             target={isGmailIntent ? undefined : "_blank"}
             rel={isGmailIntent ? undefined : "noopener noreferrer"}
             onClick={() => setOpen(false)}
-            className={rowClass}
+            className={anchorRowClass}
           >
-            [ gmail ]
+            <BracketLabel>gmail</BracketLabel>
           </a>
           <a
             href={outlookUrl}
             target={isOutlookIntent ? undefined : "_blank"}
             rel={isOutlookIntent ? undefined : "noopener noreferrer"}
             onClick={() => setOpen(false)}
-            className={rowClass}
+            className={anchorRowClass}
           >
-            [ outlook ]
+            <BracketLabel>outlook</BracketLabel>
           </a>
-          <a href={mailtoUrl} onClick={() => setOpen(false)} className={rowClass}>
-            [ mail_app ]
+          <a href={mailtoUrl} onClick={() => setOpen(false)} className={anchorRowClass}>
+            <BracketLabel>mail_app</BracketLabel>
           </a>
         </div>
       </Modal>

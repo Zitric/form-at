@@ -1,6 +1,15 @@
 import type { StateCreator } from "zustand";
 import type { MusicSet } from "~/data/sets";
 
+// Subset of the experimental BeforeInstallPromptEvent spec we actually touch.
+// Not in lib.dom.d.ts because the API is Chromium-only and not in the WHATWG
+// spec yet — own the type locally so we don't depend on a globally-augmented
+// declaration that could conflict elsewhere.
+export type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+};
+
 export type UiSlice = {
   toast: string | null;
   setToast: (msg: string | null) => void;
@@ -17,6 +26,33 @@ export type UiSlice = {
   fullPlayerOpen: boolean;
   openFullPlayer: () => void;
   closeFullPlayer: () => void;
+  /** True once `appinstalled` has fired in any session, OR the user
+   *  self-reported install via the iOS-Safari instruction modal. Persisted
+   *  so we remember across visits that the app lives on the home screen
+   *  even when launched from a regular browser tab (where `isStandalone()`
+   *  reads false). */
+  pwaInstalled: boolean;
+  /** True if the user closed the install modal without installing. Persisted
+   *  — Phase 3 design decision was "soft dismiss".
+   *
+   *  IMPORTANT — two consumers, two different semantics:
+   *   - <InstallCta> on the home page: a passive CTA. When this flag is true,
+   *     the button is HIDDEN entirely. The user said "not now"; we respect
+   *     it by removing the passive nudge.
+   *   - <SaveForOfflineButton> on /sets/:setId: a user-initiated action. The
+   *     button stays VISIBLE and TAPPABLE regardless of this flag. A
+   *     deliberate user tap always reopens the install modal — the flag
+   *     only suppresses any future *automatic / passive* prompting we might
+   *     add later. No dead buttons. */
+  pwaInstallDismissed: boolean;
+  /** Captured `beforeinstallprompt` event held in memory for InstallCta and
+   *  SaveForOfflineButton to call `.prompt()` on. **Not persisted** — the
+   *  event has a native ref and methods that don't round-trip through JSON.
+   *  Re-captured on each page load when Chrome decides to fire it. */
+  deferredPrompt: BeforeInstallPromptEvent | null;
+  setPwaInstalled: (v: boolean) => void;
+  setPwaInstallDismissed: (v: boolean) => void;
+  setDeferredPrompt: (e: BeforeInstallPromptEvent | null) => void;
 };
 
 export const createUiSlice: StateCreator<UiSlice, [], [], UiSlice> = (set) => ({
@@ -28,4 +64,10 @@ export const createUiSlice: StateCreator<UiSlice, [], [], UiSlice> = (set) => ({
   fullPlayerOpen: false,
   openFullPlayer: () => set({ fullPlayerOpen: true }),
   closeFullPlayer: () => set({ fullPlayerOpen: false }),
+  pwaInstalled: false,
+  pwaInstallDismissed: false,
+  deferredPrompt: null,
+  setPwaInstalled: (v) => set({ pwaInstalled: v }),
+  setPwaInstallDismissed: (v) => set({ pwaInstallDismissed: v }),
+  setDeferredPrompt: (e) => set({ deferredPrompt: e }),
 });

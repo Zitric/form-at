@@ -1,4 +1,5 @@
 import { Link, createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
+import { BracketLabel } from "~/components/BracketLabel";
 import { BrandTitle } from "~/components/BrandTitle";
 import { Card } from "~/components/Card";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
@@ -88,7 +89,7 @@ function DJDetail() {
                   androidPackage={androidPackage}
                   className="text-sm text-grey hover:text-white transition-colors tracking-widest"
                 >
-                  [ {label} ]
+                  <BracketLabel>{label}</BracketLabel>
                 </SocialLink>
               );
             })}

@@ -15,6 +15,12 @@ export const Z = {
    *  visible during a drag, but stays *below* `toast` so a copy-success or
    *  error-retry pill never disappears behind it. */
   swipeIndicator: "z-30",
+  /** Informational banner shown to in-app browser users (Instagram / TikTok
+   *  WebViews). Shares the swipe-indicator layer because the two are never
+   *  co-visible in practice — the banner is persistent context, the swipe
+   *  indicator is transient during a drag. DOM order resolves any edge case
+   *  acceptably (banner mounts in `__root.tsx`, dots inside SwipeNavigator). */
+  iabBanner: "z-30",
   /** Mobile full-screen "now playing" overlay. Covers nav + mini-player +
    *  swipe indicator when open. Toast stays above it so share-success and
    *  error pills are still visible while the overlay is up. */

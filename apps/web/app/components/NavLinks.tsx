@@ -1,4 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { BracketLabel } from "~/components/BracketLabel";
 import { cn } from "~/utils/cn";
 
 const links = [
@@ -32,7 +33,7 @@ export function NavLinks({ className, itemClassName, activeClassName }: NavLinks
               "font-display text-lg lowercase",
             )}
           >
-            {isActive ? `[ ${label} ]` : label}
+            {isActive ? <BracketLabel>{label}</BracketLabel> : label}
           </Link>
         );
       })}
