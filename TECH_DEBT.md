@@ -6,7 +6,8 @@ Each item is written to be picked up cold — no conversation context required.
 
 ## Status at a glance
 
-- **Open:** 1, 2, 3, 4, 5, 7, 8, 12, 13, 14, 15, 17, 18
+- **Launch blockers (before wider release, small trusted-friends test OK on current):** 19 (R2 custom domain — dev URL is rate-limited)
+- **Open:** 1, 2, 3, 4, 5, 7, 8, 12, 13, 14, 15, 17, 18, 19
 - **Deferred (coupled, ship together post-2026-07-24):** 16 (orphan artwork prune) — waits for the deferred manage-offline-sets view; the prune naturally lives in that view's remove flow. See PWA_PROGRESS.md for the deferral rationale.
 - **Resolved:** 6 (2026-06-28, `10811a4`), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01)
 
@@ -340,4 +341,50 @@ Separate system from the audio read-path — this is route data, not playback. N
 
 ---
 
-_Last updated: 2026-07-01 (chunk-5 regression fixes 5.1/5.2/5.3 landed; two new open bugs recorded)_
+## 19. [LAUNCH BLOCKER before wider release] Move audio off the R2 public dev URL onto a custom domain
+
+Discovered 2026-07-02 pre-friends-test. Audio MP3s + peaks JSON are currently served from the R2 Public Development URL:
+
+```
+https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/…
+```
+
+Cloudflare explicitly warns this URL is rate-limited and **NOT recommended for production** ("Connect a custom domain to the bucket to support production workloads"). No custom domain is currently assigned to the `form-at-sets` bucket (WEUR).
+
+CORS itself is fine — Allowed Origins: `*`, GET/HEAD methods, Range header exposed — audio streaming works today. The constraint is purely rate-limit / production-recommendation, not a functional bug.
+
+**Why this is a launch blocker, not a regular bug**: fine for small trusted-friends tests (low concurrency). At launch-scale concurrent traffic — many friends hitting play at once via an Instagram announcement, or any wider public share — the dev URL's rate limit can throttle audio requests, breaking playback for some users at exactly the worst moment. The failure mode is invisible in low-concurrency testing.
+
+### Fix scope (its own session — Cloudflare config + code hostname sweep)
+
+1. **Cloudflare**: connect a custom domain / subdomain to the `form-at-sets` bucket. Candidate hosts: `sets.formatglasgow.com` or `cdn.formatglasgow.com`. Gains: no rate limit, Cloudflare edge caching in front of R2, production-recommended path.
+
+2. **Code**: replace every reference to `pub-e15e86da649d4c91b6666141bfe67664.r2.dev` with the new custom domain. **Known sites to audit** (grep the hostname — DO NOT trust this list as complete, run a fresh grep at fix time):
+   - **`apps/web/app/sw.ts`** — the audio route handler matches by exact hostname (`url.hostname === "pub-e15e86…r2.dev"`). MUST update or the SW stops intercepting audio → offline playback breaks + tab streaming falls back to unproxied fetch.
+   - **`apps/web/app/data/sets.ts`** — the `src` and `peaks` URLs for every shipping set are absolute R2 URLs with this host. Change the base.
+   - **`apps/web/app/utils/audioUrl.ts`** — check whether `withAppContext` references the host (currently doesn't, but the audit is required so a future addition can't silently break).
+   - Any comment / doc entry that names the hostname (this file, `PWA_PROGRESS.md`, `CLAUDE.md`, wrangler / worker config, README) — grep and update for consistency so future audits find one canonical host.
+
+3. **Verify after the swap**:
+   - (a) Audio streams from the new domain online (both saved-in-app and never-downloaded sets).
+   - (b) Offline-from-IDB still works — the SW handler still matches the new host, still runs the `?ctx=app` → IDB path, IDB entries keyed by the new host resolve.
+   - (c) Range slicing / `createPartialResponse` still fires correctly against the new host (seek + play-through a saved set to trigger multiple Range requests).
+   - (d) The `mode: "no-cors"` preservation from chunk 5.3 still works if the new host has different CORS behaviour than the dev URL — verify with an actual GET + Range in DevTools; if the custom domain adds CORS headers the dev URL didn't, no-cors mode should still work but confirm.
+
+### Migration caveat — existing offline entries
+
+IDB entries are keyed by full URL. After the hostname swap, existing saved sets in users' IDB will have OLD-host URLs. Options:
+
+- **Force re-download**: bump the SW cache version so `reconcileFromIdb` treats the old-host entries as evicted → user re-saves under the new host. Clean but costs a re-download per set.
+- **URL-normalise in the SW handler**: strip/rewrite the host to a canonical form before the IDB lookup. Complex + fragile.
+- **Do nothing**: old entries stay orphaned and eventually get auto-purged by `reconcileFromIdb`'s catalogue-check (since `data/sets.ts` now references the new host, the old-host `setId` still matches). Simplest but users lose their downloads silently.
+
+Recommend the force-re-download path with an in-app notice ("we moved sets to a faster server — re-save to keep offline access"). Decide + document at fix time.
+
+### Timing
+
+Block wider announcement / public share until this ships. Small friends test (2026-07-02) can proceed on the dev URL — concurrency is low enough that rate limits don't bite. The threshold isn't sharp; use "am I about to link this in a post that reaches strangers?" as the go/no-go.
+
+---
+
+_Last updated: 2026-07-02 (R2 custom domain launch blocker recorded as item 19)_

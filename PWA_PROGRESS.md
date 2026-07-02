@@ -40,12 +40,56 @@ priority polish + the deploy gate, not feature work.
 
 Engineering-wise, the branch is shippable. Items below are the punch list:
 
+### Launch blockers before wider release
+
+Items that MUST land before a public / wider-audience release. A small
+trusted-friends test can proceed without these — they only bite at
+launch-scale concurrency.
+
+- **[LAUNCH BLOCKER] Move audio off the R2 public dev URL onto a custom
+  domain** (TECH_DEBT 19) — MP3s + peaks currently serve from
+  `pub-e15e86da649d4c91b6666141bfe67664.r2.dev`, which Cloudflare
+  explicitly warns is rate-limited and NOT recommended for production
+  ("Connect a custom domain to the bucket to support production
+  workloads"). At launch-scale concurrent traffic (many friends hitting
+  play at once via an Instagram announcement) the dev URL's rate limit
+  can throttle audio requests → broken playback for some users at
+  exactly the worst moment. Fix scope (Cloudflare custom domain +
+  hostname-audit code change) is documented in TECH_DEBT 19. CORS is
+  already fine; the constraint is purely rate-limit / production
+  recommendation. **Block wider announcement until this ships.**
+
 ### Pre-deploy polish
 
 - **`offline.html` visual pass** (TECH_DEBT 7) — currently functional-minimal;
   needs a typographic + terminal-aesthetic pass to match the rest of the
   site. Zero-bundle constraint applies (no external CSS/JS, inline `<style>`
   only). **This is the last item before the deploy gate.**
+
+### Open items from testing (2026-07-02) — pending verification
+
+- **[VERIFY] Layout regression pass on normal content pages** — the
+  2026-07-02 sticky-footer fix added `min-h-dvh flex flex-col` to
+  `<body>` (`routes/__root.tsx`), `flex-1 flex flex-col` to BOTH
+  SwipeNavigator wrappers (outer div + inner translated div), and
+  `flex-1` to PageLayout's `<main>`. Only the status pages
+  (NotFoundPage + offline.html) were visually verified. Pages to
+  eyeball for regression before the wider deploy:
+  - `/` (home) — has its own `sm:justify-center` on a content-sized div,
+    should be a no-op but confirm no shift on desktop.
+  - `/sets` — usually content-tall, but a short filter result could
+    reveal empty-space-at-bottom.
+  - `/djs/$djId` — the `<div className="flex-1">` at line 60 was a no-op
+    before; now consumes real space. Watch for stretched content on DJs
+    with short bios / few sets.
+  - `/events/$eventId` — same `<div className="flex-1">` pattern
+    (`$eventId.tsx:48`).
+  - `/sets/$setId` — same pattern (`$setId.tsx:127`).
+  - Swipe-between-tabs on mobile — SwipeNavigator's inner translated div
+    gained `flex-1 flex flex-col`; horizontal `translateX` gesture
+    transforms should be unaffected, but a real gesture test confirms.
+  If a page looks stretched or misaligned, the fix is scoped to the
+  three files above — no other consumer references these flex chains.
 
 ### Open bugs found in testing (2026-07-01) — pending diagnosis
 
