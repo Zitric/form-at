@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useStore, useStoreHydrated } from "~/store";
 import { detectPlatform, isStandalone } from "~/utils/installCapability";
+import { clearStashedInstallPrompt } from "~/utils/installPromptStash";
 
 // Decides whether the `save_for_offline` action is allowed right now, and if
 // not, which guidance to surface in <SaveGateModal>. The gate is binary:
@@ -91,9 +92,12 @@ export function useTriggerInstallPrompt(): () => Promise<TriggerInstallOutcome> 
     if (choice.outcome === "dismissed") {
       setPwaInstallDismissed(true);
     }
-    // Single-use per Chrome spec — clear it either way. Accepted path also
-    // fires `appinstalled` which is handled globally in InstallEventsListener.
+    // Single-use per Chrome spec — clear it either way (store AND the
+    // pre-hydration stash, so a later mount can't re-adopt a consumed event).
+    // Accepted path also fires `appinstalled` which is handled globally in
+    // InstallEventsListener.
     setDeferredPrompt(null);
+    clearStashedInstallPrompt();
     return choice.outcome;
   }, [deferredPrompt, setDeferredPrompt, setPwaInstallDismissed]);
 }

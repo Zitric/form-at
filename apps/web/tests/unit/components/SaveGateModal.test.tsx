@@ -42,6 +42,29 @@ const needsInstallGate: SaveGate = {
 
 const openAppGate: SaveGate = { allow: false, reason: "open-app" };
 
+const manualChromiumGate: SaveGate = {
+  allow: false,
+  reason: "needs-install",
+  platform: "chromium",
+  canPrompt: false,
+};
+
+describe("SaveGateModal manual-install copy (no captured prompt)", () => {
+  // Opera Android field finding (2026-07-02): it UA-matches "chromium" but
+  // never fired beforeinstallprompt and its menu had no install entry — the
+  // old copy promised "tap install app" in a menu where it didn't exist.
+  // The manual branch must hedge, never promise a specific menu item.
+  it("hedges instead of promising a specific menu item", () => {
+    const { container } = render(
+      <SaveGateModal open={true} onClose={vi.fn()} gate={manualChromiumGate} />,
+    );
+
+    expect(container.textContent).toMatch(/may not support installing/i);
+    expect(container.textContent).toMatch(/Chrome/);
+    expect(container.textContent).not.toMatch(/(?:and|then) tap install app/i);
+  });
+});
+
 describe("SaveGateModal escape-hatch handlers", () => {
   it('does NOT close the modal when "already installed? open it" is tapped (case a → b)', async () => {
     const onClose = vi.fn();

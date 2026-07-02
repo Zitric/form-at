@@ -74,19 +74,26 @@ export function SaveGateModal({ open, onClose, gate }: Props) {
     setPwaInstalled(false);
   };
 
-  // Same form-factor split as the previous InstallPromptModal:
-  //   mobile → "open browser menu (⋮), tap install app"
-  //   desktop → "tap the install icon in the address bar" (rendered with
-  //             the actual Chrome install glyph)
+  // Manual-install guidance for the no-captured-prompt path. This branch is
+  // reached by Chromium-family browsers that never fire `beforeinstallprompt`
+  // at all (Opera Android carries `Chrome/` in its UA but its menu had no
+  // install entry — field-tested 2026-07-02) AND by Chrome before its install
+  // heuristics pass. So we never promise a specific menu item: name the
+  // labels it might carry, and say honestly that this browser may not offer
+  // one. Same form-factor split as before (mobile → browser menu, desktop →
+  // address-bar icon, rendered with the actual Chrome install glyph).
   const manualInstructionTail =
     formFactor === "mobile" ? (
       <>
-        open your browser menu (⋮) and tap <span className="text-white">install app</span>.
+        open your browser menu (⋮) and look for <span className="text-white">install app</span> or{" "}
+        <span className="text-white">add to home screen</span>. don't see either? this browser may
+        not support installing — <span className="text-white">Chrome on Android</span> does.
       </>
     ) : (
       <>
-        tap the install icon <InstallIcon className="inline-block align-[-0.15em]" /> at the right
-        end of your address bar.
+        look for the install icon <InstallIcon className="inline-block align-[-0.15em]" /> at the
+        right end of your address bar. don't see it? this browser may not support installing —{" "}
+        <span className="text-white">Chrome</span> does.
       </>
     );
 
