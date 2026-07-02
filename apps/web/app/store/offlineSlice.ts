@@ -1,4 +1,5 @@
 import type { StateCreator } from "zustand";
+import { djs } from "~/data/djs";
 import {
   type OfflineAudioEntry,
   deleteOfflineSetEntries,
@@ -128,25 +129,56 @@ async function streamWithProgress(
   };
 }
 
-// Warm `artwork-v1` for a saved set so the detail page and FullPlayer render
-// images offline even if the user never visited those pages online first.
+// Warm `artwork-v1` for every page that describes a saved set's world so
+// they render offline even if the user never visited them online first:
+//   - set artwork (list cards, /sets/$setId, FullPlayer)
+//   - the DJ photo for the set's artist (/djs/$djId)
+//
 // Fires plain GETs through the SW, which the artwork-v1 SWR route handles —
 // single writer for that cache (route shape + future expiration plugin stay
-// canonical there). Variants mirror `components/Image.tsx`: 640/1080 ×
-// avif/webp. All 4 are warmed: avif is what modern browsers actually pick,
-// webp is bulletproof safety for the rare UA/older WebKit fallback. Sub-1MB
-// total per set; multiple sets sharing one `artwork` path collapse to a
-// single fetch on the second save (cache hit).
+// canonical there). Four variants per image (640/1080 × avif/webp) mirror
+// `components/Image.tsx`: avif is what modern browsers actually pick, webp
+// is the fallback for older WebKit. Sub-2MB total per set; multiple sets
+// sharing one `artwork` path OR one DJ collapse to a single fetch on the
+// second save (SWR cache hit → no re-download).
+//
+// The DJ page was the gap that motivated widening this from set-only to
+// set-plus-DJ: online-first visits SWR-cache the photo automatically, but
+// direct-to-offline first visits found no cache entry and rendered a
+// broken image. Warm-on-save closes that gap — saving a set now caches
+// everything the app needs to render that set's world offline.
+//
+// Set-to-DJ resolution via `dj.setIds`. If a set isn't wired into any DJ's
+// setIds, no DJ resolves and we skip the photo warm — graceful, but flag
+// it in dev so a future data authoring gap is visible (the DJ page still
+// works SWR-online-first; only the direct-to-offline path is degraded).
 //
 // Best-effort: all errors swallowed per-URL so a single 404 / offline blip
 // can't fail the warm batch; the outer call site also `.catch(() => {})`s.
 // See TECH_DEBT 16 for the orphan-on-removal behaviour (intentional).
-async function warmArtwork(musicSet: MusicSet): Promise<void> {
-  if (!musicSet.artwork) return;
+//
+// Exported for unit tests — the invariant this locks (DJ photo warmed when
+// a set is saved) is exactly the class of regression that goes invisible
+// without a test that keeps the two warmings coupled.
+export async function warmSetVisuals(musicSet: MusicSet): Promise<void> {
+  const dj = djs.find((d) => d.setIds?.includes(musicSet.id));
+  if (!dj && process.env.NODE_ENV === "development") {
+    console.warn(
+      `[offline] warmSetVisuals: no DJ resolves to set '${musicSet.id}' — the artist's /djs/… page won't be warmed for offline. Wire it into a dj.setIds in data/djs.ts.`,
+    );
+  }
+
   const variants = ["640.avif", "1080.avif", "640.webp", "1080.webp"];
-  await Promise.all(
-    variants.map((suffix) => fetch(`/images/${musicSet.artwork}-${suffix}`).catch(() => {})),
-  );
+  const urls: string[] = [];
+  if (musicSet.artwork) {
+    for (const v of variants) urls.push(`/images/${musicSet.artwork}-${v}`);
+  }
+  if (dj?.photo) {
+    for (const v of variants) urls.push(`/images/${dj.photo}-${v}`);
+  }
+  if (urls.length === 0) return;
+
+  await Promise.all(urls.map((url) => fetch(url).catch(() => {})));
 }
 
 export const createOfflineSlice: StateCreator<OfflineSlice, [], [], OfflineSlice> = (set, get) => ({
@@ -285,11 +317,13 @@ export const createOfflineSlice: StateCreator<OfflineSlice, [], [], OfflineSlice
         },
       }));
 
-      // Warm artwork-v1 so the saved set looks complete offline. Strictly
-      // post-IDB-commit + post-state-transition: image errors must not flip
-      // the audio's state back to failed. Fire-and-forget so the button hits
-      // [ saved ] instantly; warming runs in the background.
-      warmArtwork(musicSet).catch(() => {});
+      // Warm artwork-v1 for every page describing this set's world (set
+      // artwork + DJ photo) so they render offline without a prior online
+      // visit. Strictly post-IDB-commit + post-state-transition: image
+      // errors must not flip the audio's state back to failed. Fire-and-
+      // forget so the button hits [ saved ] instantly; warming runs in
+      // the background.
+      warmSetVisuals(musicSet).catch(() => {});
 
       // First-ever save: request persistent storage (eviction-resistant under
       // disk pressure on Chrome/Android; iOS ignores). Fire-and-forget — the
