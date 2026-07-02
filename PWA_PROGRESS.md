@@ -91,6 +91,61 @@ launch-scale concurrency.
   If a page looks stretched or misaligned, the fix is scoped to the
   three files above — no other consumer references these flex chains.
 
+### Fixed 2026-07-02 (PM) — mobile install/save UX, pending on-device re-test
+
+Four Android field-testing bugs (Chrome / Brave / Opera), diagnosed and fixed
+in code with unit coverage; the fixes need one on-device confirmation pass.
+
+- **[FIXED] First-visit: install CTA + diskette buttons invisible until
+  reload.** Root cause was NOT the SW and NOT primarily the
+  `beforeinstallprompt` race: zustand v5's persist calls
+  `merge(undefined, current)` when the storage key doesn't exist (every true
+  first visit), our `merge` destructured it unconditionally → TypeError →
+  swallowed by persist's internal `.catch` → `hasHydrated` never flipped →
+  everything gated on `useStoreHydrated()` (InstallCta, save buttons,
+  OfflineReconciler) hidden all session. Any store write during the visit
+  created the key, which is why a reload "fixed" it — and why Brave (prior
+  visit, key present) worked immediately. Guard: `store/index.ts` merge
+  returns `current` when nothing persisted; `onRehydrateStorage` now logs
+  rehydration errors so this failure class can't be silent again. Locked by
+  `tests/unit/store/persistRehydrate.test.ts`.
+- **[FIXED] `beforeinstallprompt` race (secondary cause of the same
+  symptom).** Chromium fires the event once per page load, on slow first
+  visits before React hydrates. An inline head script in `__root.tsx` now
+  stashes it on `window.__deferredInstallPrompt`;
+  `components/InstallEventsListener.tsx` adopts the stash on mount (see the
+  Reference section below). Locked by
+  `tests/unit/components/InstallEventsListener.test.tsx`.
+- **[FIXED] Opera Android: modal promised a menu item that doesn't exist.**
+  Opera's UA carries `Chrome/` → classified "chromium", but it never fired
+  `beforeinstallprompt` and its ⋮ menu had no install entry. Could not verify
+  from code/standards what current Opera Android actually supports, so the
+  manual-instructions branch of `SaveGateModal` no longer promises any
+  specific menu item — it names the likely labels ("install app" / "add to
+  home screen") and says plainly the browser may not support installing,
+  pointing at Chrome. If Opera DOES fire the event post-stash-fix, it gets
+  the native install button and never sees this copy.
+- **[FIXED] Install CTA popped in with no entrance animation.** It mounts
+  late by design (when the prompt event arrives) and had no animation of its
+  own — `prefers-reduced-motion` was ruled out (global.css uses the 0.01ms
+  duration trick, end states still land). Now wears the app-standard
+  `animate-fade-in`.
+
+On-device re-test script (fresh profile = clear site data first):
+
+1. **Chrome, fresh profile:** first visit → diskettes visible without reload;
+   install CTA fades in when Chrome delivers the prompt; CTA tap → native
+   dialog.
+2. **Chrome, revisit:** same, faster; no flash of missing buttons.
+3. **Brave, fresh profile:** previously untested-fresh — expect same as
+   Chrome fresh.
+4. **Opera, fresh profile:** diskettes visible; diskette tap → modal shows
+   EITHER the native install button (Opera fired the event — report back,
+   we'll upgrade the copy) OR the hedged manual copy with no false menu
+   promise.
+5. **Any browser:** after install, CTA gone, modal switches to open-app
+   branch; standalone gate unchanged (tab still streams, never reads IDB).
+
 ### Open bugs found in testing (2026-07-01) — pending diagnosis
 
 Two bugs surfaced during the chunk-5 verification pass that are NOT yet
@@ -254,6 +309,38 @@ Lives in `playerSlice.playTrack` BEFORE `audio.src` is set: if
 surface via `PlaybackErrorToast`'s `playbackBlockedReason:
 "not-saved-offline"` branch. Fixes TECH_DEBT 11 at its source — `<audio>`
 never gets a source it can't fetch, so it can't hammer the network.
+
+### `beforeinstallprompt` capture — pre-hydration stash (2026-07-02)
+
+Chromium fires `beforeinstallprompt` ONCE per page load, and on a slow first
+visit it fires while the bundle is still downloading — before any React
+effect can attach a listener. Pattern locked in this branch:
+
+1. Inline head script in `__root.tsx` (runs pre-bundle) does
+   `e.preventDefault()` and stashes the event on
+   `window.__deferredInstallPrompt`.
+2. `components/InstallEventsListener.tsx` adopts the stash into the Zustand
+   store on mount, and keeps a live listener for events that fire later.
+3. The stash is cleared on consumption (`useTriggerInstallPrompt` — the
+   event is single-use) and on `appinstalled`, so a remount can't re-adopt
+   a dead event.
+
+The property name is duplicated between the inline script string and
+`utils/installPromptStash.ts` (which owns the `declare global` typing) —
+keep them in sync. Do NOT move the capture back into a React effect.
+
+### First-visit persist rule (2026-07-02)
+
+zustand persist calls `merge(undefined, current)` when localStorage has no
+key — `merge` implementations MUST handle a missing persisted payload
+(return `current`). A throw inside `merge` is swallowed by persist and
+silently prevents `hasHydrated` from ever flipping, hiding every
+`useStoreHydrated()`-gated surface for the whole session.
+`onRehydrateStorage` in `store/index.ts` now logs rehydration errors;
+`tests/unit/store/persistRehydrate.test.ts` locks the first-visit path.
+(Test-infra corollary: Node 25's broken `localStorage` global used to shadow
+jsdom's in vitest — `tests/setup.ts` now installs a working in-memory
+Storage, which is what lets persist be tested at all.)
 
 ---
 

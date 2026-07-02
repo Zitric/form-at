@@ -68,13 +68,13 @@ Add knip as a **per-PR check**, parallel to the existing `static` / `unit` / `e2
 
 ### What's currently inline
 
-Five distinct concerns share the file:
+Five distinct concerns shared the file; two have since moved out:
 
-- `RootNotFound` — the 404 component
+- ~~`RootNotFound`~~ — consolidated into `components/NotFoundPage.tsx` (2026-07-02, status-pages redesign)
+- ~~`InstallEventsListener`~~ — extracted to `components/InstallEventsListener.tsx` (2026-07-02, install-race fix: the pre-hydration stash adoption needed unit tests, which forced the move)
 - `fontCSS` — inlined `@font-face` CSS string
 - `HydrateStore` — store-hydration effect component
-- `InstallEventsListener` — `beforeinstallprompt` + `appinstalled` listeners writing to the Zustand store
-- The `head()` meta / link / script config (large object literal)
+- The `head()` meta / link / script config (large object literal — now also carries the inline `beforeinstallprompt` capture script, whose property name must stay in sync with `utils/installPromptStash.ts`)
 
 ### Constraints
 
