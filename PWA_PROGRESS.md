@@ -146,11 +146,65 @@ On-device re-test script (fresh profile = clear site data first):
 5. **Any browser:** after install, CTA gone, modal switches to open-app
    branch; standalone gate unchanged (tab still streams, never reads IDB).
 
-### Open bugs found in testing (2026-07-01) — pending diagnosis
+### Fixed 2026-07-02 (evening) — review follow-ups H1 + H2, pending on-device checks
 
-Two bugs surfaced during the chunk-5 verification pass that are NOT yet
-fixed. Both have their own diagnosis plans; documented here so a fresh
-session can pick either up cold.
+Both items from the post-merge review's next-PR plan, shipped as two commits.
+
+- **[FIXED — H1] SW pass-through dropped the `Range` header.** Diagnosis
+  outcome: spec-derived, NOT locally reproducible — Node's undici does not
+  implement the `request-no-cors` header guard (demonstrated: `Range`
+  survives a no-cors `new Request()` in Node), so only a real browser shows
+  the drop. The Fetch spec is unambiguous (no-CORS-safelisted headers only:
+  accept / accept-language / content-language / content-type; Range isn't
+  one). Fix: both SW pass-through paths now forward the ORIGINAL request —
+  `fetch(request)` — never a rebuilt one; the `?ctx=app` marker is stripped
+  only for the IDB key (`stripAppContext` in the worker-safe
+  `utils/appContext.ts`). Verified with curl against the live bucket that R2
+  ignores the marker (same 200 body) and honors Range with it present (206).
+  The 5.3 no-cors regression cannot recur by construction — nothing is
+  rebuilt anymore.
+  **On-device check (needs prod build + SW active, standalone or tab):**
+  play a long set (e.g. Form:at 002 — t.i.l., ~100MB), let it buffer, then
+  seek to ~70%. DevTools → Network → the `.mp3` request fired by the seek.
+  PASS: status `206 Partial Content` with a `Range: bytes=N-` request
+  header. FAIL: status `200` and a full-size transfer restarting from byte 0.
+- **[FIXED — H2] `skipWaiting` replaced with user-consented update flow.**
+  SW no longer self-activates over old clients; it waits, the page shows the
+  gold "new build · tap to reload" toast (`UpdateToast` → `useSwUpdate`),
+  tap posts `SKIP_WAITING`, and only the consenting tab reloads on
+  `controllerchange` (first-install claims don't reload — guarded).
+  Decisions locked: toast is deferred while a set download is in flight
+  (reload would abort it); other open tabs do NOT auto-reload (no consent —
+  they accept the same stale-chunk risk as before, now bounded by an
+  explicit user action). E2E is scoped out honestly: the dev server
+  Playwright boots never serves the SW, so the flow is unit-tested against
+  a mocked `navigator.serviceWorker` only.
+  **On-device check:** load the app (prod), deploy any change, wait ~1min or
+  reload-once to let the browser's update check run → gold toast appears
+  above the player chrome → tap → single reload → new build live. Confirm
+  NO toast and NO reload on a genuinely first visit.
+
+### Open bugs found in testing (2026-07-01) — CLOSED 2026-07-02 (evening)
+
+Both diagnosed with scripted browser experiments against the production
+preview (SW active, port 4173) — full RCA in TECH_DEBT 17 + 18 (both now
+`✅ Resolved`). Short version:
+
+- **Tab-plays-IDB:** the gate is intact (proven: seeded IDB is unreachable
+  from a tab, reachable with `?ctx=app`). The heard bytes were the browser
+  HTTP cache / media-element buffer — standard layers outside the chunk-5
+  lock. One real fix shipped: the blocked first tap was silent
+  (`PlaybackErrorToast` required `nowPlaying`, which the gate sets before a
+  track attaches); now blocked reasons render without a track. Product
+  decision recorded: HTTP-cache replay in tabs is accepted (see the chunk-5
+  reference section below).
+- **`/sets` offline nav:** not reproducible on the current build — SPA nav
+  (cold cache), doc reload (pages-v1), cold doc nav (offline.html by
+  design), and detail nav all verified working offline. Likely original
+  cause: a stale pre-chunk-1.5 client (the hazard H2's update flow now
+  addresses) or the SW-not-yet-controlling first-visit window.
+
+The original entries below are kept for the diagnosis-plan history.
 
 - **[BUG, priority] Web offline plays a downloaded set** — violates the
   chunk-5 core rule (web NEVER reads IDB, even for a set that IS downloaded
@@ -162,7 +216,7 @@ session can pick either up cold.
   Diagnosis needed: trace why the SW serves from IDB for a tab request
   when no `?ctx=app` should mean pure network pass-through. Check
   `sw.ts` audio handler line-by-line: `ctxIsApp = url.searchParams.get("ctx") === "app"`;
-  if `!ctxIsApp` MUST short-circuit to `return fetch(cleanReq)` before
+  if `!ctxIsApp` MUST short-circuit to `return fetch(request)` (post-H1) before
   IDB is consulted. Verify that path is actually taken for tab-origin
   requests (and that `withAppContext` in a tab really returns bare URLs).
 - **[BUG] Web offline can't navigate to `/sets`** — offline navigation to
@@ -302,6 +356,15 @@ pick "open it from your home screen" (case b) vs "install the app" (case a).
 `SaveGateModal` includes mutual escape-hatches so a misclassified user can
 flip themselves into the right case manually.
 
+**Scope of the lock (decided 2026-07-02, TECH_DEBT 17):** the lock governs
+IDB/download exclusivity — tabs never read IDB, proven by experiment. It
+does NOT govern the browser HTTP cache: a set streamed online in a tab may
+replay offline from disk cache through the SW's `fetch(request)`
+pass-through. That's standard browser caching, outside SW control short of
+`cache: "no-store"` (rejected — it would degrade normal online streaming
+for no exclusivity gain). Not a violation; documented so nobody re-files it
+as a bug.
+
 ### Retry-storm gate
 
 Lives in `playerSlice.playTrack` BEFORE `audio.src` is set: if
@@ -309,6 +372,41 @@ Lives in `playerSlice.playTrack` BEFORE `audio.src` is set: if
 surface via `PlaybackErrorToast`'s `playbackBlockedReason:
 "not-saved-offline"` branch. Fixes TECH_DEBT 11 at its source — `<audio>`
 never gets a source it can't fetch, so it can't hammer the network.
+
+### SW network pass-through — always `fetch(request)` (2026-07-02, H1)
+
+The SW audio handler NEVER rebuilds a Request for the network. Two incidents
+locked this: chunk 5.3 (rebuild defaulted `mode: "cors"`, browser blocked R2
+MP3s) and H1 (even a mode-preserving rebuild silently drops `Range` under
+the Fetch spec's request-no-cors header guard → seeks got 200 full-body
+instead of 206). The `?ctx=app` marker is stripped only to derive the IDB
+key; on the standalone IDB-miss path the marker reaches R2, which is
+verified harmless (R2 resolves by path; Range honored with the marker).
+Marker protocol lives in `utils/appContext.ts` (worker-safe: `sw.ts` imports
+it and type-checks under WebWorker libs; `withAppContext` stays in
+`utils/audioUrl.ts` because it needs `window`).
+
+### SW update flow — user-consented skipWaiting (2026-07-02, H2)
+
+The SW has NO unconditional `skipWaiting()`. Pattern:
+
+1. New build installs → sits in `waiting` (old clients keep their precache,
+   so their lazy route chunks stay servable).
+2. `useSwUpdate` detects it (both `registration.waiting` at mount and
+   `updatefound` → `statechange` while open; "installed + has controller"
+   distinguishes an update from a first install).
+3. `UpdateToast` shows "new build · tap to reload" — deferred while a set
+   download is in flight.
+4. Tap → `postMessage({ type: "SKIP_WAITING" })` → SW calls
+   `self.skipWaiting()` → `controllerchange` → ONLY the tab that requested
+   the swap reloads (guarded ref; first-install `clientsClaim` also fires
+   controllerchange and must not reload).
+
+`clientsClaim()` stays in the SW: first install has no old clients, and it
+makes offline capability live without a reload. Detection uses
+`navigator.serviceWorker.ready` (not `getRegistration()`) because the
+inline registration script runs on window `load`, potentially after the
+hook mounts.
 
 ### `beforeinstallprompt` capture — pre-hydration stash (2026-07-02)
 

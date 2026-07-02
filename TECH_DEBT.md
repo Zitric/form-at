@@ -7,9 +7,9 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers (before wider release, small trusted-friends test OK on current):** 19 (R2 custom domain — dev URL is rate-limited)
-- **Open:** 1, 2, 3, 4, 5, 7, 8, 12, 13, 14, 15, 17, 18, 19
+- **Open:** 1, 2, 3, 4, 5, 7, 8, 12, 13, 14, 15, 19
 - **Deferred (coupled, ship together post-2026-07-24):** 16 (orphan artwork prune) — waits for the deferred manage-offline-sets view; the prune naturally lives in that view's remove flow. See PWA_PROGRESS.md for the deferral rationale.
-- **Resolved:** 6 (2026-06-28, `10811a4`), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01)
+- **Resolved:** 6 (2026-06-28, `10811a4`), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01), 17 (2026-07-02 — gate proven intact via SW-preview experiments; observed bytes were HTTP cache / element buffer, not IDB; silent-blocked-tap toast fixed), 18 (2026-07-02 — not reproducible on current build; all three offline nav modes verified against the SW preview)
 
 Resolved items keep their original section in place with a `✅ Resolved` stamp at the top, so the historical context (cause + fix path) stays readable. Search for `✅ Resolved` to skip to / past them.
 
@@ -311,13 +311,43 @@ The symmetric path is NOT implemented: warmed variants stay in `artwork-v1` when
 
 ## 17. [BUG, priority] Web offline plays a downloaded set from IDB — violates chunk-5 core rule
 
+**✅ Resolved 2026-07-02 (evening) — misattribution + one real fix.** Diagnosed
+against the production preview (SW active) with scripted browser experiments:
+
+- **The chunk-5 gate is intact.** Tab context, offline, IDB seeded with a fake
+  entry for a set URL: bare-URL fetch fails (`Failed to fetch` — SW passed
+  through to the dead network, never touched IDB); the same URL with `?ctx=app`
+  returned the seeded IDB bytes. Tabs cannot read IDB by construction
+  (`sw.ts` audio handler, post-H1).
+- **The bytes the tester heard were NOT from IDB.** Two standard non-IDB
+  sources exist: (1) the browser **HTTP disk cache** — proven live: content
+  streamed online in a tab is served offline with a 200 straight through the
+  SW's `fetch(request)` pass-through (equally true of the old `cleanReq`
+  path); (2) the **media element's own buffer** for same-track re-taps, which
+  the 2026-07-02 unified gate has since blocked at tap time (remaining
+  ungated resume paths = review item M1, queued).
+- **One real bug found and fixed:** the blocked first tap was SILENT —
+  `PlaybackErrorToast` required `nowPlaying`, but the gate fires before any
+  track attaches. Fixed (blocked reasons render without a track), unit-tested,
+  and verified in the SW preview: offline tab tap now shows "open the app to
+  listen offline".
+- **Product decision (Julian to confirm):** HTTP-cache replay in a tab is
+  accepted as standard browser behavior outside the chunk-5 lock — the lock
+  governs IDB/download exclusivity, not the HTTP cache. Forcing
+  `cache: "no-store"` would degrade normal online streaming for no
+  exclusivity gain. Documented in PWA_PROGRESS chunk-5 reference.
+
+_Original entry (kept for context):_
+
+
+
 Discovered during chunk-5 verification (2026-07-01). From a browser tab, offline, a set that IS downloaded in the standalone app currently plays from IndexedDB when tapped. This violates the chunk-5 lock: **tabs never read IDB**, even for a set present in this origin's storage. Web must always stream from network; offline in a tab means playback fails, not falls back to IDB.
 
-The intended path (per `sw.ts` audio handler + `withAppContext`): in a tab, `isStandalone()` returns false, so `withAppContext(url)` returns the bare URL (no `?ctx=app` marker). SW handler reads `ctxIsApp = url.searchParams.get("ctx") === "app"` — false in a tab — and MUST short-circuit to `return fetch(cleanReq)` before the IDB lookup. Yet the observed behaviour is that IDB IS being served in the tab.
+The intended path (per `sw.ts` audio handler + `withAppContext`): in a tab, `isStandalone()` returns false, so `withAppContext(url)` returns the bare URL (no `?ctx=app` marker). SW handler reads `ctxIsApp` via `stripAppContext(url)` (`utils/appContext.ts`) — false in a tab — and MUST short-circuit to `return fetch(request)` before the IDB lookup. (H1, 2026-07-02, renamed this path: the old `cleanReq` reconstruction is gone; the original request is forwarded untouched.) Yet the observed behaviour is that IDB IS being served in the tab.
 
 **Diagnosis needed** (do NOT fix from a guess):
 1. Confirm `withAppContext` really returns bare URLs from the tab context (log the resolved src on a tap in-tab).
-2. Confirm the SW handler's `ctxIsApp` branch is taking `return fetch(cleanReq)` for tab requests (log the branch taken).
+2. Confirm the SW handler's `ctxIsApp` branch is taking `return fetch(request)` for tab requests (log the branch taken).
 3. Check whether a different code path (SW pre-cache? runtime cache? some workbox route order issue?) is serving the audio bytes before the audio handler runs.
 4. Rule out that a stale SW from a previous build is still controlling the tab (unregister + refresh, retest).
 
@@ -326,6 +356,26 @@ The intended path (per `sw.ts` audio handler + `withAppContext`): in a tab, `isS
 ---
 
 ## 18. [BUG] Web offline can't navigate to `/sets`
+
+**✅ Resolved 2026-07-02 (evening) — not reproducible on the current build.**
+All offline navigation modes verified against the production preview (SW
+active), scripted: SPA click-nav to `/sets` with a cold cache renders the
+archive (loader degrades to null stats via the `.catch` at
+`routes/sets/index.tsx`); document reload after an online visit serves from
+`pages-v1`; cold document nav to a never-visited route lands on
+`offline.html` **by design**; offline SPA nav to a set detail page renders
+with zero failed requests. The `.catch` wrapper predates the 2026-07-01
+observation (landed 2026-06-28, `10811a4`), so "wrapper missing" is ruled
+out. Most plausible causes of the sighting: a **stale pre-chunk-1.5 client**
+still running old JS without the wrapper (the exact stale-client hazard the
+H2 update flow has since addressed), the narrow **SW-not-yet-controlling
+window** on a fresh profile (verified: offline nav before SW control
+hard-fails), or a cold doc nav reading `offline.html` as "broken". No code
+defect in the current navigation stack.
+
+_Original entry (kept for context):_
+
+
 
 Discovered during chunk-5 verification (2026-07-01). Offline navigation to `/sets` in a browser tab fails — the route doesn't render. Direct visits and reloads of other previously-visited routes work fine offline (chunk 1 `pages-v1` SWR + chunk 1.5 `route-data-v1` SWR handle those); `/sets` specifically breaks.
 
