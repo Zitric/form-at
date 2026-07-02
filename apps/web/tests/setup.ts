@@ -7,6 +7,40 @@ afterEach(() => {
   cleanup();
 });
 
+// Node 25 injects its own experimental `localStorage`/`sessionStorage`
+// globals which shadow jsdom's — without a `--localstorage-file` they're
+// stubs with no working methods (that's the "--localstorage-file was
+// provided without a valid path" warning at suite startup). zustand's
+// persist middleware binds the broken global at store creation, so any
+// `useStore.setState` in a test throws `storage.setItem is not a function`
+// — and `persist.rehydrate()` can never be exercised. Replace them with a
+// real in-memory Storage before any test module imports the store.
+function createMemoryStorage(): Storage {
+  const data = new Map<string, string>();
+  return {
+    get length() {
+      return data.size;
+    },
+    clear: () => data.clear(),
+    getItem: (key) => data.get(key) ?? null,
+    key: (i) => [...data.keys()][i] ?? null,
+    removeItem: (key) => {
+      data.delete(key);
+    },
+    setItem: (key, value) => {
+      data.set(key, value);
+    },
+  };
+}
+for (const name of ["localStorage", "sessionStorage"] as const) {
+  if (typeof window[name]?.setItem !== "function") {
+    Object.defineProperty(globalThis, name, {
+      configurable: true,
+      value: createMemoryStorage(),
+    });
+  }
+}
+
 // jsdom doesn't implement HTMLDialogElement.showModal()/close() — polyfill
 // just enough for Modal to mount/unmount as it would in a real browser.
 // Real browsers also focus the first focusable child on showModal(), which is
