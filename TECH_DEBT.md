@@ -6,9 +6,10 @@ Each item is written to be picked up cold — no conversation context required.
 
 ## Status at a glance
 
-- **Open:** 1, 2, 3, 4, 5, 7, 8, 12, 13, 14, 15, 17, 18
+- **Launch blockers (before wider release, small trusted-friends test OK on current):** 19 (R2 custom domain — dev URL is rate-limited)
+- **Open:** 1, 2, 3, 4, 5, 7, 8, 12, 13, 14, 15, 19
 - **Deferred (coupled, ship together post-2026-07-24):** 16 (orphan artwork prune) — waits for the deferred manage-offline-sets view; the prune naturally lives in that view's remove flow. See PWA_PROGRESS.md for the deferral rationale.
-- **Resolved:** 6 (2026-06-28, `10811a4`), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01)
+- **Resolved:** 6 (2026-06-28, `10811a4`), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01), 17 (2026-07-02 — gate proven intact via SW-preview experiments; observed bytes were HTTP cache / element buffer, not IDB; silent-blocked-tap toast fixed), 18 (2026-07-02 — not reproducible on current build; all three offline nav modes verified against the SW preview)
 
 Resolved items keep their original section in place with a `✅ Resolved` stamp at the top, so the historical context (cause + fix path) stays readable. Search for `✅ Resolved` to skip to / past them.
 
@@ -67,13 +68,13 @@ Add knip as a **per-PR check**, parallel to the existing `static` / `unit` / `e2
 
 ### What's currently inline
 
-Five distinct concerns share the file:
+Five distinct concerns shared the file; two have since moved out:
 
-- `RootNotFound` — the 404 component
+- ~~`RootNotFound`~~ — consolidated into `components/NotFoundPage.tsx` (2026-07-02, status-pages redesign)
+- ~~`InstallEventsListener`~~ — extracted to `components/InstallEventsListener.tsx` (2026-07-02, install-race fix: the pre-hydration stash adoption needed unit tests, which forced the move)
 - `fontCSS` — inlined `@font-face` CSS string
 - `HydrateStore` — store-hydration effect component
-- `InstallEventsListener` — `beforeinstallprompt` + `appinstalled` listeners writing to the Zustand store
-- The `head()` meta / link / script config (large object literal)
+- The `head()` meta / link / script config (large object literal — now also carries the inline `beforeinstallprompt` capture script, whose property name must stay in sync with `utils/installPromptStash.ts`)
 
 ### Constraints
 
@@ -310,13 +311,43 @@ The symmetric path is NOT implemented: warmed variants stay in `artwork-v1` when
 
 ## 17. [BUG, priority] Web offline plays a downloaded set from IDB — violates chunk-5 core rule
 
+**✅ Resolved 2026-07-02 (evening) — misattribution + one real fix.** Diagnosed
+against the production preview (SW active) with scripted browser experiments:
+
+- **The chunk-5 gate is intact.** Tab context, offline, IDB seeded with a fake
+  entry for a set URL: bare-URL fetch fails (`Failed to fetch` — SW passed
+  through to the dead network, never touched IDB); the same URL with `?ctx=app`
+  returned the seeded IDB bytes. Tabs cannot read IDB by construction
+  (`sw.ts` audio handler, post-H1).
+- **The bytes the tester heard were NOT from IDB.** Two standard non-IDB
+  sources exist: (1) the browser **HTTP disk cache** — proven live: content
+  streamed online in a tab is served offline with a 200 straight through the
+  SW's `fetch(request)` pass-through (equally true of the old `cleanReq`
+  path); (2) the **media element's own buffer** for same-track re-taps, which
+  the 2026-07-02 unified gate has since blocked at tap time (remaining
+  ungated resume paths = review item M1, queued).
+- **One real bug found and fixed:** the blocked first tap was SILENT —
+  `PlaybackErrorToast` required `nowPlaying`, but the gate fires before any
+  track attaches. Fixed (blocked reasons render without a track), unit-tested,
+  and verified in the SW preview: offline tab tap now shows "open the app to
+  listen offline".
+- **Product decision (Julian to confirm):** HTTP-cache replay in a tab is
+  accepted as standard browser behavior outside the chunk-5 lock — the lock
+  governs IDB/download exclusivity, not the HTTP cache. Forcing
+  `cache: "no-store"` would degrade normal online streaming for no
+  exclusivity gain. Documented in PWA_PROGRESS chunk-5 reference.
+
+_Original entry (kept for context):_
+
+
+
 Discovered during chunk-5 verification (2026-07-01). From a browser tab, offline, a set that IS downloaded in the standalone app currently plays from IndexedDB when tapped. This violates the chunk-5 lock: **tabs never read IDB**, even for a set present in this origin's storage. Web must always stream from network; offline in a tab means playback fails, not falls back to IDB.
 
-The intended path (per `sw.ts` audio handler + `withAppContext`): in a tab, `isStandalone()` returns false, so `withAppContext(url)` returns the bare URL (no `?ctx=app` marker). SW handler reads `ctxIsApp = url.searchParams.get("ctx") === "app"` — false in a tab — and MUST short-circuit to `return fetch(cleanReq)` before the IDB lookup. Yet the observed behaviour is that IDB IS being served in the tab.
+The intended path (per `sw.ts` audio handler + `withAppContext`): in a tab, `isStandalone()` returns false, so `withAppContext(url)` returns the bare URL (no `?ctx=app` marker). SW handler reads `ctxIsApp` via `stripAppContext(url)` (`utils/appContext.ts`) — false in a tab — and MUST short-circuit to `return fetch(request)` before the IDB lookup. (H1, 2026-07-02, renamed this path: the old `cleanReq` reconstruction is gone; the original request is forwarded untouched.) Yet the observed behaviour is that IDB IS being served in the tab.
 
 **Diagnosis needed** (do NOT fix from a guess):
 1. Confirm `withAppContext` really returns bare URLs from the tab context (log the resolved src on a tap in-tab).
-2. Confirm the SW handler's `ctxIsApp` branch is taking `return fetch(cleanReq)` for tab requests (log the branch taken).
+2. Confirm the SW handler's `ctxIsApp` branch is taking `return fetch(request)` for tab requests (log the branch taken).
 3. Check whether a different code path (SW pre-cache? runtime cache? some workbox route order issue?) is serving the audio bytes before the audio handler runs.
 4. Rule out that a stale SW from a previous build is still controlling the tab (unregister + refresh, retest).
 
@@ -325,6 +356,26 @@ The intended path (per `sw.ts` audio handler + `withAppContext`): in a tab, `isS
 ---
 
 ## 18. [BUG] Web offline can't navigate to `/sets`
+
+**✅ Resolved 2026-07-02 (evening) — not reproducible on the current build.**
+All offline navigation modes verified against the production preview (SW
+active), scripted: SPA click-nav to `/sets` with a cold cache renders the
+archive (loader degrades to null stats via the `.catch` at
+`routes/sets/index.tsx`); document reload after an online visit serves from
+`pages-v1`; cold document nav to a never-visited route lands on
+`offline.html` **by design**; offline SPA nav to a set detail page renders
+with zero failed requests. The `.catch` wrapper predates the 2026-07-01
+observation (landed 2026-06-28, `10811a4`), so "wrapper missing" is ruled
+out. Most plausible causes of the sighting: a **stale pre-chunk-1.5 client**
+still running old JS without the wrapper (the exact stale-client hazard the
+H2 update flow has since addressed), the narrow **SW-not-yet-controlling
+window** on a fresh profile (verified: offline nav before SW control
+hard-fails), or a cold doc nav reading `offline.html` as "broken". No code
+defect in the current navigation stack.
+
+_Original entry (kept for context):_
+
+
 
 Discovered during chunk-5 verification (2026-07-01). Offline navigation to `/sets` in a browser tab fails — the route doesn't render. Direct visits and reloads of other previously-visited routes work fine offline (chunk 1 `pages-v1` SWR + chunk 1.5 `route-data-v1` SWR handle those); `/sets` specifically breaks.
 
@@ -340,4 +391,50 @@ Separate system from the audio read-path — this is route data, not playback. N
 
 ---
 
-_Last updated: 2026-07-01 (chunk-5 regression fixes 5.1/5.2/5.3 landed; two new open bugs recorded)_
+## 19. [LAUNCH BLOCKER before wider release] Move audio off the R2 public dev URL onto a custom domain
+
+Discovered 2026-07-02 pre-friends-test. Audio MP3s + peaks JSON are currently served from the R2 Public Development URL:
+
+```
+https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/…
+```
+
+Cloudflare explicitly warns this URL is rate-limited and **NOT recommended for production** ("Connect a custom domain to the bucket to support production workloads"). No custom domain is currently assigned to the `form-at-sets` bucket (WEUR).
+
+CORS itself is fine — Allowed Origins: `*`, GET/HEAD methods, Range header exposed — audio streaming works today. The constraint is purely rate-limit / production-recommendation, not a functional bug.
+
+**Why this is a launch blocker, not a regular bug**: fine for small trusted-friends tests (low concurrency). At launch-scale concurrent traffic — many friends hitting play at once via an Instagram announcement, or any wider public share — the dev URL's rate limit can throttle audio requests, breaking playback for some users at exactly the worst moment. The failure mode is invisible in low-concurrency testing.
+
+### Fix scope (its own session — Cloudflare config + code hostname sweep)
+
+1. **Cloudflare**: connect a custom domain / subdomain to the `form-at-sets` bucket. Candidate hosts: `sets.formatglasgow.com` or `cdn.formatglasgow.com`. Gains: no rate limit, Cloudflare edge caching in front of R2, production-recommended path.
+
+2. **Code**: replace every reference to `pub-e15e86da649d4c91b6666141bfe67664.r2.dev` with the new custom domain. **Known sites to audit** (grep the hostname — DO NOT trust this list as complete, run a fresh grep at fix time):
+   - **`apps/web/app/sw.ts`** — the audio route handler matches by exact hostname (`url.hostname === "pub-e15e86…r2.dev"`). MUST update or the SW stops intercepting audio → offline playback breaks + tab streaming falls back to unproxied fetch.
+   - **`apps/web/app/data/sets.ts`** — the `src` and `peaks` URLs for every shipping set are absolute R2 URLs with this host. Change the base.
+   - **`apps/web/app/utils/audioUrl.ts`** — check whether `withAppContext` references the host (currently doesn't, but the audit is required so a future addition can't silently break).
+   - Any comment / doc entry that names the hostname (this file, `PWA_PROGRESS.md`, `CLAUDE.md`, wrangler / worker config, README) — grep and update for consistency so future audits find one canonical host.
+
+3. **Verify after the swap**:
+   - (a) Audio streams from the new domain online (both saved-in-app and never-downloaded sets).
+   - (b) Offline-from-IDB still works — the SW handler still matches the new host, still runs the `?ctx=app` → IDB path, IDB entries keyed by the new host resolve.
+   - (c) Range slicing / `createPartialResponse` still fires correctly against the new host (seek + play-through a saved set to trigger multiple Range requests).
+   - (d) The `mode: "no-cors"` preservation from chunk 5.3 still works if the new host has different CORS behaviour than the dev URL — verify with an actual GET + Range in DevTools; if the custom domain adds CORS headers the dev URL didn't, no-cors mode should still work but confirm.
+
+### Migration caveat — existing offline entries
+
+IDB entries are keyed by full URL. After the hostname swap, existing saved sets in users' IDB will have OLD-host URLs. Options:
+
+- **Force re-download**: bump the SW cache version so `reconcileFromIdb` treats the old-host entries as evicted → user re-saves under the new host. Clean but costs a re-download per set.
+- **URL-normalise in the SW handler**: strip/rewrite the host to a canonical form before the IDB lookup. Complex + fragile.
+- **Do nothing**: old entries stay orphaned and eventually get auto-purged by `reconcileFromIdb`'s catalogue-check (since `data/sets.ts` now references the new host, the old-host `setId` still matches). Simplest but users lose their downloads silently.
+
+Recommend the force-re-download path with an in-app notice ("we moved sets to a faster server — re-save to keep offline access"). Decide + document at fix time.
+
+### Timing
+
+Block wider announcement / public share until this ships. Small friends test (2026-07-02) can proceed on the dev URL — concurrency is low enough that rate limits don't bite. The threshold isn't sharp; use "am I about to link this in a post that reaches strangers?" as the go/no-go.
+
+---
+
+_Last updated: 2026-07-02 (R2 custom domain launch blocker recorded as item 19)_

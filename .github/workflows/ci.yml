@@ -71,7 +71,13 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('apps/web/package.json') }}
+          # Key includes the browser set AND the lockfile hash. Browser set:
+          # deploy.yml caches chromium-only under this same path — sharing a
+          # key let its cache poison this job's (webkit missing, install
+          # skipped on cache-hit; bit us on PR #2, 2026-07-02). Lockfile:
+          # the ^-versioned @playwright/test can bump its required browser
+          # build via pnpm-lock without package.json changing.
+          key: pw-${{ runner.os }}-chromium-webkit-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install Playwright browsers
         if: steps.pw-cache.outputs.cache-hit != 'true'

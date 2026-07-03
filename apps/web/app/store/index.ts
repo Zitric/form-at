@@ -45,6 +45,14 @@ export const useStore = create<AppStore>()(
         hasRequestedPersist: state.hasRequestedPersist,
       }),
       merge: (persisted, current) => {
+        // zustand calls merge(undefined, current) when the storage key does
+        // not exist yet — i.e. on every true first visit. Without this guard
+        // the destructure below throws, persist swallows the TypeError in its
+        // internal .catch, `hasHydrated` never flips, and every surface gated
+        // on useStoreHydrated() (InstallCta, save-for-offline buttons,
+        // OfflineReconciler) stays hidden for the whole session. Found via
+        // Android field testing 2026-07-02.
+        if (!persisted) return current;
         const {
           nowPlayingId,
           positions,
@@ -75,6 +83,12 @@ export const useStore = create<AppStore>()(
           offlineSets: offlineSets ?? {},
           hasRequestedPersist: hasRequestedPersist ?? false,
         };
+      },
+      // Rehydration failures are otherwise fully silent — persist catches
+      // them internally and moves on. That silence is exactly how the
+      // first-visit merge crash above went unnoticed; keep future ones loud.
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.error("[store] persist rehydration failed:", error);
       },
     },
   ),

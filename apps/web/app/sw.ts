@@ -22,6 +22,7 @@ import { createPartialResponse } from "workbox-range-requests";
 import { registerRoute, setCatchHandler } from "workbox-routing";
 import { StaleWhileRevalidate } from "workbox-strategies";
 import { getOfflineAudio } from "~/data/offline-audio";
+import { stripAppContext } from "~/utils/appContext";
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ revision: string | null; url: string }>;
@@ -33,13 +34,25 @@ declare const self: ServiceWorkerGlobalScope & {
 // in Phase 4.2.
 clientsClaim();
 
-// Activate this SW the moment it finishes installing, instead of waiting for
-// the old SW's clients to close. Pairs with `clientsClaim` above so updates
-// land immediately. We can revisit this if we ever ship a breaking
-// SW-protocol change and need a controlled rollout, but for an audio app
-// where the worst case is "old cache served for 30 more seconds", immediate
-// activation is the right default.
-self.skipWaiting();
+// NO unconditional `self.skipWaiting()` — deliberately (H2, 2026-07-02
+// review). An immediately-activating SW prunes the previous build's hashed
+// chunks from the precache while old clients are still running them; the old
+// client's next lazy route-load then 404s, because Cloudflare Pages serves
+// only the latest deployment. (The removed call's comment claimed the worst
+// case was "old cache served for 30 more seconds" — the actual worst case
+// was a broken route.) Instead: the new SW sits in `waiting`, the page shows
+// "new build · tap to reload" (<UpdateToast> → useSwUpdate), and activation
+// happens on explicit user consent via the message below, followed by a
+// reload the page itself triggers on `controllerchange`.
+//
+// `clientsClaim()` above STAYS: on first install there is no old client
+// running hashed chunks, so claiming immediately is safe — it's what makes
+// offline capability live without a reload on the very first visit.
+self.addEventListener("message", (event) => {
+  if ((event.data as { type?: string } | null)?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
 
 // Precache everything the build tags into the manifest (HTML, JS, CSS,
 // fonts, the icons referenced by the manifest). Workbox handles cache
@@ -120,10 +133,31 @@ registerRoute(
 //   - missing marker (browser tab) → pure pass-through to network. Never
 //     reads IDB. A downloaded set in a tab still streams from R2.
 //   - `ctx=app` (standalone) → read IDB; fall through to network on miss.
-// The marker is stripped before BOTH the IDB key and any network fetch so
-// the IDB lookup matches the bare URL the download flow stored, and R2 sees
-// the canonical URL exactly as if no SW were involved. `searchParams.delete`
-// + `toString()` emits no trailing `?` when the search becomes empty.
+// The marker is stripped ONLY for the IDB key (via `stripAppContext`) so the
+// lookup matches the bare URL the download flow stored.
+//
+// === Network pass-through: ALWAYS `fetch(request)`, never a rebuilt Request ===
+// Both pass-through paths (tab, and standalone IDB-miss) forward the
+// ORIGINAL request object. Two incidents locked this in:
+//   1. Chunk 5.3: a rebuilt `new Request(url, { method, headers })` defaults
+//      `mode` to "cors", silently flipping `<audio>`'s native no-cors and
+//      making the browser block R2 MP3 responses. Passing `request` through
+//      preserves mode / credentials / redirect by construction.
+//   2. H1 (2026-07-02 review): even a rebuild that copies mode explicitly
+//      loses the `Range` header — per the Fetch spec, a Headers object with
+//      the "request-no-cors" guard silently drops any header that isn't
+//      no-CORS-safelisted (accept / accept-language / content-language /
+//      content-type), and Range isn't. Result: mid-set seeks got 200
+//      full-body instead of 206, re-downloading 100MB+ sets from byte 0.
+//      (Spec-derived: Node's undici doesn't implement the guard, so this is
+//      only observable in a real browser — verify with the 206-on-seek check
+//      in PWA_PROGRESS.)
+// Consequence: on the standalone IDB-miss path the `?ctx=app` marker reaches
+// R2. Verified harmless with curl against the live bucket (2026-07-02): R2
+// resolves objects by path — same 200 body, and Range GETs return 206 with
+// the marker present. Cost: the marked URL keys the browser HTTP cache
+// separately from the bare tab URL — an acceptable duplicate-fetch, not a
+// correctness issue.
 //
 // === Cached-Response contract (the chunk-3 §3 lock — preserved) ===
 // The synthetic Response built here MUST have these five properties or Range
@@ -138,39 +172,16 @@ registerRoute(
     url.hostname === "pub-e15e86da649d4c91b6666141bfe67664.r2.dev" &&
     (url.pathname.endsWith(".mp3") || url.pathname.endsWith(".json")),
   async ({ request, url }) => {
-    const ctxIsApp = url.searchParams.get("ctx") === "app";
-
-    // Strip the marker for both the IDB key and any network fetch. Build a
-    // fresh Request because Request URLs are immutable once constructed.
-    //
-    // MUST preserve `mode`, `credentials`, `redirect` from the original
-    // request. `new Request(url, init)` defaults `mode` to "cors", which
-    // silently flips media-element cross-origin fetches from their native
-    // "no-cors" mode. That's benign for peaks JSON (already cors from JS
-    // fetch) but breaks MP3 streaming: R2's GET responses aren't ACAO-
-    // wrapped in a way that satisfies a cors check on Range, so the
-    // browser blocks the response and `<audio>` can't load.
-    //
-    // Preserving the original mode keeps each request type on its native
-    // path: MP3 stays no-cors (opaque response — safe, we return it
-    // straight through without inspecting), peaks JSON stays cors
-    // (transparent — the JS caller reads .json() as before).
-    const cleanUrl = new URL(url.toString());
-    cleanUrl.searchParams.delete("ctx");
-    const cleanUrlString = cleanUrl.toString();
-    const cleanReq = new Request(cleanUrlString, {
-      method: request.method,
-      headers: request.headers,
-      mode: request.mode,
-      credentials: request.credentials,
-      redirect: request.redirect,
-    });
+    const { ctxIsApp, bareUrl } = stripAppContext(url);
 
     // Tab semantics: pure pass-through, no IDB read even if an entry exists.
-    if (!ctxIsApp) return fetch(cleanReq);
+    // The URL carries no marker in a tab, so `request` already IS the bare
+    // canonical request — see the pass-through block comment above for why
+    // it must be forwarded unmodified.
+    if (!ctxIsApp) return fetch(request);
 
-    const entry = await getOfflineAudio(cleanUrlString);
-    if (!entry) return fetch(cleanReq);
+    const entry = await getOfflineAudio(bareUrl);
+    if (!entry) return fetch(request);
     const cached = new Response(entry.blob, {
       status: 200,
       headers: {

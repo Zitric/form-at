@@ -32,7 +32,15 @@ export function PlaybackErrorToast() {
   const playbackBlockedReason = useStore((s) => s.playbackBlockedReason);
   const setHasError = useStore((s) => s.setHasError);
 
-  if (!hasError || !nowPlaying) return null;
+  if (!hasError) return null;
+  // Generic playback errors need a loaded track for context — but the
+  // offline-blocked reasons are set by the playTrack gate BEFORE any track
+  // is attached (playerSlice returns early on a blocked FIRST tap, so
+  // `nowPlaying` can still be null). Requiring nowPlaying for those made a
+  // fresh-session offline tap in a tab fail silently: gate fired, toast
+  // never rendered, button read as dead (found via SW-preview diagnosis,
+  // 2026-07-02 evening — TECH_DEBT 17 follow-up).
+  if (!nowPlaying && !playbackBlockedReason) return null;
 
   const message =
     playbackBlockedReason === "not-saved-offline"

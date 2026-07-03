@@ -3,15 +3,15 @@ import { useEffect } from "react";
 import { BottomNav } from "~/components/BottomNav";
 import { Header } from "~/components/Header";
 import { InAppBrowserBanner } from "~/components/InAppBrowserBanner";
+import { InstallEventsListener } from "~/components/InstallEventsListener";
 import { NotFoundPage } from "~/components/NotFoundPage";
 import { OfflineReconciler } from "~/components/OfflineReconciler";
 import { ShareModal } from "~/components/ShareModal";
 import { SwipeNavigator } from "~/components/SwipeNavigator";
 import { Toast } from "~/components/Toast";
+import { UpdateToast } from "~/components/UpdateToast";
 import { PlaybackErrorToast, Player } from "~/components/player";
 import { useStore } from "~/store";
-import type { BeforeInstallPromptEvent } from "~/store/uiSlice";
-import { safeLocal } from "~/utils/safeStorage";
 import "~/styles/global.css";
 
 export const Route = createRootRoute({
@@ -115,6 +115,19 @@ export const Route = createRootRoute({
   });
 }`,
       },
+      // Pre-hydration capture of `beforeinstallprompt`. Chromium fires it
+      // once per page load, often while first-visit JS is still downloading —
+      // a React-effect listener misses it and the install CTA never appears
+      // that session. This inline script runs before any bundle; the React
+      // layer adopts the stash on mount (see utils/installPromptStash.ts,
+      // which owns the property name — keep the two in sync).
+      {
+        children: `window.__deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  window.__deferredInstallPrompt = e;
+});`,
+      },
     ],
   }),
   component: Root,
@@ -161,56 +174,6 @@ function HydrateStore() {
   return null;
 }
 
-// Global capture of the two PWA install lifecycle events. Sibling to
-// HydrateStore — null render, just runs effects on mount.
-//
-// Why one listener pair globally (not per-component): both <InstallCta> (home)
-// and Phase 3's <SaveForOfflineButton> (/sets/:setId) need the captured
-// `beforeinstallprompt` event to call `.prompt()` on. Capturing it twice in
-// two components would mean only whichever mounted second sees it — the
-// first listener consumed-and-stored it locally. Capturing once into the
-// store and reading from both consumers keeps them in sync.
-//
-// Also performs a one-time migration of Phase 1's localStorage dismiss key
-// into the new persisted `pwaInstallDismissed` flag so a returning user who
-// said "not now" before isn't re-prompted after this refactor lands.
-function InstallEventsListener() {
-  const setDeferredPrompt = useStore((s) => s.setDeferredPrompt);
-  const setPwaInstalled = useStore((s) => s.setPwaInstalled);
-  const setPwaInstallDismissed = useStore((s) => s.setPwaInstallDismissed);
-
-  useEffect(() => {
-    // safeLocal handles private-mode Safari / partitioned-iframe throws
-    // internally with a silent fallback. If the read throws → returns null →
-    // comparison fails → migration skipped. If the remove throws → no-op.
-    // Either way no crash, worst case is the user sees the install button
-    // once more (the migration just retries on next load and likely succeeds).
-    if (safeLocal.get("install-dismissed") === "1") {
-      setPwaInstallDismissed(true);
-      safeLocal.remove("install-dismissed");
-    }
-
-    const onBeforeInstall = (e: Event) => {
-      // Chrome would otherwise show its own mini-infobar; we want control.
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-    };
-    const onInstalled = () => {
-      setPwaInstalled(true);
-      setDeferredPrompt(null);
-    };
-
-    window.addEventListener("beforeinstallprompt", onBeforeInstall);
-    window.addEventListener("appinstalled", onInstalled);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onBeforeInstall);
-      window.removeEventListener("appinstalled", onInstalled);
-    };
-  }, [setDeferredPrompt, setPwaInstalled, setPwaInstallDismissed]);
-
-  return null;
-}
-
 function Root() {
   return (
     <html lang="en">
@@ -228,6 +191,7 @@ function Root() {
         <Player />
         <PlaybackErrorToast />
         <Toast />
+        <UpdateToast />
         <ShareModal />
         <InAppBrowserBanner />
         <BottomNav />
