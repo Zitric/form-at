@@ -43,9 +43,13 @@ export function useTriggerDownload(setId: string): () => void {
         setToast("size not configured for this set — flag it to the team");
         return;
       }
-      // UNKNOWN_SET and other unexpected throws — log silently. Shouldn't
-      // happen with a valid setId; the caller has already verified the set
-      // exists (it's in the catalogue render).
+      // UNKNOWN_SET and other unexpected throws shouldn't happen with a
+      // valid setId (the caller renders from the catalogue) — no user-facing
+      // toast, but surface it in dev so a data-wiring mistake isn't
+      // completely invisible.
+      if (process.env.NODE_ENV === "development") {
+        console.warn(`[offline] startDownload(${setId}) threw unexpectedly:`, e);
+      }
     });
   };
 }

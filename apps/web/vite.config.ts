@@ -1,4 +1,5 @@
-import { mkdir, readdir, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, readdir, stat } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
@@ -35,7 +36,6 @@ function buildServiceWorker(): Plugin {
     if (rel === "manifest.json") return true;
     if (rel === "icon-192.png" || rel === "icon-512.png") return true;
     if (rel === "wordmark.png" || rel === "logo.png") return true;
-    if (rel === "index.html") return true;
     if (rel === "offline.html") return true;
     if (rel.startsWith("assets/") && /\.(js|css)$/.test(rel)) return true;
     if (rel.startsWith("fonts/")) return true;
@@ -67,13 +67,18 @@ function buildServiceWorker(): Plugin {
           const rel = relative(CLIENT_DIR, full).split("\\").join("/");
           if (!shouldPrecache(rel)) continue;
           // Content-hashed Vite assets (`assets/foo-AbCd1234.js`) need no
-          // revision — their hash IS the cache-bust signal. Everything else
-          // gets the mtime as a cheap revision token. Character class
+          // revision — their hash IS the cache-bust signal. Character class
           // includes `_` and `-` because Vite uses base64url for hashes
           // (e.g. `SocialLink-DNCRpP_a.js`, `_eventId-B-zz1u4r.js`); without
-          // those, ~25% of assets fall back to mtime and re-download on
-          // every deploy even when their content hasn't changed.
-          const revision = /-[A-Za-z0-9_-]{8,}\.(js|css)$/.test(rel) ? null : st.mtimeMs.toString();
+          // those, ~25% of assets fall back to the else-branch and
+          // re-download on every deploy even when their content hasn't
+          // changed. Everything else gets an md5 of its CONTENT — mtime was
+          // the previous token, but CI's fresh checkouts give every file a
+          // new mtime, so fonts/icons/wordmark re-downloaded for every user
+          // on every deploy despite never changing.
+          const revision = /-[A-Za-z0-9_-]{8,}\.(js|css)$/.test(rel)
+            ? null
+            : createHash("md5").update(await readFile(full)).digest("hex");
           entries.push({ url: `/${rel}`, revision });
         }
       }
