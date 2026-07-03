@@ -171,9 +171,17 @@ On-device re-test script (fresh profile = clear site data first):
   line removed (SSR emits none); `useTriggerDownload`'s silent UNKNOWN_SET
   branch dev-warns.
 
-Remaining from the review's next-PR plan: M1 (playback-gate centralization —
-next session), M3 (`_headers` + CSP, bundled with TECH_DEBT 19's custom
-domain), N3 (maskable icon check), N4 (set-card extraction, backlog).
+Remaining from the review's next-PR plan: ~~M1~~ (playback-gate
+centralization — done 2026-07-03, `fix/playback-gate-m1`, see the
+retry-storm-gate Reference section), M3 (`_headers` + CSP, bundled with
+TECH_DEBT 19's custom domain), N3 (maskable icon check), N4 (set-card
+extraction, backlog).
+
+On-device addition for the pending pass (M1): install the PWA, play any
+NON-saved set, lock the phone, enable airplane mode, tap play on the lock
+screen. PASS: nothing plays, lock-screen UI stays paused, and unlocking
+shows the "not saved for offline listening" toast. FAIL: audio stutters into
+the retry storm or the lock screen shows "playing".
 
 ### Fixed 2026-07-02 (evening) — review follow-ups H1 + H2, pending on-device checks
 
@@ -394,13 +402,31 @@ pass-through. That's standard browser caching, outside SW control short of
 for no exclusivity gain). Not a violation; documented so nobody re-files it
 as a bug.
 
-### Retry-storm gate
+### Retry-storm gate — centralized (M1, 2026-07-03)
 
-Lives in `playerSlice.playTrack` BEFORE `audio.src` is set: if
-`!navigator.onLine && offlineSetState !== "saved"`, refuse to attach src +
-surface via `PlaybackErrorToast`'s `playbackBlockedReason:
-"not-saved-offline"` branch. Fixes TECH_DEBT 11 at its source — `<audio>`
-never gets a source it can't fetch, so it can't hammer the network.
+One predicate, one resume writer, every play path:
+
+- **Predicate:** `canFetchPlaybackBytes(trackId, offlineSets)` in
+  `playerSlice.ts` — true when online, or standalone AND saved (the only
+  context the SW serves IDB to). Exported, pure environment reads.
+- **Funnel:** `resumePlayback()` is THE single gated "make paused audio
+  play" action. Player-bar button, Space, lock-screen Media Session,
+  waveform scrub-release, the isPlaying bridge effect, and `playTrack`'s
+  same-track branch all delegate to it. The only other raw `audio.play()`
+  is `playTrack`'s new-track start, behind the same predicate.
+- **Feedback:** blocked → `playbackBlockedReason` set →
+  `PlaybackErrorToast` (renders trackless since 2026-07-02). The Media
+  Session handler additionally pins `mediaSession.playbackState = "paused"`
+  on block so the lock screen can't show a lying "playing".
+- **Pause is NEVER gated** — `audio.pause()` fetches nothing; blocking it
+  would trap the user with a stalled stream.
+- **No bridge loop:** a blocked resume sets `isPlaying: false`; element is
+  paused; store and element agree; the bridge effect's next run takes
+  neither branch.
+
+The original TECH_DEBT 11 fix put this only in `playTrack` (tap-time); the
+2026-07-02 review (M1) found five `audio.play()` writers bypassing it —
+worst case, lock-screen resume offline re-spawned the retry storm.
 
 ### SW network pass-through — always `fetch(request)` (2026-07-02, H1)
 

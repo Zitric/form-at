@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { create } from "zustand";
 import type { MusicSet } from "~/data/sets";
-import { createPlayerSlice, registerAudioElement } from "~/store/playerSlice";
+import {
+  canFetchPlaybackBytes,
+  createPlayerSlice,
+  registerAudioElement,
+} from "~/store/playerSlice";
 
 // Toggles navigator.onLine for a single test. jsdom exposes onLine as a
 // getter on the Navigator prototype; defineProperty overrides it locally
@@ -246,6 +250,107 @@ describe("togglePlay", () => {
     registerAudioElement(null);
     const store = makeStore();
     expect(() => store.getState().togglePlay()).not.toThrow();
+  });
+});
+
+describe("canFetchPlaybackBytes (M1 gate predicate)", () => {
+  it("is true whenever online, regardless of saved state", () => {
+    setNavigatorOnline(true);
+    expect(canFetchPlaybackBytes("set-a", undefined)).toBe(true);
+    expect(canFetchPlaybackBytes("set-a", { "set-a": { status: "not-saved" } })).toBe(true);
+  });
+
+  it("is false offline when the set isn't saved", () => {
+    setNavigatorOnline(false);
+    setStandalone(true);
+    expect(canFetchPlaybackBytes("set-a", undefined)).toBe(false);
+    expect(canFetchPlaybackBytes("set-a", { "set-a": { status: "not-saved" } })).toBe(false);
+  });
+
+  it("is false offline in a TAB even when saved (tabs never read IDB)", () => {
+    setNavigatorOnline(false);
+    setStandalone(false);
+    expect(canFetchPlaybackBytes("set-a", { "set-a": { status: "saved" } })).toBe(false);
+  });
+
+  it("is true offline only for standalone AND saved", () => {
+    setNavigatorOnline(false);
+    setStandalone(true);
+    expect(canFetchPlaybackBytes("set-a", { "set-a": { status: "saved" } })).toBe(true);
+  });
+});
+
+// M1 regression block: these are the paths the 2026-07-02 review found
+// bypassing the tap-time gate — player bar button, Space, lock-screen
+// resume, scrub-release. They all funnel into `resumePlayback` now; these
+// tests lock the funnel's behavior at the store level (the hook-side
+// delegations are one-line calls into it).
+describe("resumePlayback (M1 single gated resume writer)", () => {
+  it("blocks resume offline on an unsaved set: reason set, play() never called", async () => {
+    const store = makeStore();
+    store.getState().playTrack(trackA);
+    await Promise.resolve();
+    audio.pause();
+
+    setNavigatorOnline(false);
+    const playSpy = vi.spyOn(audio, "play");
+
+    store.getState().resumePlayback();
+
+    expect(playSpy).not.toHaveBeenCalled();
+    expect(audio.paused).toBe(true);
+    expect(store.getState().playbackBlockedReason).toBe("tab-offline-needs-network");
+    expect(store.getState().isPlaying).toBe(false);
+    expect(store.getState().hasError).toBe(true);
+  });
+
+  it("resumes when online", async () => {
+    const store = makeStore();
+    store.getState().playTrack(trackA);
+    await Promise.resolve();
+    audio.pause();
+
+    store.getState().resumePlayback();
+    await Promise.resolve();
+
+    expect(store.getState().isPlaying).toBe(true);
+    expect(store.getState().playbackBlockedReason).toBeNull();
+  });
+
+  it("no-ops without a current track (nothing to resume)", () => {
+    const store = makeStore();
+    const playSpy = vi.spyOn(audio, "play");
+    expect(() => store.getState().resumePlayback()).not.toThrow();
+    expect(playSpy).not.toHaveBeenCalled();
+  });
+
+  it("scrub-release path: store togglePlay offline+unsaved is blocked through the same funnel", async () => {
+    const store = makeStore();
+    store.getState().playTrack(trackA);
+    await Promise.resolve();
+    audio.pause();
+
+    setNavigatorOnline(false);
+    const playSpy = vi.spyOn(audio, "play");
+
+    store.getState().togglePlay();
+
+    expect(playSpy).not.toHaveBeenCalled();
+    expect(store.getState().playbackBlockedReason).toBe("tab-offline-needs-network");
+  });
+
+  it("pause via togglePlay stays ungated offline (audio.pause never fetches)", async () => {
+    const store = makeStore();
+    store.getState().playTrack(trackA);
+    await Promise.resolve();
+    expect(audio.paused).toBe(false);
+
+    setNavigatorOnline(false);
+    store.getState().togglePlay();
+
+    expect(audio.paused).toBe(true);
+    expect(store.getState().isPlaying).toBe(false);
+    expect(store.getState().hasError).toBe(false);
   });
 });
 
