@@ -123,8 +123,9 @@ in code with unit coverage; the fixes need one on-device confirmation pass.
   manual-instructions branch of `SaveGateModal` no longer promises any
   specific menu item — it names the likely labels ("install app" / "add to
   home screen") and says plainly the browser may not support installing,
-  pointing at Chrome. If Opera DOES fire the event post-stash-fix, it gets
-  the native install button and never sees this copy.
+  pointing at Chrome. **Field-confirmed 2026-07-03:** Opera Android does not
+  fire the event even with the stash; the hedged copy is the permanent
+  behavior there, not a fallback.
 - **[FIXED] Install CTA popped in with no entrance animation.** It mounts
   late by design (when the prompt event arrives) and had no animation of its
   own — `prefers-reduced-motion` was ruled out (global.css uses the 0.01ms
@@ -139,12 +140,57 @@ On-device re-test script (fresh profile = clear site data first):
 2. **Chrome, revisit:** same, faster; no flash of missing buttons.
 3. **Brave, fresh profile:** previously untested-fresh — expect same as
    Chrome fresh.
-4. **Opera, fresh profile:** diskettes visible; diskette tap → modal shows
-   EITHER the native install button (Opera fired the event — report back,
-   we'll upgrade the copy) OR the hedged manual copy with no false menu
-   promise.
+4. **Opera, fresh profile: ✅ CONFIRMED 2026-07-03 on-device.** Opera
+   Android does NOT fire `beforeinstallprompt` even with the pre-hydration
+   stash in place; the hedged manual copy renders as designed
+   (screenshot-verified). The hedge stays — do not add Opera-specific UA
+   handling.
 5. **Any browser:** after install, CTA gone, modal switches to open-app
    branch; standalone gate unchanged (tab still streams, never reads IDB).
+
+### Fixed 2026-07-03 (evening) — field bugs from on-device testing
+
+All three diagnosed with CDP touch-event reproductions against the
+production preview (mobile viewport), fixed, and re-verified the same way.
+Branch: `fix/playback-gate-m1`.
+
+- **[FIXED] FullPlayer opens/peeks during upward scrolls near the bottom.**
+  RCA: the mini-player strip's follow-finger drag is the ONLY writer of
+  partial FullPlayer transforms (proven: list-originated scrolls never move
+  it). The accident was `shouldSnapOpen`'s velocity commit — a normal
+  scroll flick starting on the strip is a high-velocity ~100–200px gesture,
+  indistinguishable from a "flick open"; CDP-reproduced: a 210px fling (25%
+  of viewport) committed fully open. Fix: `shouldSnapOpen` is distance-only
+  (>30% pull opens), plus a `canceled`-gesture guard on both drag handlers
+  (never commit a browser-canceled gesture — belt-and-braces, not
+  CDP-exercisable). Preserved interactions, all re-verified: tap opens,
+  deliberate >30% pull opens, sub-threshold drags snap back (ended OR
+  canceled), header/artwork drag-down + downward flick still close.
+  Transient follow-finger peek DURING a strip-origin flick remains — that's
+  the follow-finger design; it now always snaps back.
+- **[FIXED] open_set_details → black screen at /sets.** Two stacked causes,
+  both CDP-confirmed pre-fix (URL bounced to `/sets`, `main` opacity stuck
+  at 0): (1) the overlay's history-marker cleanup raced TanStack's
+  MICROTASK-DEFERRED `window.history.pushState` (@tanstack/history
+  `queueHistoryAction`) — `history.state` still read as the marker after a
+  route change, so cleanup fired `history.back()` and undid the navigation;
+  fixed with an explicit closed-by-route-change ref in
+  `useFullPlayerLifecycle` instead of racing history state. (2) Any second
+  navigation inside `useRouteTransition`'s 500ms fade window stranded
+  `isVisible=false` forever (`previousPathRef` only updated inside the
+  cleared timer) — content at opacity-0 under visible chrome; fixed by
+  updating the ref when the fade is scheduled. Regression-locked at both
+  levels: `useRouteTransition.test.tsx` (double-nav recovery) and a mobile
+  e2e (`player.spec.ts`: open_set_details → detail URL + content reaches
+  opacity 1). Post-fix CDP run: lands on `/sets/set-002-til`, opacity 1.
+- **[FIXED] Install CTA entrance animation.** Replaced the generic 0.6s
+  `animate-fade-in` with the home page's staged opacity-transition entrance
+  (5s on the session's true first paint via `useFirstLoad`, 0.6s
+  otherwise), running from the CTA's ACTUAL mount. With the pre-hydration
+  prompt stash the CTA normally mounts with the first render and joins the
+  page's slow entrance; a genuinely late-arriving prompt gets the 0.6s
+  fade — a lone button crawling in over 5s long after the page settled
+  would read as broken.
 
 ### Fixed 2026-07-03 — pre-friends-test review items (N1, M2, M4, quick wins)
 
