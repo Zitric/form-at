@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { create } from "zustand";
 import { sets } from "~/data/sets";
-import { type OfflineSlice, classifyDownloadFailure, createOfflineSlice } from "~/store/offlineSlice";
+import {
+  type OfflineSlice,
+  classifyDownloadFailure,
+  createOfflineSlice,
+} from "~/store/offlineSlice";
 
 // M2 + M4 (2026-07-02 review): quota-shaped failures must surface as
 // "quota" (retrying can't fix them), and a missing
@@ -18,9 +22,7 @@ describe("classifyDownloadFailure", () => {
   });
 
   it("maps RangeError (large buffer preallocation failed) to quota", () => {
-    expect(classifyDownloadFailure(new RangeError("Array buffer allocation failed"))).toBe(
-      "quota",
-    );
+    expect(classifyDownloadFailure(new RangeError("Array buffer allocation failed"))).toBe("quota");
   });
 
   it("maps everything else to network", () => {
@@ -45,10 +47,7 @@ describe("startDownload quota pre-flight", () => {
     // guards. The stubbed fetch rejection proves control flow got PAST the
     // pre-flight instead of crashing on `navigator.storage.estimate`.
     expect(navigator.storage?.estimate).toBeUndefined();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockRejectedValue(new TypeError("Failed to fetch")),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
 
     const store = makeStore();
     await store.getState().startDownload(testSet.id);
@@ -72,9 +71,7 @@ describe("startDownload quota pre-flight", () => {
 
     const state = store.getState().offlineSets[testSet.id];
     expect(state).toMatchObject({ status: "failed", reason: "quota" });
-    expect(
-      state?.status === "failed" ? state.quotaShortfallBytes : undefined,
-    ).toBeGreaterThan(0);
+    expect(state?.status === "failed" ? state.quotaShortfallBytes : undefined).toBeGreaterThan(0);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

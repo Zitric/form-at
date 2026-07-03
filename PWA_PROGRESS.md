@@ -146,6 +146,35 @@ On-device re-test script (fresh profile = clear site data first):
 5. **Any browser:** after install, CTA gone, modal switches to open-app
    branch; standalone gate unchanged (tab still streams, never reads IDB).
 
+### Fixed 2026-07-03 — pre-friends-test review items (N1, M2, M4, quick wins)
+
+- **N1 — manifest identity FROZEN.** `manifest.json` now has `"id": "/"`
+  with the analytics marker moved to `"start_url": "/?source=pwa"`.
+  **`id` must never change again** — it is the app's permanent identity;
+  changing it re-identifies the app for new installs and orphans update
+  paths. This landed BEFORE any friends-test installs, which is the only
+  window it could. (Standalone launches now request `/?source=pwa`, a
+  distinct `pages-v1` key from `/` — self-populates via SWR per launch.)
+- **M2 — download failure taxonomy.** `classifyDownloadFailure` in
+  `offlineSlice.ts`: `QuotaExceededError` → `quota` (IDB write backstop),
+  `RangeError` → `quota` (the 100MB+ buffer preallocation failing on a
+  constrained device — RAM not disk, but the user-side fix matches quota
+  and retry fixes neither), everything else non-abort → `network`. The
+  quota button label + `QuotaInfoModal` copy degrade to number-free text
+  when the shortfall is unmeasurable (write-time hit — no pre-flight math).
+- **M4 — `navigator.storage.estimate` guarded.** Missing on older WebKit /
+  some WebViews; the pre-flight is skipped there and the IDB write is the
+  backstop (correctly classified per M2).
+- **Quick wins:** precache revisions are now content md5 instead of mtime —
+  proven by building twice with touched mtimes and diffing the extracted
+  manifests (identical, 11 non-hashed entries); dead `index.html` allowlist
+  line removed (SSR emits none); `useTriggerDownload`'s silent UNKNOWN_SET
+  branch dev-warns.
+
+Remaining from the review's next-PR plan: M1 (playback-gate centralization —
+next session), M3 (`_headers` + CSP, bundled with TECH_DEBT 19's custom
+domain), N3 (maskable icon check), N4 (set-card extraction, backlog).
+
 ### Fixed 2026-07-02 (evening) — review follow-ups H1 + H2, pending on-device checks
 
 Both items from the post-merge review's next-PR plan, shipped as two commits.

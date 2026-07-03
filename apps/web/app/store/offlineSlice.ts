@@ -366,7 +366,11 @@ export const createOfflineSlice: StateCreator<OfflineSlice, [], [], OfflineSlice
       set((s) => ({
         offlineSets: {
           ...s.offlineSets,
-          [setId]: { status: "failed", reason: classifyDownloadFailure(e), lastAttempt: Date.now() },
+          [setId]: {
+            status: "failed",
+            reason: classifyDownloadFailure(e),
+            lastAttempt: Date.now(),
+          },
         },
       }));
     } finally {

@@ -78,7 +78,9 @@ function buildServiceWorker(): Plugin {
           // on every deploy despite never changing.
           const revision = /-[A-Za-z0-9_-]{8,}\.(js|css)$/.test(rel)
             ? null
-            : createHash("md5").update(await readFile(full)).digest("hex");
+            : createHash("md5")
+                .update(await readFile(full))
+                .digest("hex");
           entries.push({ url: `/${rel}`, revision });
         }
       }

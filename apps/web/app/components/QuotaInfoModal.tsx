@@ -41,8 +41,8 @@ export function QuotaInfoModal({ open, onClose, onRetry, shortfallBytes }: Props
           not enough storage.{" "}
           {shortfallBytes !== undefined ? (
             <>
-              need <span className="text-white">~{fmtBytes(shortfallBytes)} more</span> free on
-              this device to save this set offline.
+              need <span className="text-white">~{fmtBytes(shortfallBytes)} more</span> free on this
+              device to save this set offline.
             </>
           ) : (
             <>this device ran out of space while saving — free some up to fit this set.</>
