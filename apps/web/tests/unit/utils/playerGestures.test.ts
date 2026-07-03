@@ -8,23 +8,23 @@ import {
 
 describe("shouldSnapOpen", () => {
   it("opens when drag distance exceeds the progress threshold", () => {
-    expect(shouldSnapOpen(SNAP_PROGRESS + 0.01, 0, -100)).toBe(true);
+    expect(shouldSnapOpen(SNAP_PROGRESS + 0.01)).toBe(true);
   });
 
-  it("does not open when below the progress threshold with no flick", () => {
-    expect(shouldSnapOpen(SNAP_PROGRESS - 0.01, 0, -100)).toBe(false);
+  it("does not open when below the progress threshold", () => {
+    expect(shouldSnapOpen(SNAP_PROGRESS - 0.01)).toBe(false);
   });
 
-  it("opens on a fast upward flick even at low progress", () => {
-    expect(shouldSnapOpen(0.05, SNAP_VELOCITY + 0.01, -10)).toBe(true);
+  it("has NO velocity commit — a scroll-flick-sized drag stays closed (2026-07-03 field bug)", () => {
+    // 25% of viewport at any speed: with the old velocity shortcut this
+    // committed open, turning upward scroll flicks that start on the
+    // mini-player strip into accidental full-player launches. Distance is
+    // the only signature that separates a deliberate pull from a flick.
+    expect(shouldSnapOpen(0.25)).toBe(false);
   });
 
-  it("ignores fast velocity going the wrong direction (downward)", () => {
-    expect(shouldSnapOpen(0.05, SNAP_VELOCITY + 0.5, 50)).toBe(false);
-  });
-
-  it("stays closed for tap-equivalent input (zero everything)", () => {
-    expect(shouldSnapOpen(0, 0, 0)).toBe(false);
+  it("stays closed for tap-equivalent input", () => {
+    expect(shouldSnapOpen(0)).toBe(false);
   });
 });
 

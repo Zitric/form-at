@@ -123,8 +123,9 @@ in code with unit coverage; the fixes need one on-device confirmation pass.
   manual-instructions branch of `SaveGateModal` no longer promises any
   specific menu item — it names the likely labels ("install app" / "add to
   home screen") and says plainly the browser may not support installing,
-  pointing at Chrome. If Opera DOES fire the event post-stash-fix, it gets
-  the native install button and never sees this copy.
+  pointing at Chrome. **Field-confirmed 2026-07-03:** Opera Android does not
+  fire the event even with the stash; the hedged copy is the permanent
+  behavior there, not a fallback.
 - **[FIXED] Install CTA popped in with no entrance animation.** It mounts
   late by design (when the prompt event arrives) and had no animation of its
   own — `prefers-reduced-motion` was ruled out (global.css uses the 0.01ms
@@ -139,12 +140,57 @@ On-device re-test script (fresh profile = clear site data first):
 2. **Chrome, revisit:** same, faster; no flash of missing buttons.
 3. **Brave, fresh profile:** previously untested-fresh — expect same as
    Chrome fresh.
-4. **Opera, fresh profile:** diskettes visible; diskette tap → modal shows
-   EITHER the native install button (Opera fired the event — report back,
-   we'll upgrade the copy) OR the hedged manual copy with no false menu
-   promise.
+4. **Opera, fresh profile: ✅ CONFIRMED 2026-07-03 on-device.** Opera
+   Android does NOT fire `beforeinstallprompt` even with the pre-hydration
+   stash in place; the hedged manual copy renders as designed
+   (screenshot-verified). The hedge stays — do not add Opera-specific UA
+   handling.
 5. **Any browser:** after install, CTA gone, modal switches to open-app
    branch; standalone gate unchanged (tab still streams, never reads IDB).
+
+### Fixed 2026-07-03 (evening) — field bugs from on-device testing
+
+All three diagnosed with CDP touch-event reproductions against the
+production preview (mobile viewport), fixed, and re-verified the same way.
+Branch: `fix/playback-gate-m1`.
+
+- **[FIXED] FullPlayer opens/peeks during upward scrolls near the bottom.**
+  RCA: the mini-player strip's follow-finger drag is the ONLY writer of
+  partial FullPlayer transforms (proven: list-originated scrolls never move
+  it). The accident was `shouldSnapOpen`'s velocity commit — a normal
+  scroll flick starting on the strip is a high-velocity ~100–200px gesture,
+  indistinguishable from a "flick open"; CDP-reproduced: a 210px fling (25%
+  of viewport) committed fully open. Fix: `shouldSnapOpen` is distance-only
+  (>30% pull opens), plus a `canceled`-gesture guard on both drag handlers
+  (never commit a browser-canceled gesture — belt-and-braces, not
+  CDP-exercisable). Preserved interactions, all re-verified: tap opens,
+  deliberate >30% pull opens, sub-threshold drags snap back (ended OR
+  canceled), header/artwork drag-down + downward flick still close.
+  Transient follow-finger peek DURING a strip-origin flick remains — that's
+  the follow-finger design; it now always snaps back.
+- **[FIXED] open_set_details → black screen at /sets.** Two stacked causes,
+  both CDP-confirmed pre-fix (URL bounced to `/sets`, `main` opacity stuck
+  at 0): (1) the overlay's history-marker cleanup raced TanStack's
+  MICROTASK-DEFERRED `window.history.pushState` (@tanstack/history
+  `queueHistoryAction`) — `history.state` still read as the marker after a
+  route change, so cleanup fired `history.back()` and undid the navigation;
+  fixed with an explicit closed-by-route-change ref in
+  `useFullPlayerLifecycle` instead of racing history state. (2) Any second
+  navigation inside `useRouteTransition`'s 500ms fade window stranded
+  `isVisible=false` forever (`previousPathRef` only updated inside the
+  cleared timer) — content at opacity-0 under visible chrome; fixed by
+  updating the ref when the fade is scheduled. Regression-locked at both
+  levels: `useRouteTransition.test.tsx` (double-nav recovery) and a mobile
+  e2e (`player.spec.ts`: open_set_details → detail URL + content reaches
+  opacity 1). Post-fix CDP run: lands on `/sets/set-002-til`, opacity 1.
+- **[FIXED] Install CTA entrance animation.** Replaced the generic 0.6s
+  `animate-fade-in` with the home page's staged opacity-transition entrance
+  (5s on the session's true first paint via `useFirstLoad`, 0.6s
+  otherwise), running from the CTA's ACTUAL mount. With the pre-hydration
+  prompt stash the CTA normally mounts with the first render and joins the
+  page's slow entrance; a genuinely late-arriving prompt gets the 0.6s
+  fade — a lone button crawling in over 5s long after the page settled
+  would read as broken.
 
 ### Fixed 2026-07-03 — pre-friends-test review items (N1, M2, M4, quick wins)
 
@@ -171,9 +217,17 @@ On-device re-test script (fresh profile = clear site data first):
   line removed (SSR emits none); `useTriggerDownload`'s silent UNKNOWN_SET
   branch dev-warns.
 
-Remaining from the review's next-PR plan: M1 (playback-gate centralization —
-next session), M3 (`_headers` + CSP, bundled with TECH_DEBT 19's custom
-domain), N3 (maskable icon check), N4 (set-card extraction, backlog).
+Remaining from the review's next-PR plan: ~~M1~~ (playback-gate
+centralization — done 2026-07-03, `fix/playback-gate-m1`, see the
+retry-storm-gate Reference section), M3 (`_headers` + CSP, bundled with
+TECH_DEBT 19's custom domain), N3 (maskable icon check), N4 (set-card
+extraction, backlog).
+
+On-device addition for the pending pass (M1): install the PWA, play any
+NON-saved set, lock the phone, enable airplane mode, tap play on the lock
+screen. PASS: nothing plays, lock-screen UI stays paused, and unlocking
+shows the "not saved for offline listening" toast. FAIL: audio stutters into
+the retry storm or the lock screen shows "playing".
 
 ### Fixed 2026-07-02 (evening) — review follow-ups H1 + H2, pending on-device checks
 
@@ -394,13 +448,31 @@ pass-through. That's standard browser caching, outside SW control short of
 for no exclusivity gain). Not a violation; documented so nobody re-files it
 as a bug.
 
-### Retry-storm gate
+### Retry-storm gate — centralized (M1, 2026-07-03)
 
-Lives in `playerSlice.playTrack` BEFORE `audio.src` is set: if
-`!navigator.onLine && offlineSetState !== "saved"`, refuse to attach src +
-surface via `PlaybackErrorToast`'s `playbackBlockedReason:
-"not-saved-offline"` branch. Fixes TECH_DEBT 11 at its source — `<audio>`
-never gets a source it can't fetch, so it can't hammer the network.
+One predicate, one resume writer, every play path:
+
+- **Predicate:** `canFetchPlaybackBytes(trackId, offlineSets)` in
+  `playerSlice.ts` — true when online, or standalone AND saved (the only
+  context the SW serves IDB to). Exported, pure environment reads.
+- **Funnel:** `resumePlayback()` is THE single gated "make paused audio
+  play" action. Player-bar button, Space, lock-screen Media Session,
+  waveform scrub-release, the isPlaying bridge effect, and `playTrack`'s
+  same-track branch all delegate to it. The only other raw `audio.play()`
+  is `playTrack`'s new-track start, behind the same predicate.
+- **Feedback:** blocked → `playbackBlockedReason` set →
+  `PlaybackErrorToast` (renders trackless since 2026-07-02). The Media
+  Session handler additionally pins `mediaSession.playbackState = "paused"`
+  on block so the lock screen can't show a lying "playing".
+- **Pause is NEVER gated** — `audio.pause()` fetches nothing; blocking it
+  would trap the user with a stalled stream.
+- **No bridge loop:** a blocked resume sets `isPlaying: false`; element is
+  paused; store and element agree; the bridge effect's next run takes
+  neither branch.
+
+The original TECH_DEBT 11 fix put this only in `playTrack` (tap-time); the
+2026-07-02 review (M1) found five `audio.play()` writers bypassing it —
+worst case, lock-screen resume offline re-spawned the retry storm.
 
 ### SW network pass-through — always `fetch(request)` (2026-07-02, H1)
 

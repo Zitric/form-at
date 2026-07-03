@@ -62,7 +62,7 @@ export function FullPlayer({
   // refer there for the full pattern. `filterTaps: true` so taps on the [×]
   // button still hit the button's onClick instead of the drag handler.
   const headerDragBind = useDrag(
-    ({ active, first, movement: [, my], velocity: [, vy], event, last }) => {
+    ({ active, first, movement: [, my], velocity: [, vy], event, last, canceled }) => {
       event.stopPropagation();
       const el = containerRef.current;
       if (!el) return;
@@ -79,7 +79,9 @@ export function FullPlayer({
 
       if (last) {
         const progress = -my / window.innerHeight;
-        const commit = shouldSnapClose(progress, vy, my);
+        // Canceled gestures never commit — same rule as the drag-to-open
+        // side (see MobileMiniPlayer).
+        const commit = !canceled && shouldSnapClose(progress, vy, my);
         el.style.transition = "transform 400ms cubic-bezier(0.32, 0.72, 0, 1)";
         el.style.transform = commit ? "translateY(100%)" : "translateY(0%)";
         setIsDragging(false);

@@ -73,8 +73,10 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
       e.preventDefault();
       const audio = audioRef.current;
       if (!audio) return;
+      // Resume goes through the store's single gated writer (M1); pause is
+      // deliberately raw — it fetches nothing and must never be gated.
       if (useStore.getState().isPlaying) audio.pause();
-      else audio.play().catch(() => {});
+      else useStore.getState().resumePlayback();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -147,13 +149,11 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
       audio.addEventListener("canplay", seekWhenReady, { once: true });
     }
 
-    // Non-restore path (e.g. programmatic loadTrack without user gesture): try to play
-    // and accept that mobile may reject. Reset isPlaying on rejection.
+    // Non-restore path (e.g. programmatic loadTrack without user gesture):
+    // gated resume — mobile may still reject for gesture reasons; the
+    // action's catch resets isPlaying/hasError.
     if (!isRestore) {
-      audio.play().catch(() => {
-        setIsPlaying(false);
-        setHasError(true);
-      });
+      useStore.getState().resumePlayback();
     }
 
     return () => {
@@ -161,7 +161,7 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
       audio.removeEventListener("canplay", seekWhenReady);
       sendPlay(nowPlaying);
     };
-  }, [nowPlaying, sendPlay, setIsPlaying, setHasError, audioRef]);
+  }, [nowPlaying, sendPlay, setHasError, audioRef]);
 
   // Bridge: lets external components drive playback via the store's isPlaying flag.
   // If audio.play() rejects, reset the flag and surface the error so the retry
@@ -171,11 +171,12 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     if (!audio) return;
     if (!isPlaying && !audio.paused) audio.pause();
     else if (isPlaying && audio.paused)
-      audio.play().catch(() => {
-        setIsPlaying(false);
-        setHasError(true);
-      });
-  }, [isPlaying, audioRef, setIsPlaying, setHasError]);
+      // Gated like every resume. No feedback loop when blocked: the action
+      // sets isPlaying back to false, element stays paused, store and
+      // element agree, and this effect's next run (isPlaying=false, paused)
+      // takes neither branch.
+      useStore.getState().resumePlayback();
+  }, [isPlaying, audioRef]);
 
   useEffect(() => {
     if (!nowPlaying || !("mediaSession" in navigator)) return;
@@ -203,12 +204,16 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     });
 
     navigator.mediaSession.setActionHandler("play", () => {
-      const audio = audioRef.current;
-      if (!audio) return;
-      audio
-        .play()
-        .then(() => setIsPlaying(true))
-        .catch(() => setIsPlaying(false));
+      // Lock-screen resume — the most likely real-world offline resume on
+      // mobile. Gated like every other resume path (M1).
+      useStore.getState().resumePlayback();
+      // Blocked: pin the lock-screen UI to "paused" explicitly rather than
+      // trusting the UA to infer it from the untouched element. The blocked
+      // branch of resumePlayback is synchronous, so reading the reason here
+      // is race-free; the success path never reaches this state.
+      if (useStore.getState().playbackBlockedReason) {
+        navigator.mediaSession.playbackState = "paused";
+      }
     });
     navigator.mediaSession.setActionHandler("pause", () => {
       audioRef.current?.pause();
@@ -238,18 +243,9 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
       audio.pause();
       setIsPlaying(false);
     } else {
-      audio
-        .play()
-        .then(() => {
-          setIsPlaying(true);
-          setHasError(false);
-        })
-        .catch(() => {
-          setIsPlaying(false);
-          setHasError(true);
-        });
+      useStore.getState().resumePlayback();
     }
-  }, [loading, audioRef, setIsPlaying, setHasError]);
+  }, [loading, audioRef, setIsPlaying]);
 
   // seek sets audio position only; PlayerSeeker picks up the change via the 'seeked' event
   const seek = useCallback(

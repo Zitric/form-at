@@ -35,6 +35,28 @@ export function getAudioCurrentTime() {
 //                             a streamable set, decode error, etc.).
 export type PlaybackBlockedReason = "not-saved-offline" | "tab-offline-needs-network" | null;
 
+// THE offline playback gate predicate (M1: one predicate, every play path).
+// True when starting/resuming this track can actually get bytes: either
+// we're online, or we're a standalone PWA with the track saved in IDB (the
+// only context the SW serves IDB to — see the chunk-5 lock in sw.ts).
+// Environment reads only (navigator.onLine, display-mode) — no React, no
+// store; exported for unit tests and for any future play-path writer.
+export function canFetchPlaybackBytes(
+  trackId: string,
+  offlineSets: Record<string, { status: string }> | undefined,
+): boolean {
+  const isOffline = typeof navigator !== "undefined" && navigator.onLine === false;
+  if (!isOffline) return true;
+  return isStandalone() && offlineSets?.[trackId]?.status === "saved";
+}
+
+// App users have the vocabulary of "saved"; tab users don't (tabs never
+// read IDB, so downloaded-vs-not is invisible from the web) — point them
+// at the app instead.
+function blockedPlaybackReason(): PlaybackBlockedReason {
+  return isStandalone() ? "not-saved-offline" : "tab-offline-needs-network";
+}
+
 export type PlayerSlice = {
   nowPlaying: MusicSet | null;
   isPlaying: boolean;
@@ -46,6 +68,7 @@ export type PlayerSlice = {
   loadTrack: (set: MusicSet) => void;
   playTrack: (set: MusicSet, opts?: { startTime?: number }) => void;
   togglePlay: () => void;
+  resumePlayback: () => void;
   setIsPlaying: (playing: boolean) => void;
   setHasError: (hasError: boolean) => void;
   setLastPosition: (setId: string, seconds: number) => void;
@@ -99,47 +122,28 @@ export const createPlayerSlice: StateCreator<PlayerSlice & OfflineSlice, [], [],
     const isSameTrack = state.nowPlaying?.id === track.id;
     const isCurrentlyPlaying = isSameTrack && !audio.paused;
     const isPauseAction = isCurrentlyPlaying && override === undefined;
-    const isOffline = typeof navigator !== "undefined" && navigator.onLine === false;
-    // `offlineSets?.` rather than `offlineSets.` so tests that instantiate
-    // createPlayerSlice in isolation (without composing offlineSlice) don't
-    // crash here — in real prod use the slice is always composed.
-    const offlineStatus = state.offlineSets?.[track.id]?.status;
+    // `offlineSets?.` inside the predicate tolerates tests that instantiate
+    // createPlayerSlice in isolation (without composing offlineSlice) — in
+    // real prod use the slice is always composed.
+    //
     // Web tabs never read IDB (SW gates on `?ctx=app` — see `withAppContext`),
-    // so a "saved" set is still unreachable offline in a tab. Only a
-    // standalone PWA can serve saved bytes from IDB. `canReadOfflineBytes`
-    // names that exact invariant so a future reader can't confuse "the set
-    // is persisted saved in state" with "the current context can actually
-    // read it." A previous revision let tab+saved+offline skip the gate,
-    // which fell through to `audio.play()` → network fetch fails → generic
-    // playback_error — telling a web user "tap to retry" for a set the tab
-    // can never load offline. Blocking here shows the correct "open the app"
-    // message via the reason branch below.
-    const canReadOfflineBytes = isStandalone() && offlineStatus === "saved";
-    const cannotFetch = isOffline && !canReadOfflineBytes;
-    if (cannotFetch && !isPauseAction) {
-      // App-aware copy ("not saved for offline listening") in standalone
-      // — the app user has the vocabulary of "saved." Tab-aware copy
-      // ("open the app to listen offline") in a browser tab, uniform
-      // across downloaded-in-the-app and never-downloaded sets: from the
-      // web, downloaded-vs-not is irrelevant because the tab can't read
-      // IDB either way.
-      const reason: PlaybackBlockedReason = isStandalone()
-        ? "not-saved-offline"
-        : "tab-offline-needs-network";
-      set({ hasError: true, playbackBlockedReason: reason, isPlaying: false });
+    // so a "saved" set is still unreachable offline in a tab; only a
+    // standalone PWA can serve saved bytes from IDB. The predicate owns that
+    // invariant (see `canFetchPlaybackBytes` above) — a previous revision
+    // let tab+saved+offline skip the gate, which fell through to
+    // `audio.play()` → network fetch fails → generic playback_error.
+    if (!canFetchPlaybackBytes(track.id, state.offlineSets) && !isPauseAction) {
+      set({ hasError: true, playbackBlockedReason: blockedPlaybackReason(), isPlaying: false });
       return;
     }
 
     // Same track already loaded — seek if a startTime was provided, otherwise
-    // toggle. Reached only when the gate above allowed us through, so any
-    // audio.play() here is safe to attempt.
+    // toggle. Resume goes through `resumePlayback` (the single gated resume
+    // writer); the extra predicate check inside it is idempotent.
     if (isSameTrack) {
       if (override !== undefined) audio.currentTime = override;
       if (audio.paused) {
-        audio
-          .play()
-          .then(() => set({ isPlaying: true, hasError: false, playbackBlockedReason: null }))
-          .catch(() => set({ isPlaying: false, hasError: true }));
+        get().resumePlayback();
       } else if (override === undefined) {
         audio.pause();
         set({ isPlaying: false });
@@ -183,14 +187,38 @@ export const createPlayerSlice: StateCreator<PlayerSlice & OfflineSlice, [], [],
     set({ nowPlaying: track, hasError: false, playbackBlockedReason: null });
   },
 
+  // THE single gated resume writer (M1). Every "make paused audio play
+  // again" path — player-bar button, Space, lock-screen Media Session,
+  // scrub-release, the isPlaying bridge — funnels here, so the offline gate
+  // is impossible to bypass by construction. Only `playTrack`'s NEW-track
+  // branch calls audio.play() elsewhere (a start, not a resume, and it sits
+  // behind the same predicate). Pausing is deliberately NOT in here and
+  // never gated: audio.pause() fetches nothing.
+  resumePlayback: () => {
+    const audio = audioEl;
+    const track = get().nowPlaying;
+    if (!audio || !track) return;
+    if (!audio.paused) return;
+    if (!canFetchPlaybackBytes(track.id, get().offlineSets)) {
+      // Same feedback contract as the tap-time gate: reason set →
+      // PlaybackErrorToast renders (works trackless since 2026-07-02, and
+      // here a track is always attached anyway). isPlaying: false keeps
+      // store and element agreeing, so the bridge effect has nothing to
+      // re-trigger on.
+      set({ hasError: true, playbackBlockedReason: blockedPlaybackReason(), isPlaying: false });
+      return;
+    }
+    audio
+      .play()
+      .then(() => set({ isPlaying: true, hasError: false, playbackBlockedReason: null }))
+      .catch(() => set({ isPlaying: false, hasError: true }));
+  },
+
   togglePlay: () => {
     const audio = audioEl;
     if (!audio) return;
     if (audio.paused) {
-      audio
-        .play()
-        .then(() => set({ isPlaying: true, hasError: false }))
-        .catch(() => set({ isPlaying: false, hasError: true }));
+      get().resumePlayback();
     } else {
       audio.pause();
       set({ isPlaying: false });
