@@ -1,9 +1,9 @@
 {
-  "id": "/?source=pwa",
+  "id": "/",
   "name": "Form:at",
   "short_name": "Form:at",
   "description": "Techno collective from Glasgow",
-  "start_url": "/",
+  "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
   "background_color": "#161615",
