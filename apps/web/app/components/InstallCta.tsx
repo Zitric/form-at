@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { Button } from "~/components/Button";
+import { useFirstLoad } from "~/hooks/useFirstLoad";
 import { useTriggerInstallPrompt } from "~/hooks/useSaveGate";
 import { useStore, useStoreHydrated } from "~/store";
 import { cn } from "~/utils/cn";
@@ -37,19 +39,42 @@ export function InstallCta({ className }: { className?: string }) {
   // prompt before HydrateStore's rehydrate completes.
   if (!hydrated || !deferredPrompt || pwaInstallDismissed) return null;
 
-  // `animate-fade-in` because this button usually mounts LATE — it appears
-  // when Chromium delivers `beforeinstallprompt`, which can be seconds after
-  // the page entrance animations have finished. A conditional render with no
-  // animation of its own pops in abruptly; the app-standard fade keeps the
-  // late arrival calm. (Reduced-motion is handled globally in global.css by
-  // collapsing animation durations, so the `forwards` end state still lands.)
+  return <InstallCtaButton className={className} onInstall={() => triggerInstall()} />;
+}
+
+// Split so the entrance hooks run from the button's ACTUAL mount (the gate
+// above renders null until the prompt arrives — hooks in the same component
+// would start the fade while the button is still null-rendered). Same
+// opacity-transition entrance as the rest of the home page (see
+// routes/index.tsx): 5s on the session's true first paint, 0.6s otherwise.
+// Thanks to the pre-hydration prompt stash the CTA usually mounts with the
+// first render, so it joins the page's slow staged entrance; a genuinely
+// late-arriving prompt gets the short fade — a lone button crawling in over
+// 5s long after the page settled would read as broken, and 0.6s is the same
+// duration every other element uses on non-first mounts.
+function InstallCtaButton({
+  className,
+  onInstall,
+}: {
+  className?: string;
+  onInstall: () => void;
+}) {
+  const isFirstLoad = useFirstLoad();
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    setVisible(true);
+  }, []);
+  const fadeDuration = isFirstLoad ? "5s" : "0.6s";
+
+  // Fading wrapper div rather than a `style` prop on <Button> — Button
+  // deliberately has no style passthrough, and the home page fades its other
+  // buttons through styled containers the same way (routes/index.tsx socials
+  // block).
   return (
-    <Button
-      variant="secondary"
-      onClick={() => triggerInstall()}
-      className={cn("animate-fade-in", className)}
-    >
-      install_form:at
-    </Button>
+    <div style={{ opacity: visible ? 1 : 0, transition: `opacity ${fadeDuration} ease-out` }}>
+      <Button variant="secondary" onClick={onInstall} className={cn(className)}>
+        install_form:at
+      </Button>
+    </div>
   );
 }
