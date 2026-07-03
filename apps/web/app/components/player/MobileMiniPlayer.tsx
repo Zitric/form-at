@@ -122,7 +122,7 @@ export function MobileMiniPlayer({
   // has dragged >30% of the viewport up OR released with a fast upward flick.
   // `filterTaps: true` keeps the existing onClick path alive for plain taps.
   const bind = useDrag(
-    ({ active, first, movement: [, my], velocity: [, vy], event, last }) => {
+    ({ active, first, movement: [, my], event, last, canceled }) => {
       event.stopPropagation();
       if (!nowPlaying) return;
       const el = fullPlayerRef.current;
@@ -139,7 +139,11 @@ export function MobileMiniPlayer({
 
       if (last) {
         const progress = Math.max(0, -my / window.innerHeight);
-        const commit = shouldSnapOpen(progress, vy, my);
+        // A browser-canceled gesture (notification shade, edge gesture,
+        // pointer stolen mid-drag) must NEVER commit — before this guard, a
+        // canceled fling left the overlay committed fully open (field bug
+        // 2026-07-03, CDP-reproduced with touchCancel).
+        const commit = !canceled && shouldSnapOpen(progress);
         // Imperatively set the snap target *with* the transition restored so
         // the browser animates from current inline transform to the target.
         // Without this the next React render would reconcile a "transition:
