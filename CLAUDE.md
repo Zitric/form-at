@@ -167,7 +167,7 @@ Two GitHub Actions workflows in `.github/workflows/`:
 - **`ci.yml`** — runs on push (non-main) + pull_request. Three parallel jobs: `static` (biome lint + tsc), `unit` (vitest), `e2e` (playwright on Chromium + WebKit).
 - **`deploy.yml`** — runs on push to `main`. Re-runs the same three jobs as gates, then `deploy` runs only after all pass. A direct push to `main` cannot bypass the test suite.
 
-Both workflows use `pnpm/action-setup` pinned to the version in the root `package.json` `packageManager` field, plus `actions/setup-node` with pnpm cache. Playwright browsers are cached at `~/.cache/ms-playwright` keyed on `apps/web/package.json`.
+Both workflows use `pnpm/action-setup` pinned to the version in the root `package.json` `packageManager` field, plus `actions/setup-node` with pnpm cache. Playwright browsers are cached at `~/.cache/ms-playwright`, keyed on the **browser set + `pnpm-lock.yaml` hash** — the two workflows install different browser sets (ci: chromium+webkit, deploy: chromium-only) and must never share a cache key (first-writer-wins poisoning, PR #2 2026-07-02).
 
 Required GitHub secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
 
