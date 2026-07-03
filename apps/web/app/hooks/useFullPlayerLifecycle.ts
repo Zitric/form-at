@@ -70,6 +70,7 @@ export function useFullPlayerLifecycle({
   // entry on open — back-button then consumes that entry (firing popstate)
   // and we close the overlay without changing the URL. On manual close
   // ([ × ] or Escape), the cleanup pops our marker so the history stays tidy.
+  const closedByRouteChange = useRef(false);
   useEffect(() => {
     if (!isOpen) return;
     window.history.pushState({ fullPlayerOverlay: true }, "");
@@ -77,9 +78,24 @@ export function useFullPlayerLifecycle({
     window.addEventListener("popstate", handlePopState);
     return () => {
       window.removeEventListener("popstate", handlePopState);
-      // If our marker is still in history when cleanup runs, we closed
-      // programmatically (button / Escape / route change) — pop it ourselves
-      // so a future back doesn't have a phantom entry to traverse.
+      // Route-change closes must NOT pop the marker: TanStack's history
+      // defers its window.history.pushState to a microtask
+      // (@tanstack/history queueHistoryAction), so at cleanup time
+      // `window.history.state` can STILL read as our marker even though the
+      // router has already navigated. The unguarded check below then fired
+      // history.back(), undoing the navigation — which, combined with the
+      // useRouteTransition stranding, produced the "open_set_details →
+      // black screen at /sets" field bug (2026-07-03, CDP-reproduced). The
+      // ref decides explicitly instead of racing the deferred pushState.
+      // The marker stays buried in history, so the NEXT back from the new
+      // page lands on it and popstate-navigates to its URL — the page the
+      // overlay was opened from, which is where back should go anyway.
+      if (closedByRouteChange.current) {
+        closedByRouteChange.current = false;
+        return;
+      }
+      // Manual close (button / Escape): pop our marker ourselves so a
+      // future back doesn't have a phantom entry to traverse.
       if (window.history.state?.fullPlayerOverlay) {
         window.history.back();
       }
@@ -101,6 +117,11 @@ export function useFullPlayerLifecycle({
       firstPathnameRun.current = false;
       return;
     }
+    // Flag BEFORE closing so the marker effect's cleanup (triggered by the
+    // isOpen flip this causes) knows not to history.back(). Only when the
+    // overlay is actually open — a route change with the overlay closed
+    // must not leave a stale flag that would skip a future manual-close pop.
+    if (isOpen) closedByRouteChange.current = true;
     closeFullPlayer();
   }, [pathname]);
 }
