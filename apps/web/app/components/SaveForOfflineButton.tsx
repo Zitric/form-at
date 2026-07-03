@@ -121,17 +121,24 @@ export function SaveForOfflineButton({ set }: Props) {
 
     case "failed": {
       if (offlineState.reason === "quota") {
-        const shortfall = offlineState.quotaShortfallBytes ?? 0;
+        const { quotaShortfallBytes } = offlineState;
+        // Shortfall is only measurable when the pre-flight caught the
+        // shortage; a quota hit during the IDB write has none — degrade
+        // to a number-free label rather than "need 0 B more".
+        const quotaLabel =
+          quotaShortfallBytes !== undefined
+            ? `✗ need ${fmtBytes(quotaShortfallBytes)} more`
+            : "✗ not enough storage";
         return (
           <>
             <Button variant="fail" onClick={() => setQuotaOpen(true)}>
-              ✗ need {fmtBytes(shortfall)} more
+              {quotaLabel}
             </Button>
             <QuotaInfoModal
               open={quotaOpen}
               onClose={() => setQuotaOpen(false)}
               onRetry={triggerDownload}
-              shortfallBytes={shortfall}
+              shortfallBytes={quotaShortfallBytes}
             />
           </>
         );

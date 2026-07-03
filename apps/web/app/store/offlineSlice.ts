@@ -54,6 +54,28 @@ const activeControllers = new Map<string, AbortController>();
 
 const QUOTA_SAFETY_MULTIPLIER = 1.5;
 
+// Maps a download failure to the user-facing reason. The distinction
+// matters because the reasons carry different fixes: "network" invites a
+// retry, "quota" needs freed storage — conflating them tells the user to
+// retry something a retry can't fix (M2, 2026-07-02 review).
+//
+//   QuotaExceededError — the IDB write ran out of disk. The 1.5× pre-flight
+//     usually catches this first, but `estimate()` is approximate, other
+//     tabs/origins consume space concurrently, and some browsers don't
+//     expose `estimate` at all (the pre-flight is skipped there — this
+//     classification is the backstop).
+//   RangeError — the ~100MB+ `new Uint8Array(bytesTotal)` preallocation
+//     failed on a memory-constrained device. Strictly RAM rather than disk,
+//     but the user-side reality matches quota ("this device can't hold this
+//     set"), and a retry won't fix it either — so it maps to quota, not
+//     network. Exported for unit tests.
+export function classifyDownloadFailure(e: unknown): "network" | "quota" | "aborted" {
+  if (e instanceof DOMException && e.name === "AbortError") return "aborted";
+  if (e instanceof DOMException && e.name === "QuotaExceededError") return "quota";
+  if (e instanceof RangeError) return "quota";
+  return "network";
+}
+
 // Throttle Zustand updates during streaming download to once per percent of
 // progress. Avoids thousands of re-renders per ~100MB download — UI granularity
 // is integer percent anyway, no point firing more often.
@@ -216,23 +238,30 @@ export const createOfflineSlice: StateCreator<OfflineSlice, [], [], OfflineSlice
       // the buffer preallocation inside `streamWithProgress` reads the real
       // Content-Length from the response, so the download itself stays
       // correct regardless of hint drift.
+      // `estimate` is missing on older WebKit / some Android WebViews —
+      // skip the pre-flight there rather than throwing (a TypeError here
+      // used to surface as a bogus "network" failure — M4). The IDB write
+      // itself is the backstop: a real quota hit lands in the catch below
+      // and `classifyDownloadFailure` labels it correctly.
       const totalBytes = musicSet.sizeBytes;
-      const { quota, usage } = await navigator.storage.estimate();
-      const available = (quota ?? 0) - (usage ?? 0);
-      const requiredWithHeadroom = totalBytes * QUOTA_SAFETY_MULTIPLIER;
-      if (available < requiredWithHeadroom) {
-        set((s) => ({
-          offlineSets: {
-            ...s.offlineSets,
-            [setId]: {
-              status: "failed",
-              reason: "quota",
-              lastAttempt: Date.now(),
-              quotaShortfallBytes: requiredWithHeadroom - available,
+      if (navigator.storage?.estimate) {
+        const { quota, usage } = await navigator.storage.estimate();
+        const available = (quota ?? 0) - (usage ?? 0);
+        const requiredWithHeadroom = totalBytes * QUOTA_SAFETY_MULTIPLIER;
+        if (available < requiredWithHeadroom) {
+          set((s) => ({
+            offlineSets: {
+              ...s.offlineSets,
+              [setId]: {
+                status: "failed",
+                reason: "quota",
+                lastAttempt: Date.now(),
+                quotaShortfallBytes: requiredWithHeadroom - available,
+              },
             },
-          },
-        }));
-        return;
+          }));
+          return;
+        }
       }
 
       // Transition to downloading; progress starts at 0. `bytesTotal` here
@@ -334,12 +363,10 @@ export const createOfflineSlice: StateCreator<OfflineSlice, [], [], OfflineSlice
         navigator.storage.persist?.().catch(() => {});
       }
     } catch (e) {
-      const reason: "network" | "aborted" =
-        e instanceof DOMException && e.name === "AbortError" ? "aborted" : "network";
       set((s) => ({
         offlineSets: {
           ...s.offlineSets,
-          [setId]: { status: "failed", reason, lastAttempt: Date.now() },
+          [setId]: { status: "failed", reason: classifyDownloadFailure(e), lastAttempt: Date.now() },
         },
       }));
     } finally {

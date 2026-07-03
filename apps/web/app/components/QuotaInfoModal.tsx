@@ -6,7 +6,11 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onRetry: () => void;
-  shortfallBytes: number;
+  // Known only when the quota PRE-FLIGHT caught the shortage. A quota hit
+  // during the IDB write itself (or on browsers with no `estimate`) has no
+  // measurable shortfall — undefined here, and the copy degrades to a
+  // number-free "not enough storage" instead of lying with "~0 B more".
+  shortfallBytes: number | undefined;
 };
 
 // Surfaces a `failed/quota` state explanation when the user taps the
@@ -34,9 +38,15 @@ export function QuotaInfoModal({ open, onClose, onRetry, shortfallBytes }: Props
     >
       <div className="flex flex-col gap-4">
         <p className="text-sm text-grey leading-relaxed">
-          not enough storage. need{" "}
-          <span className="text-white">~{fmtBytes(shortfallBytes)} more</span> free on this device
-          to save this set offline.
+          not enough storage.{" "}
+          {shortfallBytes !== undefined ? (
+            <>
+              need <span className="text-white">~{fmtBytes(shortfallBytes)} more</span> free on
+              this device to save this set offline.
+            </>
+          ) : (
+            <>this device ran out of space while saving — free some up to fit this set.</>
+          )}
         </p>
         <p className="text-xs text-grey leading-relaxed">
           we leave a 50% headroom on top of the file size so the download has room to land cleanly.
