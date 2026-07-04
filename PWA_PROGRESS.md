@@ -148,6 +148,44 @@ On-device re-test script (fresh profile = clear site data first):
 5. **Any browser:** after install, CTA gone, modal switches to open-app
    branch; standalone gate unchanged (tab still streams, never reads IDB).
 
+### Fixed 2026-07-05 — M3: `_headers` caching + CSP (TECH_DEBT 19 itself still blocked)
+
+The launch-blocker session ran into hard preconditions: the custom domain
+is not connected to the bucket (neither candidate host resolves) and the
+local wrangler token has no R2 scopes — so the host sweep (TECH_DEBT 19),
+the IDB migration decision, and the `.mp3.mp3` rename (TECH_DEBT 14) are
+all blocked on Julian's dashboard access (exact steps in both TECH_DEBT
+items). M3 was host-independent and shipped:
+
+- **`public/_headers`:** `/assets/*` → `public, max-age=31536000,
+  immutable` (content-hashed, safe forever); `/sw.js` → `no-cache`
+  (browsers cap SW freshness at 24h regardless — this is belt-and-braces so
+  an update never waits on HTTP caching).
+- **CSP, split by where documents come from:** Cloudflare Pages `_headers`
+  applies to STATIC ASSETS ONLY — SSR documents from `_worker.js` never see
+  it. So the document policy is set in `app/server.ts` (attached to
+  `text/html` responses only), and `_headers`' `/*` rule covers
+  `offline.html`, the one static document. The two strings carry
+  keep-in-sync comments; server.ts is the source of truth.
+- **Policy shape** (restrictive-first, audited against real usage):
+  `default-src 'self'` + `'unsafe-inline'` for script/style (inline SW
+  registration + beforeinstallprompt stash + TanStack's per-request SSR
+  hydration scripts — unhashable; inline font CSS + style attributes),
+  `img-src 'self' data:`, R2 host in `media-src`/`connect-src` (the ONLY
+  external fetch origin — all social/calendar URLs are link navigations),
+  `worker-src/manifest-src/base-uri/frame-ancestors 'self'`. Nothing had
+  to be loosened beyond the audited list.
+- **Verified against the production preview** (SW active, Playwright +
+  violation listeners): all four pages + detail load, SW registers, audio
+  streams from R2, peaks fetch → waveform renders, artwork loads — ZERO
+  CSP violations.
+- **Needs live-deploy confirmation:** (1) whether `_headers` applies to
+  assets served via `env.ASSETS.fetch` from the advanced-mode `_worker.js`
+  (docs say the asset layer honours `_headers`; confirm `cache-control` on
+  a deployed `/assets/*.js` and `/sw.js`); (2) the `.ics` calendar download
+  under CSP (blob: anchor — no directive we set governs it, but the sweep
+  couldn't reach the button; one manual download click suffices).
+
 ### Fixed 2026-07-03 (evening) — field bugs from on-device testing
 
 All three diagnosed with CDP touch-event reproductions against the

@@ -275,6 +275,20 @@ The R2 object itself was uploaded with the wrong name (`.mp3.mp3` instead of `.m
 
 **Fix when convenient:** rename the R2 object (Cloudflare R2 dashboard → bucket → rename, or re-upload and delete the old key), then update the `src` and `peaks` URLs in `sets.ts` to match. Out of scope for chunk 3 work — does not affect any user-visible behaviour.
 
+**2026-07-05 attempt — blocked on credentials.** The local wrangler OAuth
+token has NO R2 scopes (`r2 object get` → 403 Authentication error; the
+token's grants cover containers/email/browser only). Julian's dashboard
+steps (do together with the TECH_DEBT 19 domain connection, one bucket
+visit):
+1. Cloudflare dashboard → R2 → `form-at-sets` → `002/`.
+2. For `Form_at 002 - Brandon Lee Vear.mp3.mp3`: download → re-upload as
+   `Form_at 002 - Brandon Lee Vear.mp3` (dashboard has no in-place rename).
+   Same for `….mp3.json` → `….json` (matches the t.i.l. naming pattern).
+3. Keep the OLD keys until the sets.ts change deploys, then delete them.
+4. Tell the next session "objects renamed" — the `sets.ts` URL update is
+   deliberately NOT made yet (code must never point at keys that don't
+   exist).
+
 ---
 
 ## 15. Browser `fetch(url, { method: "HEAD" })` against R2 fails with `net::ERR_FAILED`
@@ -434,6 +448,25 @@ Recommend the force-re-download path with an in-app notice ("we moved sets to a 
 ### Timing
 
 Block wider announcement / public share until this ships. Small friends test (2026-07-02) can proceed on the dev URL — concurrency is low enough that rate limits don't bite. The threshold isn't sharp; use "am I about to link this in a post that reaches strangers?" as the go/no-go.
+
+### 2026-07-05 session status — BLOCKED on the domain connection
+
+Attempted; stopped at the precondition, per this item's own spec:
+- Neither candidate host resolves (`sets.` / `cdn.formatglasgow.com` → no
+  DNS). The custom domain is NOT connected to the bucket.
+- The local wrangler token cannot connect it either (no R2/zone scopes —
+  403 on any R2 call).
+
+**Julian unblocks with:** dashboard → R2 → `form-at-sets` → Settings →
+Custom Domains → Connect → pick the hostname (spec candidates:
+`sets.formatglasgow.com` or `cdn.formatglasgow.com`). Then the next session
+verifies `curl -H "Range: bytes=0-99"` returns 206 + CORS headers on the
+new host and runs the sweep.
+
+**Sweep note:** M3 landed meanwhile, so the hostname now ALSO lives in
+`apps/web/public/_headers` (CSP media-src/connect-src) and
+`apps/web/app/server.ts` (`AUDIO_HOST` const) — both deliberately greppable
+and flagged in-file. A fresh grep at sweep time remains mandatory.
 
 ---
 
