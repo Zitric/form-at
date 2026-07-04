@@ -40,6 +40,7 @@ class MockContainer extends EventTarget {
   controller: object | null = null;
   registration = new MockRegistration();
   ready: Promise<MockRegistration>;
+  getRegistration = () => Promise.resolve(this.registration);
   constructor() {
     super();
     this.ready = Promise.resolve(this.registration);
@@ -109,7 +110,59 @@ describe("useSwUpdate", () => {
     await waitFor(() => expect(result.current.updateReady).toBe(true));
 
     act(() => result.current.applyUpdate());
-    expect(waiting.postMessage).toHaveBeenCalledWith({ type: "SKIP_WAITING" });
+    await waitFor(() => expect(waiting.postMessage).toHaveBeenCalledWith({ type: "SKIP_WAITING" }));
+  });
+
+  it("re-targets the CURRENT reg.waiting at tap time when the captured worker went redundant", async () => {
+    // 2026-07-03 field bug's silent-drop path: multiple deploys while the
+    // tab stays open replace the waiting worker; posting SKIP_WAITING to
+    // the old (now redundant) captured object is silently dropped and the
+    // tap does nothing.
+    const staleWorker = new MockServiceWorker();
+    container.registration.waiting = staleWorker;
+    container.controller = {};
+
+    const { result } = renderHook(() => useSwUpdate());
+    await waitFor(() => expect(result.current.updateReady).toBe(true));
+
+    const newerWorker = new MockServiceWorker();
+    staleWorker.state = "redundant";
+    container.registration.waiting = newerWorker;
+
+    act(() => result.current.applyUpdate());
+    await waitFor(() =>
+      expect(newerWorker.postMessage).toHaveBeenCalledWith({ type: "SKIP_WAITING" }),
+    );
+    expect(staleWorker.postMessage).not.toHaveBeenCalled();
+  });
+
+  it("falls back to a plain reload when controllerchange never fires after consent", async () => {
+    const reload = vi.fn();
+    const originalLocation = window.location;
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...originalLocation, reload },
+    });
+
+    try {
+      const waiting = new MockServiceWorker();
+      container.registration.waiting = waiting;
+      container.controller = {};
+
+      const { result } = renderHook(() => useSwUpdate());
+      await waitFor(() => expect(result.current.updateReady).toBe(true));
+
+      vi.useFakeTimers();
+      act(() => result.current.applyUpdate());
+      // No controllerchange dispatched — the wedged/redundant case.
+      act(() => {
+        vi.advanceTimersByTime(2100);
+      });
+      expect(reload).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+      Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
+    }
   });
 
   it("controllerchange without a prior applyUpdate does not reload (first-install claim)", async () => {
