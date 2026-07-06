@@ -42,22 +42,34 @@ Engineering-wise, the branch is shippable. Items below are the punch list:
 
 ### Launch blockers before wider release
 
-Items that MUST land before a public / wider-audience release. A small
-trusted-friends test can proceed without these — they only bite at
-launch-scale concurrency.
+**NONE OPEN as of 2026-07-06.** The single blocker (TECH_DEBT 19, audio on
+the R2 dev URL) is resolved: audio now serves from
+`https://cdn.formatglasgow.com` (custom domain on the `form-at-sets`
+bucket — no rate limit, Cloudflare edge caching, production-recommended).
+Host verified by curl (Range GET → 206 with correct content-range; CORS
+preflight allows GET/HEAD + range header; `Content-Length` exposed for the
+download progress reader) and against the production preview with the SW
+active (streams, IDB read via `?ctx=app` with new-host keys, bare-URL
+pass-through, 5.3 no-cors lock intact). The hostname is centralized in
+`apps/web/app/utils/audioHost.ts` (worker-safe; `_headers` carries a
+keep-in-sync comment).
 
-- **[LAUNCH BLOCKER] Move audio off the R2 public dev URL onto a custom
-  domain** (TECH_DEBT 19) — MP3s + peaks currently serve from
-  `pub-e15e86da649d4c91b6666141bfe67664.r2.dev`, which Cloudflare
-  explicitly warns is rate-limited and NOT recommended for production
-  ("Connect a custom domain to the bucket to support production
-  workloads"). At launch-scale concurrent traffic (many friends hitting
-  play at once via an Instagram announcement) the dev URL's rate limit
-  can throttle audio requests → broken playback for some users at
-  exactly the worst moment. Fix scope (Cloudflare custom domain +
-  hostname-audit code change) is documented in TECH_DEBT 19. CORS is
-  already fine; the constraint is purely rate-limit / production
-  recommendation. **Block wider announcement until this ships.**
+**IDB migration decision (documented per TECH_DEBT 19):** force
+re-download. `reconcileFromIdb` now validates every entry's URL against the
+catalogue (`offlineSlice.ts`, pass 2) — entries under URLs the catalogue no
+longer emits are purged and a set whose MP3 went stale flips to `evicted`,
+surfacing the existing "↻ re-save · was N MB" button as the notice. This
+was necessary (the natural path did NOT evict: grouping is by setId, so
+old-host entries kept the state lying "saved" while the SW's exact-URL
+lookup missed) and it self-heals future object renames (TECH_DEBT 14).
+Clean-slate (bump the IDB name) was considered and rejected — the guard is
+~20 lines, generic, and unit-locked. Only Julian's devices had saved sets;
+they will each show re-save buttons once after this deploys.
+
+**On-device checks for the next pass:** (1) play + seek a set on the
+deployed site — Network panel shows `cdn.formatglasgow.com` with 206s on
+seek; (2) standalone app: previously-saved sets show "↻ re-save"; re-save
+one and confirm airplane-mode playback works from the new-host IDB entry.
 
 ### Pre-deploy polish
 
