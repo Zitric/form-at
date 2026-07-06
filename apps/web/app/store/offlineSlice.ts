@@ -451,10 +451,39 @@ export const createOfflineSlice: StateCreator<OfflineSlice, [], [], OfflineSlice
         for (const e of entries) orphanUrlsToPurge.push(e.url);
         continue;
       }
+      // URL-migration guard (TECH_DEBT 19, host swap to the custom domain;
+      // also self-heals future object renames like TECH_DEBT 14). The SW
+      // looks entries up by EXACT URL, so bytes stored under a URL the
+      // catalogue no longer emits are unreachable — without this check the
+      // state would keep saying "saved" while offline playback silently
+      // failed. Stale entries are purged; a set whose MP3 went stale flips
+      // to `evicted`, which is the documented force-re-download path — the
+      // existing "↻ re-save · was N MB" UX is the user notice.
+      const catalogueUrls = new Set(
+        [catalogueSet.src, catalogueSet.peaks].filter((u): u is string => Boolean(u)),
+      );
+      const live = entries.filter((e) => catalogueUrls.has(e.url));
+      for (const e of entries) {
+        if (!catalogueUrls.has(e.url)) orphanUrlsToPurge.push(e.url);
+      }
+
       const existing = persisted[setId];
+      const hasPlayableMp3 = live.some((e) => e.kind === "mp3");
+      if (!hasPlayableMp3) {
+        if (existing?.status === "saved") {
+          updates[setId] = {
+            status: "evicted",
+            lastKnownSavedAt: existing.savedAt,
+            lastKnownBytes: existing.bytesTotal,
+          };
+        }
+        continue;
+      }
+      // Stale peaks alone (e.g. only the JSON was renamed): purged above,
+      // set stays saved — the seeker falls back to the plain slider.
       if (!existing || existing.status !== "saved") {
-        const bytesTotal = entries.reduce((sum, e) => sum + e.bytesTotal, 0);
-        const savedAt = Math.min(...entries.map((e) => e.savedAt));
+        const bytesTotal = live.reduce((sum, e) => sum + e.bytesTotal, 0);
+        const savedAt = Math.min(...live.map((e) => e.savedAt));
         updates[setId] = { status: "saved", bytesTotal, savedAt };
       }
     }
