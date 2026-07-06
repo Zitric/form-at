@@ -7,8 +7,8 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
-- **Open:** 1, 2, 3, 4, 7, 8, 12, 13, 14 (deferred — see item), 15
-- **Deferred (coupled, ship together post-2026-07-24):** 16 (orphan artwork prune) — waits for the deferred manage-offline-sets view; the prune naturally lives in that view's remove flow. See PWA_PROGRESS.md for the deferral rationale.
+- **Open:** 1, 2, 3, 4, 8, 12, 13, 15
+- **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, ships together post-2026-07-24; see PWA_PROGRESS.md for the deferral rationale)
 - **Resolved:** 6 (2026-06-28, `10811a4`), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01), 17 (2026-07-02 — gate proven intact via SW-preview experiments; observed bytes were HTTP cache / element buffer, not IDB; silent-blocked-tap toast fixed), 18 (2026-07-02 — not reproducible on current build; all three offline nav modes verified against the SW preview), 5 (absorbed into 19's verification — CORS re-checked on the custom domain 2026-07-06: preflight GET/HEAD + range, ACAO *, Content-Length exposed), 19 (2026-07-06 — audio on cdn.formatglasgow.com, host centralized in utils/audioHost.ts, IDB force-re-download migration in reconcileFromIdb)
 
 Resolved items keep their original section in place with a `✅ Resolved` stamp at the top, so the historical context (cause + fix path) stays readable. Search for `✅ Resolved` to skip to / past them.
@@ -156,6 +156,10 @@ What's still broken offline: **client-side navigation (link click between routes
 
 ## 7. Polish `offline.html`
 
+**✅ Resolved 2026-07-02** (`d2bbc36`, "Re design the Offline page and the not found page"). Verified against the current file (`apps/web/public/offline.html`): terminal-prompt status line (`› offline`, gold prompt / white value), the wordmark treatment mirroring `Header.tsx`'s crop + `mix-blend-mode: screen`, bracketed CTA buttons matching the design system, and the zero-bundle constraint fully preserved (inline `<style>` only, no Tailwind, no external CSS/JS). The description below predates the redesign and is stale — kept for the constraints list, which is still the correct spec for any future edit to this file.
+
+_Original entry (kept for context):_
+
 `apps/web/public/offline.html` is currently a functional-minimal fallback page — inline `<style>` block, no Tailwind, no JS. That's deliberate and must stay: the file has to render with **zero dependencies on the app bundle**, because it's served exactly when the bundle is unavailable.
 
 What's missing is a proper visual pass to match the Form:at aesthetic — typographic hierarchy, the terminal-CLI feel of the rest of the site, maybe a small inlined pixel-F SVG logo. Currently it's just text plus a retry button.
@@ -295,18 +299,17 @@ The R2 object itself was uploaded with the wrong name (`.mp3.mp3` instead of `.m
 **Fix when convenient:** rename the R2 object (Cloudflare R2 dashboard → bucket → rename, or re-upload and delete the old key), then update the `src` and `peaks` URLs in `sets.ts` to match. Out of scope for chunk 3 work — does not affect any user-visible behaviour.
 
 **2026-07-05 attempt — blocked on credentials.** The local wrangler OAuth
-token has NO R2 scopes (`r2 object get` → 403 Authentication error; the
-token's grants cover containers/email/browser only). Julian's dashboard
-steps (do together with the TECH_DEBT 19 domain connection, one bucket
-visit):
-1. Cloudflare dashboard → R2 → `form-at-sets` → `002/`.
-2. For `Form_at 002 - Brandon Lee Vear.mp3.mp3`: download → re-upload as
-   `Form_at 002 - Brandon Lee Vear.mp3` (dashboard has no in-place rename).
-   Same for `….mp3.json` → `….json` (matches the t.i.l. naming pattern).
-3. Keep the OLD keys until the sets.ts change deploys, then delete them.
-4. Tell the next session "objects renamed" — the `sets.ts` URL update is
-   deliberately NOT made yet (code must never point at keys that don't
-   exist).
+token had NO R2 scopes (`r2 object get` → 403 Authentication error; the
+token's grants cover containers/email/browser only). The dashboard-rename
+path (download 292MB → re-upload under a clean key → update `sets.ts` →
+delete the old key) was drafted but never executed.
+
+**2026-07-06 — Julian's call: deferred indefinitely, not just blocked.**
+R2's dashboard has no in-place rename regardless of credentials (only
+download + re-upload of the 292MB object), and the item is cosmetic with no
+user-visible impact. Not worth the bandwidth. The `.mp3.mp3` keys stay on
+the new `cdn.formatglasgow.com` host (TECH_DEBT 19). Revisit only if a
+reason to touch this object comes up for other reasons.
 
 ---
 
@@ -503,6 +506,13 @@ new host and runs the sweep.
 `apps/web/app/server.ts` (`AUDIO_HOST` const) — both deliberately greppable
 and flagged in-file. A fresh grep at sweep time remains mandatory.
 
+### 2026-07-06 — unblocked, resolved
+
+Julian connected `cdn.formatglasgow.com` to the bucket and verified it
+himself (206 + correct content-range). The sweep, centralization, and IDB
+migration described in the ✅ Resolved summary at the top of this item all
+happened this session — see there for the full verification record.
+
 ---
 
-_Last updated: 2026-07-02 (R2 custom domain launch blocker recorded as item 19)_
+_Last updated: 2026-07-06 (item 19 resolved — custom domain live; item 14 deferred indefinitely; item 5 absorbed into 19; item 7 stamped resolved — was already fixed 2026-07-02 but unstamped)_
