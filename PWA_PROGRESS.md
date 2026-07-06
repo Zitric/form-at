@@ -262,10 +262,33 @@ Both items from the post-merge review's next-PR plan, shipped as two commits.
   explicit user action). E2E is scoped out honestly: the dev server
   Playwright boots never serves the SW, so the flow is unit-tested against
   a mocked `navigator.serviceWorker` only.
-  **On-device check:** load the app (prod), deploy any change, wait ~1min or
-  reload-once to let the browser's update check run → gold toast appears
-  above the player chrome → tap → single reload → new build live. Confirm
-  NO toast and NO reload on a genuinely first visit.
+  **Field bug + fix (2026-07-04):** the 2026-07-03 Android report ("tap does
+  nothing; works on desktop") was CDP-reproduced and root-caused: a PLAYING
+  track streams through the OLD service worker's fetch handler as a
+  long-lived response, and the waiting worker's activation — even after
+  `skipWaiting()` — is deferred until the active worker's functional events
+  settle, i.e. until the track ends. Tap → SKIP_WAITING → nothing activates
+  → no controllerchange → no reload. Desktop "worked" only because nothing
+  was playing (hit-target / gesture / tap-vs-click hypotheses all killed by
+  probes: the tap reached the button and fired click even in the failing
+  case). Three-part fix in `useSwUpdate.applyUpdate`:
+  1. `releaseAudioStream()` (playerSlice) tears down the audio connection at
+     consent — we're reloading anyway — which unblocks activation
+     immediately (verified: controllerchange + reload with a track playing).
+  2. The SKIP_WAITING target is re-resolved from `reg.waiting` at tap time —
+     the captured worker object can have gone redundant across multiple
+     deploys, and postMessage to a redundant worker is silently dropped.
+  3. A 2s fallback reload guarantees a consent tap always visibly converges
+     even if activation wedges.
+  Affordance also fixed: the toast is now "new build ready [ reload ]" —
+  bracketed CTA per the design system, ~44px touch target, active-state
+  feedback. (It was already a real `<button>`; it just read as a passive
+  status pill.)
+  **On-device check (updated):** load the app (prod), START A SET PLAYING,
+  deploy any change, let the update check run → gold "new build ready
+  [ reload ]" toast → tap WHILE audio plays → playback stops, single
+  reload, new build live. Confirm NO toast and NO reload on a genuinely
+  first visit.
 
 ### Open bugs found in testing (2026-07-01) — CLOSED 2026-07-02 (evening)
 

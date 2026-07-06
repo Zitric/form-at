@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { releaseAudioStream } from "~/store/playerSlice";
 
 // Detects a new service-worker build waiting to activate and exposes the
 // user-consented swap (H2: no unconditional skipWaiting in the SW — see the
@@ -17,6 +18,11 @@ import { useEffect, useRef, useState } from "react";
 // updatefound listener would never attach. `ready` waits for an active
 // registration; where the SW never registers (dev server, unsupported
 // browser) it simply never resolves and the hook stays idle.
+
+// controllerchange normally lands well under a second after SKIP_WAITING;
+// 2s is comfortably past that without making a genuinely-needed fallback
+// reload feel unresponsive.
+const RELOAD_FALLBACK_MS = 2000;
 
 // Pure decision — exported for unit tests. A worker reaching "installed"
 // only means "update ready" when the page already has a controller: on the
@@ -75,7 +81,30 @@ export function useSwUpdate(): { updateReady: boolean; applyUpdate: () => void }
   const applyUpdate = () => {
     if (!waiting) return;
     requestedRef.current = true;
-    waiting.postMessage({ type: "SKIP_WAITING" });
+    // Playing audio streams through the OLD worker's fetch handler and
+    // blocks the waiting worker's activation for the rest of the track —
+    // the 2026-07-03 "tap does nothing" field bug. We're reloading anyway,
+    // so tear the stream down first; activation then proceeds immediately.
+    releaseAudioStream();
+    // Re-resolve the waiting worker AT TAP TIME instead of posting to the
+    // captured state object: with multiple deploys while a tab stays open
+    // (mobile tabs live for hours), the captured worker can have gone
+    // REDUNDANT — replaced by a newer waiting worker — and postMessage to a
+    // redundant worker is silently dropped: the tap does nothing (2026-07-03
+    // field bug's only silent-drop path; the tap→click→handler chain itself
+    // is CDP-verified working on mobile emulation).
+    navigator.serviceWorker.getRegistration().then((reg) => {
+      (reg?.waiting ?? waiting).postMessage({ type: "SKIP_WAITING" });
+    });
+    // Convergence guarantee: a consent tap must ALWAYS visibly do something.
+    // If controllerchange hasn't reloaded us shortly (worker was redundant
+    // with nothing to activate, message lost, activation wedged), reload
+    // anyway — a plain reload re-registers and picks up the newest build.
+    // No double-reload risk: whichever fires first navigates away and the
+    // page (with this timer) is gone.
+    window.setTimeout(() => {
+      if (requestedRef.current) window.location.reload();
+    }, RELOAD_FALLBACK_MS);
   };
 
   return { updateReady: waiting !== null, applyUpdate };
