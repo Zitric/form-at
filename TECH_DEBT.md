@@ -6,10 +6,10 @@ Each item is written to be picked up cold — no conversation context required.
 
 ## Status at a glance
 
-- **Launch blockers (before wider release, small trusted-friends test OK on current):** 19 (R2 custom domain — dev URL is rate-limited)
-- **Open:** 1, 2, 3, 4, 5, 7, 8, 12, 13, 14, 15, 19
+- **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
+- **Open:** 1, 2, 3, 4, 7, 8, 12, 13, 14 (deferred — see item), 15
 - **Deferred (coupled, ship together post-2026-07-24):** 16 (orphan artwork prune) — waits for the deferred manage-offline-sets view; the prune naturally lives in that view's remove flow. See PWA_PROGRESS.md for the deferral rationale.
-- **Resolved:** 6 (2026-06-28, `10811a4`), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01), 17 (2026-07-02 — gate proven intact via SW-preview experiments; observed bytes were HTTP cache / element buffer, not IDB; silent-blocked-tap toast fixed), 18 (2026-07-02 — not reproducible on current build; all three offline nav modes verified against the SW preview)
+- **Resolved:** 6 (2026-06-28, `10811a4`), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01), 17 (2026-07-02 — gate proven intact via SW-preview experiments; observed bytes were HTTP cache / element buffer, not IDB; silent-blocked-tap toast fixed), 18 (2026-07-02 — not reproducible on current build; all three offline nav modes verified against the SW preview), 5 (absorbed into 19's verification — CORS re-checked on the custom domain 2026-07-06: preflight GET/HEAD + range, ACAO *, Content-Length exposed), 19 (2026-07-06 — audio on cdn.formatglasgow.com, host centralized in utils/audioHost.ts, IDB force-re-download migration in reconcileFromIdb)
 
 Resolved items keep their original section in place with a `✅ Resolved` stamp at the top, so the historical context (cause + fix path) stays readable. Search for `✅ Resolved` to skip to / past them.
 
@@ -103,6 +103,13 @@ Five distinct concerns shared the file; two have since moved out:
 ---
 
 ## 5. R2 CORS verification — pre-chunk-3 check
+
+**✅ Absorbed into item 19 (2026-07-06).** The check was re-run against the
+custom domain `cdn.formatglasgow.com`: preflight 204 with GET/HEAD + range
+allowed, `access-control-allow-origin: *`,
+`access-control-expose-headers: Content-Range,Accept-Ranges,Content-Length`.
+
+_Original entry (kept for context):_
 
 Before Phase 4 chunk 3 (audio download write-path) lands, confirm the R2 bucket `pub-e15e86da649d4c91b6666141bfe67664.r2.dev` allows CORS reads from the PWA origins: production `formatglasgow.com` and dev `http://localhost:4173`. Streaming a 64MB MP3 with client-side `fetch` requires permissive CORS; a mid-chunk-3 CORS surprise would mean a detour to bucket settings.
 
@@ -264,6 +271,18 @@ Current behaviour is intentional and load-bearing; this entry exists so a future
 
 ## 14. Brandon Lee Vear R2 object has a double `.mp3` extension
 
+**Deferred indefinitely (2026-07-06, Julian's call).** R2 has no rename
+operation — the dashboard only offers download + re-upload of the 292MB
+object — and the item is purely cosmetic (playback works; the SW matches on
+`.endsWith(".mp3")`, which `.mp3.mp3` passes). The TECH_DEBT 19 host sweep
+kept the `.mp3.mp3` keys, now on the new host. If the rename ever happens,
+`reconcileFromIdb`'s URL-validation guard (added for 19) automatically
+flips affected saved sets to `evicted` — no extra migration code needed;
+play stats are keyed by `set_id`, not URL (`api/signal.ts`, `schema.sql`),
+so stats survive any rename.
+
+_Original entry (kept for context):_
+
 `apps/web/app/data/sets.ts` references the MP3 + peaks for the Brandon Lee Vear set with a stuttered extension in the URL path:
 
 ```
@@ -274,6 +293,20 @@ https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20Bran
 The R2 object itself was uploaded with the wrong name (`.mp3.mp3` instead of `.mp3`). Cosmetic — playback and download work fine because the SW matches on `.endsWith(".mp3")` which still passes. Discovered during chunk 3c CORS diagnosis (and ruled out as the cause: the t.i.l. set has a clean URL and failed identically).
 
 **Fix when convenient:** rename the R2 object (Cloudflare R2 dashboard → bucket → rename, or re-upload and delete the old key), then update the `src` and `peaks` URLs in `sets.ts` to match. Out of scope for chunk 3 work — does not affect any user-visible behaviour.
+
+**2026-07-05 attempt — blocked on credentials.** The local wrangler OAuth
+token has NO R2 scopes (`r2 object get` → 403 Authentication error; the
+token's grants cover containers/email/browser only). Julian's dashboard
+steps (do together with the TECH_DEBT 19 domain connection, one bucket
+visit):
+1. Cloudflare dashboard → R2 → `form-at-sets` → `002/`.
+2. For `Form_at 002 - Brandon Lee Vear.mp3.mp3`: download → re-upload as
+   `Form_at 002 - Brandon Lee Vear.mp3` (dashboard has no in-place rename).
+   Same for `….mp3.json` → `….json` (matches the t.i.l. naming pattern).
+3. Keep the OLD keys until the sets.ts change deploys, then delete them.
+4. Tell the next session "objects renamed" — the `sets.ts` URL update is
+   deliberately NOT made yet (code must never point at keys that don't
+   exist).
 
 ---
 
@@ -393,6 +426,22 @@ Separate system from the audio read-path — this is route data, not playback. N
 
 ## 19. [LAUNCH BLOCKER before wider release] Move audio off the R2 public dev URL onto a custom domain
 
+**✅ Resolved 2026-07-06.** Audio serves from `https://cdn.formatglasgow.com`
+(custom domain connected by Julian, verified: Range GET → 206 with correct
+content-range; CORS preflight GET/HEAD + range; ACAO `*`; Content-Length
+exposed). Code sweep complete — the hostname is centralized in
+`apps/web/app/utils/audioHost.ts` (worker-safe: sw.ts imports the matcher
+host; sets.ts builds URLs from `AUDIO_ORIGIN`; server.ts CSP uses it;
+`_headers` carries a keep-in-sync comment; `appContext.test.ts` imports the
+const). IDB migration: force re-download via URL validation in
+`reconcileFromIdb` (unit-locked in `reconcileUrlMigration.test.ts`) — the
+guard also self-heals future object renames. Verified against the
+production preview with SW active: streaming, `?ctx=app` IDB hit on
+new-host keys, bare pass-through, 5.3 no-cors lock. TECH_DEBT 5's CORS
+check was re-run on the new host and is absorbed here.
+
+_Original entry (kept for context):_
+
 Discovered 2026-07-02 pre-friends-test. Audio MP3s + peaks JSON are currently served from the R2 Public Development URL:
 
 ```
@@ -434,6 +483,25 @@ Recommend the force-re-download path with an in-app notice ("we moved sets to a 
 ### Timing
 
 Block wider announcement / public share until this ships. Small friends test (2026-07-02) can proceed on the dev URL — concurrency is low enough that rate limits don't bite. The threshold isn't sharp; use "am I about to link this in a post that reaches strangers?" as the go/no-go.
+
+### 2026-07-05 session status — BLOCKED on the domain connection
+
+Attempted; stopped at the precondition, per this item's own spec:
+- Neither candidate host resolves (`sets.` / `cdn.formatglasgow.com` → no
+  DNS). The custom domain is NOT connected to the bucket.
+- The local wrangler token cannot connect it either (no R2/zone scopes —
+  403 on any R2 call).
+
+**Julian unblocks with:** dashboard → R2 → `form-at-sets` → Settings →
+Custom Domains → Connect → pick the hostname (spec candidates:
+`sets.formatglasgow.com` or `cdn.formatglasgow.com`). Then the next session
+verifies `curl -H "Range: bytes=0-99"` returns 206 + CORS headers on the
+new host and runs the sweep.
+
+**Sweep note:** M3 landed meanwhile, so the hostname now ALSO lives in
+`apps/web/public/_headers` (CSP media-src/connect-src) and
+`apps/web/app/server.ts` (`AUDIO_HOST` const) — both deliberately greppable
+and flagged in-file. A fresh grep at sweep time remains mandatory.
 
 ---
 

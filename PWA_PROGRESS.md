@@ -42,22 +42,34 @@ Engineering-wise, the branch is shippable. Items below are the punch list:
 
 ### Launch blockers before wider release
 
-Items that MUST land before a public / wider-audience release. A small
-trusted-friends test can proceed without these — they only bite at
-launch-scale concurrency.
+**NONE OPEN as of 2026-07-06.** The single blocker (TECH_DEBT 19, audio on
+the R2 dev URL) is resolved: audio now serves from
+`https://cdn.formatglasgow.com` (custom domain on the `form-at-sets`
+bucket — no rate limit, Cloudflare edge caching, production-recommended).
+Host verified by curl (Range GET → 206 with correct content-range; CORS
+preflight allows GET/HEAD + range header; `Content-Length` exposed for the
+download progress reader) and against the production preview with the SW
+active (streams, IDB read via `?ctx=app` with new-host keys, bare-URL
+pass-through, 5.3 no-cors lock intact). The hostname is centralized in
+`apps/web/app/utils/audioHost.ts` (worker-safe; `_headers` carries a
+keep-in-sync comment).
 
-- **[LAUNCH BLOCKER] Move audio off the R2 public dev URL onto a custom
-  domain** (TECH_DEBT 19) — MP3s + peaks currently serve from
-  `pub-e15e86da649d4c91b6666141bfe67664.r2.dev`, which Cloudflare
-  explicitly warns is rate-limited and NOT recommended for production
-  ("Connect a custom domain to the bucket to support production
-  workloads"). At launch-scale concurrent traffic (many friends hitting
-  play at once via an Instagram announcement) the dev URL's rate limit
-  can throttle audio requests → broken playback for some users at
-  exactly the worst moment. Fix scope (Cloudflare custom domain +
-  hostname-audit code change) is documented in TECH_DEBT 19. CORS is
-  already fine; the constraint is purely rate-limit / production
-  recommendation. **Block wider announcement until this ships.**
+**IDB migration decision (documented per TECH_DEBT 19):** force
+re-download. `reconcileFromIdb` now validates every entry's URL against the
+catalogue (`offlineSlice.ts`, pass 2) — entries under URLs the catalogue no
+longer emits are purged and a set whose MP3 went stale flips to `evicted`,
+surfacing the existing "↻ re-save · was N MB" button as the notice. This
+was necessary (the natural path did NOT evict: grouping is by setId, so
+old-host entries kept the state lying "saved" while the SW's exact-URL
+lookup missed) and it self-heals future object renames (TECH_DEBT 14).
+Clean-slate (bump the IDB name) was considered and rejected — the guard is
+~20 lines, generic, and unit-locked. Only Julian's devices had saved sets;
+they will each show re-save buttons once after this deploys.
+
+**On-device checks for the next pass:** (1) play + seek a set on the
+deployed site — Network panel shows `cdn.formatglasgow.com` with 206s on
+seek; (2) standalone app: previously-saved sets show "↻ re-save"; re-save
+one and confirm airplane-mode playback works from the new-host IDB entry.
 
 ### Pre-deploy polish
 
@@ -147,6 +159,44 @@ On-device re-test script (fresh profile = clear site data first):
    handling.
 5. **Any browser:** after install, CTA gone, modal switches to open-app
    branch; standalone gate unchanged (tab still streams, never reads IDB).
+
+### Fixed 2026-07-05 — M3: `_headers` caching + CSP (TECH_DEBT 19 itself still blocked)
+
+The launch-blocker session ran into hard preconditions: the custom domain
+is not connected to the bucket (neither candidate host resolves) and the
+local wrangler token has no R2 scopes — so the host sweep (TECH_DEBT 19),
+the IDB migration decision, and the `.mp3.mp3` rename (TECH_DEBT 14) are
+all blocked on Julian's dashboard access (exact steps in both TECH_DEBT
+items). M3 was host-independent and shipped:
+
+- **`public/_headers`:** `/assets/*` → `public, max-age=31536000,
+  immutable` (content-hashed, safe forever); `/sw.js` → `no-cache`
+  (browsers cap SW freshness at 24h regardless — this is belt-and-braces so
+  an update never waits on HTTP caching).
+- **CSP, split by where documents come from:** Cloudflare Pages `_headers`
+  applies to STATIC ASSETS ONLY — SSR documents from `_worker.js` never see
+  it. So the document policy is set in `app/server.ts` (attached to
+  `text/html` responses only), and `_headers`' `/*` rule covers
+  `offline.html`, the one static document. The two strings carry
+  keep-in-sync comments; server.ts is the source of truth.
+- **Policy shape** (restrictive-first, audited against real usage):
+  `default-src 'self'` + `'unsafe-inline'` for script/style (inline SW
+  registration + beforeinstallprompt stash + TanStack's per-request SSR
+  hydration scripts — unhashable; inline font CSS + style attributes),
+  `img-src 'self' data:`, R2 host in `media-src`/`connect-src` (the ONLY
+  external fetch origin — all social/calendar URLs are link navigations),
+  `worker-src/manifest-src/base-uri/frame-ancestors 'self'`. Nothing had
+  to be loosened beyond the audited list.
+- **Verified against the production preview** (SW active, Playwright +
+  violation listeners): all four pages + detail load, SW registers, audio
+  streams from R2, peaks fetch → waveform renders, artwork loads — ZERO
+  CSP violations.
+- **Needs live-deploy confirmation:** (1) whether `_headers` applies to
+  assets served via `env.ASSETS.fetch` from the advanced-mode `_worker.js`
+  (docs say the asset layer honours `_headers`; confirm `cache-control` on
+  a deployed `/assets/*.js` and `/sw.js`); (2) the `.ics` calendar download
+  under CSP (blob: anchor — no directive we set governs it, but the sweep
+  couldn't reach the button; one manual download click suffices).
 
 ### Fixed 2026-07-03 (evening) — field bugs from on-device testing
 

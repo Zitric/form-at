@@ -7,7 +7,9 @@ import { stripAppContext } from "~/utils/appContext";
 // one — rebuilding drops the Range header under the request-no-cors guard),
 // so this marker logic is the only URL manipulation left in the handler.
 
-const R2 = "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev";
+import { AUDIO_ORIGIN } from "~/utils/audioHost";
+
+const R2 = AUDIO_ORIGIN;
 
 describe("stripAppContext", () => {
   it("bare URL (tab): not app context, URL unchanged", () => {

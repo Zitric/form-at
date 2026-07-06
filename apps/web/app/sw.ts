@@ -23,6 +23,7 @@ import { registerRoute, setCatchHandler } from "workbox-routing";
 import { StaleWhileRevalidate } from "workbox-strategies";
 import { getOfflineAudio } from "~/data/offline-audio";
 import { stripAppContext } from "~/utils/appContext";
+import { AUDIO_HOST } from "~/utils/audioHost";
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ revision: string | null; url: string }>;
@@ -169,7 +170,7 @@ registerRoute(
 //   Accept-Ranges:  "bytes"
 registerRoute(
   ({ url }) =>
-    url.hostname === "pub-e15e86da649d4c91b6666141bfe67664.r2.dev" &&
+    url.hostname === AUDIO_HOST &&
     (url.pathname.endsWith(".mp3") || url.pathname.endsWith(".json")),
   async ({ request, url }) => {
     const { ctxIsApp, bareUrl } = stripAppContext(url);
