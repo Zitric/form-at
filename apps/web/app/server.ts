@@ -1,4 +1,5 @@
 import { createStartHandler, defaultStreamHandler } from "@tanstack/react-start/server";
+import { AUDIO_ORIGIN } from "~/utils/audioHost";
 
 const handler = createStartHandler({ handler: defaultStreamHandler });
 
@@ -15,18 +16,17 @@ const handler = createStartHandler({ handler: defaultStreamHandler });
 //   style-src 'unsafe-inline'  — the inlined critical font CSS + React
 //     style attributes.
 //   img-src data:              — favicon/data URIs.
-//   media-src / connect-src R2 — the <audio> stream and the peaks-JSON /
-//     download fetches. AUDIO HOST: the dev URL is swept to the custom
-//     domain by TECH_DEBT 19 — deliberately greppable by hostname.
-const AUDIO_HOST = "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev";
+//   media-src / connect-src — the <audio> stream and the peaks-JSON /
+//     download fetches from the audio host (see utils/audioHost.ts, the
+//     canonical home of the hostname).
 const DOCUMENT_CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self'",
-  `media-src 'self' ${AUDIO_HOST}`,
-  `connect-src 'self' ${AUDIO_HOST}`,
+  `media-src 'self' ${AUDIO_ORIGIN}`,
+  `connect-src 'self' ${AUDIO_ORIGIN}`,
   "worker-src 'self'",
   "manifest-src 'self'",
   "base-uri 'self'",

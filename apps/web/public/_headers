@@ -16,8 +16,7 @@
   Cache-Control: no-cache
 
 # CSP for static documents (offline.html is the only one). SSR documents
-# get the same policy from app/server.ts. AUDIO HOST: the R2 dev URL below
-# is swept to the custom domain by TECH_DEBT 19 — this line is deliberately
-# greppable by hostname.
+# get the same policy from app/server.ts. AUDIO HOST: keep in sync with
+# utils/audioHost.ts (this static file can't import it).
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self' https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev; connect-src 'self' https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev; worker-src 'self'; manifest-src 'self'; base-uri 'self'; frame-ancestors 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self' https://cdn.formatglasgow.com; connect-src 'self' https://cdn.formatglasgow.com; worker-src 'self'; manifest-src 'self'; base-uri 'self'; frame-ancestors 'self'

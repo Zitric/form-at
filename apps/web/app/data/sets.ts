@@ -1,3 +1,4 @@
+import { AUDIO_ORIGIN } from "~/utils/audioHost";
 export type MusicSet = {
   id: string;
   title: string;
@@ -28,8 +29,8 @@ export const sets: MusicSet[] = [
     description:
       "Opening transmission for sequence 002. Establishing the initial connection with deep, hypnotic dub techno.",
     duration: "45:18",
-    src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20t.i.l.mp3",
-    peaks: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20t.i.l.json",
+    src: `${AUDIO_ORIGIN}/002/Form_at%20002%20-%20t.i.l.mp3`,
+    peaks: `${AUDIO_ORIGIN}/002/Form_at%20002%20-%20t.i.l.json`,
     artwork: "sets/002",
     sizeBytes: 108761280,
   },
@@ -42,8 +43,8 @@ export const sets: MusicSet[] = [
     description:
       "Mid-sequence escalation. Elevating the frequency with a high-energy blend of acid, electro, and driving grooves that took total control of the dancefloor.",
     duration: "1:31:55",
-    src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20hubey.mp3",
-    peaks: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20hubey.json",
+    src: `${AUDIO_ORIGIN}/002/Form_at%20002%20-%20hubey.mp3`,
+    peaks: `${AUDIO_ORIGIN}/002/Form_at%20002%20-%20hubey.json`,
     artwork: "sets/002",
     sizeBytes: 220613760,
   },
@@ -56,9 +57,8 @@ export const sets: MusicSet[] = [
     description:
       "External operator integrated. A two-hour sustained transmission of deep, hypnotic techno, locking the dancefloor into a continuous loop during peak system hours.",
     duration: "2:01:55",
-    src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20Brandon%20Lee%20Vear.mp3.mp3",
-    peaks:
-      "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20Brandon%20Lee%20Vear.mp3.json",
+    src: `${AUDIO_ORIGIN}/002/Form_at%20002%20-%20Brandon%20Lee%20Vear.mp3.mp3`,
+    peaks: `${AUDIO_ORIGIN}/002/Form_at%20002%20-%20Brandon%20Lee%20Vear.mp3.json`,
     artwork: "sets/002",
     sizeBytes: 292611840,
   },
@@ -71,9 +71,8 @@ export const sets: MusicSet[] = [
     description:
       "Closing protocol for sequence 002. High-fidelity techno pushing the system's architecture to its absolute limit.",
     duration: "1:39:30",
-    src: "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20Julz%20Lever.mp3",
-    peaks:
-      "https://pub-e15e86da649d4c91b6666141bfe67664.r2.dev/002/Form_at%20002%20-%20Julz%20Lever.json",
+    src: `${AUDIO_ORIGIN}/002/Form_at%20002%20-%20Julz%20Lever.mp3`,
+    peaks: `${AUDIO_ORIGIN}/002/Form_at%20002%20-%20Julz%20Lever.json`,
     artwork: "sets/002",
     sizeBytes: 238804800,
   },
