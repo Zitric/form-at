@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";
 import type { BeforeInstallPromptEvent } from "~/store/uiSlice";
 import { clearStashedInstallPrompt, readStashedInstallPrompt } from "~/utils/installPromptStash";
@@ -21,6 +22,7 @@ export function InstallEventsListener() {
   const setDeferredPrompt = useStore((s) => s.setDeferredPrompt);
   const setPwaInstalled = useStore((s) => s.setPwaInstalled);
   const setPwaInstallDismissed = useStore((s) => s.setPwaInstallDismissed);
+  const trackEvent = useTrackEvent();
 
   useEffect(() => {
     // safeLocal handles private-mode Safari / partitioned-iframe throws
@@ -46,6 +48,7 @@ export function InstallEventsListener() {
       setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
     const onInstalled = () => {
+      trackEvent("install_accepted");
       setPwaInstalled(true);
       setDeferredPrompt(null);
       clearStashedInstallPrompt();
@@ -57,7 +60,7 @@ export function InstallEventsListener() {
       window.removeEventListener("beforeinstallprompt", onBeforeInstall);
       window.removeEventListener("appinstalled", onInstalled);
     };
-  }, [setDeferredPrompt, setPwaInstalled, setPwaInstallDismissed]);
+  }, [setDeferredPrompt, setPwaInstalled, setPwaInstallDismissed, trackEvent]);
 
   return null;
 }

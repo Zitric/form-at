@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore, useStoreHydrated } from "~/store";
 import { detectPlatform, isStandalone } from "~/utils/installCapability";
 import { clearStashedInstallPrompt } from "~/utils/installPromptStash";
@@ -84,6 +85,7 @@ export function useTriggerInstallPrompt(): () => Promise<TriggerInstallOutcome> 
   const deferredPrompt = useStore((s) => s.deferredPrompt);
   const setDeferredPrompt = useStore((s) => s.setDeferredPrompt);
   const setPwaInstallDismissed = useStore((s) => s.setPwaInstallDismissed);
+  const trackEvent = useTrackEvent();
 
   return useCallback(async () => {
     if (!deferredPrompt) return "no-prompt";
@@ -91,6 +93,9 @@ export function useTriggerInstallPrompt(): () => Promise<TriggerInstallOutcome> 
     const choice = await deferredPrompt.userChoice;
     if (choice.outcome === "dismissed") {
       setPwaInstallDismissed(true);
+      // Native browser dialog dismiss — shared by InstallCta's tap-to-install
+      // AND SaveGateModal's "install" button, since both call this same hook.
+      trackEvent("install_dismissed");
     }
     // Single-use per Chrome spec — clear it either way (store AND the
     // pre-hydration stash, so a later mount can't re-adopt a consumed event).
@@ -99,5 +104,5 @@ export function useTriggerInstallPrompt(): () => Promise<TriggerInstallOutcome> 
     setDeferredPrompt(null);
     clearStashedInstallPrompt();
     return choice.outcome;
-  }, [deferredPrompt, setDeferredPrompt, setPwaInstallDismissed]);
+  }, [deferredPrompt, setDeferredPrompt, setPwaInstallDismissed, trackEvent]);
 }

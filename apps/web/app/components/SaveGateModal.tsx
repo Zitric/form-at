@@ -3,6 +3,7 @@ import { Button } from "~/components/Button";
 import { Modal } from "~/components/Modal";
 import { InstallIcon } from "~/components/icons";
 import { type SaveGate, useTriggerInstallPrompt } from "~/hooks/useSaveGate";
+import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";
 import { type FormFactor, detectFormFactor } from "~/utils/deviceFormFactor";
 
@@ -32,6 +33,7 @@ export function SaveGateModal({ open, onClose, gate }: Props) {
   const triggerInstall = useTriggerInstallPrompt();
   const setPwaInstalled = useStore((s) => s.setPwaInstalled);
   const setPwaInstallDismissed = useStore((s) => s.setPwaInstallDismissed);
+  const trackEvent = useTrackEvent();
 
   const [formFactor] = useState<FormFactor>(() =>
     typeof window !== "undefined" ? detectFormFactor() : "desktop",
@@ -42,6 +44,14 @@ export function SaveGateModal({ open, onClose, gate }: Props) {
     // closing without engaging suppresses the home-page <InstallCta> while
     // leaving this modal reachable on every future save tap.
     setPwaInstallDismissed(true);
+    // Only the needs-install branch is actually offering to install —
+    // open-app ("go to your home screen") and cannot-install ("this browser
+    // can't") have no install action to dismiss, so closing THOSE isn't an
+    // install_dismissed in any meaningful sense; counting them would inflate
+    // the metric with closes that were never really about installing.
+    if (gate.allow === false && gate.reason === "needs-install") {
+      trackEvent("install_dismissed");
+    }
     onClose();
   };
 

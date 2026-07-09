@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Button } from "~/components/Button";
 import { useFirstLoad } from "~/hooks/useFirstLoad";
 import { useTriggerInstallPrompt } from "~/hooks/useSaveGate";
+import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore, useStoreHydrated } from "~/store";
 import { cn } from "~/utils/cn";
 
@@ -61,9 +62,16 @@ function InstallCtaButton({
 }) {
   const isFirstLoad = useFirstLoad();
   const [visible, setVisible] = useState(false);
+  const trackEvent = useTrackEvent();
   useEffect(() => {
     setVisible(true);
-  }, []);
+    // This component ONLY mounts once InstallCta's gate (hydrated + a
+    // captured prompt + not dismissed) passes — i.e. exactly when the CTA
+    // becomes visible to the user, not when Chromium's beforeinstallprompt
+    // event fires (those can differ by seconds on a slow first visit, per
+    // the pre-hydration stash in installPromptStash.ts).
+    trackEvent("install_prompt_shown");
+  }, [trackEvent]);
   const fadeDuration = isFirstLoad ? "5s" : "0.6s";
 
   // Fading wrapper div rather than a `style` prop on <Button> — Button

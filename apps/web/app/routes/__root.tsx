@@ -1,5 +1,6 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { AppLaunchTracker } from "~/components/AppLaunchTracker";
 import { BottomNav } from "~/components/BottomNav";
 import { Header } from "~/components/Header";
 import { InAppBrowserBanner } from "~/components/InAppBrowserBanner";
@@ -186,6 +187,7 @@ function Root() {
         <HydrateStore />
         <InstallEventsListener />
         <OfflineReconciler />
+        <AppLaunchTracker />
         <Header />
         <SwipeNavigator />
         <Player />
