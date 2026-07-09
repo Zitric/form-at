@@ -33,6 +33,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
 describe("useTriggerDownload", () => {
@@ -44,6 +45,25 @@ describe("useTriggerDownload", () => {
     // Let the resolved promise settle so the .catch chain runs.
     await Promise.resolve();
     expect(setToastSpy).not.toHaveBeenCalled();
+  });
+
+  // save_click (2026-07-08): this hook is THE single shared source for
+  // "start a save-for-offline attempt" — both SaveForOfflineButton (detail
+  // page) and SaveForOfflineIconButton (list card) call it, so tracking
+  // here covers chunk 4's two component paths with one assertion.
+  it("fires save_click before calling startDownload", async () => {
+    startDownloadSpy.mockResolvedValue(undefined);
+    const beaconSpy = vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
+
+    const { result } = renderHook(() => useTriggerDownload("set-x"));
+    result.current();
+
+    expect(beaconSpy).toHaveBeenCalledWith("/api/event", expect.anything());
+    const [, blob] = beaconSpy.mock.calls[0] as [string, Blob];
+    expect(JSON.parse(await blob.text())).toMatchObject({
+      event_type: "save_click",
+      set_id: "set-x",
+    });
   });
 
   it("translates ONE_DOWNLOAD_AT_A_TIME into the concurrency toast", async () => {

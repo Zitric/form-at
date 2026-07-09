@@ -10,8 +10,12 @@ import type { SaveGate } from "~/hooks/useSaveGate";
 // this modal with the OTHER case's copy is exercised elsewhere via the
 // useSaveGate → useStore integration; here we lock the local invariant.
 vi.mock("~/store", () => ({
-  useStore: (selector: (s: { setPwaInstalled: (v: boolean) => void }) => unknown) =>
-    selector({ setPwaInstalled: vi.fn() }),
+  useStore: (
+    selector: (s: {
+      setPwaInstalled: (v: boolean) => void;
+      setPwaInstallDismissed: (v: boolean) => void;
+    }) => unknown,
+  ) => selector({ setPwaInstalled: vi.fn(), setPwaInstallDismissed: vi.fn() }),
 }));
 
 vi.mock("~/hooks/useSaveGate", () => ({
@@ -90,5 +94,33 @@ describe("SaveGateModal escape-hatch handlers", () => {
     await user.click(screen.getByRole("button", { name: /not installed\? install the app/i }));
 
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+// install_dismissed (2026-07-08): fires on passive close (the modal's own
+// [ x ]) ONLY for the needs-install branch — that's the only branch
+// actually offering to install something. open-app / cannot-install have
+// no install action to dismiss.
+describe("SaveGateModal install_dismissed tracking", () => {
+  it("fires install_dismissed when the needs-install branch is closed", async () => {
+    const beaconSpy = vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
+    render(<SaveGateModal open={true} onClose={vi.fn()} gate={needsInstallGate} />);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(beaconSpy).toHaveBeenCalledWith("/api/event", expect.anything());
+    const [, blob] = beaconSpy.mock.calls[0] as [string, Blob];
+    expect(JSON.parse(await blob.text())).toMatchObject({ event_type: "install_dismissed" });
+  });
+
+  it("does NOT fire install_dismissed when the open-app branch is closed", async () => {
+    const beaconSpy = vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
+    render(<SaveGateModal open={true} onClose={vi.fn()} gate={openAppGate} />);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(beaconSpy).not.toHaveBeenCalled();
   });
 });

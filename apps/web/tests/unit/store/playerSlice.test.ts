@@ -5,6 +5,7 @@ import {
   canFetchPlaybackBytes,
   createPlayerSlice,
   registerAudioElement,
+  wasServedFromIdb,
 } from "~/store/playerSlice";
 
 // Toggles navigator.onLine for a single test. jsdom exposes onLine as a
@@ -277,6 +278,33 @@ describe("canFetchPlaybackBytes (M1 gate predicate)", () => {
     setNavigatorOnline(false);
     setStandalone(true);
     expect(canFetchPlaybackBytes("set-a", { "set-a": { status: "saved" } })).toBe(true);
+  });
+});
+
+// wasServedFromIdb (is_offline analytics signal, 2026-07-08): mirrors the
+// SW's exact IDB-vs-network decision — unlike canFetchPlaybackBytes, this
+// is NOT gated on navigator.onLine. A saved set in the standalone app is
+// served from IDB even while fully online, because sw.ts's audio route
+// reads IDB whenever the `?ctx=app` marker is present and an entry exists,
+// with no online/offline check of its own.
+describe("wasServedFromIdb (is_offline analytics signal)", () => {
+  it("is true for a saved set in standalone — ONLINE included", () => {
+    setNavigatorOnline(true);
+    setStandalone(true);
+    expect(wasServedFromIdb("set-a", { "set-a": { status: "saved" } })).toBe(true);
+  });
+
+  it("is false for a saved set in a TAB (tabs never read IDB, online or not)", () => {
+    setNavigatorOnline(true);
+    setStandalone(false);
+    expect(wasServedFromIdb("set-a", { "set-a": { status: "saved" } })).toBe(false);
+  });
+
+  it("is false in standalone when the set isn't saved", () => {
+    setNavigatorOnline(true);
+    setStandalone(true);
+    expect(wasServedFromIdb("set-a", { "set-a": { status: "not-saved" } })).toBe(false);
+    expect(wasServedFromIdb("set-a", undefined)).toBe(false);
   });
 });
 

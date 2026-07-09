@@ -61,6 +61,21 @@ if (dialogProto && typeof dialogProto.showModal !== "function") {
   };
 }
 
+// jsdom doesn't implement `navigator.sendBeacon`. `useAudioPlayer`'s
+// play-tracking (`sendPlay`) and the event-tracking hook (`useTrackEvent`)
+// both call it directly, fire-and-forget — without a stub, any test that
+// reaches either code path throws "navigator.sendBeacon is not a function".
+// Real `sendBeacon` returns a boolean (queued successfully); the stub
+// matches that signature. `configurable: true` so individual tests can
+// still `vi.spyOn(navigator, "sendBeacon")` to assert on calls.
+if (typeof navigator.sendBeacon !== "function") {
+  Object.defineProperty(navigator, "sendBeacon", {
+    configurable: true,
+    writable: true,
+    value: () => true,
+  });
+}
+
 // jsdom doesn't implement `window.matchMedia`. `isStandalone()` calls it on
 // every playback URL build via `withAppContext`. Stub a non-matching result
 // so tests register as "browser tab" and URLs stay bare — which matches

@@ -1,5 +1,5 @@
 import { render } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InstallEventsListener } from "~/components/InstallEventsListener";
 import { useStore } from "~/store";
 import type { BeforeInstallPromptEvent } from "~/store/uiSlice";
@@ -22,6 +22,10 @@ function fakePrompt(): BeforeInstallPromptEvent {
 beforeEach(() => {
   window.__deferredInstallPrompt = null;
   useStore.setState({ deferredPrompt: null, pwaInstalled: false, pwaInstallDismissed: false });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("InstallEventsListener", () => {
@@ -54,5 +58,16 @@ describe("InstallEventsListener", () => {
     expect(useStore.getState().deferredPrompt).toBeNull();
     expect(window.__deferredInstallPrompt).toBeNull();
     expect(useStore.getState().pwaInstalled).toBe(true);
+  });
+
+  it("fires install_accepted on appinstalled (2026-07-08)", async () => {
+    const beaconSpy = vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
+    render(<InstallEventsListener />);
+
+    window.dispatchEvent(new Event("appinstalled"));
+
+    expect(beaconSpy).toHaveBeenCalledWith("/api/event", expect.anything());
+    const [, blob] = beaconSpy.mock.calls[0] as [string, Blob];
+    expect(JSON.parse(await blob.text())).toMatchObject({ event_type: "install_accepted" });
   });
 });
