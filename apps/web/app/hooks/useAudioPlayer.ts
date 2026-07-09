@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { type MusicSet, sets } from "~/data/sets";
 import { useStore } from "~/store";
+import { wasServedFromIdb } from "~/store/playerSlice";
 import { withAppContext } from "~/utils/audioUrl";
 
 type AudioProps = {
@@ -47,6 +48,11 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     const seconds = Math.floor((Date.now() - playStartRef.current) / 1000);
     playStartRef.current = null;
     if (seconds < 3) return;
+    // `useStore.getState()` (not a selector) — same live-read pattern already
+    // used elsewhere in this file (e.g. the Space-key handler) — reads
+    // current offlineSets without adding reactivity to this callback's
+    // stable `[]` deps.
+    const isOffline = wasServedFromIdb(track.id, useStore.getState().offlineSets);
     navigator.sendBeacon(
       "/api/signal",
       new Blob(
@@ -56,6 +62,7 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
             setTitle: track.title,
             setArtist: track.artist,
             listenedSeconds: seconds,
+            isOffline,
           }),
         ],
         { type: "application/json" },

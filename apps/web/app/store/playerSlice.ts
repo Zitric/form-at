@@ -66,6 +66,29 @@ export function canFetchPlaybackBytes(
   return isStandalone() && offlineSets?.[trackId]?.status === "saved";
 }
 
+// Mirrors the EXACT condition the SW audio route uses to decide IDB-vs-
+// network (sw.ts's registerRoute handler: `if (!ctxIsApp) return
+// fetch(request); const entry = await getOfflineAudio(bareUrl); if
+// (!entry) return fetch(request);` — i.e. IDB is read whenever ctxIsApp is
+// true AND an entry exists, REGARDLESS of navigator.onLine). A saved set in
+// the standalone app is served from IDB even while online — this is NOT
+// the same predicate as `canFetchPlaybackBytes` above, which short-circuits
+// true whenever online regardless of saved status.
+//
+// `withAppContext` only sets the `?ctx=app` marker (ctxIsApp) when
+// `isStandalone()` is true, so that's the client-side mirror of ctxIsApp.
+//
+// Used to populate the `plays.is_offline` analytics column (Analytics 1,
+// 2026-07-08) — best-effort: relies on `offlineSets` staying in sync with
+// real IDB contents via `reconcileFromIdb`, the same tolerance the rest of
+// the app already accepts for this state.
+export function wasServedFromIdb(
+  trackId: string,
+  offlineSets: Record<string, { status: string }> | undefined,
+): boolean {
+  return isStandalone() && offlineSets?.[trackId]?.status === "saved";
+}
+
 // App users have the vocabulary of "saved"; tab users don't (tabs never
 // read IDB, so downloaded-vs-not is invisible from the web) — point them
 // at the app instead.
