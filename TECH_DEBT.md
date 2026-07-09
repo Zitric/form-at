@@ -7,7 +7,7 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
-- **Open:** 1, 2, 3, 4, 7, 8, 12, 13, 14 (deferred — see item), 15
+- **Open:** 1, 2, 3, 4, 7, 8, 12, 13, 14 (deferred — see item), 15, 20 (pointer only, not urgent)
 - **Deferred (coupled, ship together post-2026-07-24):** 16 (orphan artwork prune) — waits for the deferred manage-offline-sets view; the prune naturally lives in that view's remove flow. See PWA_PROGRESS.md for the deferral rationale.
 - **Resolved:** 6 (2026-06-28, `10811a4`), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01), 17 (2026-07-02 — gate proven intact via SW-preview experiments; observed bytes were HTTP cache / element buffer, not IDB; silent-blocked-tap toast fixed), 18 (2026-07-02 — not reproducible on current build; all three offline nav modes verified against the SW preview), 5 (absorbed into 19's verification — CORS re-checked on the custom domain 2026-07-06: preflight GET/HEAD + range, ACAO *, Content-Length exposed), 19 (2026-07-06 — audio on cdn.formatglasgow.com, host centralized in utils/audioHost.ts, IDB force-re-download migration in reconcileFromIdb)
 
@@ -505,4 +505,30 @@ and flagged in-file. A fresh grep at sweep time remains mandatory.
 
 ---
 
-_Last updated: 2026-07-02 (R2 custom domain launch blocker recorded as item 19)_
+## 20. Analytics query UI — now has real data to query (feeds README's "Pending" item)
+
+**Not urgent, just a pointer.** The README's Roadmap → Pending lists
+"Analytics query UI — D1 has `started_at` and `listened_seconds` indexed
+but there's no internal dashboard page to query plays by date range or top
+tracks over time." As of 2026-07-08 (`feat/event-tracking`, see
+PWA_PROGRESS.md's "Analytics 1" entry) there's more to query than that
+README bullet describes:
+
+- `plays` gained an `is_offline` column (offline-vs-network play ratio).
+- A new `events` table tracks the install funnel (`install_prompt_shown` /
+  `install_accepted` / `install_dismissed`), `app_launch`, `save_click`,
+  `share_click` — none of which CF Web Analytics can see.
+- `schema.sql`'s trailing comment block has ready-to-run example queries
+  for all of the above (install funnel conversion, launches by day,
+  save-clicks per set, offline-vs-network ratio) — start there rather than
+  writing new SQL from scratch.
+
+**Scope, when someone picks this up:** whatever UI/dashboard gets built
+should read `events` + `plays` together (e.g. "of N `save_click`s, how many
+sets are actually `saved` per `offlineSets`" needs both). No schema changes
+anticipated — this is a "go build the UI" pointer, not new engineering
+debt on the data side.
+
+---
+
+_Last updated: 2026-07-08 (item 20 added — Analytics 1 event tracking feeds the README's Analytics query UI item)_

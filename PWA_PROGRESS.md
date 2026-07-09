@@ -160,6 +160,141 @@ On-device re-test script (fresh profile = clear site data first):
 5. **Any browser:** after install, CTA gone, modal switches to open-app
    branch; standalone gate unchanged (tab still streams, never reads IDB).
 
+### Added 2026-07-08 — Analytics 1: first-party event tracking
+
+Cloudflare Web Analytics stays as the page-view/Core-Web-Vitals layer,
+unchanged. This adds a first-party D1 `events` table for discrete product
+events CF Analytics has no concept of (install funnel, save/share clicks,
+app launches), plus an `is_offline` column on the existing `plays` table.
+Branch: `feat/event-tracking`.
+
+**The anonymous/aggregate decision (read before adding ANY column to
+`events`):** decided this week — aggregate/anonymous tracking only, no
+persistent device identifier of any kind, ever. Each row in `events` is a
+standalone fact with no reliable way to link it to another row from the
+same visitor. This is NOT enforced by a SQL constraint (SQL has no notion
+of "this column must never become a linking key") — the real enforcement
+is three loud, hard-to-miss guardrails:
+1. **Schema comment** (`schema.sql`, directly above `CREATE TABLE events`)
+   spells out the constraint and why each existing column can't reconstruct
+   a session, so a future column addition is a deliberate decision, not a
+   silent drift.
+2. **Endpoint allowlist** (`utils/trackableEvents.ts` + `routes/api/event.ts`)
+   rejects any `event_type` not on an explicit list — the practical guard
+   against the table becoming a dumping ground for arbitrary strings, which
+   is also where an accidental identifier-shaped field would first get caught
+   in review.
+3. **This doc entry** — so a future session reads the "why" before reaching
+   for a device ID to solve some future analytics question.
+
+If a real product need ever justifies a linking key, that's an explicit
+decision to make then, with its privacy tradeoffs weighed on purpose — not
+a column added because it seemed convenient.
+
+**`event_type` allowlist (six types, all from this week's discussion — no
+extras invented):** `install_prompt_shown`, `install_accepted`,
+`install_dismissed`, `app_launch`, `save_click`, `share_click`.
+
+**Fire points, with the judgment calls flagged:**
+- `install_prompt_shown` — `InstallCta.tsx`'s gated child component's mount
+  effect, i.e. when the CTA actually renders (hydrated + captured prompt +
+  not dismissed), NOT when Chromium's `beforeinstallprompt` fires — those
+  can differ by seconds on a slow first visit.
+- `install_accepted` — `InstallEventsListener.tsx`'s existing `appinstalled`
+  handler.
+- `install_dismissed` — TWO call sites, both firing the same event type:
+  (1) `useSaveGate.ts`'s `useTriggerInstallPrompt`, when the NATIVE browser
+  install dialog's outcome is `"dismissed"` — shared by InstallCta's
+  tap-to-install and SaveGateModal's "install" button, since both call this
+  one hook; (2) `SaveGateModal.tsx`'s `handleClose`, but **only** when
+  `gate.reason === "needs-install"` — closing the open-app or
+  cannot-install branches isn't dismissing an install offer (there's no
+  install action on those branches to dismiss), so counting those would
+  inflate the metric with closes that were never about installing. This
+  scoping is a judgment call, not a literal reading of "wherever the modal
+  closes" — flagging it as such.
+- `app_launch` — new `<AppLaunchTracker>` component, mounted once in
+  __root's `<body>` alongside `<HydrateStore>` / `<InstallEventsListener>` /
+  `<OfflineReconciler>` (same "mount-once, null-render" pattern). Gated on
+  `isStandalone()` alone, not the manifest's `?source=pwa` start_url marker
+  (N1) — `isStandalone()` is the authoritative signal used everywhere else
+  in the app, and requiring the query marker too would miss a standalone
+  relaunch that deep-links somewhere other than `/`. No dedicated
+  "session-start" hook was needed: this component's mount-only effect IS
+  session-start, because TanStack Router's Outlet-based navigation never
+  remounts anything living in `__root`'s body.
+- `save_click` — inside `useOfflineDownload.ts`'s `useTriggerDownload`, the
+  single hook already shared by `SaveForOfflineButton` (detail page) and
+  `SaveForOfflineIconButton` (list card) — one code change covers both of
+  chunk 4's component paths. Fires on every explicit save/retry/re-save tap
+  (first save, network-failure retry, post-eviction re-save all funnel
+  through this one hook) — doesn't yet distinguish "first save" from
+  "retry"; add a payload field for that later if it's actually needed, not
+  speculatively now.
+- `share_click` — `ShareIconButton.tsx` (list card + FullPlayer circle icon)
+  and `ShareSetButton.tsx` (detail page text button), both at the point
+  `openShareModal(set)` is called — "user expressed intent to share",
+  mirroring `save_click`'s "user expressed intent to save" semantics. Does
+  NOT track which provider inside the share modal the user picks next —
+  not asked for, would be a higher-cardinality event not on the allowlist.
+
+**Wire format — deliberately inconsistent with `api/signal.ts`:** the new
+`/api/event` endpoint uses snake_case JSON keys (`event_type`, `set_id`,
+`is_standalone`) matching the payload shape specified this week, while
+`api/signal.ts` keeps its established camelCase (`setId`, `setTitle`, …).
+Not an oversight — flagging it so a future session doesn't "fix" one to
+match the other without checking here first.
+
+**Click-tracking pattern — a hook (`useTrackEvent`), not a wrapper
+component:** the tracked actions live inside components that render EITHER
+the design-system `<Button>` OR a raw `<button>` depending on surface, and
+the real "this is a save" moment is often one branch of a multi-branch
+state machine (see `useOfflineDownload.ts` — only some `offlineState.status`
+branches are a real save attempt). A wrapper component would have to be
+either `<Button>`-specific (misses the icon-button surface) or generic
+enough that it stops being more than "call this function inline" — so
+`useTrackEvent()` returns exactly that, called directly at each real call
+site. Fires via `navigator.sendBeacon`, matching `useAudioPlayer`'s existing
+play-tracking convention exactly (fire-and-forget, survives page unload).
+
+**`plays.is_offline` — the SAME signal the SW audio route uses, not a new
+one:** `wasServedFromIdb` (`store/playerSlice.ts`, next to
+`canFetchPlaybackBytes`) mirrors `sw.ts`'s exact IDB-vs-network decision:
+`isStandalone() && offlineSets[trackId]?.status === "saved"`. This is
+**not** the same predicate as `canFetchPlaybackBytes` — that one
+short-circuits true whenever `navigator.onLine`, regardless of saved
+status. `wasServedFromIdb` has no online/offline check at all, because
+`sw.ts`'s audio route doesn't either: a saved set in the standalone app is
+served from IDB even while fully online, so `is_offline` really means
+"served from cache", not literally "device was offline" — named to match
+the product framing anyway. Computed inside `useAudioPlayer.ts`'s
+`sendPlay` via `useStore.getState().offlineSets` (a live read, not a
+selector — keeps `sendPlay`'s stable `[]` deps intact, same pattern already
+used elsewhere in that file). Best-effort: relies on `offlineSets` staying
+in sync with real IDB via `reconcileFromIdb`, the same tolerance the rest
+of the app already accepts for this state. The column is nullable and the
+endpoint treats a missing/malformed value as `null` rather than rejecting
+the whole play record — a pre-2026-07-08 cached client can keep posting the
+old payload shape for a while post-deploy (H2's consented update flow means
+old JS can legitimately outlive a deploy) without losing play-count data.
+
+**Deliberately NOT added:** a `country` column on `events` (unlike `plays`)
+— adding it needs its own decision, not a silent copy from the plays table;
+a `set_id` index on `events` — only 2 of 6 event_types carry one and no
+query needs it yet; per-provider share tracking; first-save-vs-retry
+distinction on `save_click`.
+
+**Needs on-device / production-preview confirmation** (as always for
+anything SW-adjacent in this repo): (1) `is_offline` actually reads `true`
+for a real saved set played in the installed app — the unit tests mock
+`offlineSets` and `isStandalone()`, they don't exercise the real SW; (2) the
+`/api/event` beacon actually reaches D1 in production (unit tests mock
+`navigator.sendBeacon` itself, never a real network call); (3) the schema
+migration (`ALTER TABLE plays ADD COLUMN IF NOT EXISTS is_offline INTEGER`)
+against the REAL remote D1 — apply with
+`npx wrangler d1 execute form-at-analytics --remote --file=apps/web/schema.sql`
+and confirm no error on a database that already has rows.
+
 ### Fixed 2026-07-05 — M3: `_headers` caching + CSP (TECH_DEBT 19 itself still blocked)
 
 The launch-blocker session ran into hard preconditions: the custom domain
