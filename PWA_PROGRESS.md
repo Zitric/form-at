@@ -1,20 +1,28 @@
 # Phase 4 — PWA / Offline progress
 
 Session-resumption note. If a session breaks mid-implementation, read this +
-the relevant TECH_DEBT entries + the last commit on
-`transform-the-web-app-in-a-pwa` and you have everything needed to continue.
+the relevant TECH_DEBT entries + recent commits and you have everything
+needed to continue.
 
 Authoritative reference for design decisions: `IMPROVEMENTS.md` (product),
 this file (engineering state), `TECH_DEBT.md` (engineering follow-ups —
 status-at-a-glance section at the top of that file).
 
+**Branch model (updated 2026-07-06):** the original `transform-the-web-app-in-a-pwa`
+branch merged to `main` via PR #1 (2026-07-02). All work since then has
+shipped as short-lived `fix/*` / `docs/*` branches off `main`, one PR each
+(PRs #2–#5 as of this writing). There is no long-lived feature branch
+anymore — `git log --oneline` on `main` is the source of truth for what's
+shipped, and any open branch is scoped to whatever it's named after.
+
 ---
 
-## Branch status — core PWA + offline work is COMPLETE
+## Branch status — core PWA + offline work is COMPLETE, shipped to main
 
-All planned Phase 4 chunks are committed and verified through the real UI.
-The branch is ready for an eventual PR to `main`; what's left is lower-
-priority polish + the deploy gate, not feature work.
+All planned Phase 4 chunks are merged to `main` and verified through the
+real UI (PR #1, 2026-07-02). Everything below the chunk table happened in
+follow-up PRs after the merge — bug fixes, the post-merge review's action
+items, and the R2 custom-domain launch blocker — not new feature work.
 
 | Chunk | Status | Commit | Notes |
 |-------|--------|--------|-------|
@@ -29,16 +37,18 @@ priority polish + the deploy gate, not feature work.
 | Waveform — load flick | ✅ committed | `e2b5f57` | TECH_DEBT 9. Preexisting bug. Three-state render (pending spacer / Waveform / fallback) eliminates first-play widget swap + height jump |
 | 4 — List-card save-for-offline icon button | ✅ committed | `7649abc` | Compact icon button in the card action slot (floppy / progress ring / check / red retry). Shares state with `SaveForOfflineButton` via new `useOfflineDownload` hook. Saves directly from `/sets/` without opening detail; closes the chunk-1.6 warming story through the card path |
 | 5 — Strict standalone gate (web/app divide) | ✅ committed | `fbbdd4d` | `useInstallCapability` → `useSaveGate`, `InstallPromptModal` → `SaveGateModal`. Tabs NEVER read IDB; standalone-only `?ctx=app` URL marker (`withAppContext`) drives the SW audio handler. Three-branch modal (needs-install / open-app / cannot-install) with mutual escape-hatches via the persisted `pwaInstalled` positive-only signal. PlaybackErrorToast gains a `tab-offline-needs-network` reason. |
-| 5.1 — Chunk-5 regression: cross-track loop | ✅ committed 2026-07-01 | `<pending>` | Chunk 5 wrapped both `audio.src` writes AND the `useAudioPlayer` src-match comparison in `withAppContext`. Under specific cross-track transitions (saved A → non-saved B → back to A) Chrome's browsed URL round-trip diverged marginally from the JS-constructed URL, the `===` compare flipped false, useAudioPlayer set src → load → the click-path play() promise raced the bridge effect → infinite request + play/pause loop. Confirmed via Network panel showing alternating `?ctx=app` / bare URL requests. Fix: replaced URL string comparison with an identity stamp — `audio.dataset.trackId = track.id` written at BOTH src-assignment sites (playerSlice.playTrack click path + useAudioPlayer restore path), effect compares `audio.dataset.trackId === nowPlaying.id`. Immune to URL normalization and to the `?ctx=app` marker. Chunk-5 marker-in-URL is still what the SW read-path keys on; only the JS-side comparison stopped depending on URL equality. |
-| 5.2 — Chunk-5 regression: unified offline gate (closes TECH_DEBT 11 fully) | ✅ committed 2026-07-01 | `<pending>` | The retry-storm gate (chunk 3c, `718ead3`) sat in the NEW-TRACK branch of `playerSlice.playTrack` only. The same-track branch had no gate, so re-tapping a paused non-saved set offline (play online → pause → offline → tap same set) bypassed the gate: `<audio>` retried the failing Range dozens of times = the storm the gate was built to prevent. Not a new chunk-5 regression per se — the gap existed since chunk 3c — but surfaced during chunk-5 testing. Fix: single unified gate BEFORE the same-track/new-track split; blocks starting OR resuming a track when `isOffline && offlineStatus !== "saved"`, still permits pausing a currently-playing same-track (`audio.pause()` never fetches). Three new tests in `playerSlice.test.ts` lock: (a) non-saved same-track resume blocked, (b) saved same-track resume allowed, (c) pause of a stalled non-saved stream still works. Old new-track-only gate removed — subsumed. |
-| 5.3 — Chunk-5 regression: SW CORS mode preservation | ✅ committed 2026-07-01 | `<pending>` | Chunk 5 rebuilt the R2 request as `new Request(cleanUrlString, { method, headers })`. `new Request()` init defaults `mode: "cors"`, silently flipping `<audio>`'s native `mode: "no-cors"` (media element cross-origin default per HTML spec) to cors. R2's ACAO doesn't satisfy the CORS check for MP3 Range GETs → browser blocked the response → three non-saved sets failed to stream online from the standalone app; only the saved set (served from IDB, no fetch) played. Fix: preserve `mode`, `credentials`, `redirect` from the original `request` when constructing `cleanReq`. MP3 stays no-cors (opaque response — safe, both `return fetch(cleanReq)` paths pass through without inspecting), peaks JSON stays cors (transparent — the JS caller `.json()`s it). `createPartialResponse` operates only on the synthetic IDB-hit Response, never on the network fetch, so opaque doesn't affect Range slicing. |
+| 5.1 — Chunk-5 regression: cross-track loop | ✅ committed 2026-07-01 | `2291ea0` | Chunk 5 wrapped both `audio.src` writes AND the `useAudioPlayer` src-match comparison in `withAppContext`. Under specific cross-track transitions (saved A → non-saved B → back to A) Chrome's browsed URL round-trip diverged marginally from the JS-constructed URL, the `===` compare flipped false, useAudioPlayer set src → load → the click-path play() promise raced the bridge effect → infinite request + play/pause loop. Confirmed via Network panel showing alternating `?ctx=app` / bare URL requests. Fix: replaced URL string comparison with an identity stamp — `audio.dataset.trackId = track.id` written at BOTH src-assignment sites (playerSlice.playTrack click path + useAudioPlayer restore path), effect compares `audio.dataset.trackId === nowPlaying.id`. Immune to URL normalization and to the `?ctx=app` marker. Chunk-5 marker-in-URL is still what the SW read-path keys on; only the JS-side comparison stopped depending on URL equality. |
+| 5.2 — Chunk-5 regression: unified offline gate (closes TECH_DEBT 11 fully) | ✅ committed 2026-07-01 | `2291ea0` | The retry-storm gate (chunk 3c, `718ead3`) sat in the NEW-TRACK branch of `playerSlice.playTrack` only. The same-track branch had no gate, so re-tapping a paused non-saved set offline (play online → pause → offline → tap same set) bypassed the gate: `<audio>` retried the failing Range dozens of times = the storm the gate was built to prevent. Not a new chunk-5 regression per se — the gap existed since chunk 3c — but surfaced during chunk-5 testing. Fix: single unified gate BEFORE the same-track/new-track split; blocks starting OR resuming a track when `isOffline && offlineStatus !== "saved"`, still permits pausing a currently-playing same-track (`audio.pause()` never fetches). Three new tests in `playerSlice.test.ts` lock: (a) non-saved same-track resume blocked, (b) saved same-track resume allowed, (c) pause of a stalled non-saved stream still works. Old new-track-only gate removed — subsumed. |
+| 5.3 — Chunk-5 regression: SW CORS mode preservation | ✅ committed 2026-07-01 | `2291ea0` | Chunk 5 rebuilt the R2 request as `new Request(cleanUrlString, { method, headers })`. `new Request()` init defaults `mode: "cors"`, silently flipping `<audio>`'s native `mode: "no-cors"` (media element cross-origin default per HTML spec) to cors. R2's ACAO doesn't satisfy the CORS check for MP3 Range GETs → browser blocked the response → three non-saved sets failed to stream online from the standalone app; only the saved set (served from IDB, no fetch) played. Fix: preserve `mode`, `credentials`, `redirect` from the original `request` when constructing `cleanReq`. MP3 stays no-cors (opaque response — safe, both `return fetch(cleanReq)` paths pass through without inspecting), peaks JSON stays cors (transparent — the JS caller `.json()`s it). `createPartialResponse` operates only on the synthetic IDB-hit Response, never on the network fetch, so opaque doesn't affect Range slicing. |
 | 4.5 — Beacon queue (Background Sync) | deferred — polish | TECH_DEBT 4 | Independent infra, lower stakes |
+
+_5.1/5.2/5.3 share one commit_ (`2291ea0`, "Some fixes for the player and the offline features") — the three regressions were fixed and squashed together, not as three separate commits; verified against `git log`.
 
 ---
 
 ## What's actually left
 
-Engineering-wise, the branch is shippable. Items below are the punch list:
+Engineering-wise, the PWA work is shippable and live on `main`. Items below are the punch list:
 
 ### Launch blockers before wider release
 
@@ -70,13 +80,6 @@ they will each show re-save buttons once after this deploys.
 deployed site — Network panel shows `cdn.formatglasgow.com` with 206s on
 seek; (2) standalone app: previously-saved sets show "↻ re-save"; re-save
 one and confirm airplane-mode playback works from the new-host IDB entry.
-
-### Pre-deploy polish
-
-- **`offline.html` visual pass** (TECH_DEBT 7) — currently functional-minimal;
-  needs a typographic + terminal-aesthetic pass to match the rest of the
-  site. Zero-bundle constraint applies (no external CSS/JS, inline `<style>`
-  only). **This is the last item before the deploy gate.**
 
 ### Open items from testing (2026-07-02) — pending verification
 
@@ -520,42 +523,38 @@ The original entries below are kept for the diagnosis-plan history.
   in `.catch(() => null)` so a failed server-fn shouldn't reject the
   route — verify that's still in place.
 
-### Cosmetic backlog — pre-PR polish, no dependencies between items
+### Cosmetic backlog
 
-Batchable in any order; none block the deploy gate on their own but
-worth landing before PR to main so the first public build is polished.
+Three of the four original items here shipped weeks ago and are removed
+from this list (verified against code + git log while cleaning up this doc,
+2026-07-06): toast redesign (`935ebb4`, `4c978b2` — no brackets on message
+text, whole-surface click-to-dismiss, `[ x ]` kept only where the toast
+persists); web-offline message unification (`playerSlice.ts:73` —
+`tab-offline-needs-network` is already the single reason for every tab
+offline-block, regardless of downloaded-or-not); SaveGateModal escape
+hatches (`SaveGateModal.tsx:64-75` — `handleAlreadyInstalled` /
+`handleNotInstalledAfterAll` confirmed NOT calling `onClose`). One item
+remains, re-scoped per 2026-07-06 field testing to separate it cleanly from
+a DIFFERENT, already-fixed bug:
 
-- **Toast redesign** (three toasts: PlaybackErrorToast, generic Toast,
-  any other bracketed toast surface) — remove the `[ ]` brackets from
-  toast MESSAGE text (keep on close `[ x ]` only), remove the vertical
-  separator between message and close, make the entire toast surface
-  click-to-dismiss. Also fixes the iPhone SE 2-line wrap caused by the
-  current message-plus-separator-plus-close width budget.
-- **Web-offline message unification** — from the web tab, offline, a
-  downloaded-in-the-app set shows `[ playback_error :: tap to retry ]`
-  while a non-downloaded set shows `[ ✗ playback needs connection — open
-  the app to listen offline ]`. Both should show the "open the app"
-  message: from the web, downloaded vs not doesn't matter because the
-  web can't touch IDB either way. Fold both into `tab-offline-needs-network`
-  reason at the playerSlice gate level.
-- **SaveGateModal escape-hatches close the modal instead of switching
-  message** — "already installed? open it from your home screen" and
-  "not installed? install the app" links currently close the modal
-  after flipping `pwaInstalled`. Should instead re-render the modal
-  with the OTHER case's copy, so the user sees the confirmation of
-  what they self-reported. Only close on the actual close button or
-  successful install prompt.
-- **DJ page image doesn't load unless navigated-to-first** — the
-  `<Image>` component on `/djs/$djId` fails to load the artwork on
-  direct visit; requires a prior visit to `/sets/` or `/` to warm
-  something (probably the image cache or the `Image` component's
-  intersection observer). Needs its own repro + fix.
-- **Set card abstraction — DJ page card vs `/sets/` card unification**
-  — the set list on `/sets/` and the "played by this DJ" list on
-  `/djs/$djId` currently render very similar cards via two different
-  component paths. Consolidate into one reusable `SetCard` component.
-  Needs its own plan (props shape, action-slot semantics, artwork
-  variant selection) before implementation.
+- **Set card abstraction — DJ page card vs `/sets/` card unification.** The
+  set list on `/sets/` and the "played by this DJ" list on `/djs/$djId`
+  render similar cards via two different component paths, and they've
+  drifted: `/sets/index.tsx:116` renders `SaveForOfflineIconButton` in the
+  action slot; `djs/$djId.tsx:129-130` only renders `ShareIconButton` +
+  `CirclePlayButton` — no save-for-offline icon on the DJ page at all
+  (field-confirmed 2026-07-06). Consolidating into one reusable `SetCard`
+  component would prevent this kind of per-surface drift going forward.
+  Needs its own plan (props shape, action-slot semantics, artwork variant
+  selection) before implementation.
+
+  **Not the same as the DJ-image-loading bug** that used to be listed here
+  — that one is a different, already-fixed issue: `warmSetVisuals`
+  (`offlineSlice.ts:185-199`) resolves the DJ from the saved set and warms
+  the exact photo variants `/djs/$djId`'s `<Image>` requests, with the
+  coupling locked by `warmSetVisuals.test.ts`. Verified against current
+  code — no repro needed, this was already closed by the 2026-07-02
+  post-merge review's fix.
 
 ### Deferred — post-2026-07-24 (coupled, ship together)
 
@@ -587,22 +586,17 @@ worth landing before PR to main so the first public build is polished.
   storage pressure observed.
 - **TECH_DEBT 13** — orphan offline entries when `sets.ts` ever gains an
   "archived" status. Speculative; current auto-purge is correct.
-- **TECH_DEBT 14** — Brandon Lee Vear R2 object has `.mp3.mp3`. Cosmetic.
+- **TECH_DEBT 14** — Brandon Lee Vear R2 object has `.mp3.mp3`. Deferred
+  indefinitely (2026-07-06, Julian's call) — R2 has no rename op, cosmetic
+  only, no re-visit condition.
 - **TECH_DEBT 15** — browser-side HEAD against R2 fails mysteriously.
   Sidestepped by Option B; only chase if a future feature needs HEAD.
 - **TECH_DEBT 16** — orphan artwork prune. Coupled with the deferred manage
   offline sets view above; not a standalone item.
 
-### Deploy gate
-
-- **R2 CORS verification** (TECH_DEBT 5) — one-curl confirm CORS allows
-  `formatglasgow.com` for GET/HEAD before merging to `main`.
-- **PR to main** — once polish landed (or explicitly skipped) and CORS
-  confirmed. CI is already gated (`ci.yml` + `deploy.yml`).
-
 ---
 
-## Reference — key design decisions locked in this branch
+## Reference — key design decisions from the PWA work
 
 ### Cache lifecycle on activate
 
@@ -754,13 +748,19 @@ Storage, which is what lets persist be tested at all.)
 ## How to resume
 
 If a session breaks mid-task:
-1. `git log --oneline -10` on `transform-the-web-app-in-a-pwa` to confirm
-   where HEAD is.
-2. `git status` — any working-tree files from a partial change are
+1. `git branch --show-current` — confirm which branch you're actually on.
+   There is no single long-lived feature branch anymore; recent sessions
+   have each worked on a short-lived `fix/*` / `docs/*` branch off `main`
+   (see the branch-model note at the top of this file), and this repo has
+   a history of sessions accidentally committing to the wrong branch — check
+   before you assume.
+2. `git log --oneline -10` on both that branch and `main` to confirm where
+   HEAD is on each and what's already merged.
+3. `git status` — any working-tree files from a partial change are
    recoverable; just read them.
-3. Re-read the relevant TECH_DEBT entry (top-of-file glance section shows
+4. Re-read the relevant TECH_DEBT entry (top-of-file glance section shows
    open vs resolved) and the file map above.
-4. Continue from whichever file is incomplete.
+5. Continue from whichever file is incomplete.
 
 Dev (`pnpm dev`, port 5173) does NOT serve the SW. All PWA / offline
 testing is production-preview only:
