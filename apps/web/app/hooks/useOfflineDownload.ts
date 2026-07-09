@@ -1,3 +1,4 @@
+import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";
 import type { OfflineSetState } from "~/store/offlineSlice";
 
@@ -31,8 +32,16 @@ export function useOfflineStateFor(setId: string): OfflineSetState {
 export function useTriggerDownload(setId: string): () => void {
   const startDownload = useStore((s) => s.startDownload);
   const setToast = useStore((s) => s.setToast);
+  const trackEvent = useTrackEvent();
 
   return () => {
+    // Fires on every explicit save/retry/re-save tap — first save, network
+    // retry, and post-eviction re-save all funnel through this one hook
+    // (that's this hook's whole point per the comment above), so
+    // `save_click` doesn't distinguish "first save" from "retry" today. Add
+    // a payload field for that distinction later if it's ever needed —
+    // deliberately not adding one speculatively.
+    trackEvent("save_click", setId);
     startDownload(setId).catch((e: unknown) => {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg === "ONE_DOWNLOAD_AT_A_TIME") {
