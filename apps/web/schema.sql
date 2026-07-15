@@ -20,10 +20,24 @@ CREATE INDEX IF NOT EXISTS idx_plays_started_at ON plays (started_at);
 -- "device was offline"; named `is_offline` to match the product framing.
 -- NULL for existing rows and for any pre-2026-07-08 cached client still
 -- posting the old payload shape during a deploy rollout window (nullable by
--- design — no backfill attempted). `IF NOT EXISTS` makes this statement safe
--- to re-run, so schema.sql stays fully idempotent like every statement
--- above (SQLite/D1 support `ADD COLUMN IF NOT EXISTS` since SQLite 3.35).
-ALTER TABLE plays ADD COLUMN IF NOT EXISTS is_offline INTEGER;
+-- design — no backfill attempted).
+--
+-- ⚠️ ONE-TIME MANUAL MIGRATION — NOT idempotent, unlike every other
+-- statement in this file. Originally written as `ADD COLUMN IF NOT EXISTS`
+-- on the (incorrect, 2026-07-15-disproven) assumption that D1 supports that
+-- clause the way vanilla SQLite ≥3.35 does — it doesn't: running the
+-- IF-NOT-EXISTS form against remote D1 fails with
+-- `near "EXISTS": syntax error at offset 923: SQLITE_ERROR` every time,
+-- confirmed via `wrangler d1 execute --remote --file=schema.sql`. The bare
+-- form below is Cloudflare's documented-safe D1 pattern and was verified
+-- working via `wrangler d1 execute --remote --command`
+-- (`PRAGMA table_info(plays)` confirmed `is_offline` present afterward) —
+-- but running it AGAIN on a database that already has the column will fail
+-- with a duplicate-column error, since there's no IF-NOT-EXISTS guard
+-- anymore. Already applied to production as of 2026-07-15; do not re-run
+-- this line via `--file` against that database. A fresh/dev database still
+-- needs it run once.
+ALTER TABLE plays ADD COLUMN is_offline INTEGER;
 
 -- Aggregate/anonymous first-party event tracking (Phase "Analytics 1",
 -- 2026-07-08). Cloudflare Web Analytics stays as-is for page-view metrics;
@@ -100,3 +114,4 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 -- Save-clicks per set:
 --   SELECT set_id, COUNT(*) AS clicks FROM events
 --   WHERE event_type = 'save_click' GROUP BY set_id ORDER BY clicks DESC;
+
