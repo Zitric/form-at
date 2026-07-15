@@ -7,6 +7,10 @@ dist/
 .env.local
 .env.*.local
 
+# VAPID key material (Phase 2, push notifications) and any other local-only
+# secret scratch files — never committed, generated fresh per machine/session.
+.secrets/
+
 # TanStack Router — auto-generated, regenerated on every dev start
 apps/*/app/routeTree.gen.ts
 

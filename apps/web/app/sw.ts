@@ -211,6 +211,65 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(Promise.all([caches.delete("pages-v1"), caches.delete("audio-v1")]));
 });
 
+// Phase 2 (2026-07-15) — push notifications: receive + click-to-open.
+//
+// Payload shape is whatever `webPush.ts`'s `PushPayload` sends — JSON
+// `{ title, body, url? }`. MUST NOT throw: `event.data` is legitimately
+// `null` for an empty push per spec, and `.json()` itself throws on
+// non-JSON bodies — optional chaining alone only guards the null case, so
+// this wraps the whole read in try/catch and falls back to a generic
+// notification rather than dropping the push silently.
+self.addEventListener("push", (event) => {
+  let payload: { title?: string; body?: string; url?: string } = {};
+  try {
+    payload = event.data?.json() ?? {};
+  } catch {
+    // Non-JSON payload — show the generic fallback below instead of nothing.
+  }
+
+  const title = payload.title || "Form:at";
+  const options: NotificationOptions = {
+    body: payload.body || "",
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
+    data: { url: payload.url || "/" },
+    // Unique per push — a constant tag would make a second announcement
+    // silently REPLACE an unread first one (tag collapse, no renotify).
+    // Two same-day sends (new set + new event) must both stay visible.
+    tag: `format-${Date.now()}`,
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Focus-or-open, standard PWA notificationclick pattern (verified against
+// MDN's `notificationclick` + `WindowClient.navigate()` references,
+// 2026-07-15) — `navigate()` is what lets a tap deep-link an ALREADY-OPEN
+// app to the pushed URL, not just bring an unrelated open tab to the front.
+// `includeUncontrolled: true` matters here specifically: a client open from
+// BEFORE this SW activated (or before `clientsClaim()` took it over) is
+// still a real open window we should reuse instead of spawning a duplicate.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data as { url?: string } | undefined)?.url || "/";
+
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientList) => {
+        const existing = clientList[0];
+        if (existing) return existing.focus().then((c) => c.navigate(url));
+        return self.clients.openWindow(url);
+      })
+      // `navigate()` rejects (TypeError) on a client this SW doesn't control
+      // — and includeUncontrolled above deliberately admits those. Without
+      // this fallback the tap would be swallowed entirely: the notification
+      // is already closed, the rejection dies inside waitUntil, nothing
+      // opens. Worst case here is a duplicate window, which beats a dead tap.
+      .catch(() => self.clients.openWindow(url)),
+  );
+});
+
 // Last-resort fallback when nothing else handled the request — no cached
 // entry AND network failed. Use `matchPrecache` instead of
 // `createHandlerBoundToURL`: the latter runs the PrecacheStrategy which has

@@ -35,6 +35,7 @@ export const useStore = create<AppStore>()(
         // The event is re-captured each page load when Chrome fires it.
         pwaInstalled: state.pwaInstalled,
         pwaInstallDismissed: state.pwaInstallDismissed,
+        pushOptInDismissed: state.pushOptInDismissed,
         // Offline: persist ONLY confirmed-saved entries + the "first save
         // already requested persistent storage" flag. Mid-download state,
         // failures, and evictions are ephemeral — reconciled at boot from
@@ -60,6 +61,7 @@ export const useStore = create<AppStore>()(
           durations,
           pwaInstalled,
           pwaInstallDismissed,
+          pushOptInDismissed,
           offlineSets,
           hasRequestedPersist,
         } = persisted as {
@@ -69,6 +71,7 @@ export const useStore = create<AppStore>()(
           durations: Record<string, number>;
           pwaInstalled?: boolean;
           pwaInstallDismissed?: boolean;
+          pushOptInDismissed?: boolean;
           offlineSets?: Record<string, OfflineSetState>;
           hasRequestedPersist?: boolean;
         };
@@ -80,6 +83,7 @@ export const useStore = create<AppStore>()(
           durations: durations ?? {},
           pwaInstalled: pwaInstalled ?? false,
           pwaInstallDismissed: pwaInstallDismissed ?? false,
+          pushOptInDismissed: pushOptInDismissed ?? false,
           offlineSets: offlineSets ?? {},
           hasRequestedPersist: hasRequestedPersist ?? false,
         };

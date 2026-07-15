@@ -17,11 +17,13 @@
     "optimize-images": "node scripts/optimize-images.mjs",
     "og": "tsx scripts/generate-og.ts",
     "sitemap": "tsx scripts/generate-sitemap.ts",
+    "send-push": "tsx scripts/send-push.ts",
     "screenshots": "vite build && tsx scripts/capture-screenshots.ts",
     "stats": "node scripts/stats.mjs",
     "deploy": "pnpm build && npx wrangler pages deploy dist/client --project-name=form-at-web --commit-dirty=true"
   },
   "dependencies": {
+    "@pushforge/builder": "^2.0.5",
     "@tanstack/react-router": "^1.114.0",
     "@tanstack/react-start": "^1.114.0",
     "@use-gesture/react": "^10.3.1",

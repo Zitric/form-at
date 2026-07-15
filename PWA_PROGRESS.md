@@ -293,10 +293,254 @@ for a real saved set played in the installed app — the unit tests mock
 `offlineSets` and `isStandalone()`, they don't exercise the real SW; (2) the
 `/api/event` beacon actually reaches D1 in production (unit tests mock
 `navigator.sendBeacon` itself, never a real network call); (3) the schema
-migration (`ALTER TABLE plays ADD COLUMN IF NOT EXISTS is_offline INTEGER`)
-against the REAL remote D1 — apply with
-`npx wrangler d1 execute form-at-analytics --remote --file=apps/web/schema.sql`
-and confirm no error on a database that already has rows.
+migration — **✅ DONE 2026-07-15**, applied via `--command` (NOT `--file`;
+see schema.sql's warning comment: the `ALTER TABLE plays ADD COLUMN` line
+is non-idempotent and running the whole file against the migrated prod DB
+now fails with a duplicate-column error — the `--file` instruction that
+used to sit here was corrected in the 2026-07-16 review).
+
+### Added 2026-07-15 — Phase 2: push notification infrastructure
+
+Subscribe + receive + a real manual-send script — the actual mechanism for
+announcing new sets and events until an admin panel exists (and a manual
+override afterward too). Branch: `feat/push-notifications`.
+
+**Step 0 research — how to send Web Push from a Cloudflare Worker (done
+BEFORE writing any send logic):** the standard `web-push` npm package
+depends on Node's `crypto` (`crypto.createECDH`) and `https` modules, which
+the Workers runtime does not implement even with `nodejs_compat` on —
+confirmed as a known, unresolved gap
+([web-push-libs/web-push#718](https://github.com/web-push-libs/web-push/issues/718),
+open since 2022). Chose `@pushforge/builder` instead: built entirely on
+`globalThis.crypto.subtle` (Web Crypto API), which is portable across
+browsers, Node 20+, and workerd — verified directly against the package's
+compiled source (`dist/lib/crypto.js`), not just its documentation, to
+confirm zero `node:` imports. This is the same reasoning that makes
+`app/utils/webPush.ts` reusable as-is by a future Worker-based admin panel:
+nothing in it is Node-specific.
+
+**⚠️ Known caveat found in the 2026-07-16 pre-commit review — legacy
+encryption encoding, iOS delivery unverified.** Reading the library's
+actual compiled source (`vapid.js`, `payload.js`) shows it implements the
+pre-RFC draft `aesgcm` scheme (`Content-Encoding: aesgcm`, `Encryption:
+salt=` / `Crypto-Key: dh=` headers, 2-byte prefix padding), NOT RFC 8291's
+final `aes128gcm`. FCM and Mozilla autopush accept both encodings; Apple's
+push service (`web.push.apple.com`) arrived post-RFC and may accept only
+`aes128gcm` — unverifiable from source, and iOS-standalone users are a
+headline audience for this app's push. **The iOS field test IS the
+verdict on this.** Test an iPhone FIRST, before announcing to anyone: if
+Apple's service 4xxes, swap the internals of `webPush.ts` for an
+`aes128gcm` implementation — the module boundary makes that a contained,
+one-file change; nothing else in this phase touches the encoding.
+
+**VAPID keys (RFC 8292) — one-time, local, never committed:** generated via
+`npx @pushforge/builder vapid` on 2026-07-15. The public key is a plain
+committed constant (`app/utils/vapidPublicKey.ts`) — safe to expose, that's
+the point of VAPID's asymmetric design. The private key lives ONLY in
+`apps/web/.env` (git-ignored, `VAPID_PRIVATE_KEY_JWK` — see `.env.example`
+for the required shape) and as a Cloudflare secret for the future admin
+panel. **Not yet stored as a Cloudflare secret — Julian needs to run this
+himself** (same reasoning as `CLOUDFLARE_API_TOKEN`: secret-writing
+commands aren't run on his behalf). This is a **Pages** project
+(`wrangler.toml` has `pages_build_output_dir`), so it's the Pages-scoped
+command — the Workers-style `wrangler secret put` fails here (corrected in
+the 2026-07-16 review; the original instruction had the Workers form):
+```bash
+npx wrangler pages secret put VAPID_PRIVATE_KEY_JWK --project-name=form-at-web
+```
+(paste the full JWK from `apps/web/.env` when prompted). Only the PRIVATE
+key needs to be a secret — the public key is a committed constant
+(`app/utils/vapidPublicKey.ts`), storing it as a secret would be pointless.
+The key pair was verified mathematically consistent (public point derived
+from the private JWK's x/y === the committed constant) on 2026-07-16. If
+these keys are ever rotated, `vapidPublicKey.ts`, `.env`, and the
+Cloudflare secret must all change together — a mismatched pair fails
+silently at `pushManager.subscribe()` (browser-side `DOMException`) or at
+send time (push service 401/403).
+
+**`push_subscriptions` D1 table — a deliberate exception to the Analytics 1
+anonymity rule, not a reversal of it.** Full reasoning lives in `schema.sql`
+directly above `CREATE TABLE push_subscriptions` (read it there — not
+duplicated here to avoid the two copies drifting). Short version: a push
+subscription's `endpoint` IS an addressable per-device token by necessity —
+that's the only way push delivery works — unlike `events`, where
+addressability was explicitly designed out. Mitigation is scope, not
+anonymity: never joined against `events` or `plays`, no IP/UA/name/email
+stored. **Not yet applied to the remote database** — same "Julian runs it"
+pattern as the `is_offline` migration above. **Do NOT use
+`--file=apps/web/schema.sql`**: schema.sql contains the one-time
+`ALTER TABLE plays ADD COLUMN is_offline` line (already applied to prod,
+non-idempotent — see its own warning comment), so running the whole file
+fails with a duplicate-column error. Run the isolated statement instead:
+```bash
+npx wrangler d1 execute form-at-analytics --remote --command "CREATE TABLE IF NOT EXISTS push_subscriptions (endpoint TEXT PRIMARY KEY, p256dh TEXT NOT NULL, auth TEXT NOT NULL, is_standalone INTEGER NOT NULL, created_at INTEGER NOT NULL)"
+```
+(idempotent — safe to re-run; keep it in sync with schema.sql's DDL if the
+table ever changes).
+
+**Client opt-in — `<PushOptInCta>`, a deliberate button tap, never an
+auto-prompt.** Placed on the home route directly below `<InstallCta>`, in
+the same passive capability-nudge zone (`routes/index.tsx`) — proposed
+rather than picked silently, since both CTAs are "ask once, respect the
+answer" nudges that belong together but must stay visually/functionally
+separate (see below). A SEPARATE component and a SEPARATE dismiss flag
+(`pushOptInDismissed`, mirrors `pwaInstallDismissed`'s "soft dismiss, hide
+forever" semantic but is NOT the same flag) — installing the app and
+opting into push are different asks with different native prompts;
+conflating the flags would mean dismissing one silently answers a question
+the user was never asked. Gated on capability detection
+(`'serviceWorker' in navigator && 'PushManager' in window`), not UA
+sniffing — this is also what naturally handles iOS Safari's real
+constraint (Push API only exists for installed/standalone PWAs there, not
+browser tabs) without any special-casing. `Notification.permission ===
+"granted"` or `"denied"` both hide the CTA (nothing left to offer, and the
+browser blocks re-prompting after an explicit deny anyway); a
+dismissed-without-choosing prompt is covered by `pushOptInDismissed` itself
+since the Notification API resolves that case the same as "denied" — no
+separate handling needed. After a successful subscribe the parent component
+re-reads `Notification.permission` and the CTA hides in the SAME session
+(2026-07-16 review fix — originally it only disappeared on the next mount).
+A transient subscribe failure (`"failed"` outcome — push service
+unreachable, etc.) leaves the button visible for a legitimate retry. Button
+label: `notify_me`, matching the app's lowercase terminal-command tone
+(`install_form:at`, `resume_signal`).
+
+**`POST /api/push-subscribe` — follows `api/event.ts`'s conventions, not
+`api/signal.ts`'s.** Exported `validate()` for unit tests, snake_case for
+the one app-controlled field (`is_standalone`), always-204, try/catch
+swallow — the newer/better-practice pattern in this codebase, chosen
+because `push_subscriptions` is a Phase-2 sibling of the deliberately
+designed `events` table, not a play-tracking beacon. `endpoint` /
+`keys.p256dh` / `keys.auth` are NOT this app's casing choice — that's
+exactly what the browser's `PushSubscription.toJSON()` produces (a Web
+standard shape). `INSERT OR REPLACE` on the primary key (`endpoint`) so a
+re-subscribe (permission re-granted, browser refreshed the subscription)
+overwrites cleanly instead of erroring on a duplicate insert. Sent via
+`navigator.sendBeacon`, matching every other tracking beacon in this
+codebase — fire-and-forget; a failed POST means the browser holds a
+subscription this app doesn't know about, and the next send simply won't
+reach that device (no retry/reconciliation UI — deliberately deferred, see
+below).
+
+**SW handlers (`app/sw.ts`) — `push` and `notificationclick`, API shapes
+verified against MDN before writing, not assumed:**
+- `push`: reads `event.data?.json()` wrapped in try/catch (both because
+  `event.data` is legitimately `null` for an empty push per spec, AND
+  because `.json()` itself throws on a non-JSON body — optional chaining
+  alone only guards the first case). Falls back to a generic "Form:at"
+  notification rather than dropping the push silently on a malformed
+  payload. Calls `registration.showNotification(title, { body, icon,
+  badge, data: { url }, tag })`.
+- `notificationclick`: the standard focus-or-open pattern —
+  `clients.matchAll({ type: "window", includeUncontrolled: true })`, and
+  if an existing client is found, `.focus()` then `.navigate(url)` to
+  deep-link it to the pushed URL (falls back to `/` if the payload carried
+  none); otherwise `clients.openWindow(url)`. `WindowClient.navigate()` is
+  what makes the deep-link work on an ALREADY-OPEN app — a bare `.focus()`
+  (the basic MDN example) would just bring an unrelated open page to the
+  front. `includeUncontrolled: true` matters specifically for a client that
+  was open before this SW activated. If `navigate()` rejects (it throws on
+  a client this SW doesn't control — exactly what `includeUncontrolled`
+  admits), a `.catch` falls back to `openWindow` so the tap is never
+  swallowed. Notification `tag` is unique per push (`format-<timestamp>`) —
+  a constant tag would make a second announcement silently replace an
+  unread first one.
+
+**`scripts/send-push.ts` — THE real production send mechanism, run locally,
+not a public endpoint.** Deliberately a local Node script rather than a
+Worker HTTP route: a public endpoint would need its own authentication to
+stop anyone who finds the URL from spamming every subscriber, and there's
+no auth system yet (that's the deferred admin panel). Running it from
+Julian's terminal reuses his already-authenticated `wrangler` session
+instead of needing to build auth infrastructure just for this. Shells out
+to `wrangler d1 execute --remote` (no direct D1 connection from Node — that
+plumbing is NOT part of the reusable `webPush.ts` module, deliberately,
+since it doesn't port to a future Worker route which would use its own D1
+binding instead). Implements the Web Push spec's dead-subscription rule: a
+404 or 410 from the push service means the subscription is permanently
+invalid, so the script deletes that row immediately rather than letting
+dead entries accumulate forever. Transient failures (429 rate limit, 5xx)
+are counted and reported but NOT deleted — deleting a live subscription
+because the push service had a bad minute would be wrong, and the
+distinction is unit-locked in `webPush.test.ts`. Sends run sequentially
+(one `await` per subscriber) with per-subscription error isolation — a
+thrown error on one row (malformed stored keys, network drop) is counted
+as failed and the loop continues; fine at the current handful-of-devices
+scale, revisit concurrency only if the subscriber count makes a send
+noticeably slow. **How to send an announcement today:**
+```bash
+cd apps/web
+pnpm send-push -- --title "New set: DJ Name" --body "Fresh from the booth" --url /sets/003
+pnpm send-push -- --title "Event: Warehouse Session" --body "This Saturday" --url /events/012
+```
+(requires `apps/web/.env` filled in per `.env.example`, and the two
+Cloudflare secrets above set up first). The admin panel, whenever it's
+built, calls the SAME `sendWebPush()` from `app/utils/webPush.ts` this
+script calls — it adds a UI on top, it doesn't reimplement the send logic.
+
+**Deliberately NOT done:** a "you're subscribed" confirmation state in the
+UI (the CTA hides once permission is granted — no positive confirmation
+toast, a known gap); any retry/reconciliation if the `/api/push-subscribe`
+beacon fails to reach the server (same fire-and-forget tolerance every
+other beacon in this app accepts); a UI-level unsubscribe (a user revokes
+in browser/OS settings, and the next send's 404/410 cleanup removes the
+row — building an in-app toggle means building subscription-state UI that
+the "no confirmation state" decision above already deferred; both land
+together or not at all); a `push_subscribed` analytics event on the
+`events` allowlist (would need its own `is_standalone`-shaped decision
+like `save_click`/`share_click` got — not asked for, skipped rather than
+silently expanding that allowlist); first-save-vs-resubscribe distinction
+(the `INSERT OR REPLACE` collapses both into one row either way, so
+there's nothing to distinguish yet); any abuse guard on
+`/api/push-subscribe` beyond shape validation (anyone can insert
+arbitrary-HTTPS rows — bounded by the length caps, low impact, acceptable
+at current scale; revisit at the auth/admin-panel milestone, noted
+2026-07-16).
+
+**Needs on-device / production-preview confirmation** (as always for
+anything SW-adjacent in this repo, plus this phase's own real-network
+requirements):
+0. **BLOCKER FIRST — wrangler auth.** Live-tested 2026-07-16: `wrangler d1
+   execute --remote` fails with `Authentication error [code: 10000]` on
+   the current local credentials (consistent with the M3 note that this
+   token lacks R2 scopes — it lacks D1 too). `npx wrangler login` (or a
+   token with D1 write scope) before ANY of the following; the migration
+   AND every send-script run depend on it.
+1. The `wrangler pages secret put VAPID_PRIVATE_KEY_JWK` command above —
+   not yet run.
+2. The `push_subscriptions` table — not yet applied to the remote
+   database (use the isolated `--command` above, NOT `--file`).
+3. The opt-in tap → real `Notification.requestPermission()` → real
+   `pushManager.subscribe()` round trip on an actual device (Android
+   Chrome tab; iOS Safari **only works from the installed/standalone app**,
+   per the platform constraint noted above — a tab there has no
+   `PushManager` at all, confirm the CTA correctly stays hidden).
+4. A real push actually arriving and calling `sw.ts`'s `push` handler —
+   unit tests exercise the SW's parsing/fallback logic directly, they
+   cannot simulate a real push service delivery (no jsdom/Playwright
+   equivalent for the Push API's OS-level delivery path). **Test iOS
+   (installed PWA) FIRST — it doubles as the verdict on the legacy-aesgcm
+   encoding caveat above.** Pass = notification appears on the locked
+   iPhone; fail = the send script logs a 4xx from `web.push.apple.com`,
+   which means swapping `webPush.ts`'s internals for `aes128gcm` before
+   anything ships.
+5. `notificationclick` deep-linking, both branches: tapping a notification
+   while the app is CLOSED (`clients.openWindow`) and while it's already
+   OPEN on a different page (`.focus()` + `.navigate()`).
+6. `scripts/send-push.ts`'s real `wrangler d1 execute --json` output shape
+   on a SUCCESSFUL query — the parsing in `runD1Command()` is defensively
+   checked (throws a clear error rather than crashing obscurely on a shape
+   mismatch). The FAILURE path got live-verified 2026-07-16 by accident:
+   the auth error in item 0 came back as a JSON object on stdout, exactly
+   the shape the guard rejects loudly. The success shape still needs one
+   watched real run.
+7. Dead-subscription cleanup (404/410 → row actually deleted from D1) —
+   the status→outcome mapping and the delete-only-on-dead distinction are
+   unit-locked (`webPush.test.ts`, mocked builder + stubbed fetch), but a
+   REAL push service returning 404/410 for a genuinely expired
+   subscription can only be observed on-device (subscribe, uninstall the
+   PWA / revoke in OS settings, send again, confirm the row disappears and
+   the script reports `dead_removed=1`).
 
 ### Fixed 2026-07-05 — M3: `_headers` caching + CSP (TECH_DEBT 19 itself still blocked)
 

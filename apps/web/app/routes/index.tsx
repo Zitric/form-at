@@ -6,6 +6,7 @@ import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { InstallCta } from "~/components/InstallCta";
 import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
+import { PushOptInCta } from "~/components/PushOptInCta";
 import { SocialLink } from "~/components/SocialLink";
 import { useFirstLoad } from "~/hooks/useFirstLoad";
 import { useTypedOnce } from "~/hooks/useTypedOnce";
@@ -102,12 +103,16 @@ function Home() {
           <BookingsButton className="text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer" />
         </div>
 
-        {/* PWA install CTA — renders only when Chromium fires
-            beforeinstallprompt (post-engagement + manifest + SW). Lives
-            below the socials so it doesn't compete with the primary CTA but
-            stays discoverable. iOS / Firefox: no event = nothing renders. */}
-        <div className="flex justify-center -mt-4 mb-8">
+        {/* Passive capability-opt-in nudge zone — install CTA renders only
+            when Chromium fires beforeinstallprompt (post-engagement +
+            manifest + SW); push CTA renders only when the Push API is
+            present and permission is still unasked. Stacked together below
+            the socials so they don't compete with the primary CTA but stay
+            discoverable. Either, both, or neither may render depending on
+            platform + prior dismissals. */}
+        <div className="flex flex-col items-center gap-3 -mt-4 mb-8">
           <InstallCta />
+          <PushOptInCta />
         </div>
       </div>
     </PageLayout>

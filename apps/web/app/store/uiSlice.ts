@@ -50,9 +50,24 @@ export type UiSlice = {
    *  event has a native ref and methods that don't round-trip through JSON.
    *  Re-captured on each page load when Chrome decides to fire it. */
   deferredPrompt: BeforeInstallPromptEvent | null;
+  /** Push-notification opt-in, passive-CTA dismiss flag (Phase 2,
+   *  2026-07-15) — same "soft dismiss, hide forever" semantic as
+   *  `pwaInstallDismissed`, deliberately mirrored rather than reusing that
+   *  flag (installing the app and opting into push are different asks; a
+   *  "not now" on one shouldn't silently answer the other). Set to true
+   *  after ANY `Notification.requestPermission()` outcome that isn't
+   *  `"granted"` — covers both an explicit "Block" AND the ambiguous case
+   *  where the user closes the native prompt without choosing (the
+   *  Notification API resolves that the same as never having asked, so
+   *  without our own flag we'd re-prompt on every visit — exactly the
+   *  nagging this flag exists to prevent). Once `Notification.permission`
+   *  is `"denied"` the browser itself blocks re-prompting forever anyway;
+   *  this flag's real job is covering the dismissed-without-choosing gap. */
+  pushOptInDismissed: boolean;
   setPwaInstalled: (v: boolean) => void;
   setPwaInstallDismissed: (v: boolean) => void;
   setDeferredPrompt: (e: BeforeInstallPromptEvent | null) => void;
+  setPushOptInDismissed: (v: boolean) => void;
 };
 
 export const createUiSlice: StateCreator<UiSlice, [], [], UiSlice> = (set) => ({
@@ -67,7 +82,9 @@ export const createUiSlice: StateCreator<UiSlice, [], [], UiSlice> = (set) => ({
   pwaInstalled: false,
   pwaInstallDismissed: false,
   deferredPrompt: null,
+  pushOptInDismissed: false,
   setPwaInstalled: (v) => set({ pwaInstalled: v }),
   setPwaInstallDismissed: (v) => set({ pwaInstallDismissed: v }),
   setDeferredPrompt: (e) => set({ deferredPrompt: e }),
+  setPushOptInDismissed: (v) => set({ pushOptInDismissed: v }),
 });

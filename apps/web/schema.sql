@@ -115,3 +115,54 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 --   SELECT set_id, COUNT(*) AS clicks FROM events
 --   WHERE event_type = 'save_click' GROUP BY set_id ORDER BY clicks DESC;
 
+-- Push notification subscriptions (Phase 2, 2026-07-15).
+--
+-- ⚠️ DELIBERATE EXCEPTION to the "no persistent identifier" rule that
+-- governs `events` (see that table's comment block above). Read this before
+-- assuming the same anonymous-aggregate philosophy applies here — it does
+-- NOT, and that's by necessity, not an oversight or a quiet reversal of the
+-- Analytics 1 decision:
+--   - `events` rows are disconnected FACTS about aggregate behavior — no
+--     row needs to be addressable, and addressability was explicitly
+--     designed out.
+--   - A push subscription's `endpoint` IS, unavoidably, an addressable
+--     per-device token — that's the ENTIRE mechanism by which push
+--     delivery works. The push service (FCM, Mozilla autopush, etc.) uses
+--     that exact URL to route a message to one specific browser
+--     installation. There is no way to implement Web Push without storing
+--     something that identifies an individual subscriber's endpoint; the
+--     capability and the "traceable to a device" property are the same
+--     fact, not separable design choices.
+-- The mitigation is scope, not anonymity: this table is NEVER joined
+-- against `events` or `plays` (nothing here would even join cleanly — no
+-- shared key), it stores NOTHING beyond what push delivery strictly
+-- requires (no IP, no UA, no name/email — `is_standalone` is the only
+-- "extra" field, kept purely to distinguish install-prompted vs. tab
+-- subscribers in aggregate counts, never to identify one row). If this
+-- table is ever queried for anything beyond "who do I send this
+-- announcement to," that's a new decision requiring the same scrutiny the
+-- `events` table's design got — it doesn't inherit a blanket allowance.
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  endpoint      TEXT    PRIMARY KEY,
+  p256dh        TEXT    NOT NULL,
+  auth          TEXT    NOT NULL,
+  is_standalone INTEGER NOT NULL,
+  created_at    INTEGER NOT NULL  -- unix ms
+);
+
+-- No secondary index: the only query this table serves today is "give me
+-- every row" (the send script does a full scan — see scripts/send-push.ts),
+-- and deletes are by the primary key (`endpoint`) directly on a 404/410
+-- cleanup. Add one if a real filtered-send use case shows up later.
+
+-- Useful queries:
+--
+-- All subscriptions (what the send script reads):
+--   SELECT endpoint, p256dh, auth FROM push_subscriptions;
+--
+-- Subscriber count, standalone vs tab:
+--   SELECT is_standalone, COUNT(*) AS n FROM push_subscriptions GROUP BY is_standalone;
+--
+-- Remove a dead subscription (what the send script does automatically on 404/410):
+--   DELETE FROM push_subscriptions WHERE endpoint = ?;
+

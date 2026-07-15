@@ -49,4 +49,52 @@ describe("persist rehydration", () => {
     expect(useStore.getState().positions[seeded.id]).toBe(42);
     expect(useStore.getState().pwaInstalled).toBe(true);
   });
+
+  // Push opt-in dismissal (Phase 2, 2026-07-15) — same "soft dismiss, hide
+  // forever" persistence as pwaInstallDismissed above, mirrored not reused
+  // (see uiSlice.ts). Locks both directions: an absent key defaults to
+  // false (pre-Phase-2 storage / a cached client mid-rollout), and a seeded
+  // `true` survives the round trip so a "not now" is actually remembered.
+  it("defaults pushOptInDismissed to false when absent from a seeded key (pre-Phase-2 storage)", async () => {
+    localStorage.setItem(
+      "format-player",
+      JSON.stringify({
+        state: {
+          nowPlayingId: null,
+          positions: {},
+          peaksCache: {},
+          durations: {},
+          pwaInstalled: false,
+          pwaInstallDismissed: false,
+          offlineSets: {},
+          hasRequestedPersist: false,
+        },
+        version: 0,
+      }),
+    );
+    await useStore.persist.rehydrate();
+    expect(useStore.getState().pushOptInDismissed).toBe(false);
+  });
+
+  it("restores a seeded pushOptInDismissed: true", async () => {
+    localStorage.setItem(
+      "format-player",
+      JSON.stringify({
+        state: {
+          nowPlayingId: null,
+          positions: {},
+          peaksCache: {},
+          durations: {},
+          pwaInstalled: false,
+          pwaInstallDismissed: false,
+          pushOptInDismissed: true,
+          offlineSets: {},
+          hasRequestedPersist: false,
+        },
+        version: 0,
+      }),
+    );
+    await useStore.persist.rehydrate();
+    expect(useStore.getState().pushOptInDismissed).toBe(true);
+  });
 });
