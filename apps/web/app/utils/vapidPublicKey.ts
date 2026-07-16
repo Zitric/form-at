@@ -17,4 +17,4 @@
 // send time (push service returns 401/403). See the Phase 2 doc section for
 // the rotation checklist.
 export const VAPID_PUBLIC_KEY =
-  "BPtDmnCE0CgPP4l2CDmeiHFn_fkrFhWMStLpszfB1Bh1ZgAV_pTtgiduClX-MRfs94XrUoXPv_I9bDTGURq_pLw";
+  "BGoZDkz9X9AZ264iXoFngijx7RN1_SaPYzSrewCDNJHOHptYJ4n0hqjPy0B5Tjz2FHWRQzM0FN_o8Sn7N0f0dUE";
