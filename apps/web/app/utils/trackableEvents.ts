@@ -16,6 +16,17 @@ export const TRACKABLE_EVENT_TYPES = [
   "app_launch",
   "save_click",
   "share_click",
+  // Push opt-in soft prompt (feat/push-optin-modal, 2026-07-16) — mirrors
+  // the install_* naming. `notify_prompt_shown` / `notify_install_nudge_shown`
+  // are the two modal variants becoming visible (standalone subscribe prompt
+  // vs browser-tab install nudge); `notify_accepted` is accepting OUR soft
+  // prompt (fires before the native permission ask — grant rate is inferable
+  // by comparing against the push_subscriptions table); `notify_declined` is
+  // closing either variant without accepting/engaging.
+  "notify_prompt_shown",
+  "notify_accepted",
+  "notify_declined",
+  "notify_install_nudge_shown",
 ] as const;
 
 export type TrackableEventType = (typeof TRACKABLE_EVENT_TYPES)[number];

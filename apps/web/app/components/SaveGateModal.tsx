@@ -1,11 +1,10 @@
-import { useState } from "react";
 import { Button } from "~/components/Button";
+import { IosInstallSteps, ManualInstallHint } from "~/components/InstallInstructions";
 import { Modal } from "~/components/Modal";
-import { InstallIcon } from "~/components/icons";
+import { TextButton } from "~/components/TextButton";
 import { type SaveGate, useTriggerInstallPrompt } from "~/hooks/useSaveGate";
 import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";
-import { type FormFactor, detectFormFactor } from "~/utils/deviceFormFactor";
 
 type Props = { open: boolean; onClose: () => void; gate: SaveGate };
 
@@ -34,10 +33,6 @@ export function SaveGateModal({ open, onClose, gate }: Props) {
   const setPwaInstalled = useStore((s) => s.setPwaInstalled);
   const setPwaInstallDismissed = useStore((s) => s.setPwaInstallDismissed);
   const trackEvent = useTrackEvent();
-
-  const [formFactor] = useState<FormFactor>(() =>
-    typeof window !== "undefined" ? detectFormFactor() : "desktop",
-  );
 
   const handleClose = () => {
     // Passive dismiss matches the previous InstallPromptModal behaviour:
@@ -84,29 +79,6 @@ export function SaveGateModal({ open, onClose, gate }: Props) {
     setPwaInstalled(false);
   };
 
-  // Manual-install guidance for the no-captured-prompt path. This branch is
-  // reached by Chromium-family browsers that never fire `beforeinstallprompt`
-  // at all (Opera Android carries `Chrome/` in its UA but its menu had no
-  // install entry — field-tested 2026-07-02) AND by Chrome before its install
-  // heuristics pass. So we never promise a specific menu item: name the
-  // labels it might carry, and say honestly that this browser may not offer
-  // one. Same form-factor split as before (mobile → browser menu, desktop →
-  // address-bar icon, rendered with the actual Chrome install glyph).
-  const manualInstructionTail =
-    formFactor === "mobile" ? (
-      <>
-        open your browser menu (⋮) and look for <span className="text-white">install app</span> or{" "}
-        <span className="text-white">add to home screen</span>. don't see either? this browser may
-        not support installing — <span className="text-white">Chrome on Android</span> does.
-      </>
-    ) : (
-      <>
-        look for the install icon <InstallIcon className="inline-block align-[-0.15em]" /> at the
-        right end of your address bar. don't see it? this browser may not support installing —{" "}
-        <span className="text-white">Chrome</span> does.
-      </>
-    );
-
   return (
     <Modal
       open={open}
@@ -133,7 +105,7 @@ export function SaveGateModal({ open, onClose, gate }: Props) {
               </>
             ) : (
               <p className="text-sm text-grey leading-relaxed">
-                saving sets offline lives in the Form:at app — {manualInstructionTail}
+                saving sets offline lives in the Form:at app — <ManualInstallHint />
               </p>
             )
           ) : (
@@ -142,27 +114,17 @@ export function SaveGateModal({ open, onClose, gate }: Props) {
                 saving sets offline lives in the Form:at app. iOS Safari only installs from the
                 share menu — two taps:
               </p>
-              <ol className="text-xs text-grey leading-relaxed space-y-2 pl-5 list-decimal">
-                <li>tap the share icon (⎙) at the bottom of Safari</li>
-                <li>
-                  scroll and tap <span className="text-white">Add to Home Screen</span>
-                </li>
-                <li>
-                  tap <span className="text-white">Add</span> in the top right
-                </li>
-              </ol>
+              <IosInstallSteps />
             </>
           )}
-          <button
-            type="button"
+          <TextButton
             onClick={(e) => {
               e.stopPropagation();
               handleAlreadyInstalled();
             }}
-            className="text-xs text-grey/70 hover:text-grey underline underline-offset-2 self-start"
           >
             already installed? open it from your home screen
-          </button>
+          </TextButton>
         </div>
       )}
 
@@ -172,16 +134,14 @@ export function SaveGateModal({ open, onClose, gate }: Props) {
             Form:at is already on your device — open it from your home screen to save sets for
             offline listening. this tab streams from the network, the app keeps the bytes.
           </p>
-          <button
-            type="button"
+          <TextButton
             onClick={(e) => {
               e.stopPropagation();
               handleNotInstalledAfterAll();
             }}
-            className="text-xs text-grey/70 hover:text-grey underline underline-offset-2 self-start"
           >
             not installed? install the app
-          </button>
+          </TextButton>
         </div>
       )}
 
