@@ -1,26 +1,33 @@
 import { useEffect, useState } from "react";
 import { Button } from "~/components/Button";
+import { PushOptInModal } from "~/components/PushOptInModal";
 import { useFirstLoad } from "~/hooks/useFirstLoad";
-import { isPushSupported, useSubscribeToPush } from "~/hooks/usePushSubscription";
+import { type PushSubscribeOutcome, isPushSupported } from "~/hooks/usePushSubscription";
+import { useSaveGate } from "~/hooks/useSaveGate";
 import { useStore, useStoreHydrated } from "~/store";
 import { cn } from "~/utils/cn";
 
 // Push-notification opt-in CTA — home route, stacked directly below
 // <InstallCta> in the same passive-nudge zone (see routes/index.tsx).
+// Tapping it opens <PushOptInModal> (the soft prompt); the native permission
+// dialog NEVER fires from this component — only from the modal's accept
+// action, and only in the standalone variant.
 //
-// A SEPARATE component rather than folded into InstallCta: installing the
-// app and opting into push are different asks with different capability
-// checks (`beforeinstallprompt` vs `PushManager` presence) and different
-// native prompts. Conflating them would mean dismissing one silently
-// answers a question the user was never actually asked — the exact
-// reasoning `pushOptInDismissed` being its own flag already documents in
-// uiSlice.ts.
+// Renders in BOTH display modes, with different asks behind the tap:
+//   standalone — the real subscribe offer. Requires the Push API and an
+//     unspent ask: permission "default", OR "granted" with no live
+//     subscription (a previous subscribe failed after the grant — the modal
+//     can retry without re-prompting, so the CTA must come back).
+//   browser tab — the install nudge (subscriptions are app-only product
+//     policy; the tab variant converts notification interest into installs).
+//     Shown even where the Push API is absent (iOS Safari tabs — installing
+//     IS the fix there); hidden once permission is known-spent at this
+//     origin ("granted" means they've been through the app flow, "denied"
+//     means notifications are a dead end nobody should be nudged toward).
 //
-// Gate order mirrors InstallCta: hydrated (persisted dismiss flag known) →
-// capability present → not already dismissed → permission still "default"
-// (nothing to offer once granted — Phase 2 has no "you're subscribed"
-// confirmation UI, a documented gap — or once denied, since the browser
-// itself blocks re-prompting at that point anyway).
+// Suppression tiers: `pushOptInDismissed` (persisted — a spent native ask)
+// and `pushOptInDeclinedSession` (this session only — declined the soft
+// prompt; see uiSlice.ts for why declines are deliberately not persisted).
 //
 // `Notification.permission` is read in an effect, not at render/module
 // scope — it's a browser-only global with no SSR equivalent; reading it
@@ -28,29 +35,67 @@ import { cn } from "~/utils/cn";
 export function PushOptInCta({ className }: { className?: string }) {
   const hydrated = useStoreHydrated();
   const pushOptInDismissed = useStore((s) => s.pushOptInDismissed);
-  const subscribe = useSubscribeToPush();
+  const pushOptInDeclinedSession = useStore((s) => s.pushOptInDeclinedSession);
+  const setPushOptInDeclinedSession = useStore((s) => s.setPushOptInDeclinedSession);
+  const gate = useSaveGate();
+
   const [permission, setPermission] = useState<NotificationPermission | null>(null);
+  const [hasSubscription, setHasSubscription] = useState<boolean | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
-    if (isPushSupported()) setPermission(Notification.permission);
+    if (!isPushSupported()) return;
+    setPermission(Notification.permission);
+    if (Notification.permission !== "granted") return;
+    // Granted but possibly unsubscribed (a subscribe that failed after the
+    // grant, some earlier session). `getSubscription()` settles whether the
+    // CTA still has something to offer. Fails closed — an errored check
+    // reads as "subscribed" so we never show a nudge we can't back up.
+    let cancelled = false;
+    navigator.serviceWorker.ready
+      .then((registration) => registration.pushManager.getSubscription())
+      .then((subscription) => {
+        if (!cancelled) setHasSubscription(subscription !== null);
+      })
+      .catch(() => {
+        if (!cancelled) setHasSubscription(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Owned by the parent (not the button child) so the permission re-read
-  // lands on the state that gates rendering: a successful subscribe flips
-  // `Notification.permission` to "granted" and the CTA hides THIS session,
-  // not just on the next mount. A "failed" outcome leaves permission at
-  // "granted" too (the grant succeeded, the subscribe after it didn't) —
-  // acceptable: the browser-level ask is spent either way, and re-showing
-  // a button whose tap can no longer trigger a prompt would be a dead nudge.
-  // "denied" hides via the pushOptInDismissed flag the hook already set.
-  const handleOptIn = async () => {
-    await subscribe();
+  if (!hydrated) return null;
+
+  const suppressed = pushOptInDismissed || pushOptInDeclinedSession;
+  const grantedButUnsubscribed = permission === "granted" && hasSubscription === false;
+  const standaloneOfferable = permission === "default" || grantedButUnsubscribed;
+  // In a tab, `permission === null` means the Push API is absent here (iOS
+  // Safari tab) — exactly the audience the install nudge exists for.
+  const tabOfferable = permission === null || permission === "default";
+  const showCta = !suppressed && (gate.allow === true ? standaloneOfferable : tabOfferable);
+
+  const handleOutcome = (outcome: PushSubscribeOutcome) => {
     if (isPushSupported()) setPermission(Notification.permission);
+    if (outcome === "subscribed") setHasSubscription(true);
   };
 
-  if (!hydrated || pushOptInDismissed || permission !== "default") return null;
-
-  return <PushOptInCtaButton className={className} onOptIn={handleOptIn} />;
+  // The modal is a SIBLING of the gated button, not inside it — a subscribe
+  // or decline flips `showCta` false while the modal is still open (success
+  // copy showing, exit animation running), and unmounting it at that moment
+  // would cut both off.
+  return (
+    <>
+      {showCta && <PushOptInCtaButton className={className} onOpen={() => setModalOpen(true)} />}
+      <PushOptInModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onDeclined={() => setPushOptInDeclinedSession(true)}
+        onOutcome={handleOutcome}
+        gate={gate}
+      />
+    </>
+  );
 }
 
 // Split for the same reason InstallCtaButton is split from InstallCta: the
@@ -58,13 +103,7 @@ export function PushOptInCta({ className }: { className?: string }) {
 // fade-in hooks need to run from this component's actual mount rather than
 // racing the gate's own null render. Same first-load timing convention as
 // every other home-page entrance (5s true first paint, 0.6s otherwise).
-function PushOptInCtaButton({
-  className,
-  onOptIn,
-}: {
-  className?: string;
-  onOptIn: () => Promise<void>;
-}) {
+function PushOptInCtaButton({ className, onOpen }: { className?: string; onOpen: () => void }) {
   const isFirstLoad = useFirstLoad();
   const [visible, setVisible] = useState(false);
   useEffect(() => {
@@ -74,7 +113,7 @@ function PushOptInCtaButton({
 
   return (
     <div style={{ opacity: visible ? 1 : 0, transition: `opacity ${fadeDuration} ease-out` }}>
-      <Button variant="secondary" onClick={() => void onOptIn()} className={cn(className)}>
+      <Button variant="secondary" onClick={onOpen} className={cn(className)}>
         notify_me
       </Button>
     </div>

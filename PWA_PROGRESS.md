@@ -478,9 +478,11 @@ Cloudflare secrets above set up first). The admin panel, whenever it's
 built, calls the SAME `sendWebPush()` from `app/utils/webPush.ts` this
 script calls — it adds a UI on top, it doesn't reimplement the send logic.
 
-**Deliberately NOT done:** a "you're subscribed" confirmation state in the
+**Deliberately NOT done:** ~~a "you're subscribed" confirmation state in the
 UI (the CTA hides once permission is granted — no positive confirmation
-toast, a known gap); any retry/reconciliation if the `/api/push-subscribe`
+toast, a known gap)~~ — CLOSED 2026-07-16 by the soft-prompt modal's
+success phase (see the 2026-07-16 section below); any retry/reconciliation
+if the `/api/push-subscribe`
 beacon fails to reach the server (same fire-and-forget tolerance every
 other beacon in this app accepts); a UI-level unsubscribe (a user revokes
 in browser/OS settings, and the next send's 404/410 cleanup removes the
@@ -510,11 +512,13 @@ requirements):
    not yet run.
 2. The `push_subscriptions` table — not yet applied to the remote
    database (use the isolated `--command` above, NOT `--file`).
-3. The opt-in tap → real `Notification.requestPermission()` → real
-   `pushManager.subscribe()` round trip on an actual device (Android
-   Chrome tab; iOS Safari **only works from the installed/standalone app**,
-   per the platform constraint noted above — a tab there has no
-   `PushManager` at all, confirm the CTA correctly stays hidden).
+3. The opt-in tap → soft-prompt modal accept → real
+   `Notification.requestPermission()` → real `pushManager.subscribe()`
+   round trip on an actual device. NOTE the flow changed 2026-07-16:
+   subscribing is now **standalone-only** (product policy — see the
+   two-variant modal section below), and a browser tab — including iOS
+   Safari, where a tab has no `PushManager` at all — now shows the CTA
+   with an install nudge behind it instead of hiding it.
 4. A real push actually arriving and calling `sw.ts`'s `push` handler —
    unit tests exercise the SW's parsing/fallback logic directly, they
    cannot simulate a real push service delivery (no jsdom/Playwright
@@ -541,6 +545,111 @@ requirements):
    subscription can only be observed on-device (subscribe, uninstall the
    PWA / revoke in OS settings, send again, confirm the row disappears and
    the script reports `dead_removed=1`).
+
+### Added 2026-07-16 — push opt-in soft prompt (two-variant modal)
+
+The bare `notify_me` button is now a **soft prompt**: tapping it opens
+`PushOptInModal.tsx`, and the native browser permission dialog does NOT
+fire until the user accepts our modal. Rationale: a native "Block" is
+nearly unrecoverable (the browser refuses to re-prompt forever), while a
+decline of our own modal stays fully recoverable. The guarantee is
+unit-locked (`PushOptInModal.test.tsx`): `Notification.requestPermission`
+is asserted un-called on open, on decline, and on every browser-tab path —
+it fires only from the standalone variant's explicit accept.
+
+**Two variants, branched on the same `SaveGate` the save-for-offline flow
+uses** (decision 2026-07-16):
+
+- **Standalone (installed app)** — the real subscribe ask. Accept → the
+  existing `useSubscribeToPush()` flow unchanged. The modal owns outcome
+  UI: a success phase (closing the old "no subscribed-confirmation" gap),
+  a distinct denied phase (blocked at browser level, settings pointer, no
+  dead retry button), and a distinct failed phase with `try_again` —
+  retry is cheap because a granted permission resolves instantly without
+  re-prompting.
+- **Browser tab** — NO subscription possible, by product policy:
+  subscriptions are app-only, so the tab variant converts notification
+  interest into installs instead of losing it. It reuses the exact install
+  mechanics `SaveGateModal` uses — `useTriggerInstallPrompt()` when a
+  `beforeinstallprompt` is stashed, otherwise the hedged manual copy /
+  iOS share-menu steps, now extracted into `InstallInstructions.tsx`
+  (shared, not duplicated) — plus the same mutual already-installed /
+  not-installed escape hatches. The `open-app` and `cannot-install` gate
+  reasons get honest notification-flavoured guidance.
+
+**CTA gating changed with it** (`PushOptInCta.tsx`): the CTA now renders
+in tabs too — including iOS Safari tabs with no Push API at all, exactly
+the audience the install nudge exists for — and hides in a tab once
+permission is known-spent at the origin. In standalone it additionally
+returns for the granted-but-unsubscribed case (a subscribe that failed
+after the grant, detected via `pushManager.getSubscription()`): the old
+"granted hides the CTA" tradeoff was justified by "a tap couldn't prompt
+again", which the modal made obsolete.
+
+**Decline semantics (decision + rationale):** declining the modal (either
+variant: "not now" or closing without accepting) suppresses the CTA for
+the **session only**, via the non-persisted `pushOptInDeclinedSession`
+store flag. Three suppression tiers now exist: persisted
+`pushOptInDismissed` is reserved for a spent NATIVE ask; the session flag
+covers soft-prompt declines (persisting those would recreate the
+near-unrecoverable state the modal exists to avoid); no suppression at
+all after an accept — even a failed one, so the failed state stays
+retryable. Full note in `uiSlice.ts`.
+
+**Analytics quartet** added to the `events` allowlist, mirroring the
+`install_*` naming: `notify_prompt_shown` / `notify_install_nudge_shown`
+(the two variants becoming visible), `notify_accepted` (accepting OUR
+prompt — fires before the native ask, so grant rate is inferable against
+the `push_subscriptions` table), `notify_declined` (closing either
+variant without accepting/engaging). Install actions inside the nudge
+keep reporting through the existing `install_*` events. Anonymous /
+aggregate rules unchanged.
+
+**New on-device checks** (append to the checklist above):
+8. Standalone modal → accept → native prompt → notification subscribe —
+   the full soft-prompt path on a real installed PWA (iOS + Android).
+9. Tab modal → install nudge routes correctly on Chrome for Android
+   (native `beforeinstallprompt` path) AND on a no-`beforeinstallprompt`
+   Chromium browser like Opera (must show the hedged manual copy, not a
+   dead install button — same field finding as 2026-07-02).
+10. iOS Safari TAB now shows the CTA (it used to hide) → modal must show
+   the share-menu install steps, and nothing on that path may touch the
+   Notification API (it doesn't exist there — a regression here is a
+   hard crash).
+
+### Decided 2026-07-17 — NO further app-gate abstraction yet (rule of three)
+
+Analysed save-for-offline vs push opt-in for a shared "app-gated
+capability" abstraction (a `useAppGate(feature)` hook / generic
+`AppGateModal` shell). **Decision: don't — the current sharing level is
+the right stopping point.** The full pattern map lives in the Reference
+section ("App-gated capability pattern"); the short version of why:
+
+- Everything mechanical is ALREADY shared: `useSaveGate` (the decision),
+  `useTriggerInstallPrompt` (the action), `InstallInstructions.tsx` (the
+  field-tested manual/iOS copy), `TextButton`, `Modal`. What remains
+  duplicated between `SaveGateModal` and `PushOptInModal` is ~40 lines of
+  declarative branch JSX each — and the parts that vary inside it (lead
+  copy, close-time analytics, dismiss-flag semantics) are exactly the
+  parts that would become 6-8 configuration props on a generic shell.
+- The two modals deliberately DISAGREE at close time (SaveGateModal:
+  `pwaInstallDismissed` + conditional `install_dismissed`;
+  PushOptInModal: `notify_declined` + session-only flag, never touches
+  `pwaInstallDismissed` — the uiSlice "one ask must not answer the
+  other" rule). A shared shell would have to take that behaviour as
+  callbacks, i.e. it would abstract nothing.
+- PushOptInModal's standalone subscribe variant (phase machine:
+  idle/busy/subscribed/denied/failed) has no SaveGateModal counterpart —
+  in a generic shell it becomes an opaque slot that bypasses the
+  abstraction.
+
+**Revisit trigger:** when a THIRD app-gated capability appears (anything
+"this lives in the installed app" — background-sync surfaces, badging,
+share-target…). At that point: extract the branch ladder as an
+`AppGateGuidance` component taking per-branch lead copy, and consider
+renaming `useSaveGate` → `useAppGate` (it is already feature-agnostic;
+only its name is save-specific — a rename was skipped now because it
+would churn many imports/tests for zero behaviour).
 
 ### Fixed 2026-07-05 — M3: `_headers` caching + CSP (TECH_DEBT 19 itself still blocked)
 
@@ -841,6 +950,44 @@ a DIFFERENT, already-fixed bug:
 ---
 
 ## Reference — key design decisions from the PWA work
+
+### App-gated capability pattern (2026-07-17)
+
+The recurring shape for "this capability lives in the installed app":
+detect context → either enable the feature or convert interest into an
+install with the right message per situation. Two instances exist
+(save-for-offline; push opt-in). Build the NEXT one from these layers
+instead of rediscovering them:
+
+1. **Decision — `useSaveGate()`** (`hooks/useSaveGate.ts`). One hook, all
+   inputs: hydration (`pending`), `isStandalone()` (`allow: true`),
+   persisted `pwaInstalled` (`open-app`), `detectPlatform()` + stashed
+   `beforeinstallprompt` (`needs-install` chromium/ios-safari +
+   `canPrompt`), else `cannot-install`. Feature-agnostic despite the
+   name.
+2. **Action — `useTriggerInstallPrompt()`** (same file). Fires the native
+   prompt, handles choice, clears the single-use event + stash, tracks
+   `install_dismissed`. Shared by InstallCta + both modals.
+3. **Guidance mechanics — `InstallInstructions.tsx`** (`ManualInstallHint`
+   hedged Chromium copy — Opera field finding 2026-07-02 — and
+   `IosInstallSteps`) **+ `TextButton`** for the mutual
+   already-installed/not-installed escape hatches (which flip
+   `pwaInstalled` WITHOUT closing, so the modal re-renders the corrected
+   branch in place).
+4. **Feature skin — a per-feature modal** (`SaveGateModal`,
+   `PushOptInModal`) owning: lead copy per gate branch, close-time
+   analytics + suppression semantics, and any feature-only variant
+   (push's standalone subscribe phases). This layer is deliberately NOT
+   generic — see the 2026-07-17 decision above; extract an
+   `AppGateGuidance` branch-ladder component only when a third feature
+   lands.
+5. **Entry point — a CTA with feature-appropriate gating.** Three
+   coexisting policies, all deliberate: always-visible user-initiated
+   action (`SaveForOfflineButton` — taps always answer), passive nudge
+   hidden after dismissal (`InstallCta`), passive nudge with a
+   permission/subscription lifecycle + session-decline tier
+   (`PushOptInCta`). Do not unify these; the divergence IS the design
+   (uiSlice.ts documents the dismiss-semantic split).
 
 ### Cache lifecycle on activate
 

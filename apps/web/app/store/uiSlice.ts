@@ -64,10 +64,25 @@ export type UiSlice = {
    *  is `"denied"` the browser itself blocks re-prompting forever anyway;
    *  this flag's real job is covering the dismissed-without-choosing gap. */
   pushOptInDismissed: boolean;
+  /** Declined the push soft-prompt modal this SESSION (closed it, or tapped
+   *  "not now", without accepting). Deliberately NOT persisted — a third
+   *  suppression tier between the other two:
+   *   - `pushOptInDismissed` (persisted, forever) is reserved for a spent
+   *     NATIVE permission ask — once the browser prompt was declined,
+   *     re-nudging is pointless (the browser blocks re-prompting) or nagging.
+   *   - This flag covers declining OUR soft prompt, which is exactly the
+   *     recoverable "not now" the soft-prompt pattern exists to preserve:
+   *     hiding the CTA for the rest of the session respects the no, and
+   *     letting it return next visit keeps the ask alive for a "not now"
+   *     that meant *not now*. Persisting it would recreate the
+   *     near-unrecoverable state the modal was built to avoid.
+   *  In-memory store state resets on page load, which IS the session scope. */
+  pushOptInDeclinedSession: boolean;
   setPwaInstalled: (v: boolean) => void;
   setPwaInstallDismissed: (v: boolean) => void;
   setDeferredPrompt: (e: BeforeInstallPromptEvent | null) => void;
   setPushOptInDismissed: (v: boolean) => void;
+  setPushOptInDeclinedSession: (v: boolean) => void;
 };
 
 export const createUiSlice: StateCreator<UiSlice, [], [], UiSlice> = (set) => ({
@@ -83,8 +98,10 @@ export const createUiSlice: StateCreator<UiSlice, [], [], UiSlice> = (set) => ({
   pwaInstallDismissed: false,
   deferredPrompt: null,
   pushOptInDismissed: false,
+  pushOptInDeclinedSession: false,
   setPwaInstalled: (v) => set({ pwaInstalled: v }),
   setPwaInstallDismissed: (v) => set({ pwaInstallDismissed: v }),
   setDeferredPrompt: (e) => set({ deferredPrompt: e }),
   setPushOptInDismissed: (v) => set({ pushOptInDismissed: v }),
+  setPushOptInDeclinedSession: (v) => set({ pushOptInDeclinedSession: v }),
 });

@@ -22,6 +22,20 @@ describe("validate (api/event)", () => {
     expect(validate({ event_type: "totally_made_up_event", is_standalone: false })).toBeNull();
   });
 
+  // The accept-everything loop above would pass even if these were dropped
+  // from the allowlist — this locks their PRESENCE, since the soft-prompt
+  // modal fires all four (feat/push-optin-modal, 2026-07-16).
+  it("keeps the push opt-in quartet on the allowlist", () => {
+    for (const eventType of [
+      "notify_prompt_shown",
+      "notify_accepted",
+      "notify_declined",
+      "notify_install_nudge_shown",
+    ]) {
+      expect(TRACKABLE_EVENT_TYPES).toContain(eventType);
+    }
+  });
+
   it("rejects a missing event_type", () => {
     expect(validate({ is_standalone: true })).toBeNull();
   });
