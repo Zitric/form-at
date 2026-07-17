@@ -1,11 +1,16 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "~/components/Button";
 import { PushOptInModal } from "~/components/PushOptInModal";
 import { useFirstLoad } from "~/hooks/useFirstLoad";
-import { type PushSubscribeOutcome, isPushSupported } from "~/hooks/usePushSubscription";
+import {
+  type PushSubscribeOutcome,
+  isPushSupported,
+  postSubscription,
+} from "~/hooks/usePushSubscription";
 import { useSaveGate } from "~/hooks/useSaveGate";
 import { useStore, useStoreHydrated } from "~/store";
 import { cn } from "~/utils/cn";
+import { isStandalone } from "~/utils/installCapability";
 
 // Push-notification opt-in CTA — home route, stacked directly below
 // <InstallCta> in the same passive-nudge zone (see routes/index.tsx).
@@ -55,7 +60,18 @@ export function PushOptInCta({ className }: { className?: string }) {
     navigator.serviceWorker.ready
       .then((registration) => registration.pushManager.getSubscription())
       .then((subscription) => {
-        if (!cancelled) setHasSubscription(subscription !== null);
+        if (cancelled) return;
+        setHasSubscription(subscription !== null);
+        // Reconcile: a local subscription can exist with NO server row —
+        // the field case was a device that subscribed before the
+        // push_subscriptions migration was applied (subscribe succeeded at
+        // the push service, the POST hit a missing table). The CTA hides
+        // on it, so without this re-POST the device would silently never
+        // receive a send again. Idempotent (INSERT OR REPLACE on
+        // endpoint). Standalone-only: a tab can share the origin's
+        // subscription, and re-POSTing from there would flip the row's
+        // is_standalone.
+        if (subscription && isStandalone()) postSubscription(subscription);
       })
       .catch(() => {
         if (!cancelled) setHasSubscription(true);
@@ -75,10 +91,13 @@ export function PushOptInCta({ className }: { className?: string }) {
   const tabOfferable = permission === null || permission === "default";
   const showCta = !suppressed && (gate.allow === true ? standaloneOfferable : tabOfferable);
 
-  const handleOutcome = (outcome: PushSubscribeOutcome) => {
+  // Stable (useCallback) because the modal folds this into `applyOutcome`,
+  // which its open-effect depends on — an unstable identity would re-fire
+  // that effect on every render here and re-run the resume subscribe.
+  const handleOutcome = useCallback((outcome: PushSubscribeOutcome) => {
     if (isPushSupported()) setPermission(Notification.permission);
     if (outcome === "subscribed") setHasSubscription(true);
-  };
+  }, []);
 
   // The modal is a SIBLING of the gated button, not inside it — a subscribe
   // or decline flips `showCta` false while the modal is still open (success

@@ -25,13 +25,32 @@ function setGate(gate: SaveGate) {
 }
 
 function mockNotification(permission: NotificationPermission) {
+  const requestPermission = vi.fn().mockResolvedValue(permission);
   Object.defineProperty(window, "Notification", {
     configurable: true,
-    value: { permission, requestPermission: vi.fn().mockResolvedValue(permission) },
+    value: { permission, requestPermission },
   });
+  return requestPermission;
 }
 
-function mockPushSupport({ subscribed }: { subscribed: boolean }) {
+const existingSubscriptionJson = {
+  endpoint: "https://push.example/existing",
+  keys: { p256dh: "p", auth: "a" },
+};
+
+// `isStandalone()` checks `navigator.standalone` before falling through to
+// matchMedia — defining it is the cheapest way to fake app context per test.
+function mockStandaloneDisplayMode() {
+  Object.defineProperty(navigator, "standalone", { configurable: true, value: true });
+}
+
+function mockPushSupport({
+  subscribed,
+  subscribeImpl = () => Promise.reject(new Error("not exercised here")),
+}: {
+  subscribed: boolean;
+  subscribeImpl?: () => Promise<unknown>;
+}) {
   Object.defineProperty(window, "PushManager", {
     configurable: true,
     value: class PushManager {},
@@ -41,8 +60,10 @@ function mockPushSupport({ subscribed }: { subscribed: boolean }) {
     value: {
       ready: Promise.resolve({
         pushManager: {
-          getSubscription: vi.fn().mockResolvedValue(subscribed ? { endpoint: "x" } : null),
-          subscribe: vi.fn().mockRejectedValue(new Error("not exercised here")),
+          getSubscription: vi
+            .fn()
+            .mockResolvedValue(subscribed ? { toJSON: () => existingSubscriptionJson } : null),
+          subscribe: vi.fn(subscribeImpl),
         },
       }),
     },
@@ -53,6 +74,14 @@ function clearPushGlobals() {
   Reflect.deleteProperty(window, "PushManager");
   Reflect.deleteProperty(navigator, "serviceWorker");
   Reflect.deleteProperty(window, "Notification");
+  Reflect.deleteProperty(navigator, "standalone");
+}
+
+function pushSubscribeBeacons(): Blob[] {
+  const spy = navigator.sendBeacon as unknown as ReturnType<typeof vi.fn>;
+  return spy.mock.calls
+    .filter(([url]) => url === "/api/push-subscribe")
+    .map(([, blob]) => blob as Blob);
 }
 
 const tabGate: SaveGate = {
@@ -164,6 +193,48 @@ describe("PushOptInCta gating — suppression flags", () => {
   });
 });
 
+// Reconcile path (field bug 2026-07-17): a device subscribed BEFORE the
+// push_subscriptions migration was applied holds a live local subscription
+// with no server row. The CTA correctly hides on it — so the mount effect
+// must re-POST the existing subscription (idempotent INSERT OR REPLACE) or
+// that device silently never receives a send again.
+describe("PushOptInCta — orphaned-subscription reconcile", () => {
+  it("re-beacons an existing subscription on mount in standalone", async () => {
+    setGate({ allow: true });
+    mockStandaloneDisplayMode();
+    mockPushSupport({ subscribed: true });
+    mockNotification("granted");
+    render(<PushOptInCta />);
+
+    await waitFor(() => expect(pushSubscribeBeacons()).toHaveLength(1));
+    const [blob] = pushSubscribeBeacons();
+    expect(JSON.parse(await (blob as Blob).text())).toMatchObject(existingSubscriptionJson);
+    // Still hidden — the device IS subscribed; only the server row was missing.
+    expect(ctaButton()).not.toBeInTheDocument();
+  });
+
+  it("does NOT re-beacon from a browser tab (a shared subscription's row must keep is_standalone)", async () => {
+    setGate(tabGate);
+    mockPushSupport({ subscribed: true });
+    mockNotification("granted");
+    render(<PushOptInCta />);
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(pushSubscribeBeacons()).toHaveLength(0);
+  });
+
+  it("does not beacon when there is no existing subscription", async () => {
+    setGate({ allow: true });
+    mockStandaloneDisplayMode();
+    mockPushSupport({ subscribed: false });
+    mockNotification("granted");
+    render(<PushOptInCta />);
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(pushSubscribeBeacons()).toHaveLength(0);
+  });
+});
+
 describe("PushOptInCta → PushOptInModal wiring", () => {
   it("tapping the CTA opens the modal for the current variant", async () => {
     setGate(tabGate);
@@ -173,6 +244,45 @@ describe("PushOptInCta → PushOptInModal wiring", () => {
     await user.click(await screen.findByRole("button", { name: "[ notify_me ]" }));
 
     expect(screen.getByText(/notifications live in the Form:at app/i)).toBeInTheDocument();
+  });
+
+  it("granted-but-unsubscribed tap goes straight to subscribe — no soft prompt, no requestPermission", async () => {
+    setGate({ allow: true });
+    mockPushSupport({
+      subscribed: false,
+      subscribeImpl: () =>
+        Promise.resolve({ toJSON: () => ({ endpoint: "https://push.example/x", keys: {} }) }),
+    });
+    const requestPermission = mockNotification("granted");
+    render(<PushOptInCta />);
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "[ notify_me ]" }));
+
+    expect(await screen.findByText(/you're in/i)).toBeInTheDocument();
+    expect(screen.queryByText(/hear about new sets/i)).not.toBeInTheDocument();
+    expect(requestPermission).not.toHaveBeenCalled();
+    // Subscribed → the CTA hides while the modal (a sibling) keeps its success copy.
+    await waitFor(() => expect(ctaButton()).not.toBeInTheDocument());
+    expect(screen.getByText(/you're in/i)).toBeInTheDocument();
+  });
+
+  it("closing a failed direct subscribe keeps the CTA — not a decline, no session flag", async () => {
+    setGate({ allow: true });
+    mockPushSupport({
+      subscribed: false,
+      subscribeImpl: () => Promise.reject(new Error("push service unreachable")),
+    });
+    mockNotification("granted");
+    render(<PushOptInCta />);
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "[ notify_me ]" }));
+    await screen.findByRole("button", { name: /try_again/ });
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(ctaButton()).toBeInTheDocument();
+    expect(useStore.getState().pushOptInDeclinedSession).toBe(false);
   });
 
   it("declining the modal suppresses the CTA for the session WITHOUT touching the persisted flag", async () => {

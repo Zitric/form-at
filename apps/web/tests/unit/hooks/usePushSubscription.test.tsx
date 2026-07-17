@@ -91,6 +91,29 @@ describe("useSubscribeToPush", () => {
     expect(useStore.getState().pushOptInDismissed).toBe(true);
   });
 
+  // Locks the resume-path guarantee (granted-but-unsubscribed recovery,
+  // 2026-07-17): when the grant already exists, the hook must not call
+  // requestPermission at all — the "native dialog only ever fires from a
+  // modal accept" contract stays literal instead of relying on the browser
+  // treating a granted-state prompt call as a no-op.
+  it("skips requestPermission entirely when permission is already granted", async () => {
+    mockPushSupport(() =>
+      Promise.resolve({ toJSON: () => ({ endpoint: "https://push.example/x", keys: {} }) }),
+    );
+    const requestPermission = vi.fn().mockResolvedValue("granted");
+    Object.defineProperty(window, "Notification", {
+      configurable: true,
+      value: { permission: "granted", requestPermission },
+    });
+    vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
+
+    const { result } = renderHook(() => useSubscribeToPush());
+    const outcome = await result.current();
+
+    expect(outcome).toBe("subscribed");
+    expect(requestPermission).not.toHaveBeenCalled();
+  });
+
   it("subscribes and posts the subscription when permission is granted", async () => {
     const fakeSubscription = {
       toJSON: () => ({
