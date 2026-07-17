@@ -1,9 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "~/components/Button";
 import { IosInstallSteps, ManualInstallHint } from "~/components/InstallInstructions";
 import { Modal } from "~/components/Modal";
 import { TextButton } from "~/components/TextButton";
-import { type PushSubscribeOutcome, useSubscribeToPush } from "~/hooks/usePushSubscription";
+import {
+  type PushSubscribeOutcome,
+  isPushSupported,
+  useSubscribeToPush,
+} from "~/hooks/usePushSubscription";
 import { type SaveGate, useTriggerInstallPrompt } from "~/hooks/useSaveGate";
 import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";
@@ -40,6 +44,9 @@ type SubscribePhase = "idle" | "busy" | "subscribed" | "denied" | "failed";
 //   gate.allow === true (standalone app) — the real subscribe ask. Accept →
 //     `useSubscribeToPush()` (which owns the native permission request +
 //     subscribe + POST). Decline → close, session-only CTA suppression.
+//     When permission is ALREADY granted (granted-but-unsubscribed — a
+//     subscribe that failed after its grant), there's no ask to make: the
+//     modal skips the prompt and resumes the subscribe directly on open.
 //
 //   any browser-tab reason — NO subscription is possible here, by design:
 //     push subscriptions are app-only product policy, so the tab variant
@@ -65,12 +72,43 @@ export function PushOptInModal({ open, onClose, onDeclined, onOutcome, gate }: P
 
   const isSubscribeVariant = gate.allow === true;
 
+  // Stable (useCallback) because the open-effect below depends on it — an
+  // unstable identity would re-fire the effect mid-open and re-run the
+  // resume subscribe on every parent render.
+  const applyOutcome = useCallback(
+    (outcome: PushSubscribeOutcome) => {
+      onOutcome(outcome);
+      if (outcome === "subscribed") setPhase("subscribed");
+      else if (outcome === "denied") setPhase("denied");
+      // "failed" and "unsupported" both land here; "unsupported" is unreachable
+      // in practice (the CTA only offers this variant when isPushSupported()).
+      else setPhase("failed");
+    },
+    [onOutcome],
+  );
+
   useEffect(() => {
     if (!open) return;
-    setPhase("idle");
     engagedRef.current = false;
+    // Resume path: permission was granted in an earlier session but no
+    // subscription survived (the subscribe after the grant failed). There
+    // is no ask left to make and no native prompt that could fire, so the
+    // soft prompt would be noise — subscribe directly instead.
+    // `Notification.permission` is read HERE, not taken as a prop or dep:
+    // a prop would flip mid-open when a normal accept lands its grant, and
+    // this effect re-firing on that flip would subscribe a second time.
+    // Engaged from the start — closing a failed resume is not a decline
+    // (the CTA must stay retryable) — and no notify_* events fire: the
+    // funnel measures the soft prompt, and this path never shows one.
+    if (isSubscribeVariant && isPushSupported() && Notification.permission === "granted") {
+      engagedRef.current = true;
+      setPhase("busy");
+      void subscribe().then(applyOutcome);
+      return;
+    }
+    setPhase("idle");
     trackEvent(isSubscribeVariant ? "notify_prompt_shown" : "notify_install_nudge_shown");
-  }, [open, isSubscribeVariant, trackEvent]);
+  }, [open, isSubscribeVariant, subscribe, applyOutcome, trackEvent]);
 
   const handleClose = () => {
     if (!engagedRef.current) {
@@ -84,13 +122,7 @@ export function PushOptInModal({ open, onClose, onDeclined, onOutcome, gate }: P
     engagedRef.current = true;
     trackEvent("notify_accepted");
     setPhase("busy");
-    const outcome = await subscribe();
-    onOutcome(outcome);
-    if (outcome === "subscribed") setPhase("subscribed");
-    else if (outcome === "denied") setPhase("denied");
-    // "failed" and "unsupported" both land here; "unsupported" is unreachable
-    // in practice (the CTA only offers this variant when isPushSupported()).
-    else setPhase("failed");
+    applyOutcome(await subscribe());
   };
 
   const handleNativeInstall = async () => {
@@ -117,6 +149,10 @@ export function PushOptInModal({ open, onClose, onDeclined, onOutcome, gate }: P
         notifications for <span className="text-white">formatglasgow.com</span> in your device
         settings — we can't re-ask from here.
       </p>
+    ) : phase === "busy" ? (
+      // Neutral enough for both routes into busy: the normal accept (where
+      // the native prompt may be up) and the resume path (where it never is).
+      <p className="text-sm text-grey leading-relaxed">setting up notifications…</p>
     ) : phase === "failed" ? (
       <div className="flex flex-col gap-4">
         <p className="text-sm text-grey leading-relaxed">
@@ -137,12 +173,7 @@ export function PushOptInModal({ open, onClose, onDeclined, onOutcome, gate }: P
         <p className="text-xs text-grey/70 leading-relaxed">
           your browser will ask to confirm — that part's one tap.
         </p>
-        <Button
-          variant="secondary"
-          onClick={() => void handleAccept()}
-          disabled={phase === "busy"}
-          className="text-left"
-        >
+        <Button variant="secondary" onClick={() => void handleAccept()} className="text-left">
           enable_notifications
         </Button>
         <TextButton onClick={handleClose}>not now</TextButton>

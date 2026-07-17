@@ -617,6 +617,45 @@ aggregate rules unchanged.
    Notification API (it doesn't exist there — a regression here is a
    hard crash).
 
+### Fixed 2026-07-17 — granted-but-unsubscribed resume path (field bug)
+
+Field report (Android, installed app, post-PR-#7 build): CTA invisible
+for a device with `Notification.permission === "granted"` and no
+`push_subscriptions` row. **Root cause: an orphaned LOCAL subscription.**
+The device tapped the old pre-modal `notify_me` on 2026-07-16 BEFORE the
+push_subscriptions migration was applied — the grant and
+`pushManager.subscribe()` succeeded (a live subscription exists at the
+push service), but the fire-and-forget POST hit a missing table. Today's
+`getSubscription()` gating then hides the CTA — *correctly*, because the
+device IS subscribed; what's missing is only the server row. (An earlier
+diagnosis this session blamed an unmerged branch — wrong, made from
+stale local refs without fetching; PR #7 was merged and deployed.)
+
+Two changes:
+
+- **Reconcile re-beacon (the actual field fix):** the CTA's mount effect
+  now re-POSTs an existing local subscription via the shared
+  `postSubscription()` (extracted in `usePushSubscription.ts`) —
+  `/api/push-subscribe` is an idempotent `INSERT OR REPLACE` on
+  `endpoint`, so healing a missing row is safe and repeat sends are
+  no-ops. Standalone-only: a tab can share the origin's subscription and
+  a tab re-POST would flip the row's `is_standalone`. The same edge
+  covers any future dead-subscription cleanup that deletes a row for a
+  still-live device.
+- **Granted-but-unsubscribed resume path:** when `getSubscription()`
+  really returns null but permission is granted (a subscribe that failed
+  before reaching the push service), the modal used to reopen the soft
+  prompt — a redundant ask. Now it resumes the subscribe directly on
+  open: busy → subscribed/failed, engaged-from-start (closing a failed
+  resume is not a decline), outside the notify_* funnel (no ask was
+  shown), and `useSubscribeToPush` skips `requestPermission` entirely
+  when the grant already exists — the "native dialog only from a modal
+  accept" guarantee is now literal, unit-locked in all three suites.
+
+New on-device check: on the affected Android device, open the installed
+app's home once → `SELECT endpoint FROM push_subscriptions` must show the
+device's row, with the CTA still hidden and NO permission dialog.
+
 ### Decided 2026-07-17 — NO further app-gate abstraction yet (rule of three)
 
 Analysed save-for-offline vs push opt-in for a shared "app-gated

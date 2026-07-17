@@ -21,11 +21,14 @@ vi.mock("~/hooks/useSaveGate", () => ({
 
 // Same spec-shaped per-test mocks as usePushSubscription.test.tsx — jsdom
 // has none of Notification / PushManager / navigator.serviceWorker.
-function mockNotification(outcome: NotificationPermission) {
+function mockNotification(
+  outcome: NotificationPermission,
+  current: NotificationPermission = "default",
+) {
   const requestPermission = vi.fn().mockResolvedValue(outcome);
   Object.defineProperty(window, "Notification", {
     configurable: true,
-    value: { requestPermission },
+    value: { permission: current, requestPermission },
   });
   return requestPermission;
 }
@@ -220,6 +223,44 @@ describe("PushOptInModal — subscribe outcomes through the modal", () => {
 
     await user.click(screen.getByRole("button", { name: "Close" }));
     expect(onDeclined).not.toHaveBeenCalled();
+  });
+});
+
+// The resume path (granted-but-unsubscribed): permission was granted in an
+// earlier session but the subscribe after it never completed. There is no
+// ask left to make, so the modal must skip the soft prompt, subscribe
+// directly, and stay outside the notify_* funnel entirely.
+describe("PushOptInModal — granted-but-unsubscribed resume", () => {
+  it("skips the soft prompt and subscribes on open — requestPermission never called", async () => {
+    mockPushSupport(() =>
+      Promise.resolve({ toJSON: () => ({ endpoint: "https://push.example/x", keys: {} }) }),
+    );
+    const requestPermission = mockNotification("granted", "granted");
+    const beaconSpy = vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
+    const { onOutcome } = renderModal(standaloneGate);
+
+    expect(await screen.findByText(/you're in/i)).toBeInTheDocument();
+    expect(onOutcome).toHaveBeenCalledWith("subscribed");
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(screen.queryByText(/hear about new sets/i)).not.toBeInTheDocument();
+
+    const types = await beaconedEventTypes(beaconSpy);
+    expect(types).not.toContain("notify_prompt_shown");
+    expect(types).not.toContain("notify_accepted");
+  });
+
+  it("failed resume is retryable, and closing it is NOT a decline", async () => {
+    mockPushSupport(() => Promise.reject(new Error("push service unreachable")));
+    mockNotification("granted", "granted");
+    const beaconSpy = vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
+    const { onDeclined } = renderModal(standaloneGate);
+
+    expect(await screen.findByRole("button", { name: /try_again/ })).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(onDeclined).not.toHaveBeenCalled();
+    expect(await beaconedEventTypes(beaconSpy)).not.toContain("notify_declined");
   });
 });
 

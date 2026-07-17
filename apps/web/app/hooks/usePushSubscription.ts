@@ -34,6 +34,31 @@ export function isPushSupported(): boolean {
   return typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window;
 }
 
+// POSTs a subscription's wire shape to the server. Fire-and-forget,
+// matching the analytics endpoints' own convention (`useTrackEvent`) — a
+// failed POST means the subscription exists in the browser but not in our
+// D1 table. That exact orphaned state happened in the field (a device
+// subscribed on 2026-07-16 before the push_subscriptions migration was
+// applied), which is why this is exported: the CTA re-beacons an existing
+// subscription on mount to heal a missing row. `/api/push-subscribe` is
+// INSERT OR REPLACE on `endpoint`, so re-sends are idempotent.
+export function postSubscription(subscription: PushSubscription): void {
+  const json = subscription.toJSON();
+  navigator.sendBeacon(
+    "/api/push-subscribe",
+    new Blob(
+      [
+        JSON.stringify({
+          endpoint: json.endpoint,
+          keys: json.keys,
+          is_standalone: isStandalone(),
+        }),
+      ],
+      { type: "application/json" },
+    ),
+  );
+}
+
 // Orchestrates the opt-in flow: request permission → subscribe →
 // POST to the server. Returns an outcome so the calling component can
 // decide what (if anything) to show — this hook doesn't own any UI.
@@ -47,7 +72,13 @@ export function useSubscribeToPush(): () => Promise<PushSubscribeOutcome> {
     // stack frame in most browsers (same mobile constraint this codebase
     // already works around for audio.play() in playerSlice.ts) — this
     // function is called directly from a button onClick, preserving that.
-    const permission = await Notification.requestPermission();
+    // Skipped entirely when the grant already exists (the resume path:
+    // granted in an earlier session, subscribe never completed) — a no-op
+    // prompt call is still a prompt call, and the soft-prompt guarantee
+    // ("the native dialog only ever fires from a modal accept") stays
+    // literal rather than relying on the browser treating it as a no-op.
+    const permission =
+      Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
     if (permission !== "granted") {
       // Covers both an explicit "Block" AND a dismissed-without-choosing
       // prompt (Notification API resolves both cases outside "granted" —
@@ -73,26 +104,7 @@ export function useSubscribeToPush(): () => Promise<PushSubscribeOutcome> {
       return "failed";
     }
 
-    const json = subscription.toJSON();
-    // Fire-and-forget, matching the analytics endpoints' own convention
-    // (`useTrackEvent`) — a failed POST here means the subscription
-    // exists in the browser but not in our D1 table, so the send script
-    // simply won't reach this device. Not silently ignored in a way that
-    // breaks anything else in the app; acceptable given Phase 2 has no
-    // retry/reconciliation UI yet (documented as a known gap).
-    navigator.sendBeacon(
-      "/api/push-subscribe",
-      new Blob(
-        [
-          JSON.stringify({
-            endpoint: json.endpoint,
-            keys: json.keys,
-            is_standalone: isStandalone(),
-          }),
-        ],
-        { type: "application/json" },
-      ),
-    );
+    postSubscription(subscription);
 
     return "subscribed";
   }, [setPushOptInDismissed]);
