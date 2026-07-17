@@ -617,6 +617,40 @@ aggregate rules unchanged.
    Notification API (it doesn't exist there — a regression here is a
    hard crash).
 
+### Decided 2026-07-17 — NO further app-gate abstraction yet (rule of three)
+
+Analysed save-for-offline vs push opt-in for a shared "app-gated
+capability" abstraction (a `useAppGate(feature)` hook / generic
+`AppGateModal` shell). **Decision: don't — the current sharing level is
+the right stopping point.** The full pattern map lives in the Reference
+section ("App-gated capability pattern"); the short version of why:
+
+- Everything mechanical is ALREADY shared: `useSaveGate` (the decision),
+  `useTriggerInstallPrompt` (the action), `InstallInstructions.tsx` (the
+  field-tested manual/iOS copy), `TextButton`, `Modal`. What remains
+  duplicated between `SaveGateModal` and `PushOptInModal` is ~40 lines of
+  declarative branch JSX each — and the parts that vary inside it (lead
+  copy, close-time analytics, dismiss-flag semantics) are exactly the
+  parts that would become 6-8 configuration props on a generic shell.
+- The two modals deliberately DISAGREE at close time (SaveGateModal:
+  `pwaInstallDismissed` + conditional `install_dismissed`;
+  PushOptInModal: `notify_declined` + session-only flag, never touches
+  `pwaInstallDismissed` — the uiSlice "one ask must not answer the
+  other" rule). A shared shell would have to take that behaviour as
+  callbacks, i.e. it would abstract nothing.
+- PushOptInModal's standalone subscribe variant (phase machine:
+  idle/busy/subscribed/denied/failed) has no SaveGateModal counterpart —
+  in a generic shell it becomes an opaque slot that bypasses the
+  abstraction.
+
+**Revisit trigger:** when a THIRD app-gated capability appears (anything
+"this lives in the installed app" — background-sync surfaces, badging,
+share-target…). At that point: extract the branch ladder as an
+`AppGateGuidance` component taking per-branch lead copy, and consider
+renaming `useSaveGate` → `useAppGate` (it is already feature-agnostic;
+only its name is save-specific — a rename was skipped now because it
+would churn many imports/tests for zero behaviour).
+
 ### Fixed 2026-07-05 — M3: `_headers` caching + CSP (TECH_DEBT 19 itself still blocked)
 
 The launch-blocker session ran into hard preconditions: the custom domain
@@ -916,6 +950,44 @@ a DIFFERENT, already-fixed bug:
 ---
 
 ## Reference — key design decisions from the PWA work
+
+### App-gated capability pattern (2026-07-17)
+
+The recurring shape for "this capability lives in the installed app":
+detect context → either enable the feature or convert interest into an
+install with the right message per situation. Two instances exist
+(save-for-offline; push opt-in). Build the NEXT one from these layers
+instead of rediscovering them:
+
+1. **Decision — `useSaveGate()`** (`hooks/useSaveGate.ts`). One hook, all
+   inputs: hydration (`pending`), `isStandalone()` (`allow: true`),
+   persisted `pwaInstalled` (`open-app`), `detectPlatform()` + stashed
+   `beforeinstallprompt` (`needs-install` chromium/ios-safari +
+   `canPrompt`), else `cannot-install`. Feature-agnostic despite the
+   name.
+2. **Action — `useTriggerInstallPrompt()`** (same file). Fires the native
+   prompt, handles choice, clears the single-use event + stash, tracks
+   `install_dismissed`. Shared by InstallCta + both modals.
+3. **Guidance mechanics — `InstallInstructions.tsx`** (`ManualInstallHint`
+   hedged Chromium copy — Opera field finding 2026-07-02 — and
+   `IosInstallSteps`) **+ `TextButton`** for the mutual
+   already-installed/not-installed escape hatches (which flip
+   `pwaInstalled` WITHOUT closing, so the modal re-renders the corrected
+   branch in place).
+4. **Feature skin — a per-feature modal** (`SaveGateModal`,
+   `PushOptInModal`) owning: lead copy per gate branch, close-time
+   analytics + suppression semantics, and any feature-only variant
+   (push's standalone subscribe phases). This layer is deliberately NOT
+   generic — see the 2026-07-17 decision above; extract an
+   `AppGateGuidance` branch-ladder component only when a third feature
+   lands.
+5. **Entry point — a CTA with feature-appropriate gating.** Three
+   coexisting policies, all deliberate: always-visible user-initiated
+   action (`SaveForOfflineButton` — taps always answer), passive nudge
+   hidden after dismissal (`InstallCta`), passive nudge with a
+   permission/subscription lifecycle + session-decline tier
+   (`PushOptInCta`). Do not unify these; the divergence IS the design
+   (uiSlice.ts documents the dismiss-semantic split).
 
 ### Cache lifecycle on activate
 
