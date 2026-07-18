@@ -40,6 +40,7 @@ import { isStandalone } from "~/utils/installCapability";
 export function PushOptInCta({ className }: { className?: string }) {
   const hydrated = useStoreHydrated();
   const pushOptInDismissed = useStore((s) => s.pushOptInDismissed);
+  const setPushOptInDismissed = useStore((s) => s.setPushOptInDismissed);
   const pushOptInDeclinedSession = useStore((s) => s.pushOptInDeclinedSession);
   const setPushOptInDeclinedSession = useStore((s) => s.setPushOptInDeclinedSession);
   const gate = useSaveGate();
@@ -47,6 +48,25 @@ export function PushOptInCta({ className }: { className?: string }) {
   const [permission, setPermission] = useState<NotificationPermission | null>(null);
   const [hasSubscription, setHasSubscription] = useState<boolean | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+
+  // The persisted denial flag records a denial OBSERVED at set time — but
+  // live permission can change outside the app entirely (Android app
+  // settings, Chrome site settings, permission resets). Live state wins:
+  // the flag may only suppress the CTA while permission is still "denied";
+  // any other live value means it's stale, so clear it and let the normal
+  // gating re-offer (granted → the direct-subscribe resume path, default →
+  // the full soft prompt). Field bug 2026-07-18: a user who tapped Block,
+  // then re-enabled notifications in Android settings, was locked out
+  // forever because the flag outranked reality.
+  // Read via getState(), not the subscribed value: a flag set mid-session
+  // (dismissing the native prompt leaves permission "default") should keep
+  // this session's suppression and be reconciled on the NEXT mount.
+  useEffect(() => {
+    if (!hydrated || !isPushSupported()) return;
+    if (Notification.permission !== "denied" && useStore.getState().pushOptInDismissed) {
+      setPushOptInDismissed(false);
+    }
+  }, [hydrated, setPushOptInDismissed]);
 
   useEffect(() => {
     if (!isPushSupported()) return;

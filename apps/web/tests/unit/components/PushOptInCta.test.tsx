@@ -193,6 +193,62 @@ describe("PushOptInCta gating — suppression flags", () => {
   });
 });
 
+// Live permission outranks the persisted denial flag (field bug
+// 2026-07-18): permission can change outside the app (Android settings,
+// Chrome site settings, permission resets), so the flag may only suppress
+// the CTA while live permission is still "denied" — anything else means
+// the flag is stale and must be cleared, or a Block later undone in device
+// settings locks the CTA out forever.
+describe("PushOptInCta — persisted denial flag vs live permission", () => {
+  it("flag set but live permission granted: clears the flag, shows the CTA, tap resumes directly", async () => {
+    setGate({ allow: true });
+    useStore.setState({ pushOptInDismissed: true });
+    mockPushSupport({
+      subscribed: false,
+      subscribeImpl: () =>
+        Promise.resolve({ toJSON: () => ({ endpoint: "https://push.example/x", keys: {} }) }),
+    });
+    const requestPermission = mockNotification("granted");
+    render(<PushOptInCta />);
+
+    expect(await screen.findByRole("button", { name: "[ notify_me ]" })).toBeInTheDocument();
+    expect(useStore.getState().pushOptInDismissed).toBe(false);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "[ notify_me ]" }));
+    expect(await screen.findByText(/you're in/i)).toBeInTheDocument();
+    expect(requestPermission).not.toHaveBeenCalled();
+  });
+
+  it("flag set and live permission still denied: stays hidden, flag intact", async () => {
+    setGate({ allow: true });
+    useStore.setState({ pushOptInDismissed: true });
+    mockPushSupport({ subscribed: false });
+    mockNotification("denied");
+    render(<PushOptInCta />);
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(ctaButton()).not.toBeInTheDocument();
+    expect(useStore.getState().pushOptInDismissed).toBe(true);
+  });
+
+  it("flag set but permission reset to default: clears the flag, tap opens the full soft prompt", async () => {
+    setGate({ allow: true });
+    useStore.setState({ pushOptInDismissed: true });
+    mockPushSupport({ subscribed: false });
+    const requestPermission = mockNotification("default");
+    render(<PushOptInCta />);
+
+    expect(await screen.findByRole("button", { name: "[ notify_me ]" })).toBeInTheDocument();
+    expect(useStore.getState().pushOptInDismissed).toBe(false);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "[ notify_me ]" }));
+    expect(await screen.findByText(/hear about new sets/i)).toBeInTheDocument();
+    expect(requestPermission).not.toHaveBeenCalled();
+  });
+});
+
 // Reconcile path (field bug 2026-07-17): a device subscribed BEFORE the
 // push_subscriptions migration was applied holds a live local subscription
 // with no server row. The CTA correctly hides on it — so the mount effect
