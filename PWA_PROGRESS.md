@@ -895,7 +895,7 @@ Both items from the post-merge review's next-PR plan, shipped as two commits.
   header. FAIL: status `200` and a full-size transfer restarting from byte 0.
 - **[FIXED — H2] `skipWaiting` replaced with user-consented update flow.**
   SW no longer self-activates over old clients; it waits, the page shows the
-  gold "new build · tap to reload" toast (`UpdateToast` → `useSwUpdate`),
+  gold "new version ready [ update ]" toast (`UpdateToast` → `useSwUpdate`),
   tap posts `SKIP_WAITING`, and only the consenting tab reloads on
   `controllerchange` (first-install claims don't reload — guarded).
   Decisions locked: toast is deferred while a set download is in flight
@@ -922,13 +922,21 @@ Both items from the post-merge review's next-PR plan, shipped as two commits.
      deploys, and postMessage to a redundant worker is silently dropped.
   3. A 2s fallback reload guarantees a consent tap always visibly converges
      even if activation wedges.
-  Affordance also fixed: the toast is now "new build ready [ reload ]" —
-  bracketed CTA per the design system, ~44px touch target, active-state
-  feedback. (It was already a real `<button>`; it just read as a passive
-  status pill.)
+  Affordance also fixed at the time: the toast became "new build ready
+  [ reload ]" — bracketed CTA per the design system, ~44px touch target,
+  active-state feedback. (It was already a real `<button>`; it just read
+  as a passive status pill.)
+  **Polished 2026-07-18** (copy + style only — the tap-handler chain,
+  deferral, and button/touch-target guarantees above are untouched):
+  copy is now "new version ready [ update ]" — jargon-free message, the
+  action verb is the user's goal (update) not the mechanism (reload).
+  Visual hierarchy: grey message + gold bracketed action instead of an
+  all-gold strip; press feedback lands on the action label. Comfortable
+  padding (px-5 py-3.5 → exact 44px target), fadeInUp entrance shared
+  with the toast family, reduced-motion collapsed globally.
   **On-device check (updated):** load the app (prod), START A SET PLAYING,
-  deploy any change, let the update check run → gold "new build ready
-  [ reload ]" toast → tap WHILE audio plays → playback stops, single
+  deploy any change, let the update check run → gold "new version ready
+  [ update ]" toast → tap WHILE audio plays → playback stops, single
   reload, new build live. Confirm NO toast and NO reload on a genuinely
   first visit.
 
@@ -1190,8 +1198,8 @@ The SW has NO unconditional `skipWaiting()`. Pattern:
 2. `useSwUpdate` detects it (both `registration.waiting` at mount and
    `updatefound` → `statechange` while open; "installed + has controller"
    distinguishes an update from a first install).
-3. `UpdateToast` shows "new build · tap to reload" — deferred while a set
-   download is in flight.
+3. `UpdateToast` shows "new version ready [ update ]" — deferred while a
+   set download is in flight.
 4. Tap → `postMessage({ type: "SKIP_WAITING" })` → SW calls
    `self.skipWaiting()` → `controllerchange` → ONLY the tab that requested
    the swap reloads (guarded ref; first-install `clientsClaim` also fires

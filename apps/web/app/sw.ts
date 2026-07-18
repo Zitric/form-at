@@ -31,7 +31,7 @@ declare const self: ServiceWorkerGlobalScope & {
 
 // Take control of any open clients as soon as this SW activates. Without
 // this, clients keep talking to the previous SW until they're closed and
-// reopened — which would defeat the "new build · tap to reload" flow we wire
+// reopened — which would defeat the "new version ready [ update ]" flow we wire
 // in Phase 4.2.
 clientsClaim();
 
@@ -42,7 +42,7 @@ clientsClaim();
 // only the latest deployment. (The removed call's comment claimed the worst
 // case was "old cache served for 30 more seconds" — the actual worst case
 // was a broken route.) Instead: the new SW sits in `waiting`, the page shows
-// "new build · tap to reload" (<UpdateToast> → useSwUpdate), and activation
+// "new version ready [ update ]" (<UpdateToast> → useSwUpdate), and activation
 // happens on explicit user consent via the message below, followed by a
 // reload the page itself triggers on `controllerchange`.
 //

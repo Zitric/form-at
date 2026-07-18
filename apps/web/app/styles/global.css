@@ -13,6 +13,7 @@
   --animate-blink: blink 1s step-start infinite;
   --animate-slow-fade-in: fade-in 5s ease-out;
   --animate-fade-in: fade-in 0.6s ease-out;
+  --animate-fade-in-up: fadeInUp 300ms ease-out;
   --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
   --animate-border-pulse: border-pulse 2s ease-in-out infinite;
   /* Single radius token for tappable content surfaces. Subtle by design —

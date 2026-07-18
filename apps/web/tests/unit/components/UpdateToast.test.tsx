@@ -13,11 +13,11 @@ vi.mock("~/hooks/useSwUpdate", () => ({
 }));
 
 describe("UpdateToast", () => {
-  it("renders a real button with the bracketed reload action", () => {
+  it("renders a real button with the bracketed update action", () => {
     useStore.setState({ activeDownloadId: null });
     render(<UpdateToast />);
 
-    const button = screen.getByRole("button", { name: /new build ready.*reload/i });
+    const button = screen.getByRole("button", { name: /new version ready.*update/i });
     expect(button.tagName).toBe("BUTTON");
     button.click();
     expect(applyUpdate).toHaveBeenCalledTimes(1);
