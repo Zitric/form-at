@@ -620,16 +620,18 @@ aggregate rules unchanged.
 ### Fixed 2026-07-17 — granted-but-unsubscribed resume path (field bug)
 
 Field report (Android, installed app, post-PR-#7 build): CTA invisible
-for a device with `Notification.permission === "granted"` and no
-`push_subscriptions` row. **Root cause: an orphaned LOCAL subscription.**
-The device tapped the old pre-modal `notify_me` on 2026-07-16 BEFORE the
-push_subscriptions migration was applied — the grant and
-`pushManager.subscribe()` succeeded (a live subscription exists at the
-push service), but the fire-and-forget POST hit a missing table. Today's
-`getSubscription()` gating then hides the CTA — *correctly*, because the
-device IS subscribed; what's missing is only the server row. (An earlier
-diagnosis this session blamed an unmerged branch — wrong, made from
-stale local refs without fetching; PR #7 was merged and deployed.)
+for a device believed to hold an orphaned LOCAL subscription (subscribed
+pre-migration, POST hit a missing table). **CORRECTED 2026-07-18: that
+attribution was wrong** — the sole `push_subscriptions` row belonged to a
+DIFFERENT device, and the affected device turned out to have no
+subscription at all; its CTA was hidden by the persisted denial flag (see
+the 2026-07-18 entry below). The two changes in this entry remain correct
+code for the states they handle — but neither was what that device
+needed, and the orphaned-local-subscription state, while real as a class
+(pre-migration window, future dead-row cleanup), has NOT been observed in
+the field. (An even earlier diagnosis blamed an unmerged branch — also
+wrong, made from stale local refs without fetching; PR #7 was merged and
+deployed.)
 
 Two changes:
 
@@ -652,9 +654,69 @@ Two changes:
   when the grant already exists — the "native dialog only from a modal
   accept" guarantee is now literal, unit-locked in all three suites.
 
-New on-device check: on the affected Android device, open the installed
-app's home once → `SELECT endpoint FROM push_subscriptions` must show the
-device's row, with the CTA still hidden and NO permission dialog.
+~~New on-device check: on the affected Android device, open the installed
+app's home once → the device's row appears via the re-beacon.~~ VOID
+2026-07-18 — written for the wrong diagnosis; that device had nothing to
+re-beacon. The re-beacon path stays unit-locked but has no field
+verification case yet. The device's real check lives in the 2026-07-18
+entry.
+
+### Fixed 2026-07-18 — persisted denial flag deferred to live permission (field bug)
+
+Field sequence (Android, installed app, user-diagnosed): tapped
+**Block** on the native permission dialog at some point →
+`pushOptInDismissed` persisted → CTA hidden. Later re-enabled
+notifications EXTERNALLY (Android Settings → Notifications → Apps →
+Form:at). The app never re-checked live permission — the flag alone kept
+the CTA hidden forever, with no in-app path back. **Root design flaw:
+the persisted flag was acting as the source of truth when the real one,
+`Notification.permission`, is live-queryable and changes outside the app
+** (Android app settings, Chrome site settings, permission resets).
+
+Fix (`PushOptInCta.tsx`, reconcile effect): on mount, after hydration,
+read `Notification.permission` fresh. The flag only keeps suppressing
+while live permission is still `"denied"`; any other value means it's
+stale → cleared. The states then route themselves through existing
+gating: granted-but-unsubscribed → CTA → direct-subscribe resume (busy →
+subscribed, NO dialog); back to `"default"` (permission reset) → CTA →
+full soft prompt. Read via `getState()` deliberately: a flag set
+mid-session (native prompt dismissed without choosing leaves permission
+`"default"`) keeps THIS session's suppression and reconciles on the next
+mount — so the dismissed-without-choosing case now degrades from
+"hidden forever" to session-scope suppression. That original
+hide-forever rationale predates the soft prompt (the CTA no longer fires
+the native dialog on tap); `uiSlice.ts`'s flag comment is rewritten to
+match.
+
+Verified vs inferred: the reconcile logic + both transitions
+(granted / default) are unit-locked (three new CTA tests). The exact
+mapping of the Android app-level notification toggle onto
+`Notification.permission` for a WebAPK is INFERRED, not device-verified:
+re-enabling is expected to read `"granted"` (the origin's site permission
+was never revoked; Chrome binds the WebAPK's notification channel to it),
+while a Chrome site-settings reset reads `"default"`. The fix doesn't
+depend on which one is right — both un-hide the CTA and route to the
+correct ask. The on-device check below settles it.
+
+Considered, NOT implemented — muted denied-state CTA ("notifications are
+blocked for form:at — enable them in your device settings" instead of a
+fully hidden CTA). Trade-off: honest-disclosure precedent (Opera hedged
+copy) favours it, but unlike Opera's case this user explicitly said no —
+a permanent passive pointer in the nudge zone reads as nagging past a
+clear refusal, and the modal's denied phase already gives the settings
+pointer to anyone who engages. With this fix, a user who changes their
+mind via settings self-heals on next visit, which covers the field case.
+Revisit if analytics/support show users stuck wanting notifications
+without finding device settings.
+
+On-device check (THIS device): after merge + deploy, open the installed
+app's home → CTA must reappear (no dialog) → tap `[ notify_me ]` → modal
+lands directly on "setting up notifications…" → success copy, still no
+native dialog → `SELECT endpoint FROM push_subscriptions` now shows TWO
+rows (the other device's plus this one's). Also confirms whether live
+permission read `"granted"` (direct subscribe, as expected) or
+`"default"` (soft prompt shown first) — note which, to settle the
+inference above.
 
 ### Decided 2026-07-17 — NO further app-gate abstraction yet (rule of three)
 

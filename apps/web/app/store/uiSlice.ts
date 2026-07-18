@@ -50,19 +50,27 @@ export type UiSlice = {
    *  event has a native ref and methods that don't round-trip through JSON.
    *  Re-captured on each page load when Chrome decides to fire it. */
   deferredPrompt: BeforeInstallPromptEvent | null;
-  /** Push-notification opt-in, passive-CTA dismiss flag (Phase 2,
-   *  2026-07-15) — same "soft dismiss, hide forever" semantic as
-   *  `pwaInstallDismissed`, deliberately mirrored rather than reusing that
-   *  flag (installing the app and opting into push are different asks; a
-   *  "not now" on one shouldn't silently answer the other). Set to true
-   *  after ANY `Notification.requestPermission()` outcome that isn't
-   *  `"granted"` — covers both an explicit "Block" AND the ambiguous case
-   *  where the user closes the native prompt without choosing (the
-   *  Notification API resolves that the same as never having asked, so
-   *  without our own flag we'd re-prompt on every visit — exactly the
-   *  nagging this flag exists to prevent). Once `Notification.permission`
-   *  is `"denied"` the browser itself blocks re-prompting forever anyway;
-   *  this flag's real job is covering the dismissed-without-choosing gap. */
+  /** Push-notification opt-in, spent-native-ask flag (Phase 2, 2026-07-15;
+   *  semantics narrowed 2026-07-18). Its OWN flag rather than reusing
+   *  `pwaInstallDismissed` (installing the app and opting into push are
+   *  different asks; a "not now" on one shouldn't silently answer the
+   *  other). Set to true after ANY `Notification.requestPermission()`
+   *  outcome that isn't `"granted"`.
+   *
+   *  NOT a source of truth — live `Notification.permission` is, and it can
+   *  change outside the app entirely (Android app settings, Chrome site
+   *  settings, permission resets). <PushOptInCta> reconciles on mount: the
+   *  flag only keeps suppressing while live permission is still "denied";
+   *  any other live value means it's stale and it gets cleared (field bug
+   *  2026-07-18 — a Block later undone in Android settings had locked the
+   *  CTA out forever). Net effect per case:
+   *   - explicit Block → hidden while denied; external re-enable un-hides.
+   *   - native prompt dismissed without choosing (permission stays
+   *     "default") → suppression for the rest of THIS session only, CTA
+   *     returns next visit. The original "hide forever, or we'd re-prompt
+   *     on every visit" rationale predates the soft prompt — the CTA now
+   *     opens our own modal, so a returning CTA no longer nags with the
+   *     native dialog. */
   pushOptInDismissed: boolean;
   /** Declined the push soft-prompt modal this SESSION (closed it, or tapped
    *  "not now", without accepting). Deliberately NOT persisted — a third
