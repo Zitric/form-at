@@ -186,13 +186,37 @@ describe("PushOptInModal — subscribe outcomes through the modal", () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /enable_notifications/ }));
 
-    expect(await screen.findByText(/you're in/i)).toBeInTheDocument();
+    expect(await screen.findByText(/notifications on/i)).toBeInTheDocument();
     expect(onOutcome).toHaveBeenCalledWith("subscribed");
 
     // Closing after an accept is not a decline — even a successful one.
     await user.click(screen.getByRole("button", { name: "Close" }));
     expect(onDeclined).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("accept transitions phases inside ONE dialog — success carries both messages and [ done ] closes without a decline", async () => {
+    mockPushSupport(() =>
+      Promise.resolve({ toJSON: () => ({ endpoint: "https://push.example/x", keys: {} }) }),
+    );
+    mockNotification("granted");
+    vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
+    const { onDeclined, onClose } = renderModal(standaloneGate);
+
+    expect(document.querySelectorAll("dialog")).toHaveLength(1);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /enable_notifications/ }));
+
+    // Both messages in ONE surface: the confirmation and the reassurance.
+    expect(await screen.findByText(/notifications on/i)).toBeInTheDocument();
+    expect(screen.getByText(/no spam, just the signal/i)).toBeInTheDocument();
+    // Still the same single dialog — phases swap in place, no second mount.
+    expect(document.querySelectorAll("dialog")).toHaveLength(1);
+
+    await user.click(screen.getByRole("button", { name: "[ done ]" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onDeclined).not.toHaveBeenCalled();
   });
 
   it("accept → native denied: blocked-at-browser-level copy, no retry button", async () => {
@@ -239,7 +263,7 @@ describe("PushOptInModal — granted-but-unsubscribed resume", () => {
     const beaconSpy = vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
     const { onOutcome } = renderModal(standaloneGate);
 
-    expect(await screen.findByText(/you're in/i)).toBeInTheDocument();
+    expect(await screen.findByText(/notifications on/i)).toBeInTheDocument();
     expect(onOutcome).toHaveBeenCalledWith("subscribed");
     expect(requestPermission).not.toHaveBeenCalled();
     expect(screen.queryByText(/hear about new sets/i)).not.toBeInTheDocument();
@@ -297,7 +321,7 @@ describe("PushOptInModal — analytics", () => {
 
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /enable_notifications/ }));
-    await screen.findByText(/you're in/i);
+    await screen.findByText(/notifications on/i);
     await user.click(screen.getByRole("button", { name: "Close" }));
 
     const types = await beaconedEventTypes(beaconSpy);

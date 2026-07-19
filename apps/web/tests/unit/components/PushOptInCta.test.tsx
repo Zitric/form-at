@@ -216,7 +216,7 @@ describe("PushOptInCta — persisted denial flag vs live permission", () => {
 
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "[ notify_me ]" }));
-    expect(await screen.findByText(/you're in/i)).toBeInTheDocument();
+    expect(await screen.findByText(/notifications on/i)).toBeInTheDocument();
     expect(requestPermission).not.toHaveBeenCalled();
   });
 
@@ -315,12 +315,12 @@ describe("PushOptInCta → PushOptInModal wiring", () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "[ notify_me ]" }));
 
-    expect(await screen.findByText(/you're in/i)).toBeInTheDocument();
+    expect(await screen.findByText(/notifications on/i)).toBeInTheDocument();
     expect(screen.queryByText(/hear about new sets/i)).not.toBeInTheDocument();
     expect(requestPermission).not.toHaveBeenCalled();
     // Subscribed → the CTA hides while the modal (a sibling) keeps its success copy.
     await waitFor(() => expect(ctaButton()).not.toBeInTheDocument());
-    expect(screen.getByText(/you're in/i)).toBeInTheDocument();
+    expect(screen.getByText(/notifications on/i)).toBeInTheDocument();
   });
 
   it("closing a failed direct subscribe keeps the CTA — not a decline, no session flag", async () => {

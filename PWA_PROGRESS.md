@@ -718,6 +718,133 @@ permission read `"granted"` (direct subscribe, as expected) or
 `"default"` (soft prompt shown first) — note which, to settle the
 inference above.
 
+### Reference 2026-07-19 — push device lifecycle: the canonical state machine
+
+Answers "why does/doesn't the CTA show on this device right now" for any
+device without reading code. A device's push state is the product of
+three axes:
+
+- **A** — live `Notification.permission`: `default` / `granted` / `denied`
+- **B** — local browser subscription (`pushManager.getSubscription()`):
+  exists / none
+- **C** — server row in `push_subscriptions` (keyed on endpoint):
+  exists / none
+
+Overlaid by two suppression flags (`uiSlice.ts`): `pushOptInDismissed`
+(persisted, honoured only while A=denied — reconciled against live
+permission on CTA mount, 2026-07-18) and `pushOptInDeclinedSession`
+(this session only). CTA gating (`PushOptInCta.tsx`): **standalone**
+shows when A=default OR (A=granted AND B=none); **tab** shows when A is
+unreadable (no Push API — iOS Safari tab) or default; A=denied hides the
+CTA everywhere. **C is invisible to gating** — the client never queries
+the server; C only matters to the send script.
+
+| # | A | B | C | user sees | in / out |
+|---|---|---|---|-----------|----------|
+| 1 | default | – | – | CTA visible; standalone → soft prompt, tab → install nudge | Fresh device (or post-reset). Out: accept + native Allow → 2; native Block or dismiss → 5 (flag set); soft "not now" → hidden this session only |
+| 2 | granted | yes | yes | CTA hidden — healthy subscribed state | Out: app-notification toggle OFF → 6; Chrome site-settings reset → 1 (sub dropped; stale row 410s at next send); browser subscription rotation → 4 |
+| 3 | granted | yes | – | CTA hidden; heals silently | Orphaned row-loss (pre-migration class; row deleted while device live). The mount re-beacon re-POSTs the local sub → 2. No user action involved |
+| 4 | granted | – | any | CTA visible → tap → **direct subscribe** (busy → success, NO dialog) | Local sub lost (failed subscribe after grant, rotation) or post-re-enable. New subscribe = new endpoint = new row; any stale row dies at next send (410) |
+| 5 | denied | – | – | CTA hidden everywhere | Native Block, native dismiss, or Android app-notification toggle OFF (**field-verified 2026-07-19: toggle-off reads as "denied"**). Out: Android settings re-enable → A=granted → 4; Chrome site reset → 1 |
+| 6 | denied | ? | yes | CTA hidden; row is dead but present | Subscribed then toggled off. Next send → FCM 410 → cleanup removes row → 7 |
+| 7 | denied | ? | – | CTA hidden — terminal until user acts | `dead_removed`. Re-enable → A=granted → 4 **if** B reads none (see open question) |
+
+**Open question (B = "?" in 6/7):** whether `getSubscription()` returns
+null or the stale subscription after a toggle-off → toggle-on cycle is
+NOT field-verified. Null → state 4 → clean direct re-subscribe. Stale →
+the CTA hides (granted + B=exists) and the re-beacon re-POSTs a dead
+endpoint (harmless — it 410s out again — but the device never
+re-subscribes without a site-data reset). On-device check: on the
+dead_removed device, re-enable notifications in Android settings, open
+the app → if the CTA reappears, B reads null (good); if it stays hidden,
+we need dead-sub detection (unsubscribe+resubscribe keyed off send-time
+410s, or channel validation at mount).
+
+Clear-site-data resets everything client-side (A→default, B→none, flags
+wiped) but leaves C — looks like state 1; the stale row 410s out after
+the next send.
+
+**Field-verified lifecycle stories:**
+1. **The dead-end device** (2026-07-18→19): 1 →(native Block)→ 5
+   →(Android settings re-enable)→ 4 →(tap → direct subscribe, no
+   dialog)→ 2. The 2026-07-18 reconcile fix is what makes the 5→4 edge
+   exist at all.
+2. **The dead_removed device** (2026-07-19): 2 →(app-notification toggle
+   off)→ 6 →(send attempt → FCM 410)→ 7, row removed server-side.
+   OS-level unsubscribe works end-to-end with no in-app affordance.
+
+### Fixed 2026-07-19 — accept flow read as TWO modals (geometry jump)
+
+Field bug: accepting the soft prompt "produces one modal and then
+another". There is no second mount — `PushOptInModal` is one `<dialog>`
+whose phases render in place (unit-locked: dialog count stays 1 through
+accept). The illusion was geometric: `Modal.tsx`'s panel is
+`fixed inset-0 m-auto h-fit`, so it resizes AND recenters on every
+body-height change. The ~200px idle ask collapsed to a one-line "setting
+up notifications…" then swapped to a short success paragraph — with the
+OS permission sheet interleaved, the differently-sized, differently-
+positioned, fully-reworded box read as a new modal. Fix:
+- the subscribe-variant body is wrapped in a `min-h-48` container keyed
+  by phase — geometry stays pinned near the tallest phase, and the key
+  re-runs `animate-fade-in` so each phase change is an explicit in-place
+  transition;
+- the success phase now carries BOTH messages in one surface —
+  "notifications on." (white, the confirmation) + "we'll ping you when
+  something new drops — no spam, just the signal." (grey, the
+  reassurance) — plus an explicit `[ done ]` that closes without
+  counting as a decline (field users didn't reliably find `[ x ]`).
+
+### Proposed 2026-07-19 — third bracket-CTA treatment for toast surfaces (awaiting art direction)
+
+Direction (Julian): gold border works at toast size, gold TEXT doesn't;
+needs more padding to read. That treatment already exists concretely in
+`UpdateToast` since the 2026-07-18 polish — spec, for extraction as the
+canonical "toast CTA" treatment: `bg-black`, `border-gold/40`
+(hover /70, active full gold), message `text-grey text-xs`, action as
+gold `BracketLabel` with the label going white on press, `px-5 py-3.5`
+(exact 44px target), `gap-4 max-w-sm`, `whitespace-nowrap` on the
+bracket, `animate-fade-in-up` entrance. NOT implemented as a shared
+variant yet — deliberately: unifying means touching `PlaybackErrorToast`
+(red; does the error tone adopt the same padding/entrance, or stay
+visually distinct?) and `Toast` (ephemeral auto-fade; probably stays
+lighter), all three field-hardened, and those are art-direction calls.
+The three positioning wrappers are already copy-identical (same bottom
+math in all three files) — when the direction lands, extract a
+`ToastShell` owning wrapper + surface treatment in one place.
+
+### Finding 2026-07-19 — notify_me CTA entrance fade unreliable (decision pending)
+
+The fade IS wired (`PushOptInCta.tsx` → `PushOptInCtaButton`, 5s/0.6s
+first-load convention) and was never removed (diff-verified: untouched
+since 2e4972b). Root cause: the `visible` state + opacity-transition
+pattern only animates if the browser PAINTS the opacity-0 frame before
+the flip to 1. The home hero/socials mount with the route commit, so
+that frame paints. The CTA mounts LATE — after the permission-read
+effect, the async `getSubscription()` resolution, or the flag-reconcile
+re-render — so insertion and the flip can land in the same paint: first
+computed style is already opacity 1 → no transition → pop-in. Options:
+(a) double-rAF before `setVisible(true)` (SwipeNavigator precedent);
+(b) switch to the `animate-fade-in` keyframe on mount — keyframes always
+run on insertion (BottomNav's keyframe-flash caveat doesn't apply: this
+element is client-conditional, never SSR-rendered); (c) drop the
+entrance. Recommendation: (b) — one class, deletes the state+effect.
+Julian decides.
+
+### Decided 2026-07-19 — in-app unsubscribe still deferred
+
+With real members subscribed, re-evaluated: still no in-app unsubscribe.
+Why: the OS-level path is field-verified end-to-end TODAY (dead_removed
+story — Android toggle → 410 → row cleanup), and it lives where users
+already look for notification control; iOS has the same per-app toggle;
+410 cleanup keeps the table honest without user action; the audience is
+collective members who asked for the pings. A minimal affordance would
+be small (`getSubscription().unsubscribe()` + a DELETE endpoint) but its
+natural home is the future settings/manage view (TECH_DEBT's manage-view
+precedent) — a lone "unsubscribe" button with no settings surface around
+it isn't worth the surface area yet. Revisit on ANY of: a member asks
+how to stop notifications; the settings/manage view lands; send cadence
+rises beyond occasional pings.
+
 ### Decided 2026-07-17 — NO further app-gate abstraction yet (rule of three)
 
 Analysed save-for-offline vs push opt-in for a shared "app-gated
