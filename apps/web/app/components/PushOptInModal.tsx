@@ -140,9 +140,15 @@ export function PushOptInModal({ open, onClose, onDeclined, onOutcome, gate }: P
 
   const subscribeBody =
     phase === "subscribed" ? (
-      <p className="text-sm text-grey leading-relaxed">
-        you're in — we'll ping you when something new drops. no spam, just the signal.
-      </p>
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-white leading-relaxed">notifications on.</p>
+        <p className="text-sm text-grey leading-relaxed">
+          we'll ping you when something new drops — no spam, just the signal.
+        </p>
+        <Button variant="secondary" onClick={handleClose} className="text-left">
+          done
+        </Button>
+      </div>
     ) : phase === "denied" ? (
       <p className="text-sm text-grey leading-relaxed">
         notifications are blocked for Form:at at the browser level. if you change your mind, allow
@@ -191,7 +197,19 @@ export function PushOptInModal({ open, onClose, onDeclined, onOutcome, gate }: P
         </div>
       }
     >
-      {isSubscribeVariant && subscribeBody}
+      {/* Phase transitions must read as ONE modal changing state, not a
+          chain of modals (field bug 2026-07-19): the <dialog> is centered
+          with `inset-0 m-auto h-fit`, so any body-height change resizes AND
+          recenters it — with the OS permission sheet interleaved between
+          the ask and the outcome, the jump read as a second modal. min-h
+          pins the geometry near the tallest phase (the idle ask) so busy/
+          success/denied hold the same footprint, and the keyed fade makes
+          the content swap an explicit in-place transition. */}
+      {isSubscribeVariant && (
+        <div key={phase} className="animate-fade-in min-h-48">
+          {subscribeBody}
+        </div>
+      )}
 
       {gate.allow === false && gate.reason === "needs-install" && (
         <div className="flex flex-col gap-4">
