@@ -231,7 +231,15 @@ self.addEventListener("push", (event) => {
   const options: NotificationOptions = {
     body: payload.body || "",
     icon: "/icon-192.png",
-    badge: "/icon-192.png",
+    // `badge` is a DIFFERENT asset from `icon`, not a smaller copy of it —
+    // MDN (verified 2026-07-21): ~96x96, "the image will be automatically
+    // masked." Android/Chrome discard color and use only the alpha channel,
+    // so a fully-opaque icon (icon-192.png has zero transparency — verified
+    // pixel-by-pixel) masks to a solid square, which was the reported bug.
+    // badge-96.png is a derived white-on-transparent silhouette of the same
+    // F mark (luminance → alpha; see PWA_PROGRESS's Phase 2 badge entry for
+    // the derivation).
+    badge: "/badge-96.png",
     data: { url: payload.url || "/" },
     // Unique per push — a constant tag would make a second announcement
     // silently REPLACE an unread first one (tag collapse, no renotify).
