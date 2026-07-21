@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { isDeadSubscriptionStatus, sendWebPush } from "~/utils/webPush";
+import { type PushPayload, isDeadSubscriptionStatus, sendWebPush } from "~/utils/webPush";
 
 // Locks the Web Push spec's permanent-invalidation contract (Phase 2,
 // 2026-07-15): 404 and 410 from the push service mean the subscription is
@@ -102,5 +102,32 @@ describe("sendWebPush status→outcome mapping", () => {
       status: 502,
       statusText: "Bad Gateway",
     });
+  });
+});
+
+// `sendWebPush` treats `payload` as opaque — it's handed straight to
+// `buildPushHTTPRequest` for encryption, never destructured. A regression
+// here (e.g. someone later rebuilding the message object field-by-field)
+// would silently drop new PushPayload fields with no type error, since
+// they're all optional. Locks that the full 2026-07-21 shape (image,
+// requireInteraction, timestamp) survives unchanged.
+describe("sendWebPush — payload passthrough", () => {
+  it("forwards every PushPayload field, including the new optional ones, unchanged", async () => {
+    const { buildPushHTTPRequest } = await import("@pushforge/builder");
+    stubFetchStatus(201);
+    const fullPayload: PushPayload = {
+      title: "New set: DJ Name",
+      body: "Fresh from the booth",
+      url: "/sets/003",
+      image: "/images/sets/003-1080.webp",
+      requireInteraction: true,
+      timestamp: 1_700_000_000_000,
+    };
+
+    await sendWebPush(subscription, fullPayload, vapid);
+
+    expect(buildPushHTTPRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.objectContaining({ payload: fullPayload }) }),
+    );
   });
 });

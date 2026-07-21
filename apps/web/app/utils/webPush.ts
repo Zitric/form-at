@@ -23,10 +23,21 @@ export type PushSubscriptionRecord = {
 // `notificationclick` handler in sw.ts falls back to `/` when absent, so a
 // generic announcement doesn't need one, but a "new set" or "new event"
 // push should always include the deep-link path.
+//
+// `image`, `requireInteraction`, and `timestamp` are the per-send options
+// (2026-07-21) — see `~/utils/pushNotification.ts` for how they (plus the
+// fixed vibrate pattern + action buttons, which are NOT per-send) become
+// `NotificationOptions`. `image` is just a URL, same shape/resolution rules
+// as `url` — verified against MDN, no absolute-URL requirement (relative
+// site paths resolve against the SW's own origin, same as `icon`/`badge`
+// already do).
 export type PushPayload = {
   title: string;
   body: string;
   url?: string;
+  image?: string;
+  requireInteraction?: boolean;
+  timestamp?: number;
 };
 
 export type VapidCredentials = {

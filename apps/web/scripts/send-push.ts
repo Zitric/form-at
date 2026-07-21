@@ -8,9 +8,30 @@
  * override — see PWA_PROGRESS.md's Phase 2 section, "How to send an
  * announcement today").
  *
- * Usage (from apps/web/):
+ * Usage (from apps/web/) — a plain send needs only title/body/url:
  *   pnpm send-push -- --title "New set: DJ Name" --body "Fresh from the booth" --url /sets/003
  *   pnpm send-push -- --title "Event: Warehouse Session" --body "This Saturday" --url /events/012
+ *
+ * Every other option is opt-in (2026-07-21):
+ *   --image <url>              large artwork in the expanded notification.
+ *                              A site-relative path (e.g. /images/sets/003-1080.webp)
+ *                              works fine — it resolves against the SW's own
+ *                              origin, same as icon/badge already do; an
+ *                              absolute URL works too if that's more
+ *                              convenient. Set/event artwork lives on
+ *                              formatglasgow.com's own /images/ path, NOT on
+ *                              cdn.formatglasgow.com — that CDN is audio-only
+ *                              (TECH_DEBT 19), verified against
+ *                              app/utils/jsonld.ts's imageUrl() helper.
+ *   --require-interaction true  keeps the notification visible until the
+ *                              user dismisses it, instead of auto-hiding.
+ *                              Defaults off — reserve `true` for something
+ *                              genuinely urgent; a routine new-set ping
+ *                              should be allowed to auto-hide.
+ *
+ * Every send also gets, with no flag needed: a short non-intrusive vibration,
+ * "view" / "later" action buttons, and the actual send time as the
+ * notification's timestamp — see ~/utils/pushNotification.ts.
  *
  * Requires `apps/web/.env` with VAPID_PRIVATE_KEY_JWK + VAPID_CONTACT_EMAIL
  * (see .env.example) and an authenticated `wrangler` session (`npx wrangler
@@ -132,7 +153,21 @@ async function main() {
   }
   const privateJWK: JsonWebKey = JSON.parse(privateJWKRaw);
 
-  const payload: PushPayload = { title: args.title, body: args.body, url: args.url };
+  const payload: PushPayload = {
+    title: args.title,
+    body: args.body,
+    url: args.url,
+    image: args.image,
+    // The actual send time, not "now" at display — meaningful given the 24h
+    // TTL (sendWebPush's ttl option): a push that arrives after the device
+    // comes back online should show when it was actually sent, not the
+    // delivery moment. Always included — trivial, no flag needed.
+    timestamp: Date.now(),
+  };
+  // Omitted rather than set to `false` when absent — keeps the payload
+  // honest about what THIS send actually asked for (same convention as
+  // buildNotificationOptions in ~/utils/pushNotification.ts).
+  if (args["require-interaction"] === "true") payload.requireInteraction = true;
 
   console.log(`Reading subscriptions from ${D1_DATABASE}.push_subscriptions...`);
   const rows = runD1Command<{ endpoint: string; p256dh: string; auth: string }>(

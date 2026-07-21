@@ -908,6 +908,136 @@ building that harness is beyond this pass's scope (flagged, not built).
 On-device check: trigger a real push send → Android notification shade
 shows the F silhouette, not a solid square.
 
+### Added 2026-07-21 — notification polish (image, vibration, actions, requireInteraction, timestamp)
+
+Extended the push notification surface beyond title/body/url. Verified
+the current state first rather than trusting a prior summary: confirmed
+by reading `webPush.ts`, `sw.ts`'s push handler, and `send-push.ts` fresh
+— payload really was title/body/url only, icon+badge really were
+hardcoded, no vibration/actions/image existed anywhere.
+
+**Architecture:** a new pure module, `~/utils/pushNotification.ts`,
+owns `buildNotificationOptions(payload)` (payload → `NotificationOptions`)
+and `resolveNotificationClickUrl(action, url)` (click routing). Pure and
+SW-global-free on purpose — `sw.ts` has no jsdom test harness (Phase 2's
+finding, still true), so pulling the payload-shaping and click-routing
+logic OUT of `sw.ts` and into a plain module is what makes any of this
+pass unit-testable at all. `sw.ts`'s handlers shrink to gluing this
+module's output to `self.registration.showNotification` /
+`self.clients`.
+
+**TypeScript gap, verified not assumed:** `image`, `vibrate`, `actions`,
+and `timestamp` are all real, shipped `NotificationOptions` fields (MDN,
+fetched 2026-07-21) that are simply ABSENT from TypeScript's bundled
+`lib.dom.d.ts` and `lib.webworker.d.ts` (checked directly against the
+installed `typescript` package — both files declare only `badge`, `body`,
+`data`, `dir`, `icon`, `lang`, `requireInteraction`, `silent`, `tag`).
+Handled with a local `PushNotificationOptions = NotificationOptions & {…}`
+extension rather than `any`, per CLAUDE.md's "unknown + narrowing" rule —
+structural typing means the widened object still satisfies
+`showNotification`'s narrower parameter type with no cast needed.
+
+1. **Image** — `PushPayload.image?: string`, passed straight through as
+   `NotificationOptions.image` (MDN, verified: "a string containing the
+   URL of an image to be displayed in the notification," silently omitted
+   if absent — no special handling needed). **Does NOT need to be
+   absolute** — checked directly, not assumed: set/event artwork lives on
+   formatglasgow.com's own `/images/` path via the responsive-image
+   pipeline (`app/utils/jsonld.ts`'s `imageUrl()` → `${SITE}/images/…`),
+   NOT on `cdn.formatglasgow.com` — that CDN (TECH_DEBT 19) is audio-only
+   (`AUDIO_HOST`/`AUDIO_ORIGIN` in `utils/audioHost.ts`). This corrects
+   the task's own premise. A relative path resolves against the SW's own
+   origin exactly like `icon`/`badge` already do (both already ship as
+   root-relative paths with zero issue); an absolute URL works too if
+   that's more convenient when pulling from elsewhere.
+2. **Vibration** — a fixed `vibrate: [100, 50, 100]` (short buzz-pause-
+   buzz, ~250ms total) applied to EVERY push, not payload/CLI-configurable
+   — a vibe check, not a feature to design options around. Support is
+   real but partial (MDN marks `vibrate` "Limited availability… does not
+   work in some of the most widely-used browsers" — notably iOS/Safari).
+   Degradation is silent by the same mechanism `icon`/`badge` already rely
+   on unconditionally in this codebase: unsupported `NotificationOptions`
+   dictionary members are ignored, not thrown — an inference from
+   established WebIDL dictionary behavior and this file's own existing
+   precedent, since MDN's page didn't spell out the no-op explicitly for
+   this specific field.
+3. **Action buttons** — a fixed pair, not payload/CLI-configurable:
+   `view` / `later`. Wording decided over the alternatives ("listen now"/
+   "later", "view"/"dismiss"): "view" over "listen now" because a push
+   can announce a set OR an event, not only audio; "later" over "dismiss"
+   to match the app's existing soft-decline voice (`PushOptInModal`'s
+   "not now") rather than reading as a rejection of the channel itself.
+   `view` reuses the same `url` the notification already carries (no new
+   field) — simplest shape, no new CLI flag. Routing verified against
+   MDN's `NotificationEvent.action`: empty string for a body tap, the
+   action's id for a button tap — `resolveNotificationClickUrl` returns
+   the url for both a body tap AND `view` (identical destination), `null`
+   for `later` (close only, don't navigate). Considered and rejected: the
+   per-action `navigate` field MDN also documents (browser navigates
+   directly, bypassing `notificationclick` entirely) — would fragment
+   click handling across two mechanisms and skip the already-hardened
+   focus-existing-window/fallback logic in the `notificationclick`
+   handler for one of the two actions. Per-action `icon` also skipped —
+   not requested, rarely rendered in practice, and MDN's phrasing around
+   it reads more like a typical schema field than a hard requirement (no
+   documented throw for omitting it, unlike `renotify` + empty `tag`).
+4. **`requireInteraction`** — real, verified (MDN: boolean, defaults
+   `false`/auto-hide). Defaults OFF (omitted unless the payload sets it
+   true — a routine "new set" ping should auto-hide); exposed as
+   `--require-interaction true` for a genuinely urgent send.
+5. **`renotify`** — investigated, NOT added. MDN: only applies when a new
+   notification reuses an EXISTING tag (replace-in-place) — the whole
+   point is whether that replacement re-alerts. Since yesterday's fix
+   already makes `tag` unique per push (`format-${Date.now()}`, specifically
+   to stop same-day announcements from collapsing into each other), the
+   precondition for `renotify` to ever matter — two notifications sharing
+   a tag — never occurs in this app. Confirmed moot, not added as a dead
+   option.
+6. **`timestamp`** — real, verified (MDN: Unix ms, meant for exactly the
+   "message that couldn't be delivered immediately because the device was
+   offline" case — which the existing 24h TTL makes a real scenario here).
+   Trivial: `send-push.ts` captures `Date.now()` once per run and includes
+   it unconditionally (no CLI flag — there's no "off" state worth
+   exposing) via `PushPayload.timestamp`.
+
+**CLI** (`send-push.ts`): a plain send is unchanged —
+`--title / --body / --url`. Two new opt-in flags, `--image <url>` and
+`--require-interaction true`; `timestamp` is automatic. No flag was added
+for vibration or actions — deliberately, since neither is configurable.
+
+```bash
+# plain send (unchanged)
+pnpm send-push -- --title "New set: DJ Name" --body "Fresh from the booth" --url /sets/003
+
+# fully loaded — every optional field in one send
+pnpm send-push -- --title "Event: Warehouse Session" --body "This Saturday, doors 11pm" \
+  --url /events/012 --image /images/events/012-1080.webp --require-interaction true
+```
+
+**Tests:** `pushNotification.test.ts` (new, 12 tests) locks
+`buildNotificationOptions`'s always-present shape (body/icon/badge/
+vibrate/actions/data) and that image/requireInteraction/timestamp are
+each conditionally applied — including the `timestamp: 0` edge (a
+presence check, `!== undefined`, not a truthiness check, since 0 is a
+legitimate Unix timestamp) — plus `resolveNotificationClickUrl`'s four
+routing cases. `webPush.test.ts` gained one passthrough test: a
+kitchen-sink `PushPayload` (every optional field set) survives unchanged
+into the `buildPushHTTPRequest` call — `sendWebPush` treats payload as
+opaque, so nothing here validated that a future refactor couldn't
+silently drop a field; now something does.
+
+**New on-device checks** (append to the Phase 2 checklist above):
+11. Image renders in the expanded notification (Android notification
+    shade, pulled down).
+12. Vibration fires on receipt — short, not jarring (confirms the
+    pattern reads as intended, not just that it's wired).
+13. Both action buttons (`view` / `later`) appear on the notification;
+    `view` and a body tap both open the same deep link, `later` closes
+    the notification with no navigation.
+14. With `--require-interaction true`: the notification stays visible
+    until manually dismissed, confirming the flag actually changes
+    device behavior (not just that the option is passed).
+
 ### Proposed 2026-07-19 — third bracket-CTA treatment for toast surfaces (awaiting art direction)
 
 Direction (Julian): gold border works at toast size, gold TEXT doesn't;
