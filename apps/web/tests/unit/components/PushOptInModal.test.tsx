@@ -55,6 +55,19 @@ function clearPushGlobals() {
   Reflect.deleteProperty(window, "Notification");
 }
 
+// Lets a test hold `subscribe()` open mid-flight to inspect the in-flight
+// UI, then resolve it on demand — a fixed-resolution mock can't distinguish
+// "never showed busy copy" from "resolved too fast to see it".
+function deferredSubscription() {
+  let resolve!: (v: { toJSON: () => { endpoint: string; keys: Record<string, string> } }) => void;
+  const promise = new Promise<{ toJSON: () => { endpoint: string; keys: Record<string, string> } }>(
+    (res) => {
+      resolve = res;
+    },
+  );
+  return { promise, resolve };
+}
+
 async function beaconedEventTypes(spy: ReturnType<typeof vi.spyOn>): Promise<string[]> {
   const types: string[] = [];
   for (const call of spy.mock.calls) {
@@ -285,6 +298,50 @@ describe("PushOptInModal — granted-but-unsubscribed resume", () => {
     await user.click(screen.getByRole("button", { name: "Close" }));
     expect(onDeclined).not.toHaveBeenCalled();
     expect(await beaconedEventTypes(beaconSpy)).not.toContain("notify_declined");
+  });
+});
+
+// Field bug 2026-07-20: the visible "setting up notifications…" busy page
+// made the modal look like it was "turning pages by itself" for the few
+// hundred ms subscribe() takes. Fixed by making the in-flight window either
+// blank (direct/resume path — nothing honest to say yet) or a dimmed
+// continuation of the ask (native-dialog path) — never its own page.
+describe("PushOptInModal — busy phase visibility (2026-07-20 simplification)", () => {
+  it("direct/resume path: no busy copy, no ask copy, ONE dialog throughout — blank until it resolves", async () => {
+    const { promise, resolve } = deferredSubscription();
+    mockPushSupport(() => promise);
+    mockNotification("granted", "granted");
+    vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
+    renderModal(standaloneGate);
+
+    expect(screen.queryByText(/setting up/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/hear about new sets/i)).not.toBeInTheDocument();
+    expect(document.querySelectorAll("dialog")).toHaveLength(1);
+
+    resolve({ toJSON: () => ({ endpoint: "https://push.example/x", keys: {} }) });
+    expect(await screen.findByText(/notifications on/i)).toBeInTheDocument();
+    expect(document.querySelectorAll("dialog")).toHaveLength(1);
+  });
+
+  it("native-dialog path: the ask content stays visible and disabled during flight, never swapped for busy copy", async () => {
+    const { promise, resolve } = deferredSubscription();
+    mockPushSupport(() => promise);
+    mockNotification("granted");
+    vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
+    renderModal(standaloneGate);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /enable_notifications/ }));
+
+    // Same ask copy, still on screen — not swapped, just disabled.
+    expect(screen.getByText(/hear about new sets/i)).toBeInTheDocument();
+    expect(screen.queryByText(/setting up/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /enable_notifications/ })).toBeDisabled();
+    expect(document.querySelectorAll("dialog")).toHaveLength(1);
+
+    resolve({ toJSON: () => ({ endpoint: "https://push.example/x", keys: {} }) });
+    expect(await screen.findByText(/notifications on/i)).toBeInTheDocument();
+    expect(document.querySelectorAll("dialog")).toHaveLength(1);
   });
 });
 

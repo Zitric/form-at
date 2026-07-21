@@ -11,6 +11,7 @@ import {
 import { type SaveGate, useTriggerInstallPrompt } from "~/hooks/useSaveGate";
 import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";
+import { cn } from "~/utils/cn";
 
 type Props = {
   open: boolean;
@@ -32,7 +33,21 @@ type Props = {
 // transparency, no dead retry button), failed is a transient subscribe
 // error after a successful grant (retry is legitimate and cheap, since
 // `Notification.requestPermission()` resolves instantly once granted).
-type SubscribePhase = "idle" | "busy" | "subscribed" | "denied" | "failed";
+//
+// "busy" and "resuming" are both in-flight states but read differently ON
+// PURPOSE (field bug 2026-07-20 — a visible "setting up notifications…"
+// page made the modal look like it was "turning pages by itself" for the
+// few hundred ms subscribe() takes):
+//   "busy" — the native-dialog path (user tapped enable_notifications; the
+//     OS permission sheet may be up). The ASK CONTENT STAYS ON SCREEN,
+//     dimmed and disabled, so the modal's visible content changes exactly
+//     once (ask → outcome) rather than ask → busy → outcome.
+//   "resuming" — the direct-subscribe path (permission already granted, no
+//     ask was ever shown). Renders nothing (geometry still pinned by
+//     min-h) — there's no honest copy to show before the outcome is known,
+//     and the window is short enough that Julian's call is to not cover it
+//     with loading copy at all.
+type SubscribePhase = "idle" | "busy" | "resuming" | "subscribed" | "denied" | "failed";
 
 // Soft-prompt modal behind the home page's `notify_me` CTA — the
 // pre-permission pattern: the native browser permission dialog must NOT
@@ -102,7 +117,7 @@ export function PushOptInModal({ open, onClose, onDeclined, onOutcome, gate }: P
     // funnel measures the soft prompt, and this path never shows one.
     if (isSubscribeVariant && isPushSupported() && Notification.permission === "granted") {
       engagedRef.current = true;
-      setPhase("busy");
+      setPhase("resuming");
       void subscribe().then(applyOutcome);
       return;
     }
@@ -138,6 +153,36 @@ export function PushOptInModal({ open, onClose, onDeclined, onOutcome, gate }: P
   const handleAlreadyInstalled = () => setPwaInstalled(true);
   const handleNotInstalledAfterAll = () => setPwaInstalled(false);
 
+  // Shared between "idle" and "busy" — same content, the only difference is
+  // whether it's interactive. Keeping ONE JSX shape (rather than a separate
+  // busy-specific render) means the in-flight state is a dim/disable
+  // transition on the SAME content, not a swap to different content.
+  const askContent = (disabled: boolean) => (
+    <div
+      className={cn(
+        "flex flex-col gap-4 transition-opacity",
+        disabled && "opacity-50 pointer-events-none",
+      )}
+    >
+      <p className="text-sm text-grey leading-relaxed">
+        hear about new sets, events and line-ups before anyone else — a short ping when something
+        drops, nothing else.
+      </p>
+      <p className="text-xs text-grey/70 leading-relaxed">
+        your browser will ask to confirm — that part's one tap.
+      </p>
+      <Button
+        variant="secondary"
+        onClick={() => void handleAccept()}
+        disabled={disabled}
+        className="text-left"
+      >
+        enable_notifications
+      </Button>
+      <TextButton onClick={handleClose}>not now</TextButton>
+    </div>
+  );
+
   const subscribeBody =
     phase === "subscribed" ? (
       <div className="flex flex-col gap-4">
@@ -155,11 +200,7 @@ export function PushOptInModal({ open, onClose, onDeclined, onOutcome, gate }: P
         notifications for <span className="text-white">formatglasgow.com</span> in your device
         settings — we can't re-ask from here.
       </p>
-    ) : phase === "busy" ? (
-      // Neutral enough for both routes into busy: the normal accept (where
-      // the native prompt may be up) and the resume path (where it never is).
-      <p className="text-sm text-grey leading-relaxed">setting up notifications…</p>
-    ) : phase === "failed" ? (
+    ) : phase === "resuming" ? null : phase === "failed" ? (
       <div className="flex flex-col gap-4">
         <p className="text-sm text-grey leading-relaxed">
           something went wrong subscribing — usually a network hiccup. your permission is granted;
@@ -171,20 +212,15 @@ export function PushOptInModal({ open, onClose, onDeclined, onOutcome, gate }: P
         <TextButton onClick={handleClose}>not now</TextButton>
       </div>
     ) : (
-      <div className="flex flex-col gap-4">
-        <p className="text-sm text-grey leading-relaxed">
-          hear about new sets, events and line-ups before anyone else — a short ping when something
-          drops, nothing else.
-        </p>
-        <p className="text-xs text-grey/70 leading-relaxed">
-          your browser will ask to confirm — that part's one tap.
-        </p>
-        <Button variant="secondary" onClick={() => void handleAccept()} className="text-left">
-          enable_notifications
-        </Button>
-        <TextButton onClick={handleClose}>not now</TextButton>
-      </div>
+      askContent(phase === "busy")
     );
+
+  // Groups phases that render the SAME visible content under one key, so
+  // React doesn't remount (and re-fade) across a dim/disable transition —
+  // only a genuine content change (ask → outcome) gets the fresh mount +
+  // fade-in. "resuming" gets its own key purely for correctness; it has no
+  // content to preserve identity for.
+  const geometryKey = phase === "busy" ? "idle" : phase;
 
   return (
     <Modal
@@ -203,10 +239,12 @@ export function PushOptInModal({ open, onClose, onDeclined, onOutcome, gate }: P
           recenters it — with the OS permission sheet interleaved between
           the ask and the outcome, the jump read as a second modal. min-h
           pins the geometry near the tallest phase (the idle ask) so busy/
-          success/denied hold the same footprint, and the keyed fade makes
-          the content swap an explicit in-place transition. */}
+          success/denied hold the same footprint. Keyed on `geometryKey`,
+          not `phase` (2026-07-20): idle → busy must NOT remount — that's a
+          dim/disable transition on the same content — only a genuine
+          content change (ask → outcome) gets the fresh mount + fade-in. */}
       {isSubscribeVariant && (
-        <div key={phase} className="animate-fade-in min-h-48">
+        <div key={geometryKey} className="animate-fade-in min-h-48">
           {subscribeBody}
         </div>
       )}

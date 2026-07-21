@@ -711,12 +711,12 @@ without finding device settings.
 
 On-device check (THIS device): after merge + deploy, open the installed
 app's home → CTA must reappear (no dialog) → tap `[ notify_me ]` → modal
-lands directly on "setting up notifications…" → success copy, still no
-native dialog → `SELECT endpoint FROM push_subscriptions` now shows TWO
-rows (the other device's plus this one's). Also confirms whether live
-permission read `"granted"` (direct subscribe, as expected) or
-`"default"` (soft prompt shown first) — note which, to settle the
-inference above.
+opens blank for a beat (no "setting up…" copy — removed 2026-07-20) then
+lands on success copy, still no native dialog → `SELECT endpoint FROM
+push_subscriptions` now shows TWO rows (the other device's plus this
+one's). Also confirms whether live permission read `"granted"` (direct
+subscribe, as expected) or `"default"` (soft prompt shown first) — note
+which, to settle the inference above.
 
 ### Reference 2026-07-19 — push device lifecycle: the canonical state machine
 
@@ -744,7 +744,7 @@ the server; C only matters to the send script.
 | 1 | default | – | – | CTA visible; standalone → soft prompt, tab → install nudge | Fresh device (or post-reset). Out: accept + native Allow → 2; native Block or dismiss → 5 (flag set); soft "not now" → hidden this session only |
 | 2 | granted | yes | yes | CTA hidden — healthy subscribed state | Out: app-notification toggle OFF → 6; Chrome site-settings reset → 1 (sub dropped; stale row 410s at next send); browser subscription rotation → 4 |
 | 3 | granted | yes | – | CTA hidden; heals silently | Orphaned row-loss (pre-migration class; row deleted while device live). The mount re-beacon re-POSTs the local sub → 2. No user action involved |
-| 4 | granted | – | any | CTA visible → tap → **direct subscribe** (busy → success, NO dialog) | Local sub lost (failed subscribe after grant, rotation) or post-re-enable. New subscribe = new endpoint = new row; any stale row dies at next send (410) |
+| 4 | granted | – | any | CTA visible → tap → **direct subscribe** (brief blank pause, no loading copy, → success — NO dialog) | Local sub lost (failed subscribe after grant, rotation) or post-re-enable. New subscribe = new endpoint = new row; any stale row dies at next send (410) |
 | 5 | denied | – | – | CTA hidden everywhere | Native Block, native dismiss, or Android app-notification toggle OFF (**field-verified 2026-07-19: toggle-off reads as "denied"**). Out: Android settings re-enable → A=granted → 4; Chrome site reset → 1 |
 | 6 | denied | ? | yes | CTA hidden; row is dead but present | Subscribed then toggled off. Next send → FCM 410 → cleanup removes row → 7 |
 | 7 | denied | ? | – | CTA hidden — terminal until user acts | `dead_removed`. Re-enable → A=granted → 4 **if** B reads none (see open question) |
@@ -793,6 +793,120 @@ positioned, fully-reworded box read as a new modal. Fix:
   something new drops — no spam, just the signal." (grey, the
   reassurance) — plus an explicit `[ done ]` that closes without
   counting as a decline (field users didn't reliably find `[ x ]`).
+
+**Follow-up 2026-07-20:** the "setting up notifications…" busy copy this
+fix pinned in place was ITSELF field-reported as noise (see the entry
+below) — it's now removed rather than geometry-stabilized. The min-h
+pinning and keyed-transition mechanism from this fix stay; only the busy
+phase's content changed.
+
+### Fixed 2026-07-20 — busy phase read as the modal "turning pages by itself"
+
+Field feedback (screenshots reviewed): on the direct-subscribe path
+(permission already granted), tapping `notify_me` flashed "setting up
+notifications…" for the few hundred ms `subscribe()` takes, then swapped
+to success — even with 2026-07-19's geometry pinning, a same-sized,
+same-position but fully-reworded box reads as the modal changing pages
+on its own. Reference behaviour: `SaveGateModal` never self-advances —
+stable content per situation.
+
+Root cause (`PushOptInModal.tsx`): a single `"busy"` phase rendered the
+same loading text for two structurally different situations — the
+native-dialog accept (where the ask was just shown and dismissed) and
+the direct/resume path (where NO ask was ever shown, so busy copy was
+the FIRST thing the user saw appear, unprompted).
+
+Fix — split into two phases with different visibility rules, both still
+in-flight states internally:
+- **`"busy"`** (native-dialog path, `handleAccept`): the ask content
+  (`askContent`) stays ON SCREEN, `opacity-50 pointer-events-none` and
+  the `enable_notifications` button's native `disabled` attribute set —
+  a dim/disable transition on the SAME content, not a swap. The geometry
+  key groups `"idle"` and `"busy"` together (`geometryKey`,
+  `PushOptInModal.tsx:223`) so React doesn't remount/re-fade for this
+  transition — only a genuine content change gets the fresh mount.
+  Net result: the modal's visible content changes exactly ONCE per
+  accept (ask → outcome), never ask → busy → outcome.
+- **`"resuming"`** (direct/resume path, the granted-but-unsubscribed
+  open-effect): renders `null`. There's no honest copy to show before
+  the outcome is known — the ask was never shown, so there's nothing to
+  hold in place or dim — and the window is a few hundred ms; Julian's
+  call was not to cover it with loading copy at all. `min-h-48` still
+  reserves the geometry so the eventual outcome doesn't jump the modal.
+  Net result: "outcome only" — the direct path shows exactly one
+  content change (blank → outcome), same as before this fix but now
+  honestly blank instead of narrating a step the user doesn't need to
+  see.
+
+Both paths still fall through to the existing `"failed"` phase (retry
+button, not-a-decline) unchanged — only the in-flight rendering changed,
+not the outcome handling. Unit-locked: dialog count stays 1 through
+both paths' entire flight (regression guard against the 2026-07-19
+bug's mechanism recurring), native path's ask copy + disabled button
+assert mid-flight via a controllable (not just fast) mock promise, and
+direct path asserts no busy/ask copy at any point.
+
+State-machine reference (2026-07-19, above): row 4's "user sees" column
+updated to drop "busy" wording; the on-device check's quoted copy
+updated to match. The phase machine itself (`idle`/`busy`/`resuming`/
+`subscribed`/`denied`/`failed`) still exists internally — only which
+phases render distinct copy, and to whom, changed.
+
+### Added 2026-07-20 — notification badge icon (Android status-bar mask)
+
+Field bug: the Android status-bar/notification-shade icon rendered as a
+generic solid square instead of the F mark. Root cause, verified two
+ways: (1) MDN (`ServiceWorkerRegistration.showNotification()`, fetched
+2026-07-21) — the small status-bar icon is a SEPARATE option named
+`badge` (not a resized `icon`), recommended ~96×96px, and "the image
+will be automatically masked"; (2) pixel-level check of the asset the SW
+was passing as `badge` — `icon-192.png` — showed alpha=255 at every
+single pixel (`identify`/PIL, verified). Android/Chrome discard color
+and mask using ONLY the alpha channel, so a uniformly-opaque icon masks
+to a uniform (square) shape regardless of what's drawn on it — that's
+the bug, not a missing asset.
+
+Fix: `apps/web/public/badge-96.png`, derived (not hand-drawn) from the
+existing `icon-512.png` brand mark — the source icon is already a flat
+white "F" silhouette on black (verified: 82 unique colors in the whole
+512×512 image, dominated by pure black/white with a thin antialiased
+edge), so luminance IS the shape's alpha channel. Script mapped
+luminance → alpha and forced RGB to white at 96×96 (one-off, run
+locally with `sharp` — already a project dependency — not added as a
+permanent build step; there is no existing "icon pipeline" to hook into,
+see below). Verified the output: RGB is uniformly `(255,255,255)`
+across every pixel, alpha spans the full 0–255 range tracing the F
+shape, and a composite over a colored background renders the F cleanly.
+
+`sw.ts`'s push handler (`:233-241`) now passes `badge: "/badge-96.png"`
+instead of reusing `icon-192.png`; `icon` was already correctly set to
+the app icon (`icon-192.png`) — confirmed present, no change needed
+there.
+
+**Icon pipeline finding:** there isn't one. `icon-192.png` / `icon-512.png`
+are hand-placed static files in `apps/web/public/`, referenced directly
+by path from `manifest.json` and `sw.ts` — no generation script, unlike
+`optimize-images.mjs` (which targets content images — set art, flyers —
+output to `public/images/`, a different asset class entirely). Following
+the existing convention meant: derive the asset once, drop the PNG
+directly in `public/`, reference it by path. If icon assets multiply
+(more sizes, more purposes), a small `scripts/generate-icons.mjs` sibling
+to `optimize-images.mjs` would be the natural next step — not done now,
+one new asset doesn't justify a script.
+
+Note for future sends: badge rendering is monochrome BY SPEC, not a
+Form:at choice — Android/Chrome use only the alpha channel and discard
+whatever RGB is supplied (the derivation above sets RGB to white for
+correctness/clarity when previewing the asset directly, but the OS would
+mask identically if it were any other color, since only alpha carries
+shape information).
+
+Tests: not unit-locked. `sw.ts` has no existing unit-test harness — it's
+a genuine service-worker module (`self.__WB_MANIFEST`, `workbox-precaching`,
+`self.addEventListener`) with no jsdom-compatible test target today, and
+building that harness is beyond this pass's scope (flagged, not built).
+On-device check: trigger a real push send → Android notification shade
+shows the F silhouette, not a solid square.
 
 ### Proposed 2026-07-19 — third bracket-CTA treatment for toast surfaces (awaiting art direction)
 
