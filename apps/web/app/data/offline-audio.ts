@@ -19,7 +19,8 @@
 
 import { type DBSchema, type IDBPDatabase, openDB } from "idb";
 
-export type OfflineAudioKind = "mp3" | "peaks";
+// Not exported — used only by `OfflineAudioEntry` below, in this file.
+type OfflineAudioKind = "mp3" | "peaks";
 
 export type OfflineAudioEntry = {
   url: string;
@@ -45,7 +46,9 @@ const VERSION = 1;
 
 let dbPromise: Promise<IDBPDatabase<OfflineAudioDB>> | null = null;
 
-export function openOfflineAudioDb(): Promise<IDBPDatabase<OfflineAudioDB>> {
+// Not exported — every caller lives in this file (knip flagged it as an
+// unused export, correctly: nothing outside this module ever imported it).
+function openOfflineAudioDb(): Promise<IDBPDatabase<OfflineAudioDB>> {
   if (!dbPromise) {
     dbPromise = openDB<OfflineAudioDB>(DB_NAME, VERSION, {
       upgrade(db) {

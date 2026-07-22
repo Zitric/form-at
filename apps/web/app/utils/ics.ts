@@ -77,8 +77,11 @@ export function buildIcs(event: Event): string {
 }
 
 /** Google Calendar deep-link — opens https://calendar.google.com with the new
- *  event pre-filled. Dates must be absolute UTC in the `dates=START/END` format. */
-export function buildGoogleCalendarUrl(event: Event): string {
+ *  event pre-filled. Dates must be absolute UTC in the `dates=START/END` format.
+ *  Not exported — only `buildGoogleCalendarTargetUrl` below needs it directly;
+ *  keeping it module-private matches its actual usage (knip flagged it as an
+ *  unused EXPORT, correctly — nothing outside this file ever imported it). */
+function buildGoogleCalendarUrl(event: Event): string {
   const { startDate, endDate } = eventDateTimes(event.date, event.runtime);
   const startUtc = londonLocalToUtc(startDate);
   const endUtc = endDate ? londonLocalToUtc(endDate) : startUtc;
@@ -101,8 +104,9 @@ export function buildGoogleCalendarTargetUrl(event: Event): string {
 }
 
 /** Outlook Live deep-link — opens outlook.live.com calendar compose view with
- *  the event pre-filled. Dates are ISO 8601 with `Z` (absolute UTC). */
-export function buildOutlookCalendarUrl(event: Event): string {
+ *  the event pre-filled. Dates are ISO 8601 with `Z` (absolute UTC).
+ *  Not exported — same reasoning as `buildGoogleCalendarUrl` above. */
+function buildOutlookCalendarUrl(event: Event): string {
   const { startDate, endDate } = eventDateTimes(event.date, event.runtime);
   const startUtc = londonLocalToUtc(startDate);
   const endUtc = endDate ? londonLocalToUtc(endDate) : startUtc;

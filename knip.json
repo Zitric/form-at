@@ -3,13 +3,15 @@
   "workspaces": {
     ".": {
       "entry": ["turbo.json", "scripts/*.{ts,mjs,js}"],
-      "ignoreBinaries": ["vite", "playwright", "wrangler"]
+      "ignoreBinaries": ["vite", "playwright", "wrangler", "ffmpeg"]
     },
     "apps/web": {
       "entry": [
         "app/server.ts",
         "app/router.tsx",
         "app/routes/**/*.{ts,tsx}",
+        "app/sw.ts!",
+        "app/components/Text.tsx!",
         "scripts/*.{ts,mjs,js}",
         "tests/**/*.{ts,tsx}"
       ],

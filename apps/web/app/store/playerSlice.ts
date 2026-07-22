@@ -49,7 +49,10 @@ export function releaseAudioStream() {
 //   null                    — generic playback failure (audio element rejected
 //                             play() for some other reason — network blip on
 //                             a streamable set, decode error, etc.).
-export type PlaybackBlockedReason = "not-saved-offline" | "tab-offline-needs-network" | null;
+// Not exported — consumers (e.g. PlaybackErrorToast) read the VALUE via
+// `useStore((s) => s.playbackBlockedReason)` with inferred typing; nothing
+// imports this type name directly.
+type PlaybackBlockedReason = "not-saved-offline" | "tab-offline-needs-network" | null;
 
 // THE offline playback gate predicate (M1: one predicate, every play path).
 // True when starting/resuming this track can actually get bytes: either

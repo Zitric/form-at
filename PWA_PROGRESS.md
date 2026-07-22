@@ -1038,25 +1038,62 @@ silently drop a field; now something does.
     until manually dismissed, confirming the flag actually changes
     device behavior (not just that the option is passed).
 
-### Proposed 2026-07-19 — third bracket-CTA treatment for toast surfaces (awaiting art direction)
+### Implemented 2026-07-22 — third bracket-CTA treatment: shared `ToastShell` (was: "Proposed 2026-07-19")
 
-Direction (Julian): gold border works at toast size, gold TEXT doesn't;
-needs more padding to read. That treatment already exists concretely in
-`UpdateToast` since the 2026-07-18 polish — spec, for extraction as the
-canonical "toast CTA" treatment: `bg-black`, `border-gold/40`
-(hover /70, active full gold), message `text-grey text-xs`, action as
-gold `BracketLabel` with the label going white on press, `px-5 py-3.5`
-(exact 44px target), `gap-4 max-w-sm`, `whitespace-nowrap` on the
-bracket, `animate-fade-in-up` entrance. NOT implemented as a shared
-variant yet — deliberately: unifying means touching `PlaybackErrorToast`
-(red; does the error tone adopt the same padding/entrance, or stay
-visually distinct?) and `Toast` (ephemeral auto-fade; probably stays
-lighter), all three field-hardened, and those are art-direction calls.
-The three positioning wrappers are already copy-identical (same bottom
-math in all three files) — when the direction lands, extract a
-`ToastShell` owning wrapper + surface treatment in one place.
+Julian's call on the 2026-07-19 proposal below: unify all three toasts —
+error stays red-toned, everything else (including the generic ephemeral
+`Toast`) adopts the gold-border/grey-text/padding treatment `UpdateToast`
+already shipped. Extracted `ToastShell` (`components/ToastShell.tsx`)
+owning the wrapper positioning (verified byte-identical across all three
+consumers before extracting, still true) and the surface treatment
+(`bg-black`, border, `px-5 py-3.5`, `gap-4 max-w-sm`,
+`animate-fade-in-up`), with a `variant` prop mirroring `Button.tsx`'s
+existing `Record<Variant, string>` idiom rather than a new mechanism:
 
-### Finding 2026-07-19 — notify_me CTA entrance fade unreliable (decision pending)
+- `"default"` — gold (`UpdateToast`, the generic `Toast`).
+- `"error"` — red equivalent, same mechanics (border brightens
+  `/40 → hover:/70 → active:` full, same for text), preserving the
+  urgency read (`PlaybackErrorToast`).
+
+Zero behavior change: all three consumers' existing test suites pass
+unchanged. Notably, `Toast`'s own timed enter/exit
+(`fadeInUp`/`fadeOutDown`, driven by its `exiting` state — a LIFECYCLE
+concern, deliberately kept separate from the visual unification) is
+passed as an inline `style` prop, which wins over `ToastShell`'s default
+`animate-fade-in-up` class via ordinary CSS specificity — no conditional
+class-dropping needed. `PlaybackErrorToast`'s message keeps its
+`flex-1` (pushes `[ x ]` to the far edge) since `ToastShell` only owns
+the shared row, not each consumer's own child layout. New
+`ToastShell.test.tsx` locks the variant → class mapping and the
+style-override behavior directly, since it was clean to test in
+isolation; the three consumers' unchanged suites remain the behavior
+regression guard.
+
+### Decided + implemented 2026-07-22, option (b) — notify_me CTA entrance fade (was: "Finding 2026-07-19")
+
+Root cause (unchanged from the 2026-07-19 finding below): the `visible`
+state + opacity-transition pattern only animates if the browser paints
+the opacity-0 frame before the flip — this element mounts LATE (after
+the permission-read effect / async `getSubscription()` / flag-reconcile
+re-render), so insertion and the flip can land in the same paint and the
+fade never plays.
+
+Fixed with option (b): `PushOptInCtaButton` now applies
+`animate-fade-in` (or `animate-slow-fade-in` on true first load — same
+5s/0.6s convention as before, unchanged) directly on mount; the
+`visible` state + effect are gone. Verified, not just cited, that
+BottomNav's keyframe-flash caveat doesn't apply here before relying on
+it: that caveat is specific to elements present in the SSR'd HTML, where
+attaching an animation only client-side jumps the element back to the
+keyframe's 0% before replaying. `useStoreHydrated()`'s
+`getServerSnapshot` (`store/index.ts`) unconditionally returns `false`,
+so this whole subtree is NEVER in the server-rendered HTML — its first
+DOM appearance full stop IS this mount, so the keyframe's 0%→100% is the
+honest first frame, not a jump from an already-painted state. Visual-only
+change; existing `PushOptInCta` test suite (no assertions on
+opacity/animation) passes unchanged.
+
+### Finding 2026-07-19 — notify_me CTA entrance fade unreliable (original, resolved above)
 
 The fade IS wired (`PushOptInCta.tsx` → `PushOptInCtaButton`, 5s/0.6s
 first-load convention) and was never removed (diff-verified: untouched
@@ -1073,6 +1110,24 @@ run on insertion (BottomNav's keyframe-flash caveat doesn't apply: this
 element is client-conditional, never SSR-rendered); (c) drop the
 entrance. Recommendation: (b) — one class, deletes the state+effect.
 Julian decides.
+
+### Proposed 2026-07-19 — third bracket-CTA treatment for toast surfaces (original, resolved above)
+
+Direction (Julian): gold border works at toast size, gold TEXT doesn't;
+needs more padding to read. That treatment already exists concretely in
+`UpdateToast` since the 2026-07-18 polish — spec, for extraction as the
+canonical "toast CTA" treatment: `bg-black`, `border-gold/40`
+(hover /70, active full gold), message `text-grey text-xs`, action as
+gold `BracketLabel` with the label going white on press, `px-5 py-3.5`
+(exact 44px target), `gap-4 max-w-sm`, `whitespace-nowrap` on the
+bracket, `animate-fade-in-up` entrance. NOT implemented as a shared
+variant yet — deliberately: unifying means touching `PlaybackErrorToast`
+(red; does the error tone adopt the same padding/entrance, or stay
+visually distinct?) and `Toast` (ephemeral auto-fade; probably stays
+lighter), all three field-hardened, and those are art-direction calls.
+The three positioning wrappers are already copy-identical (same bottom
+math in all three files) — when the direction lands, extract a
+`ToastShell` owning wrapper + surface treatment in one place.
 
 ### Decided 2026-07-19 — in-app unsubscribe still deferred
 
