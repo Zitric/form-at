@@ -7,15 +7,33 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
-- **Open:** 1, 2, 3, 4, 8, 12, 13, 15, 20 (pointer only, not urgent)
+- **Open:** 3, 4, 8, 12, 13, 15, 20 (pointer only, not urgent)
+- **Invalid:** 1 (2026-07-22 — premise was wrong, not stale: both flagged functions are load-bearing behind a live multi-provider calendar picker; do not delete, see item for the full re-verification)
 - **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, ships together post-2026-07-24; see PWA_PROGRESS.md for the deferral rationale)
-- **Resolved:** 6 (2026-06-28, `10811a4`), 7 (2026-07-02, `d2bbc36` — offline.html redesign, stamped during the 2026-07-06 docs cleanup), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01), 17 (2026-07-02 — gate proven intact via SW-preview experiments; observed bytes were HTTP cache / element buffer, not IDB; silent-blocked-tap toast fixed), 18 (2026-07-02 — not reproducible on current build; all three offline nav modes verified against the SW preview), 5 (absorbed into 19's verification — CORS re-checked on the custom domain 2026-07-06: preflight GET/HEAD + range, ACAO *, Content-Length exposed), 19 (2026-07-06 — audio on cdn.formatglasgow.com, host centralized in utils/audioHost.ts, IDB force-re-download migration in reconcileFromIdb)
+- **Resolved:** 2 (2026-07-22 — knip.json config + parallel CI job; see item for a correction to its own original plan), 6 (2026-06-28, `10811a4`), 7 (2026-07-02, `d2bbc36` — offline.html redesign, stamped during the 2026-07-06 docs cleanup), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01), 17 (2026-07-02 — gate proven intact via SW-preview experiments; observed bytes were HTTP cache / element buffer, not IDB; silent-blocked-tap toast fixed), 18 (2026-07-02 — not reproducible on current build; all three offline nav modes verified against the SW preview), 5 (absorbed into 19's verification — CORS re-checked on the custom domain 2026-07-06: preflight GET/HEAD + range, ACAO *, Content-Length exposed), 19 (2026-07-06 — audio on cdn.formatglasgow.com, host centralized in utils/audioHost.ts, IDB force-re-download migration in reconcileFromIdb)
 
 Resolved items keep their original section in place with a `✅ Resolved` stamp at the top, so the historical context (cause + fix path) stays readable. Search for `✅ Resolved` to skip to / past them.
 
 ---
 
 ## 1. Delete dead code flagged by knip
+
+**❌ INVALID — re-verified 2026-07-22, do NOT delete.** This item's premise
+was wrong, not just stale. Re-grepping before touching anything (as this
+entry's own "Verification" note below asked) found real callers:
+`buildGoogleCalendarUrl` is called by `buildGoogleCalendarTargetUrl`
+(`ics.ts:99`), and `buildOutlookCalendarUrl` by
+`buildOutlookCalendarTargetUrl` (`ics.ts:127`) — both wrappers exported and
+imported directly by `AddToCalendarButton.tsx:8`, which renders an actual
+multi-provider picker modal (`google` / `outlook` / `apple · .ics`,
+`AddToCalendarButton.tsx:41-98`) — the exact UI this entry's "why
+deprecated" claimed doesn't exist and isn't planned. The 2026-06-24 knip
+audit's "zero callers outside `ics.ts`" was technically true (the direct
+callers ARE inside the file) but missed that those in-file callers are
+themselves the load-bearing indirection knip can't see through in this
+shape — deleting either function would have broken live `google`/`outlook`
+add-to-calendar links in production. Original text kept below for context,
+per this file's stamp convention.
 
 **Scope:** one file — `apps/web/app/utils/ics.ts`.
 
@@ -34,7 +52,48 @@ Remove the two exports:
 
 ## 2. knip.json + CI placement
 
-**Scope:** create `apps/web/knip.json` (per-app, not repo-root); then wire knip into CI.
+**✅ Resolved 2026-07-22.** `pnpm knip` verified exiting 0 locally with the
+config in place, and a parallel `knip` job added to `.github/workflows/ci.yml`
+alongside `static`/`unit`/`e2e` (per-PR check, not a pre-commit hook, per
+this item's own instruction below).
+
+**Correction to this item's own scope line:** a per-app `apps/web/knip.json`
+was NOT created — by the time this was picked up, a ROOT-level `knip.json`
+already existed using knip's `"workspaces"` map (covering `.`, `apps/web`,
+and `packages/tsconfig`). Empirically verified (not assumed) that knip
+completely ignores a per-workspace `knip.json` file once a root config
+defines that workspace via `"workspaces"` — creating one had zero effect on
+the findings. The two config lines below were instead merged into the
+existing root config's relevant workspace blocks: `entry: ["app/sw.ts!"]`
+into `apps/web`'s existing `entry` array, `ignoreBinaries: ["ffmpeg"]` into
+the **`.` (root) workspace**, not `apps/web` — `scripts/generate-peaks.mjs`
+(the ffmpeg caller) lives at the repo root's `scripts/`, not
+`apps/web/scripts/`.
+
+**Additional findings beyond this item's original two-line snippet** (real
+`pnpm knip` output on re-verification, not anticipated when this item was
+written):
+- `Text` / `Heading` / `Muted` (the design-system surface this item's item-1
+  neighbor explicitly says to keep exported, not delete) — silenced by
+  marking `apps/web/app/components/Text.tsx!` as an additional knip `entry`
+  file. Verified against knip's docs: entry files are excluded from
+  "unused exports" reporting by default — the intended, documented
+  mechanism for "this whole file is a public surface," not a workaround.
+- Six more exports/types flagged as "unused" for the exact same reason item
+  1's `buildGoogleCalendarUrl`/`buildOutlookCalendarUrl` were (genuinely
+  used, but only by other code in the SAME file — knip correctly flags an
+  export nothing outside the file imports, even when it's not actually
+  dead). Unlike items 1's pair, these six had no documented reason to stay
+  part of the public surface, so each had its `export` keyword removed
+  instead (zero behavior change — confirmed via grep that nothing outside
+  each file referenced them by name; `pnpm check` + full test suite stayed
+  green): `openOfflineAudioDb` (`offline-audio.ts`), `OfflineAudioKind`
+  (`offline-audio.ts`), `NOT_SAVED` (`useOfflineDownload.ts`),
+  `PlaybackBlockedReason` (`playerSlice.ts`), and `ToastVariant`
+  (`ToastShell.tsx`, new this session).
+
+**Scope:** ~~create `apps/web/knip.json` (per-app, not repo-root)~~ — see
+correction above; then wire knip into CI.
 
 ### Minimum config to clear the known false positives
 

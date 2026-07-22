@@ -139,19 +139,37 @@ export function PushOptInCta({ className }: { className?: string }) {
 
 // Split for the same reason InstallCtaButton is split from InstallCta: the
 // gate above renders null until capability + permission are known, so the
-// fade-in hooks need to run from this component's actual mount rather than
-// racing the gate's own null render. Same first-load timing convention as
-// every other home-page entrance (5s true first paint, 0.6s otherwise).
+// fade-in needs to run from this component's actual mount rather than
+// racing the gate's own null render.
+//
+// A CSS keyframe class, not the opacity-state + transition pattern this used
+// before (fixed 2026-07-22, field-reported unreliable): that pattern only
+// animates if the browser paints the opacity-0 frame before the effect flips
+// it to 1. This element mounts LATE — after the permission-read effect, the
+// async getSubscription() resolution, and/or the flag-reconcile re-render —
+// so insertion and the flip can land in the same paint, and the fade never
+// plays. A keyframe class attached at mount always plays, because it doesn't
+// depend on a separate prior frame existing.
+//
+// This does NOT hit BottomNav's keyframe-flash caveat (verified, not just
+// cited): that bug is specific to elements present in the SERVER-rendered
+// HTML, where attaching an animation only client-side jumps the element from
+// its already-painted state back to the keyframe's 0% before replaying —
+// the visible double-fade. This component's parent gates on
+// `useStoreHydrated()`, whose `getServerSnapshot` (`store/index.ts`) always
+// returns `false` — so this subtree is NEVER in the SSR'd HTML. Its first
+// appearance in the DOM full stop IS this mount, so there's no prior painted
+// state to jump from; the keyframe's 0%→100% is the truthful first frame.
+//
+// Same first-load timing convention as every other home-page entrance (5s
+// true first paint, 0.6s otherwise) — `animate-slow-fade-in` and
+// `animate-fade-in` share the same `fade-in` keyframe, just a different
+// theme-level duration (`global.css`).
 function PushOptInCtaButton({ className, onOpen }: { className?: string; onOpen: () => void }) {
   const isFirstLoad = useFirstLoad();
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    setVisible(true);
-  }, []);
-  const fadeDuration = isFirstLoad ? "5s" : "0.6s";
 
   return (
-    <div style={{ opacity: visible ? 1 : 0, transition: `opacity ${fadeDuration} ease-out` }}>
+    <div className={isFirstLoad ? "animate-slow-fade-in" : "animate-fade-in"}>
       <Button variant="secondary" onClick={onOpen} className={cn(className)}>
         notify_me
       </Button>

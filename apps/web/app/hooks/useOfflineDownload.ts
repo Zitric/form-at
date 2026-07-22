@@ -6,7 +6,8 @@ import type { OfflineSetState } from "~/store/offlineSlice";
 // module-level: a fresh object literal inside a Zustand selector would fail
 // `Object.is` equality and trigger an infinite render loop. Frozen so
 // callers can't accidentally mutate the shared reference.
-export const NOT_SAVED: OfflineSetState = Object.freeze({ status: "not-saved" });
+// Not exported — only `useOfflineStateFor` below (in this file) reads it.
+const NOT_SAVED: OfflineSetState = Object.freeze({ status: "not-saved" });
 
 // Single Zustand selector pattern shared by every component that reads
 // per-set offline status — keeps the `?? NOT_SAVED` fallback in one place

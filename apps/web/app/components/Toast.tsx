@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
+import { ToastShell } from "~/components/ToastShell";
 import { useStore } from "~/store";
-import { Z } from "~/styles/z";
 
 const VISIBLE_MS = 1700;
 const EXIT_MS = 250;
@@ -14,6 +14,14 @@ const EXIT_MS = 250;
 // so a close affordance would contradict that "you must dismiss this" reading.
 // PlaybackErrorToast keeps its `[ x ]` because that one persists until the
 // user acts.
+//
+// Surface/positioning come from `ToastShell` (extracted 2026-07-22, adopting
+// the gold-border/grey-text/padding treatment `UpdateToast` shipped) — but
+// this component's own timed enter/exit (`fadeInUp`/`fadeOutDown`, driven by
+// `exiting` state) is a LIFECYCLE concern, kept separate from that visual
+// unification: passed as `style`, which wins over `ToastShell`'s default
+// `animate-fade-in-up` class via ordinary CSS specificity (inline style
+// beats any class). Nothing about the auto-fade timing changed.
 export function Toast() {
   const toast = useStore((s) => s.toast);
   const setToast = useStore((s) => s.setToast);
@@ -35,26 +43,17 @@ export function Toast() {
   if (!toast) return null;
 
   return (
-    <div
-      // Mobile bottom = nav (55) + mini-player (50) + safe-area + 12px gap.
-      // Desktop has no BottomNav, just clears the static ~78px desktop player.
-      // If LAYOUT in styles/layout.ts changes, this calc needs the matching
-      // px update — kept inline so Tailwind's JIT picks it up at build time.
-      className={`fixed inset-x-0 ${Z.toast} flex items-center justify-center pointer-events-none px-4 bottom-[calc(105px+env(safe-area-inset-bottom)+12px)] sm:bottom-[100px]`}
+    <ToastShell
+      variant="default"
+      onClick={() => setExiting(true)}
+      ariaLabel="Dismiss notification"
       style={{
         animation: exiting
           ? `fadeOutDown ${EXIT_MS}ms ease-in forwards`
           : `fadeInUp ${EXIT_MS}ms ease-out`,
       }}
     >
-      <button
-        type="button"
-        onClick={() => setExiting(true)}
-        aria-label="Dismiss notification"
-        className="pointer-events-auto bg-black border border-gold/60 text-white text-xs font-mono max-w-sm px-4 py-2 hover:text-gold transition-colors text-left cursor-pointer"
-      >
-        {toast}
-      </button>
-    </div>
+      <span className="text-grey">{toast}</span>
+    </ToastShell>
   );
 }
