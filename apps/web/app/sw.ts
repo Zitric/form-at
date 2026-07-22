@@ -24,6 +24,8 @@ import { StaleWhileRevalidate } from "workbox-strategies";
 import { getOfflineAudio } from "~/data/offline-audio";
 import { stripAppContext } from "~/utils/appContext";
 import { AUDIO_HOST } from "~/utils/audioHost";
+import { buildNotificationOptions, resolveNotificationClickUrl } from "~/utils/pushNotification";
+import type { PushPayload } from "~/utils/webPush";
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ revision: string | null; url: string }>;
@@ -211,41 +213,31 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(Promise.all([caches.delete("pages-v1"), caches.delete("audio-v1")]));
 });
 
-// Phase 2 (2026-07-15) — push notifications: receive + click-to-open.
+// Phase 2 (2026-07-15; extended 2026-07-21 — image/vibrate/actions/
+// requireInteraction/timestamp) — push notifications: receive + click-to-open.
 //
-// Payload shape is whatever `webPush.ts`'s `PushPayload` sends — JSON
-// `{ title, body, url? }`. MUST NOT throw: `event.data` is legitimately
-// `null` for an empty push per spec, and `.json()` itself throws on
-// non-JSON bodies — optional chaining alone only guards the null case, so
-// this wraps the whole read in try/catch and falls back to a generic
-// notification rather than dropping the push silently.
+// Payload shape is whatever `webPush.ts`'s `PushPayload` sends. MUST NOT
+// throw: `event.data` is legitimately `null` for an empty push per spec, and
+// `.json()` itself throws on non-JSON bodies — optional chaining alone only
+// guards the null case, so this wraps the whole read in try/catch and falls
+// back to a generic notification rather than dropping the push silently.
+// `buildNotificationOptions` (pure, unit-tested — see
+// `~/utils/pushNotification.ts`) owns everything payload-shaped; `tag` stays
+// here because it's receipt-time state, not derivable from the payload.
 self.addEventListener("push", (event) => {
-  let payload: { title?: string; body?: string; url?: string } = {};
+  let payload: Partial<PushPayload> = {};
   try {
-    payload = event.data?.json() ?? {};
+    payload = (event.data?.json() as Partial<PushPayload> | undefined) ?? {};
   } catch {
     // Non-JSON payload — show the generic fallback below instead of nothing.
   }
 
   const title = payload.title || "Form:at";
-  const options: NotificationOptions = {
-    body: payload.body || "",
-    icon: "/icon-192.png",
-    // `badge` is a DIFFERENT asset from `icon`, not a smaller copy of it —
-    // MDN (verified 2026-07-21): ~96x96, "the image will be automatically
-    // masked." Android/Chrome discard color and use only the alpha channel,
-    // so a fully-opaque icon (icon-192.png has zero transparency — verified
-    // pixel-by-pixel) masks to a solid square, which was the reported bug.
-    // badge-96.png is a derived white-on-transparent silhouette of the same
-    // F mark (luminance → alpha; see PWA_PROGRESS's Phase 2 badge entry for
-    // the derivation).
-    badge: "/badge-96.png",
-    data: { url: payload.url || "/" },
-    // Unique per push — a constant tag would make a second announcement
-    // silently REPLACE an unread first one (tag collapse, no renotify).
-    // Two same-day sends (new set + new event) must both stay visible.
-    tag: `format-${Date.now()}`,
-  };
+  const options = buildNotificationOptions(payload);
+  // Unique per push — a constant tag would make a second announcement
+  // silently REPLACE an unread first one (tag collapse, no renotify).
+  // Two same-day sends (new set + new event) must both stay visible.
+  options.tag = `format-${Date.now()}`;
 
   event.waitUntil(self.registration.showNotification(title, options));
 });
@@ -257,24 +249,33 @@ self.addEventListener("push", (event) => {
 // `includeUncontrolled: true` matters here specifically: a client open from
 // BEFORE this SW activated (or before `clientsClaim()` took it over) is
 // still a real open window we should reuse instead of spawning a duplicate.
+//
+// `event.action` (2026-07-21) distinguishes a body tap from one of the two
+// action buttons — verified against MDN's `NotificationEvent.action`:
+// empty string for a body tap or a notification with no buttons, otherwise
+// the tapped action's id. `resolveNotificationClickUrl` (pure, unit-tested)
+// owns that decision; `null` means "later" was tapped — close only, the
+// notification already closed above, so there's nothing left to do.
 self.addEventListener("notificationclick", (event) => {
+  const dataUrl = (event.notification.data as { url?: string } | undefined)?.url;
+  const targetUrl = resolveNotificationClickUrl(event.action, dataUrl);
   event.notification.close();
-  const url = (event.notification.data as { url?: string } | undefined)?.url || "/";
+  if (targetUrl === null) return;
 
   event.waitUntil(
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((clientList) => {
         const existing = clientList[0];
-        if (existing) return existing.focus().then((c) => c.navigate(url));
-        return self.clients.openWindow(url);
+        if (existing) return existing.focus().then((c) => c.navigate(targetUrl));
+        return self.clients.openWindow(targetUrl);
       })
       // `navigate()` rejects (TypeError) on a client this SW doesn't control
       // — and includeUncontrolled above deliberately admits those. Without
       // this fallback the tap would be swallowed entirely: the notification
       // is already closed, the rejection dies inside waitUntil, nothing
       // opens. Worst case here is a duplicate window, which beats a dead tap.
-      .catch(() => self.clients.openWindow(url)),
+      .catch(() => self.clients.openWindow(targetUrl)),
   );
 });
 

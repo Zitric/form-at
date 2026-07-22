@@ -28,8 +28,37 @@ Live at [formatglasgow.com](https://formatglasgow.com)
 pnpm install       # install all workspaces
 pnpm dev           # start dev server (generates routeTree.gen.ts on first run)
 pnpm build         # production build
-pnpm check         # Biome lint + format
+pnpm check         # Biome lint + format, auto-fixing, across the whole repo, then typecheck every workspace
+pnpm lint          # Biome check only (reports, doesn't fix) — same check CI's `static` job runs per-workspace
+pnpm tsc           # typecheck every workspace only, no lint/format
+pnpm format        # Biome format only, auto-fixing, no lint rules or typecheck
+pnpm knip          # find unused files/exports/dependencies across the monorepo
 ```
+
+`lint`/`tsc`/`build`/`dev` are thin Turbo wrappers at the root — they fan
+out to every workspace (`@form-at/web` today; future apps in `apps/` pick
+this up for free). `check` is the one exception: it runs Biome directly
+over the whole repo (not per-workspace) before calling `turbo tsc`. Run a
+single workspace directly with `pnpm -C apps/web <script>` when you don't
+want the others.
+
+### Scripts (apps/web)
+
+All of these run from `apps/web/` — either `cd apps/web` first, or prefix
+each with `pnpm -C apps/web` from the repo root.
+
+| Command | What it does |
+|---|---|
+| `start` | Serve the production build (port 4173) — the only way to test PWA/service-worker behaviour, see below |
+| `send-push -- --title "..." --body "..."` | Send a push notification to subscribed devices |
+| `optimize-images` | Convert `images-source/` originals into responsive AVIF/WebP |
+| `og` | Generate social share banners (runs automatically in `pnpm build`) |
+| `sitemap` | Generate `public/sitemap.xml` (runs automatically in `pnpm build`) |
+| `screenshots` | Capture the two PWA install-prompt screenshots |
+| `stats` | Print a play-analytics summary from production D1 |
+| `deploy` | Build and deploy straight to Cloudflare Pages (bypasses CI — normally deploys happen via `deploy.yml` on push to `main`) |
+
+Full explanations, setup steps, and every flag: **`apps/web/scripts/README.md`**.
 
 ### Tests
 
