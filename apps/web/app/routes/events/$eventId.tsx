@@ -22,7 +22,8 @@ export const Route = createFileRoute("/events/$eventId")({
     if (!event) return {};
     return pageHead({
       title: `${event.title} · ${event.date}`,
-      description: `${event.title} on ${event.date} at ${event.venue}. ${event.audio}.`,
+      description:
+        event.description ?? `${event.title} on ${event.date} at ${event.venue}. ${event.audio}.`,
       path: `/events/${event.id}`,
       // Per-event banner generated at build by scripts/generate-og.ts
       // (flyer + title + date composition). Falls back to /og-image.png if missing.
@@ -85,6 +86,13 @@ function EventDetail() {
                 );
               })}
             </p>
+            {/* Placed here, not at the top of the page: it exists to explain
+                a lineup that might look partial (e.g. a co-organized event
+                where some names have no Form:at DJ profile) — reads as a
+                footnote to the names right above it, not a general blurb. */}
+            {event.description && (
+              <p className="text-xs text-grey/70 leading-relaxed mt-2">{event.description}</p>
+            )}
           </div>
         ) : event.status === "upcoming" ? (
           <div className="mb-10">

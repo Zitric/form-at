@@ -29,4 +29,21 @@ test.describe("events page", () => {
     const djLink = page.locator('a[href^="/djs/"]').first();
     await expect(djLink).toBeVisible();
   });
+
+  test("co-organized event explains why some lineup names have no DJ profile link", async ({
+    page,
+  }) => {
+    // Direct navigation to a dynamic detail route isn't an established
+    // pattern in this suite (every other detail-page test clicks through
+    // from the list) — click-through, matching that precedent.
+    await gotoAndHydrate(page, "/events");
+    await page.getByRole("button", { name: /seafield sound/i }).click();
+    await expect(page.getByRole("heading", { name: /lineup/i })).toBeVisible();
+    // Confirms the fields wired this session actually render together: real
+    // DJ links for the acts that have profiles...
+    await expect(page.getByRole("link", { name: /julz lever/i })).toBeVisible();
+    // ...and the description explaining the co-organized/partial-lineup case
+    // for the ones that don't (rushford / dimebag / 3sr have no djs.ts entry).
+    await expect(page.getByText(/co-organized/i)).toBeVisible();
+  });
 });

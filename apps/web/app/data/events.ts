@@ -8,6 +8,12 @@ export type Event = {
   runtime: string;
   status: "upcoming" | "past";
   flyer?: string;
+  // Optional free-text note, same shape/purpose as MusicSet's `description?`
+  // (sets.ts) — most events won't need one (the auto-built meta description
+  // in $eventId.tsx covers the generic case). Use it when there's context a
+  // visitor can't get from the structured fields alone — e.g. a co-organized
+  // event where some lineup names have no Form:at DJ profile.
+  description?: string;
 };
 
 export const events: Event[] = [
@@ -20,6 +26,19 @@ export const events: Event[] = [
     audio: "techno / electro / dub",
     runtime: "23:00 — 05:00",
     status: "upcoming",
+  },
+  {
+    id: "seafield-sound",
+    title: "Seafield Sound",
+    date: "2026-07-24",
+    venue: "Seafield road beach spot, Edinburgh",
+    lineupIds: ["julz-lever", "hubey", "til", "angel-negrin", "rushford", "dimebug", "3sr"],
+    audio: "electro / house / techno",
+    runtime: "20:30 — very late",
+    status: "upcoming",
+    flyer: "events/seafield-sound",
+    description:
+      "a joint transmission — form:at is one node in this crew, not the sole operator. on the sand at seafield road; if weather breaks, a covered plan b stands 100m inland. this year's rig hits harder than last year's.",
   },
   {
     id: "format-002",

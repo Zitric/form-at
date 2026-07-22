@@ -40,8 +40,24 @@ function durationToISO8601(s: string | undefined): string | undefined {
 /**
  * Combine `event.date` ("2026-04-24") with `event.runtime` ("23:00 — 05:00")
  * into ISO 8601 local datetimes for Schema.org. End time wrapping past
- * midnight rolls the date forward by a day. Returns date-only `startDate`
- * (no `endDate`) if runtime can't be parsed — Google still accepts this.
+ * midnight rolls the date forward by a day.
+ *
+ * `startDate` is ALWAYS a full `T`-qualified local datetime — never a bare
+ * date. This matters beyond Schema.org: `ics.ts`'s calendar-link builders
+ * feed this straight into `new Date(\`${startDate}Z\`)`, and a bare date
+ * there (`"2026-07-24Z"`, no time component) is malformed ISO 8601 — Chromium
+ * parses it leniently, but WebKit/Safari throws ("date value is not finite")
+ * inside `Intl.DateTimeFormat().formatToParts()`, crashing the whole event
+ * page (found via a real Safari e2e run against the Seafield Sound entry,
+ * 2026-07-22, whose runtime — "20:30 — very late" — has an unparseable end
+ * time). Three cases, most to least specific:
+ *   1. Both start and end are `HH:MM` — full range, as before.
+ *   2. Only the start is `HH:MM` (e.g. "20:30 — very late") — keep the REAL
+ *      start time; omit `endDate` rather than invent one (every consumer
+ *      already treats a missing `endDate` as "same as start" gracefully:
+ *      `eventLd`'s spread, `buildIcs`'s `endDate ? ... : dtStart`).
+ *   3. Nothing parses at all — midnight, so the shape stays valid everywhere
+ *      that consumes it, even though the specific time is a guess.
  *
  * Local-time strings (no timezone) are intentional: Glasgow flips between
  * GMT and BST across the year, and Schema.org interprets unqualified
@@ -54,19 +70,28 @@ export function eventDateTimes(
   startDate: string;
   endDate?: string;
 } {
-  const match = runtime?.match(/(\d{1,2}):(\d{2})\s*[—–-]\s*(\d{1,2}):(\d{2})/);
-  if (!match) return { startDate: date };
+  const rangeMatch = runtime?.match(/(\d{1,2}):(\d{2})\s*[—–-]\s*(\d{1,2}):(\d{2})/);
+  if (rangeMatch) {
+    const [, sh, sm, eh, em] = rangeMatch as unknown as [string, string, string, string, string];
+    const startDate = `${date}T${sh.padStart(2, "0")}:${sm}:00`;
+    const startMin = Number(sh) * 60 + Number(sm);
+    const endMin = Number(eh) * 60 + Number(em);
 
-  const [, sh, sm, eh, em] = match as unknown as [string, string, string, string, string];
-  const startDate = `${date}T${sh.padStart(2, "0")}:${sm}:00`;
-  const startMin = Number(sh) * 60 + Number(sm);
-  const endMin = Number(eh) * 60 + Number(em);
+    const endDateBase =
+      endMin < startMin ? new Date(`${date}T00:00:00Z`).getTime() + 86400000 : null;
+    const endDay = endDateBase ? new Date(endDateBase).toISOString().slice(0, 10) : date;
+    const endDate = `${endDay}T${eh.padStart(2, "0")}:${em}:00`;
 
-  const endDateBase = endMin < startMin ? new Date(`${date}T00:00:00Z`).getTime() + 86400000 : null;
-  const endDay = endDateBase ? new Date(endDateBase).toISOString().slice(0, 10) : date;
-  const endDate = `${endDay}T${eh.padStart(2, "0")}:${em}:00`;
+    return { startDate, endDate };
+  }
 
-  return { startDate, endDate };
+  const startOnlyMatch = runtime?.match(/(\d{1,2}):(\d{2})/);
+  if (startOnlyMatch) {
+    const [, sh, sm] = startOnlyMatch as unknown as [string, string, string];
+    return { startDate: `${date}T${sh.padStart(2, "0")}:${sm}:00` };
+  }
+
+  return { startDate: `${date}T00:00:00` };
 }
 
 /** Collect full social URLs for the `sameAs` field. */
@@ -161,6 +186,7 @@ export function eventLd(event: Event, lineup: ReadonlyArray<DJ | undefined>) {
     "@type": "MusicEvent",
     name: event.title,
     url: `${SITE}/events/${event.id}`,
+    description: event.description,
     startDate,
     ...(endDate ? { endDate } : {}),
     eventStatus: "https://schema.org/EventScheduled",
