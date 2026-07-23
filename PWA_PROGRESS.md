@@ -1413,36 +1413,40 @@ The original entries below are kept for the diagnosis-plan history.
 
 ### Cosmetic backlog
 
-Three of the four original items here shipped weeks ago and are removed
-from this list (verified against code + git log while cleaning up this doc,
-2026-07-06): toast redesign (`935ebb4`, `4c978b2` — no brackets on message
-text, whole-surface click-to-dismiss, `[ x ]` kept only where the toast
-persists); web-offline message unification (`playerSlice.ts:73` —
-`tab-offline-needs-network` is already the single reason for every tab
-offline-block, regardless of downloaded-or-not); SaveGateModal escape
-hatches (`SaveGateModal.tsx:64-75` — `handleAlreadyInstalled` /
-`handleNotInstalledAfterAll` confirmed NOT calling `onClose`). One item
-remains, re-scoped per 2026-07-06 field testing to separate it cleanly from
-a DIFFERENT, already-fixed bug:
+**All four original items here are now shipped** (verified against code +
+git log while cleaning up this doc): toast redesign (`935ebb4`, `4c978b2` —
+no brackets on message text, whole-surface click-to-dismiss, `[ x ]` kept
+only where the toast persists, 2026-07-06); web-offline message unification
+(`playerSlice.ts:73` — `tab-offline-needs-network` is already the single
+reason for every tab offline-block, regardless of downloaded-or-not,
+2026-07-06); SaveGateModal escape hatches (`SaveGateModal.tsx:64-75` —
+`handleAlreadyInstalled` / `handleNotInstalledAfterAll` confirmed NOT
+calling `onClose`, 2026-07-06); **Set card abstraction — resolved
+2026-07-23.** Re-verified the file:line claims fresh before touching
+anything (the entry had drifted slightly: `djs/$djId.tsx:129-130` was by
+then `:127-138`, still the same underlying gap) — `/sets/index.tsx` and
+`/djs/$djId.tsx`'s "played by this DJ" list rendered two different card
+implementations; the DJ page had no `SaveForOfflineIconButton` at all.
+Extracted `components/SetCard.tsx` — takes only `set` + `index`, owns
+navigation/`playTrack`/`isThisPlaying` internally rather than accepting
+them as props (both call sites did identical wiring before, so
+internalizing it makes parity structural, not conventional); action slot
+is unconditionally save-offline → share → play. One deliberate visual
+change, not a silent one: standardized both surfaces on `/sets/index.tsx`'s
+more truncation-resistant mobile body layout (3-line mobile / 2-line sm+)
+rather than forking body markup per consumer, which would've reintroduced
+the same drift this extraction exists to remove. Tests: `SetCard.test.tsx`
+(new, action-slot parity + navigation + playback wiring) plus an e2e
+regression lock in `djs.spec.ts` asserting the save-for-offline button role
+now renders on a DJ page — the exact gap this item existed to close.
 
-- **Set card abstraction — DJ page card vs `/sets/` card unification.** The
-  set list on `/sets/` and the "played by this DJ" list on `/djs/$djId`
-  render similar cards via two different component paths, and they've
-  drifted: `/sets/index.tsx:116` renders `SaveForOfflineIconButton` in the
-  action slot; `djs/$djId.tsx:129-130` only renders `ShareIconButton` +
-  `CirclePlayButton` — no save-for-offline icon on the DJ page at all
-  (field-confirmed 2026-07-06). Consolidating into one reusable `SetCard`
-  component would prevent this kind of per-surface drift going forward.
-  Needs its own plan (props shape, action-slot semantics, artwork variant
-  selection) before implementation.
-
-  **Not the same as the DJ-image-loading bug** that used to be listed here
-  — that one is a different, already-fixed issue: `warmSetVisuals`
-  (`offlineSlice.ts:185-199`) resolves the DJ from the saved set and warms
-  the exact photo variants `/djs/$djId`'s `<Image>` requests, with the
-  coupling locked by `warmSetVisuals.test.ts`. Verified against current
-  code — no repro needed, this was already closed by the 2026-07-02
-  post-merge review's fix.
+**Not the same as the DJ-image-loading bug** that used to be listed here
+— that one is a different, already-fixed issue: `warmSetVisuals`
+(`offlineSlice.ts:185-199`) resolves the DJ from the saved set and warms
+the exact photo variants `/djs/$djId`'s `<Image>` requests, with the
+coupling locked by `warmSetVisuals.test.ts`. Verified against current
+code — no repro needed, this was already closed by the 2026-07-02
+post-merge review's fix.
 
 ### Deferred — post-2026-07-24 (coupled, ship together)
 

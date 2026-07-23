@@ -1,15 +1,11 @@
-import { Await, createFileRoute, defer, useNavigate } from "@tanstack/react-router";
+import { Await, createFileRoute, defer } from "@tanstack/react-router";
 import { Suspense } from "react";
-import { Card } from "~/components/Card";
 import { PageLayout } from "~/components/PageLayout";
-import { SaveForOfflineIconButton } from "~/components/SaveForOfflineIconButton";
-import { ShareIconButton } from "~/components/ShareIconButton";
+import { SetCard } from "~/components/SetCard";
 import { TerminalRow } from "~/components/TerminalRow";
 import { Label, PageTitle } from "~/components/Text";
-import { CirclePlayButton } from "~/components/player";
 import { type OverallStats, fetchOverallStats } from "~/data/set-stats";
 import { sets } from "~/data/sets";
-import { useStore } from "~/store";
 import { fmtDuration } from "~/utils/fmt";
 import { pageHead } from "~/utils/head";
 
@@ -80,10 +76,6 @@ function OverallMetrics({ promise }: { promise: Promise<OverallStats | null> }) 
 }
 
 function Sets() {
-  const navigate = useNavigate();
-  const playTrack = useStore((s) => s.playTrack);
-  const nowPlaying = useStore((s) => s.nowPlaying);
-  const isPlaying = useStore((s) => s.isPlaying);
   const { overallStats } = Route.useLoaderData();
 
   const groups = sets.reduce<Record<string, typeof sets>>((acc, set) => {
@@ -101,56 +93,11 @@ function Sets() {
             <PageTitle>002 : audio_extracted</PageTitle>
 
             <ul className="space-y-px">
-              {groupSets.map((set, index) => {
-                const isThisPlaying = nowPlaying?.id === set.id && isPlaying;
-
-                return (
-                  <li key={set.id}>
-                    <Card
-                      imageSrc={set.artwork}
-                      imageAlt={set.title}
-                      hideImageOnMobile
-                      onClick={() => navigate({ to: "/sets/$setId", params: { setId: set.id } })}
-                      action={
-                        <div className="flex items-center gap-1">
-                          <SaveForOfflineIconButton set={set} />
-                          <ShareIconButton set={set} />
-                          <CirclePlayButton
-                            isThisPlaying={isThisPlaying}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              playTrack(set);
-                            }}
-                          />
-                        </div>
-                      }
-                      animationDelay={index}
-                    >
-                      <div className="flex flex-col gap-1">
-                        {/* Phone widths (<sm): DJ on row 1, event on row 2 —
-                            no date/location row. Truncation-resistant for
-                            long names like "Brandon Lee Vear" at iPhone SE
-                            375px, where the combined "{artist} @ {title}"
-                            line was getting cut. sm+ keeps the richer
-                            single-line + date/location layout. */}
-                        <p className="text-sm tracking-tight truncate sm:hidden">{set.artist}</p>
-                        <p className="text-xs tracking-tight truncate sm:hidden">
-                          @<span className="pl-1">{set.title}</span>
-                        </p>
-                        <p className="text-xs text-grey truncate sm:hidden"> {set.date}</p>
-
-                        <p className="hidden sm:block sm:text-base tracking-tight truncate">
-                          {set.artist} @ {set.title}
-                        </p>
-                        <p className="hidden sm:block sm:text-sm text-grey truncate">
-                          {set.date}
-                          {set.date && " · "}Glasgow
-                        </p>
-                      </div>
-                    </Card>
-                  </li>
-                );
-              })}
+              {groupSets.map((set, index) => (
+                <li key={set.id}>
+                  <SetCard set={set} index={index} />
+                </li>
+              ))}
             </ul>
           </section>
         );

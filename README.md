@@ -176,7 +176,6 @@ Patterns to watch for:
 ### Pending
 
 - **Analytics query UI** — D1 has `started_at` and `listened_seconds` indexed but there's no internal dashboard page to query plays by date range or top tracks over time.
-- **Social share image** — `og:image` currently uses the square F icon. A 1200×630 banner would give much richer link previews on Instagram, Twitter, etc.
 
 ### Longer term
 
@@ -187,6 +186,7 @@ Patterns to watch for:
 - **Artwork on sets** — every set in `sets.ts` carries an `artwork` path (e.g. `"sets/002"`, verified against all four current entries); wired into the Media Session lock-screen display and the card/detail UI.
 - **Mobile player track info** — the mobile mini-player shows `artist · title · date` inline (`components/player/MobileMiniPlayer.tsx:97-109`), truncating or marqueeing on overflow. Not hidden.
 - **Service Worker / PWA** — installable app, offline audio playback from IndexedDB, offline page fallback, and a user-consented update flow. See `PWA_PROGRESS.md` for the full design history and `TECH_DEBT.md` for open follow-ups.
+- **Social share image** — this list previously said `og:image` "currently uses the square F icon," which was already stale: `scripts/generate-og.ts` composes a proper 1200×630 branded banner (wordmark + tagline) as the site-wide default (`__root.tsx`), plus a fully bespoke per-entity banner (photo/artwork/flyer + name/title/date) for every set (`/sets/$setId`), DJ (`/djs/$djId`), and event (`/events/$eventId`) detail page — verified both by reading each route's `head()` and by checking the generated files exist under `public/og/{sets,djs,events}/`. Listing pages and home keep the generic banner deliberately (no single entity to feature). The only fallback path is a genuinely-missing source image (a DJ with no `photo`, a set with no `artwork`, an event with no `flyer`) — the script skips and logs a warning rather than crash, which is correct degradation, not a gap.
 
 ---
 

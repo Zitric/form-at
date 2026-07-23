@@ -6,16 +6,14 @@ import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { Image } from "~/components/Image";
 import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
-import { ShareIconButton } from "~/components/ShareIconButton";
+import { SetCard } from "~/components/SetCard";
 import { SocialLink } from "~/components/SocialLink";
 import { TerminalRow } from "~/components/TerminalRow";
 import { PageTitle } from "~/components/Text";
-import { CirclePlayButton } from "~/components/player";
 import { getDJ } from "~/data/djs";
 import { events } from "~/data/events";
 import { getSet } from "~/data/sets";
 import { useTypedOnce } from "~/hooks/useTypedOnce";
-import { useStore } from "~/store";
 import { pageHead } from "~/utils/head";
 import { djLd } from "~/utils/jsonld";
 import { SOCIALS, SOCIAL_ORDER, type SocialKey } from "~/utils/socials";
@@ -47,9 +45,6 @@ export const Route = createFileRoute("/djs/$djId")({
 
 function DJDetail() {
   const { dj, djEvents, sets } = Route.useLoaderData();
-  const playTrack = useStore((s) => s.playTrack);
-  const isPlaying = useStore((s) => s.isPlaying);
-  const nowPlaying = useStore((s) => s.nowPlaying);
   const navigate = useNavigate();
 
   const isFirstLoading = useTypedOnce("dj-detail");
@@ -115,39 +110,9 @@ function DJDetail() {
             <ul className="space-y-px">
               {sets.map((set, index) => {
                 if (!set) return null;
-                const isThisPlaying = nowPlaying?.id === set.id && isPlaying;
-
                 return (
                   <li key={set.id}>
-                    <Card
-                      imageSrc={set.artwork}
-                      imageAlt={set.title}
-                      hideImageOnMobile
-                      onClick={() => navigate({ to: "/sets/$setId", params: { setId: set.id } })}
-                      action={
-                        <div className="flex items-center gap-1">
-                          <ShareIconButton set={set} />
-                          <CirclePlayButton
-                            isThisPlaying={isThisPlaying}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              playTrack(set);
-                            }}
-                          />
-                        </div>
-                      }
-                      animationDelay={index}
-                    >
-                      <div className="flex flex-col gap-1">
-                        <p className="text-sm sm:text-base tracking-tight truncate">
-                          {set.artist} @ {set.title}
-                        </p>
-                        <p className="text-xs sm:text-sm text-grey truncate">
-                          {set.date}
-                          {set.date && " · "}Glasgow
-                        </p>
-                      </div>
-                    </Card>
+                    <SetCard set={set} index={index} />
                   </li>
                 );
               })}

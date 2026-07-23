@@ -31,6 +31,9 @@ Running list of feature/functional improvements. Tick off as we ship.
 - [ ] **#7 — "Shuffle the archive" / random set**
   One button on `/sets` (and maybe `/`) that picks a random set and plays it. Fits the explore vibe.
 
+- [ ] **#11 — Search/filter input for the sets catalogue**
+  Not needed yet — same revisit trigger PWA_PROGRESS.md already uses for the deferred manage-offline-sets view: earns its place once the catalogue grows past ~10-15 sets, where scanning every card becomes a chore. At today's 4 sets, scanning is still instant. Placeholder so it isn't lost once the next few batches land.
+
 ## Bigger but worth it
 
 - [ ] **#8 — Full PWA (install + share routing + offline + polish)**
