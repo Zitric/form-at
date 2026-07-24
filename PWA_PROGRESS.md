@@ -1178,6 +1178,35 @@ renaming `useSaveGate` → `useAppGate` (it is already feature-agnostic;
 only its name is save-specific — a rename was skipped now because it
 would churn many imports/tests for zero behaviour).
 
+### Added 2026-07-23 — Phase 4.5: beacon queue + Background Sync (TECH_DEBT 4)
+
+A failed `/api/signal` play beacon (offline at call time — the metro
+scenario Phase 4's offline playback exists for) used to just be lost, no
+retry. Full detail + the exact file shapes live in TECH_DEBT.md item 4
+(stamped ✅ Resolved) — this entry is the SW-touching-change log line that
+file's own convention doesn't cover: `sw.ts` gained one new listener,
+`self.addEventListener("sync", ...)`, replaying `data/beacon-queue.ts`'s
+queue via `fetch` inside `event.waitUntil()`. Verified against MDN before
+writing anything (same rigor as every other SW API this project has
+added): `sendBeacon` is Window-only, confirmed absent from
+`WorkerNavigator` — the SW side has to use `fetch`, not the API the page
+side uses. TypeScript's bundled lib doesn't define Background Sync's types
+at all; declared locally rather than reaching for `any`.
+
+Real coverage gap, not a theoretical one: Safari (desktop + iOS) and
+Firefox don't support Background Sync at all (~77% global support,
+Chromium-only in practice, verified against caniuse) — `BeaconQueueFlusher.tsx`
+is the deliberate fallback (replays on mount + the `online` event, page-
+context only, so it can't replay after the tab closes the way Background
+Sync can). No UI surfaced either way, matching TECH_DEBT 4's own scope.
+
+On-device check (new): seed the queue offline (airplane mode mid-playback
+on a saved set), reconnect, confirm a real `/api/signal` request fires and
+D1 receives it, queue is then empty — this item's own original
+verification wording. `sw.ts`'s `sync` listener itself has no jsdom
+coverage (the same gap every other SW handler in this file has noted), so
+this on-device pass is the only place that wiring gets verified.
+
 ### Fixed 2026-07-05 — M3: `_headers` caching + CSP (TECH_DEBT 19 itself still blocked)
 
 The launch-blocker session ran into hard preconditions: the custom domain

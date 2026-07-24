@@ -1,5 +1,6 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
 import { AppLaunchTracker } from "~/components/AppLaunchTracker";
+import { BeaconQueueFlusher } from "~/components/BeaconQueueFlusher";
 import { BottomNav } from "~/components/BottomNav";
 import { Header } from "~/components/Header";
 import { HydrateStore } from "~/components/HydrateStore";
@@ -34,6 +35,7 @@ function Root() {
         <HydrateStore />
         <InstallEventsListener />
         <OfflineReconciler />
+        <BeaconQueueFlusher />
         <AppLaunchTracker />
         <Header />
         <SwipeNavigator />

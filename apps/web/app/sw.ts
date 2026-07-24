@@ -21,6 +21,7 @@ import { matchPrecache, precacheAndRoute } from "workbox-precaching";
 import { createPartialResponse } from "workbox-range-requests";
 import { registerRoute, setCatchHandler } from "workbox-routing";
 import { StaleWhileRevalidate } from "workbox-strategies";
+import { SYNC_TAG, replaySignalQueue } from "~/data/beacon-queue";
 import { getOfflineAudio } from "~/data/offline-audio";
 import { stripAppContext } from "~/utils/appContext";
 import { AUDIO_HOST } from "~/utils/audioHost";
@@ -211,6 +212,30 @@ registerRoute(
 // runtime caches.
 self.addEventListener("activate", (event) => {
   event.waitUntil(Promise.all([caches.delete("pages-v1"), caches.delete("audio-v1")]));
+});
+
+// Phase 4.5 (2026-07-23, TECH_DEBT 4) — Background Sync replay for
+// `/api/signal` beacons that failed to send offline (queued from
+// `useAudioPlayer.ts`'s `sendPlay`). `replaySignalQueue` (pure, unit-tested
+// — see `~/data/beacon-queue.ts`) owns the actual replay logic; this is
+// just the event wiring, same split as `push`/`notificationclick` above.
+//
+// TypeScript's bundled WebWorker lib doesn't define `SyncEvent` or a `"sync"`
+// entry in `ServiceWorkerGlobalScopeEventMap` at all (checked directly,
+// 2026-07-23) — `addEventListener` falls through to its generic
+// `(type: string, listener: EventListenerOrEventListenerObject)` overload,
+// so `event` below is typed as plain `Event` without the cast. Shape
+// verified against MDN's `SyncEvent` reference: `tag` (which registration
+// this is) and `lastChance` (true if the UA won't retry after this attempt),
+// extending `ExtendableEvent` for `waitUntil()`.
+interface SyncEvent extends ExtendableEvent {
+  readonly tag: string;
+  readonly lastChance: boolean;
+}
+
+self.addEventListener("sync", (event) => {
+  const syncEvent = event as SyncEvent;
+  if (syncEvent.tag === SYNC_TAG) syncEvent.waitUntil(replaySignalQueue());
 });
 
 // Phase 2 (2026-07-15; extended 2026-07-21 — image/vibrate/actions/
