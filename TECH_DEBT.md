@@ -7,10 +7,10 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
-- **Open:** 3, 4, 8, 12, 13, 15, 20 (pointer only, not urgent)
+- **Open:** 8, 12, 13, 15, 20 (pointer only, not urgent)
 - **Invalid:** 1 (2026-07-22 — premise was wrong, not stale: both flagged functions are load-bearing behind a live multi-provider calendar picker; do not delete, see item for the full re-verification)
 - **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, ships together post-2026-07-24; see PWA_PROGRESS.md for the deferral rationale)
-- **Resolved:** 2 (2026-07-22 — knip.json config + parallel CI job; see item for a correction to its own original plan), 6 (2026-06-28, `10811a4`), 7 (2026-07-02, `d2bbc36` — offline.html redesign, stamped during the 2026-07-06 docs cleanup), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01), 17 (2026-07-02 — gate proven intact via SW-preview experiments; observed bytes were HTTP cache / element buffer, not IDB; silent-blocked-tap toast fixed), 18 (2026-07-02 — not reproducible on current build; all three offline nav modes verified against the SW preview), 5 (absorbed into 19's verification — CORS re-checked on the custom domain 2026-07-06: preflight GET/HEAD + range, ACAO *, Content-Length exposed), 19 (2026-07-06 — audio on cdn.formatglasgow.com, host centralized in utils/audioHost.ts, IDB force-re-download migration in reconcileFromIdb)
+- **Resolved:** 2 (2026-07-22 — knip.json config + parallel CI job; see item for a correction to its own original plan), 3 (2026-07-23 — `__root.tsx` split into `fontCSS.ts` / `HydrateStore.tsx` / `rootHead.ts`), 4 (2026-07-23 — beacon queue + Background Sync, with a page-side fallback for Safari/Firefox), 6 (2026-06-28, `10811a4`), 7 (2026-07-02, `d2bbc36` — offline.html redesign, stamped during the 2026-07-06 docs cleanup), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01), 17 (2026-07-02 — gate proven intact via SW-preview experiments; observed bytes were HTTP cache / element buffer, not IDB; silent-blocked-tap toast fixed), 18 (2026-07-02 — not reproducible on current build; all three offline nav modes verified against the SW preview), 5 (absorbed into 19's verification — CORS re-checked on the custom domain 2026-07-06: preflight GET/HEAD + range, ACAO *, Content-Length exposed), 19 (2026-07-06 — audio on cdn.formatglasgow.com, host centralized in utils/audioHost.ts, IDB force-re-download migration in reconcileFromIdb)
 
 Resolved items keep their original section in place with a `✅ Resolved` stamp at the top, so the historical context (cause + fix path) stays readable. Search for `✅ Resolved` to skip to / past them.
 
@@ -123,41 +123,131 @@ Add knip as a **per-PR check**, parallel to the existing `static` / `unit` / `e2
 
 ## 3. `__root.tsx` extraction
 
-**Scope:** `apps/web/app/routes/__root.tsx` — split one file into several, single responsibility per module.
+**✅ Resolved 2026-07-23.** Re-verified this entry's own claims fresh before
+touching anything (per this week's repeated stale-doc lesson): `RootNotFound`
+and `InstallEventsListener` really were already gone, and nothing else had
+snuck into the file since — every remaining import was a real component
+being rendered, not a new inline definition (checked all of `AppLaunchTracker`,
+`BottomNav`, `Header`, `InAppBrowserBanner`, `OfflineReconciler`, `ShareModal`,
+`SwipeNavigator`, `Toast`, `UpdateToast`, `PlaybackErrorToast`, `Player`).
 
-### What's currently inline
+Extracted the remaining three, following this codebase's existing
+module-organization conventions rather than inventing a new one:
+- `fontCSS` → `styles/fontCSS.ts` (matches `styles/{tokens,layout,z}.ts`'s
+  existing style-constant convention)
+- `HydrateStore` → `components/HydrateStore.tsx` (matches the established
+  invisible-mount-effect-component shape already used by
+  `InstallEventsListener.tsx` / `OfflineReconciler.tsx` / `AppLaunchTracker.tsx`)
+- The `head()` config → `utils/rootHead.ts`, exporting `rootHead()` — sits
+  next to its sibling `pageHead()` in `utils/head.ts` rather than being
+  merged into it (different shape: static config vs. parameterized builder;
+  merging would have been a consolidation the constraints explicitly forbid)
 
-Five distinct concerns shared the file; two have since moved out:
+Verified byte-for-byte before wiring the import back in — extracted the
+object literal into `rootHead()`'s return value, then diffed it
+programmatically against the original inline object (not by eyeballing):
+identical except the necessarily-different closing token
+(`}),` → `};`). The `beforeinstallprompt` inline script's
+`window.__deferredInstallPrompt` property name — the one piece required to
+stay in sync with `utils/installPromptStash.ts` — carried over unchanged;
+confirmed via the same diff and re-confirmed in the rendered dev-server
+HTML.
 
-- ~~`RootNotFound`~~ — consolidated into `components/NotFoundPage.tsx` (2026-07-02, status-pages redesign)
-- ~~`InstallEventsListener`~~ — extracted to `components/InstallEventsListener.tsx` (2026-07-02, install-race fix: the pre-hydration stash adoption needed unit tests, which forced the move)
-- `fontCSS` — inlined `@font-face` CSS string
-- `HydrateStore` — store-hydration effect component
-- The `head()` meta / link / script config (large object literal — now also carries the inline `beforeinstallprompt` capture script, whose property name must stay in sync with `utils/installPromptStash.ts`)
+One necessary compile-time-only fix, not a behavior change: extracting the
+object literal into a standalone function lost TypeScript's contextual
+typing, widening a couple of DOM-attribute literals (`fetchPriority: "high"`,
+`crossOrigin: "anonymous"` ×3) to plain `string`. Restored with `as const`
+on each — purely a type annotation, the runtime string values are identical
+either way.
 
-### Constraints
-
-- **Pure mechanical move.** No new abstractions, no consolidation across the five modules, no "while I'm here" cleanups. Split only.
-- **No behaviour change.** Same render output, same effects firing in the same order at the same lifecycle moments.
-- **Plan first.** Propose the target file paths before touching anything — locking the structure during plan-review avoids re-litigation mid-refactor.
-
-### Verification
-
-- `pnpm check` (lint + tsc) green.
-- `pnpm test:run` stays at the current passing count (137 at the time of writing this entry — 2026-06-24).
-- Manual smoke test in dev: install flow still wires up, 404 page still renders for an unknown route, fonts still load, store still hydrates.
+**Verification:** baseline established BEFORE touching anything (not trusting
+the stale "137" figure this entry was written with) — `pnpm test:run` was
+already at 325/325 and e2e at 62 passed / 6 skipped on top-of-main; both
+held at the exact same counts after the extraction. `pnpm check` green.
+Manual smoke test in a real dev server: fetched the rendered HTML directly —
+`fontCSS`'s `@font-face` block present in the inlined `<style>` tag, both
+head scripts present byte-for-byte (SW registration + the
+`beforeinstallprompt` stash with its exact property name), the 404 page
+renders correctly for an unknown route ("SIGNAL_LOST"). Store hydration
+verified via the e2e suite's real-browser test (`sets.spec.ts`'s "first
+visit: save-for-offline buttons appear without a reload" — the actual
+regression lock for a broken `HydrateStore`), since a raw HTML fetch can't
+execute the client-side hydration effect that stamps `data-hydrated`.
 
 ---
 
 ## 4. Phase 4.5 — Beacon queue (offline play counts via Background Sync)
 
-**Deferred from Phase 4 per architecture decision** (2026-06-24): independent infrastructure with no shared code with the audio cache chain. Different API (Background Sync vs Cache Storage), different storage (IndexedDB queue vs Cache Storage), different failure mode (intermittent network vs full offline), lower stakes (lose a play count vs lose a 64MB download), invisible to users.
+**✅ Resolved 2026-07-23.** Re-verified this item's own premise fresh first
+(`useAudioPlayer.ts`'s `sendPlay`, read in full): still exactly as described
+— fires `navigator.sendBeacon("/api/signal", ...)` on pause/ended/unload
+after 3+ seconds, no retry path, a failed beacon was simply lost. Built the
+queue + both replay paths described below.
 
-**Scope:** queue `/api/signal` POSTs in IndexedDB when offline; replay them via a Background Sync registration when connectivity returns. Drop the queue entry on successful replay; surface no UI either way.
+**Shape, following this codebase's existing conventions rather than
+inventing new ones:**
+- `data/beacon-queue.ts` — IDB wrapper mirroring `offline-audio.ts`'s exact
+  pattern (module-level `dbPromise` singleton, private `openBeaconQueueDb()`,
+  plain async CRUD). Exports `queueSignalForReplay(payload)` (enqueue +
+  best-effort Background Sync registration), `getQueuedSignals()`,
+  `dequeueSignal(id)`, and `replaySignalQueue()` (the actual replay logic,
+  exported so it's unit-testable rather than living inline in `sw.ts` —
+  same split this week's other SW work already established for
+  `buildNotificationOptions`/`resolveNotificationClickUrl`).
+- `useAudioPlayer.ts`'s `sendPlay` — reuses the exact `navigator.onLine`
+  check `canFetchPlaybackBytes` (`playerSlice.ts`) already uses. Known-offline
+  at call time, or `sendBeacon` returning `false` (browser rejected queuing
+  it) → `queueSignalForReplay` instead of dropping. The online-succeeds
+  happy path is untouched — same `sendBeacon` call, same Blob shape.
+- `sw.ts` — a `"sync"` event listener calling `replaySignalQueue()` inside
+  `event.waitUntil()`. Verified against MDN before writing anything (same
+  rigor as this week's badge/notification-options work): `sendBeacon` is
+  Window-only (confirmed absent from `WorkerNavigator`) — the SW replay
+  path uses `fetch` instead. TypeScript's bundled lib doesn't define
+  `SyncManager` / `ServiceWorkerRegistration.sync` / `SyncEvent` at all
+  (checked directly against the installed package, same class of gap as
+  the Notification options fields found this week) — declared locally via
+  `declare global` augmentation + a module-local `SyncEvent` interface,
+  rather than reaching for `any`.
+- **Fallback for browsers without Background Sync — real coverage gap, not
+  an edge case.** Verified against caniuse (2026-07-23): Safari (desktop
+  AND iOS) and Firefox do not support Background Sync at all — ~77%
+  global support, Chromium-only in practice. `components/BeaconQueueFlusher.tsx`
+  (mirrors `OfflineReconciler.tsx`'s invisible-mount-effect shape) replays
+  the queue via `sendBeacon` on mount (if online) and on the `online`
+  window event — covers reopening the app after being offline, and
+  connectivity returning while the app stays open. This is the pragmatic,
+  justified degradation: it can only replay while a tab is open, but
+  that's the best available without Background Sync.
+- No UI surfaced anywhere, per this item's own scope note.
 
-**Order:** ships any time after Phase 4 audio chunks (2/3/4) stabilize. Not on the critical path; can slip indefinitely if higher-priority work appears.
+**Tests:** `beacon-queue.test.ts` — a REAL IndexedDB round-trip (added
+`fake-indexeddb` as a new devDependency specifically for this, since no
+existing test exercises real IDB — every other IDB-backed module's
+consumers mock `~/data/offline-audio` at the module boundary instead, and
+this item's own verification note explicitly wants a queue that "is then
+empty" after replay, not a mocked assertion of it) — enqueue/read/dequeue,
+the Background-Sync-registration best-effort path (present/absent/
+unsupported), and `replaySignalQueue`'s fetch-based replay (success,
+non-ok, network failure, multiple entries replayed independently). Found
+and fixed a real test-authoring bug along the way: deleting the whole fake
+database between tests blocked forever (`onblocked`, not
+`onsuccess`/`onerror`) because nothing ever closes the cached connection —
+same as `offline-audio.ts`'s deliberate pattern. Fixed by draining the
+queue via the module's own `dequeueSignal` instead of deleting the
+database. `useAudioPlayerBeaconQueue.test.tsx` locks `sendPlay`'s three
+branches (online success / known-offline / sendBeacon-rejected).
+`BeaconQueueFlusher.test.tsx` locks the fallback's mount + `online`-event
+replay, including that a still-failing entry stays queued.
 
-**Verification:** seed a queue offline (simulate plays), come back online, confirm `/api/signal` requests fire and D1 receives them; queue is then empty.
+**Not testable in the existing harness, flagged rather than forced:** the
+actual `self.addEventListener("sync", ...)` wiring in `sw.ts` — same
+jsdom-harness gap documented repeatedly this week for every other SW
+handler. On-device check: seed the queue while offline (e.g. airplane
+mode mid-playback), reconnect, confirm a real `/api/signal` request fires
+and D1 receives it, and the queue is then empty — this item's own original
+verification wording, now the literal on-device check since the mechanics
+above are unit-tested up to the SW boundary.
 
 ---
 

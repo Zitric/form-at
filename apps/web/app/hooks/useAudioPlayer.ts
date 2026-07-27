@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
+import { queueSignalForReplay } from "~/data/beacon-queue";
 import { type MusicSet, sets } from "~/data/sets";
 import { useStore } from "~/store";
 import { wasServedFromIdb } from "~/store/playerSlice";
@@ -53,21 +54,31 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     // current offlineSets without adding reactivity to this callback's
     // stable `[]` deps.
     const isOffline = wasServedFromIdb(track.id, useStore.getState().offlineSets);
-    navigator.sendBeacon(
-      "/api/signal",
-      new Blob(
-        [
-          JSON.stringify({
-            setId: track.id,
-            setTitle: track.title,
-            setArtist: track.artist,
-            listenedSeconds: seconds,
-            isOffline,
-          }),
-        ],
-        { type: "application/json" },
-      ),
-    );
+    const payload = {
+      setId: track.id,
+      setTitle: track.title,
+      setArtist: track.artist,
+      listenedSeconds: seconds,
+      isOffline,
+    };
+
+    // Known-offline at call time (TECH_DEBT 4) — same `navigator.onLine`
+    // check `canFetchPlaybackBytes` already uses (playerSlice.ts). Skip
+    // `sendBeacon` entirely rather than let the browser accept-then-drop it:
+    // `sendBeacon` has no failure callback, so "offline right now" is the
+    // one case we CAN know about before even trying.
+    const knownOffline = typeof navigator !== "undefined" && navigator.onLine === false;
+    const sent =
+      !knownOffline &&
+      navigator.sendBeacon(
+        "/api/signal",
+        new Blob([JSON.stringify(payload)], { type: "application/json" }),
+      );
+    // `sendBeacon` returning `false` means the browser rejected queuing it
+    // (e.g. its own internal queue is full) — the online happy path is
+    // untouched above; this only ever engages on a path that would
+    // otherwise have silently lost the play count.
+    if (!sent) void queueSignalForReplay(payload);
   }, []);
 
   useEffect(() => {
