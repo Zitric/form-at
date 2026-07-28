@@ -1207,6 +1207,240 @@ verification wording. `sw.ts`'s `sync` listener itself has no jsdom
 coverage (the same gap every other SW handler in this file has noted), so
 this on-device pass is the only place that wiring gets verified.
 
+### Added 2026-07-27 — internal admin analytics dashboard (`/admin/dashboard`)
+
+Read-only dashboard over the analytics already being collected — no new
+tracking. Branch: `feat/admin-dashboard`, extended same-day with a second
+pass (four more views, below) on `feat/admin-dashboard-v2`.
+
+**Branch-state note:** the v2 pass was asked for as a fresh branch off
+`main` once `feat/admin-dashboard`'s PR merged — it hadn't: that branch's
+work was still uncommitted (never pushed, no PR opened). `feat/admin-
+dashboard-v2` was created from the same tip regardless (equivalent to
+`main` plus those uncommitted files) rather than inventing a commit/push/PR
+flow on Julian's behalf. Both branches' changes are uncommitted as of this
+entry — reconcile branch/PR strategy before either lands (e.g. squash into
+one PR, or commit+PR the first pass before rebasing v2).
+
+**No in-app authentication — deliberate, not an oversight.** The route is
+protected at the edge by Cloudflare Access (a policy on `/admin/*` allowing
+exactly the team's 3 emails), which Julian configures himself outside this
+repo's scope — **not yet set up**, so the route is currently reachable by
+anyone who finds the URL until that policy is added. The route file
+(`routes/admin/dashboard.tsx`) carries a top-of-file comment to stop a
+future session from "fixing" the missing login check with a weaker
+client-side mechanism. Two independent layers keep it out of casual
+discovery in the meantime: `noindex` (via a new optional param on
+`utils/head.ts`'s `pageHead()`) and exclusion from the sitemap, which is
+automatic — `scripts/generate-sitemap.ts` only emits routes from its own
+explicit `staticRoutes` allowlist, and `/admin/dashboard` was simply never
+added to it.
+
+**Five metric groups, all aggregate SQL (`COUNT`/`GROUP BY`), nothing
+pulled row-by-row into the client:**
+- **Install funnel** — `install_prompt_shown` / `install_accepted` /
+  `install_dismissed` counts from `events`, plus conversion rate
+  (accepted ÷ shown). Conversion renders as `—` (not `0%`) when nothing's
+  been shown yet — "no data" and "0% conversion" are different facts.
+  **v2:** each of the three stages also gets its own 60-day/7-day-bucketed
+  trend sparkline (`shownTrend`/`acceptedTrend`/`dismissedTrend`), same
+  shape as app-launches/push-subscriber growth below — one `TerminalRow`
+  per stage, reusing the exact row-per-trend layout already established for
+  those two rather than building a combined multi-series chart for three
+  data points. One D1 query covers all three (`GROUP BY day, event_type`),
+  not three separate day-bucketed queries.
+- **App launches** — total `app_launch` count, plus a 60-day trend bucketed
+  into 7-day sparkline bars. Reuses `set-stats.ts`'s existing
+  `fillDailyWindow`/`bucketByWeek`/`TREND_WINDOW_DAYS`/`TREND_BUCKET_DAYS`
+  (exported for this, generalized from a `plays`-specific field name to
+  `count` — second real consumer, not a speculative export) and
+  `utils/fmt.ts`'s `asciiBar()` sparkline renderer, the same shape already
+  used for per-set play trends.
+- **Plays** — total count, top 5 sets by play count, and an offline/online
+  split from `is_offline`. Rows with `is_offline IS NULL` (pre-2026-07-08
+  or a stale client mid-rollout) count toward the total but are excluded
+  from the split — same exclusion `schema.sql`'s own "useful queries"
+  comment documents for this exact ratio. **v2:** a new `// per_set_plays`
+  section adds a set picker (a row of `<Button variant="secondary">`
+  labeled by artist — the app has no `<select>`/dropdown convention, and a
+  native `<select>` would break the bracket-button design-system rule, so a
+  button row was the closest fit for a 4-set catalogue) that shows the
+  selected set's play count + 60-day trend. **Reuses `fetchSetStats` as-is**
+  — the same `createServerFn` `/sets/$setId` already calls in its own
+  loader — rather than duplicating its query. `set-stats.ts` is a shared
+  data module, not the public route itself, so importing it into the admin
+  route is architecturally identical to `admin-stats.ts` already importing
+  its trend-bucketing helpers from that same file; no extraction needed.
+  Called directly from a client `useEffect` on picker selection — the first
+  client-invoked `createServerFn` call in this codebase (every prior call
+  site is inside a route `loader`) — deliberately, so switching sets
+  re-fetches only that one set's stats instead of re-running the whole
+  dashboard loader's five aggregate queries again.
+- **Push subscribers** — total, standalone-vs-tab split (`is_standalone`),
+  and the same 60-day/7-day growth trend as app launches. **Only ever
+  selects `is_standalone`/`created_at`/`COUNT` from `push_subscriptions`
+  — never `endpoint`/`p256dh`/`auth`.** Per that table's own schema.sql
+  comment, `endpoint` is an addressable per-device token by necessity
+  (that's how push delivery works) and the mitigation is scope, not
+  anonymity: this dashboard reads aggregate counts only, holding the same
+  discipline every other consumer of that table besides the send script
+  itself must hold to. Locked by a dedicated regression test (below).
+- **Clicks** — `save_click` / `share_click` counts from `events`. **v2:** a
+  new per-set breakdown (`GROUP BY set_id, event_type`, mapped to
+  title/artist via `getSet()` from `data/sets.ts` since `events` stores only
+  `set_id`, no denormalized title/artist the way `plays` does), rendered as
+  a ranked list (highest save+share total first) — matching the existing
+  top-sets-by-plays list shape for visual consistency. **Full list, not
+  top-N** — today's catalogue is 4 sets, so "top 5" and "all" are the same
+  list, and click volume per set is low enough that a hardcoded `LIMIT`
+  risks silently hiding a set with real signal once the catalogue grows;
+  revisit with a `LIMIT` if the list becomes unwieldy later.
+
+**v2 addition — install → push-subscribe conversion (`installToPushConversion`).**
+⚠️ **Aggregate approximation, not a tracked per-user funnel — read before
+trusting this number.** `install_accepted` lives in `events`, anonymous by
+design (no device identifier); `push_subscriptions` is a separate table
+with no shared key (see both tables' own schema.sql comments on why they're
+never joined). This stat is just `pushSubscribers.total ÷
+installFunnel.accepted` — two independent aggregate counts divided, nothing
+more. A tab subscriber who never saw an install prompt, or one device
+re-subscribing after clearing site data, both move this number without
+corresponding to "one more converted install". Computed with **zero new
+queries** (both counts are already fetched for their own sections) via a
+small pure `computeInstallToPushConversion()` helper, extracted specifically
+so the null-vs-zero edge case (no accepted installs to divide by) is
+unit-testable without needing a fake `D1Database`. Rendered in the
+`install_funnel` section as `install_to_push`, with a visible caption below
+the row: *"install_to_push is an aggregate approximation, not a tracked
+per-user funnel — install events are anonymous and push_subscriptions
+shares no key with them."* — Julian should read this as a rough proxy, not
+a real funnel step.
+
+**Data layer (`data/admin-stats.ts`) — one exported, directly-callable
+function per query,** not inlined in the `createServerFn` handler like
+`set-stats.ts`'s `fetchOverallStats`/`fetchSetStats` are. This is the one
+deliberate deviation from mirroring that file exactly: neither of those two
+functions has a test today (checked — no precedent existed in this
+codebase for testing a D1-querying loader at all), so this splits the
+shape specifically to make each query unit-testable against a fake
+`D1Database`, rather than perpetuate the untestable-inline pattern. The
+`createServerFn` wrapper (`fetchAdminDashboardStats`) still follows the
+same cast-and-degrade-to-null convention as every other server function in
+this codebase (`(context as unknown as Record<string, unknown>).cloudflare`
+— the documented `any`-avoidance exception).
+
+**Visual style — reused the existing terminal/gold design system**
+(`PageTitle`, `Label`, `TerminalRow`, `asciiBar`), not a separate plain
+admin style: `/sets`'s `OverallMetrics` already renders this exact
+label/value metrics shape with `TerminalRow`, so this page is more of an
+established pattern, not a new one; the monospace font aligns tabular
+numbers for free; and a second visual language for one internal,
+Cloudflare-Access-gated page would be inconsistency for no benefit.
+
+**Tests** — 16 unit tests total in `tests/unit/data/admin-stats.test.ts` (11
+from the first pass + 5 for the v2 additions) against the same small local
+fake `D1Database` (`prepare(sql).bind().first()/.all()`, routed by matching
+the SQL text since several functions fire more than one query via
+`Promise.all`), including the original dedicated regression test asserting
+every query against `push_subscriptions` excludes `endpoint`/`p256dh`/
+`auth` by name — untouched by this pass, still passing. New coverage:
+`fetchInstallFunnel`'s three trends bucket independently per event type
+(one test, disambiguating the totals vs. trend query routes by their
+distinct `COUNT(*) as n` / `GROUP BY day, event_type` text — a broad
+`/FROM events/` match would have silently routed both queries through the
+same fixture); `fetchClickStats`'s per-set grouping, catalogue mapping, and
+unknown-`set_id` fallback (two tests); `computeInstallToPushConversion`'s
+ratio math and null-when-zero-installs edge case (two tests, no fake D1
+needed — pure function). **Per-set play trend (v2 addition #1) has no new
+data-layer test** — it reuses `fetchSetStats` unchanged, and that function
+still has zero test coverage of its own (a pre-existing gap in
+`set-stats.ts`, out of scope for this dashboard work — flagging rather than
+silently leaving it unmentioned). One e2e smoke test
+(`tests/e2e/admin-dashboard.spec.ts`) confirms the route mounts and renders
+its documented no-data fallback (the dev server has no D1 binding, so
+that's the only state reachable locally) — deliberately not a full flow
+test, matching this page's internal/low-traffic priority; left unchanged
+this pass since the same dev-environment limitation means none of the new
+sections render locally either (the whole `stats &&` branch is
+unreachable without a live D1 binding, same as the original five sections).
+
+**Needs on-device / production confirmation:** (1) the Cloudflare Access
+policy itself — not yet configured; (2) real D1 data actually renders
+correctly once deployed (unit tests only exercise the fake D1 mock, never
+a live query) — now also covering the four v2 views (set picker, per-set
+click ranking, funnel trends, install→push ratio) end to end against real
+rows.
+
+**v3 — honesty pass (2026-07-28).** A dedicated investigation session
+(2026-07-27, read-only — no code changes) audited the dashboard against
+real production row counts (pulled via `wrangler d1 execute --remote`:
+292 plays, 110 events, 4 push subscriptions at the time) and found four
+places where the page implied more than the data actually supports. This
+pass closes all four, each confirmed against the same real numbers:
+
+1. **Offline/online ratio now discloses its excluded rows.** `is_offline`
+   is `NULL` for 256 of 292 real plays (87.7%) — everything that predates
+   the column's 2026-07-08 addition. `PlayStats` gains `excludedCount`
+   (`total − offlineCount − onlineCount`, pure arithmetic on values already
+   fetched, zero new query) and the `plays` section now captions the ratio
+   with the excluded count whenever it's nonzero — the investigation found
+   this ratio was being shown with no indication it covers barely 12% of
+   real play volume.
+2. **Avg engaged listening time, per set.** `SetStats.avgSeconds` already
+   existed and was already being fetched by the v2 per-set picker
+   (`fetchSetStats`) but was never rendered anywhere in the app — a fully
+   dead computed field until now. Surfaced as a new `TerminalRow` in the
+   `per_set_plays` section using `utils/fmt.ts`'s existing `fmtDuration()`.
+   Labeled `avg_engaged_listening`, deliberately not "% completed" or
+   anything implying track position: the investigation found
+   `listened_seconds` is cumulative playback time, not furthest position
+   reached, and real data proves it — t.i.l.'s average is 292% of the
+   track's own stated length (a listener who scrubs back and replays
+   sections keeps adding to the total). A one-line caption under the row
+   spells this out so it can't be misread as completion percentage later.
+3. **60-day trend sparklines caption their real tracking start when the
+   window is only partially real.** `install_funnel`, `app_launches`, and
+   `push_subscribers`' growth trend all render a fixed 60-day window
+   regardless of how much real history exists — real `events` history only
+   goes back to 2026-07-15 (13 days at investigation time), real
+   `push_subscriptions` history to 2026-07-19 (9 days) — so most of each
+   sparkline was structural zero-padding, not "nothing happened". Two new
+   pure/fetch function pairs close this: `fetchEventsTrackingStart`/
+   `fetchPushSubscriptionsTrackingStart` (`admin-stats.ts`) each run one
+   trivial `SELECT MIN(created_at)` — a genuine extra query, not derived
+   from the already-window-limited trend rows, and deliberately so: a
+   window-truncated guess can't tell "tracking started exactly at the
+   window boundary" from "tracking started earlier but got cut off by the
+   60-day filter", and an indexed `MIN` on a 110-row (`events`) or 4-row
+   (`push_subscriptions`) table costs nothing worth trading that ambiguity
+   away for. `computeTrackingStartDay()` (pure, unit-tested with a fixed
+   `now`) turns that raw timestamp into either an ISO day to caption or
+   `null` — `null` both when there's no data at all AND, cleanly, once real
+   history reaches the full 60 days, at which point the caption disappears
+   on its own with no separate "is this still needed" check required later.
+   **Deliberately NOT applied to the per-set play trend** — `plays` genuinely
+   spans ~84 days (since 2026-05-05), so that sparkline needed no caveat and
+   still doesn't.
+4. **Tab push-subscribers captioned as policy, not a data gap.** The
+   investigation traced `PushOptInModal.tsx`'s browser-tab variant and
+   confirmed it never calls `useSubscribeToPush()`/`postSubscription()` at
+   all — "push subscriptions are app-only product policy" is the existing
+   design comment there. So `pushSubscribers.tabCount` reading 0 (all 4 real
+   subscribers are standalone) isn't "not enough data yet", it's guaranteed
+   to always read 0 unless that product policy itself changes. The
+   `push_subscribers` section now says so directly rather than leaving it
+   looking like an evolving ratio.
+
+Same visual treatment throughout: small `text-xs text-grey/70` captions
+directly under the row they qualify, matching the `install_to_push`
+caveat's existing style (the investigation flagged that caveat as the
+correct precedent every other overconfident stat should be held to).
+9 new unit tests (`admin-stats.test.ts`) — `excludedCount` arithmetic,
+`computeTrackingStartDay`'s three boundary cases (no data / partial window
+/ full window), and both new `fetchXTrackingStart` functions against the
+fake `D1Database`. All pre-existing tests (23 before this pass) pass
+unchanged.
+
 ### Fixed 2026-07-05 — M3: `_headers` caching + CSP (TECH_DEBT 19 itself still blocked)
 
 The launch-blocker session ran into hard preconditions: the custom domain

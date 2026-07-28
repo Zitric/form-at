@@ -2,6 +2,9 @@
 // Keep title/description/og:url/twitter:* in sync; social platforms read from
 // these to render the share card. Pass `image` (path under public/) to use a
 // custom OG banner — otherwise the root default (`/og-image.png`) is reused.
+// Pass `noindex` for pages that should never appear in search results (e.g.
+// the admin dashboard) — same `content="noindex"` value already used by
+// `public/offline.html`.
 
 const SITE = "https://formatglasgow.com";
 
@@ -10,11 +13,13 @@ export function pageHead({
   description,
   path,
   image,
+  noindex,
 }: {
   title: string;
   description: string;
   path: string;
   image?: string;
+  noindex?: boolean;
 }) {
   const url = `${SITE}${path}`;
   const imageMeta = image
@@ -27,6 +32,7 @@ export function pageHead({
     : [];
   return {
     meta: [
+      ...(noindex ? [{ name: "robots", content: "noindex" }] : []),
       { title },
       { name: "description", content: description },
       { property: "og:title", content: title },

@@ -15,11 +15,15 @@ export type SetStats = {
   weeklyPlays: number[];
 };
 
-const TREND_WINDOW_DAYS = 60;
-const TREND_BUCKET_DAYS = 7;
+export const TREND_WINDOW_DAYS = 60;
+export const TREND_BUCKET_DAYS = 7;
 
-function fillDailyWindow(rows: { day: string; plays: number }[], days: number): number[] {
-  const map = new Map(rows.map((r) => [r.day, r.plays]));
+// Exported (2026-07-27) for reuse by `admin-stats.ts` — the same "sparse
+// daily counts → dense day-by-day array → weekly sums" shape is exactly
+// what the admin dashboard needs for app-launch and push-subscriber growth
+// trends. Second real consumer, not a speculative export.
+export function fillDailyWindow(rows: { day: string; count: number }[], days: number): number[] {
+  const map = new Map(rows.map((r) => [r.day, r.count]));
   const result: number[] = [];
   const today = new Date();
   for (let i = days - 1; i >= 0; i--) {
@@ -31,7 +35,7 @@ function fillDailyWindow(rows: { day: string; plays: number }[], days: number): 
   return result;
 }
 
-function bucketByWeek(daily: number[], bucketDays: number): number[] {
+export function bucketByWeek(daily: number[], bucketDays: number): number[] {
   const buckets: number[] = [];
   for (let i = 0; i < daily.length; i += bucketDays) {
     const sum = daily.slice(i, i + bucketDays).reduce((a, b) => a + b, 0);
@@ -114,7 +118,7 @@ export const fetchSetStats = createServerFn({ method: "GET" })
           .all<{ country: string }>(),
         db
           .prepare(
-            `SELECT DATE(started_at/1000, 'unixepoch') AS day, COUNT(*) AS plays
+            `SELECT DATE(started_at/1000, 'unixepoch') AS day, COUNT(*) AS count
              FROM plays
              WHERE set_id = ?
                AND started_at >= (strftime('%s', 'now', '-${TREND_WINDOW_DAYS} days') * 1000)
@@ -122,7 +126,7 @@ export const fetchSetStats = createServerFn({ method: "GET" })
              ORDER BY day ASC`,
           )
           .bind(setId)
-          .all<{ day: string; plays: number }>(),
+          .all<{ day: string; count: number }>(),
       ]);
 
       if (!row || row.play_count === 0) return null;
