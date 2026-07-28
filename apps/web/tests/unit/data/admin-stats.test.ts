@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   computeInstallToPushConversion,
+  computeTrackingStartDay,
   fetchAppLaunchStats,
   fetchClickStats,
+  fetchEventsTrackingStart,
   fetchInstallFunnel,
   fetchPlayStats,
   fetchPushSubscriberStats,
+  fetchPushSubscriptionsTrackingStart,
 } from "~/data/admin-stats";
 import { TREND_BUCKET_DAYS, TREND_WINDOW_DAYS } from "~/data/set-stats";
 
@@ -143,9 +146,20 @@ describe("fetchPlayStats", () => {
     expect(result.total).toBe(100);
     expect(result.offlineCount).toBe(30);
     expect(result.onlineCount).toBe(70);
+    expect(result.excludedCount).toBe(0);
     expect(result.topSets).toEqual([
       { setId: "set-002", setTitle: "Form:at 002", setArtist: "t.i.l.", playCount: 12 },
     ]);
+  });
+
+  it("computes excludedCount as total minus offline/online (plays predating is_offline tracking)", async () => {
+    const { db } = createFakeD1([
+      { match: /FROM plays/, first: { total: 292, offline_count: 9, online_count: 27 }, all: [] },
+    ]);
+
+    const result = await fetchPlayStats(db);
+
+    expect(result.excludedCount).toBe(256);
   });
 });
 
@@ -288,5 +302,67 @@ describe("computeInstallToPushConversion", () => {
       pushSubscribers: 3,
       ratio: null,
     });
+  });
+});
+
+describe("computeTrackingStartDay", () => {
+  const now = new Date("2026-07-28T00:00:00.000Z");
+
+  it("returns null when there's no data at all", () => {
+    expect(computeTrackingStartDay(null, now)).toBeNull();
+  });
+
+  it("returns the ISO day when real tracking started more recently than the 60-day window", () => {
+    // 2026-07-15, 13 days before `now` — well inside the 60-day window.
+    const earliest = new Date("2026-07-15T16:15:45.589Z").getTime();
+
+    expect(computeTrackingStartDay(earliest, now)).toBe("2026-07-15");
+  });
+
+  it("returns null once real history reaches the full 60-day window — matches plays' no-caveat behavior", () => {
+    // Exactly TREND_WINDOW_DAYS (60) before `now`: the window is fully real,
+    // same state plays.weeklyPlays is already in, which needs no caption.
+    const windowStart = new Date(now);
+    windowStart.setUTCDate(windowStart.getUTCDate() - TREND_WINDOW_DAYS);
+
+    expect(computeTrackingStartDay(windowStart.getTime(), now)).toBeNull();
+  });
+
+  it("returns null when real tracking predates the window by a wide margin (e.g. plays' ~84-day history)", () => {
+    const earliest = new Date("2026-05-05T00:00:00.000Z").getTime();
+
+    expect(computeTrackingStartDay(earliest, now)).toBeNull();
+  });
+});
+
+describe("fetchEventsTrackingStart / fetchPushSubscriptionsTrackingStart", () => {
+  it("fetchEventsTrackingStart reads MIN(created_at) from events", async () => {
+    const { db } = createFakeD1([
+      { match: /MIN\(created_at\).*FROM events/, first: { earliest: 1784132145589 } },
+    ]);
+
+    expect(await fetchEventsTrackingStart(db)).toBe(1784132145589);
+  });
+
+  it("fetchEventsTrackingStart returns null when events has no rows", async () => {
+    const { db } = createFakeD1([{ match: /MIN\(created_at\).*FROM events/, first: null }]);
+
+    expect(await fetchEventsTrackingStart(db)).toBeNull();
+  });
+
+  it("fetchPushSubscriptionsTrackingStart reads MIN(created_at) from push_subscriptions", async () => {
+    const { db } = createFakeD1([
+      { match: /MIN\(created_at\).*FROM push_subscriptions/, first: { earliest: 1784467482633 } },
+    ]);
+
+    expect(await fetchPushSubscriptionsTrackingStart(db)).toBe(1784467482633);
+  });
+
+  it("fetchPushSubscriptionsTrackingStart returns null when the table has no rows", async () => {
+    const { db } = createFakeD1([
+      { match: /MIN\(created_at\).*FROM push_subscriptions/, first: null },
+    ]);
+
+    expect(await fetchPushSubscriptionsTrackingStart(db)).toBeNull();
   });
 });

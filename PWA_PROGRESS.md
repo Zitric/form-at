@@ -1371,6 +1371,76 @@ a live query) — now also covering the four v2 views (set picker, per-set
 click ranking, funnel trends, install→push ratio) end to end against real
 rows.
 
+**v3 — honesty pass (2026-07-28).** A dedicated investigation session
+(2026-07-27, read-only — no code changes) audited the dashboard against
+real production row counts (pulled via `wrangler d1 execute --remote`:
+292 plays, 110 events, 4 push subscriptions at the time) and found four
+places where the page implied more than the data actually supports. This
+pass closes all four, each confirmed against the same real numbers:
+
+1. **Offline/online ratio now discloses its excluded rows.** `is_offline`
+   is `NULL` for 256 of 292 real plays (87.7%) — everything that predates
+   the column's 2026-07-08 addition. `PlayStats` gains `excludedCount`
+   (`total − offlineCount − onlineCount`, pure arithmetic on values already
+   fetched, zero new query) and the `plays` section now captions the ratio
+   with the excluded count whenever it's nonzero — the investigation found
+   this ratio was being shown with no indication it covers barely 12% of
+   real play volume.
+2. **Avg engaged listening time, per set.** `SetStats.avgSeconds` already
+   existed and was already being fetched by the v2 per-set picker
+   (`fetchSetStats`) but was never rendered anywhere in the app — a fully
+   dead computed field until now. Surfaced as a new `TerminalRow` in the
+   `per_set_plays` section using `utils/fmt.ts`'s existing `fmtDuration()`.
+   Labeled `avg_engaged_listening`, deliberately not "% completed" or
+   anything implying track position: the investigation found
+   `listened_seconds` is cumulative playback time, not furthest position
+   reached, and real data proves it — t.i.l.'s average is 292% of the
+   track's own stated length (a listener who scrubs back and replays
+   sections keeps adding to the total). A one-line caption under the row
+   spells this out so it can't be misread as completion percentage later.
+3. **60-day trend sparklines caption their real tracking start when the
+   window is only partially real.** `install_funnel`, `app_launches`, and
+   `push_subscribers`' growth trend all render a fixed 60-day window
+   regardless of how much real history exists — real `events` history only
+   goes back to 2026-07-15 (13 days at investigation time), real
+   `push_subscriptions` history to 2026-07-19 (9 days) — so most of each
+   sparkline was structural zero-padding, not "nothing happened". Two new
+   pure/fetch function pairs close this: `fetchEventsTrackingStart`/
+   `fetchPushSubscriptionsTrackingStart` (`admin-stats.ts`) each run one
+   trivial `SELECT MIN(created_at)` — a genuine extra query, not derived
+   from the already-window-limited trend rows, and deliberately so: a
+   window-truncated guess can't tell "tracking started exactly at the
+   window boundary" from "tracking started earlier but got cut off by the
+   60-day filter", and an indexed `MIN` on a 110-row (`events`) or 4-row
+   (`push_subscriptions`) table costs nothing worth trading that ambiguity
+   away for. `computeTrackingStartDay()` (pure, unit-tested with a fixed
+   `now`) turns that raw timestamp into either an ISO day to caption or
+   `null` — `null` both when there's no data at all AND, cleanly, once real
+   history reaches the full 60 days, at which point the caption disappears
+   on its own with no separate "is this still needed" check required later.
+   **Deliberately NOT applied to the per-set play trend** — `plays` genuinely
+   spans ~84 days (since 2026-05-05), so that sparkline needed no caveat and
+   still doesn't.
+4. **Tab push-subscribers captioned as policy, not a data gap.** The
+   investigation traced `PushOptInModal.tsx`'s browser-tab variant and
+   confirmed it never calls `useSubscribeToPush()`/`postSubscription()` at
+   all — "push subscriptions are app-only product policy" is the existing
+   design comment there. So `pushSubscribers.tabCount` reading 0 (all 4 real
+   subscribers are standalone) isn't "not enough data yet", it's guaranteed
+   to always read 0 unless that product policy itself changes. The
+   `push_subscribers` section now says so directly rather than leaving it
+   looking like an evolving ratio.
+
+Same visual treatment throughout: small `text-xs text-grey/70` captions
+directly under the row they qualify, matching the `install_to_push`
+caveat's existing style (the investigation flagged that caveat as the
+correct precedent every other overconfident stat should be held to).
+9 new unit tests (`admin-stats.test.ts`) — `excludedCount` arithmetic,
+`computeTrackingStartDay`'s three boundary cases (no data / partial window
+/ full window), and both new `fetchXTrackingStart` functions against the
+fake `D1Database`. All pre-existing tests (23 before this pass) pass
+unchanged.
+
 ### Fixed 2026-07-05 — M3: `_headers` caching + CSP (TECH_DEBT 19 itself still blocked)
 
 The launch-blocker session ran into hard preconditions: the custom domain

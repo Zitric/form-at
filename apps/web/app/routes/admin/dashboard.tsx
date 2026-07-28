@@ -24,7 +24,7 @@ import { Label, Muted, PageTitle } from "~/components/Text";
 import { fetchAdminDashboardStats } from "~/data/admin-stats";
 import { type SetStats, fetchSetStats } from "~/data/set-stats";
 import { sets } from "~/data/sets";
-import { asciiBar } from "~/utils/fmt";
+import { asciiBar, fmtDuration } from "~/utils/fmt";
 import { pageHead } from "~/utils/head";
 
 export const Route = createFileRoute("/admin/dashboard")({
@@ -142,6 +142,12 @@ function AdminDashboard() {
               install_to_push is an aggregate approximation, not a tracked per-user funnel — install
               events are anonymous and push_subscriptions shares no key with them.
             </p>
+            {stats.eventsTrackingStartDay && (
+              <p className="mt-1 text-xs text-grey/70">
+                trends above cover tracking since {stats.eventsTrackingStartDay} — the 60-day window
+                shown is mostly not-yet-tracked, not "nothing happened".
+              </p>
+            )}
           </section>
 
           <section>
@@ -154,6 +160,12 @@ function AdminDashboard() {
                 dimValue
               />
             </div>
+            {stats.eventsTrackingStartDay && (
+              <p className="mt-1 text-xs text-grey/70">
+                tracking since {stats.eventsTrackingStartDay} — the 60-day window shown is mostly
+                not-yet-tracked, not "nothing happened".
+              </p>
+            )}
           </section>
 
           <section>
@@ -166,6 +178,12 @@ function AdminDashboard() {
                 dimValue
               />
             </div>
+            {stats.plays.excludedCount > 0 && (
+              <p className="mt-1 mb-4 text-xs text-grey/70">
+                {stats.plays.excludedCount} of {stats.plays.total} plays predate offline tracking
+                (added 2026-07-08) and are excluded from this ratio.
+              </p>
+            )}
             {stats.plays.topSets.length > 0 && (
               <div className="space-y-1">
                 {stats.plays.topSets.map((set) => (
@@ -199,6 +217,11 @@ function AdminDashboard() {
               <div className="space-y-1">
                 <TerminalRow label="plays" value={String(selectedSetStats.playCount)} dimValue />
                 <TerminalRow
+                  label="avg_engaged_listening"
+                  value={fmtDuration(selectedSetStats.avgSeconds)}
+                  dimValue
+                />
+                <TerminalRow
                   label="trend_60d"
                   value={asciiBar(selectedSetStats.weeklyPlays)}
                   dimValue
@@ -206,6 +229,13 @@ function AdminDashboard() {
               </div>
             ) : (
               <Muted>no plays yet for this set</Muted>
+            )}
+            {selectedSetStats && (
+              <p className="mt-1 text-xs text-grey/70">
+                avg_engaged_listening is cumulative playback time, not furthest position reached —
+                it can exceed the track's own length for a listener who scrubs back and replays
+                sections.
+              </p>
             )}
           </section>
 
@@ -224,6 +254,16 @@ function AdminDashboard() {
                 dimValue
               />
             </div>
+            <p className="mt-1 text-xs text-grey/70">
+              tab will always read 0 by current product policy — the browser-tab opt-in variant
+              never subscribes (see PushOptInModal.tsx), it only offers an install nudge instead.
+            </p>
+            {stats.pushTrackingStartDay && (
+              <p className="mt-1 text-xs text-grey/70">
+                tracking since {stats.pushTrackingStartDay} — the 60-day window shown is mostly
+                not-yet-tracked, not "nothing happened".
+              </p>
+            )}
           </section>
 
           <section>
