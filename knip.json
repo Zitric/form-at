@@ -19,8 +19,8 @@
       "paths": {
         "~/*": ["app/*"]
       },
-      "ignoreDependencies": ["jsdom", "tailwindcss", "@form-at/tsconfig"],
-      "ignoreBinaries": ["vite", "vitest", "wrangler"]
+      "ignoreDependencies": ["tailwindcss", "@form-at/tsconfig"],
+      "ignoreBinaries": ["wrangler"]
     },
     "packages/tsconfig": {}
   }

@@ -153,7 +153,12 @@ export function computeInstallToPushConversion(
   };
 }
 
-export type AdminDashboardStats = {
+// Not exported: nothing outside this file references the shape by name —
+// `dashboard.tsx` reads fields dynamically off `Route.useLoaderData()`
+// rather than importing this type the way `SetStats`/`OverallStats` are
+// imported for a standalone helper's parameter (`$setId.tsx`'s
+// `buildStatsRows`). Only used here as the `satisfies` target below.
+type AdminDashboardStats = {
   installFunnel: InstallFunnel;
   appLaunches: AppLaunchStats;
   plays: PlayStats;
