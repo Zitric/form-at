@@ -1,3 +1,4 @@
+import { Button, Label, Muted, PageTitle, TerminalRow } from "@form-at/ui";
 // Internal read-only analytics dashboard. NO IN-APP AUTHENTICATION HERE —
 // this is deliberate, not an oversight. Access is restricted at the edge by
 // Cloudflare Access (Julian configures this himself, outside this repo's
@@ -17,10 +18,7 @@
 // independent layer (stops indexing even if something crawls it directly).
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Button } from "~/components/Button";
 import { PageLayout } from "~/components/PageLayout";
-import { TerminalRow } from "~/components/TerminalRow";
-import { Label, Muted, PageTitle } from "~/components/Text";
 import { fetchAdminDashboardStats } from "~/data/admin-stats";
 import { type SetStats, fetchSetStats } from "~/data/set-stats";
 import { sets } from "~/data/sets";

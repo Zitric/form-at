@@ -3,4 +3,5 @@ export * from "./Button/Button";
 export * from "./cn";
 export * from "./icons";
 export * from "./TerminalRow/TerminalRow";
+export * from "./Text/Text";
 export * from "./TextButton/TextButton";

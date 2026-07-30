@@ -11,7 +11,6 @@
         "app/router.tsx",
         "app/routes/**/*.{ts,tsx}",
         "app/sw.ts!",
-        "app/components/Text.tsx!",
         "scripts/*.{ts,mjs,js}",
         "tests/**/*.{ts,tsx}"
       ],

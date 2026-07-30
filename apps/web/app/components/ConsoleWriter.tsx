@@ -1,5 +1,5 @@
+import { Body } from "@form-at/ui";
 import Typewriter from "typewriter-effect";
-import { Body } from "~/components/Text";
 
 type ConsoleWriterProps = {
   children: string;

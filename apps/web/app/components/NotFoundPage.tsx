@@ -1,8 +1,7 @@
+import { Body, BracketLabel, TerminalRow } from "@form-at/ui";
+
 import { Link } from "@tanstack/react-router";
-import { BracketLabel } from "~/components/BracketLabel";
 import { PageLayout } from "~/components/PageLayout";
-import { TerminalRow } from "~/components/TerminalRow";
-import { Body } from "~/components/Text";
 
 // Single 404 renderer consumed by BOTH:
 //   - `notFoundComponent` in `routes/__root.tsx` (unmatched child routes)

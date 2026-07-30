@@ -1,15 +1,13 @@
+import { Button, Label, PageTitle, PauseIcon, PlayIcon, TerminalRow } from "@form-at/ui";
+
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { Button } from "~/components/Button";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { Image } from "~/components/Image";
 import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
 import { SaveForOfflineButton } from "~/components/SaveForOfflineButton";
 import { ShareSetButton } from "~/components/ShareSetButton";
-import { TerminalRow } from "~/components/TerminalRow";
-import { Label, PageTitle } from "~/components/Text";
-import { PauseIcon, PlayIcon } from "~/components/icons";
 import { fetchSetStats } from "~/data/set-stats";
 import type { SetStats } from "~/data/set-stats";
 import { getSet } from "~/data/sets";
