@@ -25,6 +25,21 @@ export const WithImage: Story = {
   args: { primary: "Julz Lever", image: PlaceholderImage },
 };
 
+export const WithChildren: Story = {
+  name: "With dynamic children (bypasses primary/secondary fallback)",
+  args: {
+    children: <div data-testid="custom-content">custom content</div>,
+  },
+};
+
+export const ActionWithoutOnClick: Story = {
+  name: "Action node with no onClick (not interactive)",
+  args: {
+    primary: "Form:at 002",
+    action: <button type="button">[ info ]</button>,
+  },
+};
+
 export const WithAction: Story = {
   name: "With action node (renders as div[role=button])",
   args: {
