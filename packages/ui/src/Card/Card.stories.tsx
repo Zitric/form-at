@@ -53,3 +53,29 @@ export const Clickable: Story = {
     await expect(args.onClick).toHaveBeenCalledOnce();
   },
 };
+
+export const NestedActionKeyboardActivation: Story = {
+  name: "Enter on nested action doesn't also trigger card onClick",
+  args: {
+    primary: "Form:at 002",
+    onClick: fn(),
+    // Mirrors real action-slot buttons (e.g. SaveForOfflineIconButton,
+    // ShareIconButton): they stop propagation on their own click so a mouse
+    // click doesn't bubble to the card. Enter-activating a focused <button>
+    // fires both a keydown AND a native click — this story's own
+    // stopPropagation covers the click half; Card's keydown guard covers the
+    // other half (see Card.tsx's handleKeyDown comment).
+    action: (
+      <button type="button" onClick={(e) => e.stopPropagation()}>
+        [ play ]
+      </button>
+    ),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const nestedAction = canvas.getByRole("button", { name: "[ play ]" });
+    nestedAction.focus();
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onClick).not.toHaveBeenCalled();
+  },
+};

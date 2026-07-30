@@ -113,7 +113,11 @@ export function Card({
   // it as activatable.
   if (action) {
     const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (onClick && (e.key === "Enter" || e.key === " ")) {
+      // Only react to keydowns that land on the wrapper itself — otherwise
+      // Enter/Space on a nested action button (which only guards the mouse
+      // path via stopPropagation) would bubble up and fire onClick too,
+      // double-activating: the intended action AND an unwanted navigation.
+      if (onClick && e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
         e.preventDefault();
         onClick();
       }
