@@ -1,5 +1,6 @@
 export * from "./BracketLabel/BracketLabel";
 export * from "./Button/Button";
+export * from "./Card/Card";
 export * from "./cn";
 export * from "./icons";
 export * from "./Modal/Modal";

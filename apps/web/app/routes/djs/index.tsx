@@ -1,7 +1,7 @@
+import { Card, PageTitle } from "@form-at/ui";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Card } from "~/components/Card";
+import { Image } from "~/components/Image";
 import { PageLayout } from "~/components/PageLayout";
-import { PageTitle } from "~/components/Text";
 import { getGuests, getResidents } from "~/data/djs";
 import { pageHead } from "~/utils/head";
 
@@ -29,8 +29,16 @@ function DJs() {
           {residents.map((dj, index) => (
             <li key={dj.id}>
               <Card
-                imageSrc={dj.photo}
-                imageAlt={dj.name}
+                image={
+                  dj.photo && (
+                    <Image
+                      src={dj.photo}
+                      alt={dj.name}
+                      sizes="(min-width: 640px) 112px, 64px"
+                      className="w-full h-full object-cover"
+                    />
+                  )
+                }
                 onClick={() => navigate({ to: "/djs/$djId", params: { djId: dj.id } })}
                 animationDelay={index}
               >
@@ -51,8 +59,16 @@ function DJs() {
           {guests.map((dj, index) => (
             <li key={dj.id}>
               <Card
-                imageSrc={dj.photo}
-                imageAlt={dj.name}
+                image={
+                  dj.photo && (
+                    <Image
+                      src={dj.photo}
+                      alt={dj.name}
+                      sizes="(min-width: 640px) 112px, 64px"
+                      className="w-full h-full object-cover"
+                    />
+                  )
+                }
                 onClick={() => navigate({ to: "/djs/$djId", params: { djId: dj.id } })}
                 animationDelay={index + residents.length}
               >

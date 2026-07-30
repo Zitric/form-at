@@ -1,15 +1,12 @@
+import { BracketLabel, Card, PageTitle, TerminalRow } from "@form-at/ui";
 import { Link, createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
-import { BracketLabel } from "~/components/BracketLabel";
 import { BrandTitle } from "~/components/BrandTitle";
-import { Card } from "~/components/Card";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { Image } from "~/components/Image";
 import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
 import { SetCard } from "~/components/SetCard";
 import { SocialLink } from "~/components/SocialLink";
-import { TerminalRow } from "~/components/TerminalRow";
-import { PageTitle } from "~/components/Text";
 import { getDJ } from "~/data/djs";
 import { events } from "~/data/events";
 import { getSet } from "~/data/sets";
