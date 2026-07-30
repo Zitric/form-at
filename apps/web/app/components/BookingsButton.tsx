@@ -1,8 +1,6 @@
+import { BracketLabel, Button, Modal, TerminalRow } from "@form-at/ui";
+
 import { useState } from "react";
-import { BracketLabel } from "~/components/BracketLabel";
-import { Button } from "~/components/Button";
-import { Modal } from "~/components/Modal";
-import { TerminalRow } from "~/components/TerminalRow";
 import { useStore } from "~/store";
 import { buildAndroidIntent, isAndroid } from "~/utils/deeplink";
 

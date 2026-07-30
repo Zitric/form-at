@@ -2,6 +2,7 @@ export * from "./BracketLabel/BracketLabel";
 export * from "./Button/Button";
 export * from "./cn";
 export * from "./icons";
+export * from "./Modal/Modal";
 export * from "./TerminalRow/TerminalRow";
 export * from "./Text/Text";
 export * from "./TextButton/TextButton";

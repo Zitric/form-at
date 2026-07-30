@@ -1,8 +1,7 @@
+import { Button, Modal, TextButton, cn } from "@form-at/ui";
+
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button } from "~/components/Button";
 import { IosInstallSteps, ManualInstallHint } from "~/components/InstallInstructions";
-import { Modal } from "~/components/Modal";
-import { TextButton } from "~/components/TextButton";
 import {
   type PushSubscribeOutcome,
   isPushSupported,
@@ -11,7 +10,6 @@ import {
 import { type SaveGate, useTriggerInstallPrompt } from "~/hooks/useSaveGate";
 import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";
-import { cn } from "~/utils/cn";
 
 type Props = {
   open: boolean;

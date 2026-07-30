@@ -1,7 +1,6 @@
-import { Button } from "~/components/Button";
+import { Button, Modal, TextButton } from "@form-at/ui";
+
 import { IosInstallSteps, ManualInstallHint } from "~/components/InstallInstructions";
-import { Modal } from "~/components/Modal";
-import { TextButton } from "~/components/TextButton";
 import { type SaveGate, useTriggerInstallPrompt } from "~/hooks/useSaveGate";
 import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";
