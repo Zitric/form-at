@@ -1,6 +1,6 @@
+import { cn } from "@form-at/ui";
 import type { ReactNode } from "react";
 import { useRouteTransition } from "~/hooks/useRouteTransition";
-import { cn } from "~/utils/cn";
 
 interface PageLayoutProps {
   children: ReactNode;
