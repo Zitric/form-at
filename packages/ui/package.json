@@ -7,7 +7,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./tokens.css": "./src/tokens.css",
-    "./tokens": "./src/tokens.ts"
+    "./tokens": "./src/tokens.ts",
+    "./dom-polyfills": "./src/domPolyfills.ts"
   },
   "scripts": {
     "lint": "biome check src",
