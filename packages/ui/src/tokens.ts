@@ -1,5 +1,5 @@
 // Single source of truth for design tokens used in JS/TS contexts (e.g. canvas).
-// Keep in sync with the @theme block in global.css.
+// Kept in sync with the @theme block in tokens.css — see tokens.test.ts.
 export const colors = {
   gold: "#c58538",
   black: "#161615",
