@@ -1,10 +1,10 @@
+import { Button, cn } from "@form-at/ui";
+
 import { useEffect, useState } from "react";
-import { Button } from "~/components/Button";
 import { useFirstLoad } from "~/hooks/useFirstLoad";
 import { useTriggerInstallPrompt } from "~/hooks/useSaveGate";
 import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore, useStoreHydrated } from "~/store";
-import { cn } from "~/utils/cn";
 
 // "Install Form:at" CTA on the home route.
 //

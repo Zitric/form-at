@@ -1,4 +1,4 @@
-import { Button } from "~/components/Button";
+import { Button } from "@form-at/ui";
 import type { MusicSet } from "~/data/sets";
 import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";
