@@ -32,7 +32,8 @@
       "**/routeTree.gen.ts",
       "**/playwright-report/**",
       "**/test-results/**",
-      "**/coverage/**"
+      "**/coverage/**",
+      "**/storybook-static/**"
     ]
   }
 }
