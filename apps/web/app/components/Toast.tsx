@@ -1,6 +1,7 @@
+import { ToastShell } from "@form-at/ui";
 import { useEffect, useState } from "react";
-import { ToastShell } from "~/components/ToastShell";
 import { useStore } from "~/store";
+import { Z } from "~/styles/z";
 
 const VISIBLE_MS = 1700;
 const EXIT_MS = 250;
@@ -47,6 +48,7 @@ export function Toast() {
       variant="default"
       onClick={() => setExiting(true)}
       ariaLabel="Dismiss notification"
+      zIndexClassName={Z.toast}
       style={{
         animation: exiting
           ? `fadeOutDown ${EXIT_MS}ms ease-in forwards`

@@ -7,3 +7,4 @@ export * from "./Modal/Modal";
 export * from "./TerminalRow/TerminalRow";
 export * from "./Text/Text";
 export * from "./TextButton/TextButton";
+export * from "./ToastShell/ToastShell";

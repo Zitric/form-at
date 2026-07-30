@@ -1,7 +1,7 @@
-import { BracketLabel } from "~/components/BracketLabel";
-import { ToastShell } from "~/components/ToastShell";
+import { BracketLabel, ToastShell } from "@form-at/ui";
 import { useSwUpdate } from "~/hooks/useSwUpdate";
 import { useStore } from "~/store";
+import { Z } from "~/styles/z";
 
 // "new version ready [ update ]" — the user-consented SW update flow (H2).
 // Shown when a new service-worker build is installed and waiting; tapping
@@ -28,13 +28,9 @@ export function UpdateToast() {
   if (!updateReady || activeDownloadId !== null) return null;
 
   return (
-    <ToastShell variant="default" onClick={applyUpdate}>
+    <ToastShell variant="default" onClick={applyUpdate} zIndexClassName={Z.toast}>
       <span className="text-grey">new version ready</span>
-      {/* whitespace-nowrap per the never-split-a-bracket rule (CLAUDE.md,
-          iPhone SE case). */}
-      <span className="whitespace-nowrap">
-        <BracketLabel tone="gold">update</BracketLabel>
-      </span>
+      <BracketLabel tone="gold">update</BracketLabel>
     </ToastShell>
   );
 }

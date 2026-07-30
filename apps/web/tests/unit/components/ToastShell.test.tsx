@@ -1,7 +1,7 @@
+import { ToastShell } from "@form-at/ui";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { ToastShell } from "~/components/ToastShell";
 
 // Locks the shared surface all three toast components migrated onto
 // (2026-07-22): variant → color classes (mirroring Button.tsx's
