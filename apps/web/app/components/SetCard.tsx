@@ -1,6 +1,6 @@
 import { Card } from "@form-at/ui";
 import { useNavigate } from "@tanstack/react-router";
-import { Image } from "~/components/Image";
+import { CardArtwork } from "~/components/CardArtwork";
 import { SaveForOfflineIconButton } from "~/components/SaveForOfflineIconButton";
 import { ShareIconButton } from "~/components/ShareIconButton";
 import { CirclePlayButton } from "~/components/player";
@@ -42,16 +42,7 @@ export function SetCard({ set, index }: Props) {
 
   return (
     <Card
-      image={
-        set.artwork && (
-          <Image
-            src={set.artwork}
-            alt={set.title}
-            sizes="(min-width: 640px) 112px, 64px"
-            className="w-full h-full object-cover"
-          />
-        )
-      }
+      image={set.artwork && <CardArtwork src={set.artwork} alt={set.title} />}
       hideImageOnMobile
       onClick={() => navigate({ to: "/sets/$setId", params: { setId: set.id } })}
       action={
