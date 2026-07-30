@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import * as stories from "./ToastShell.stories";
 
-const { Default, ErrorVariant } = composeStories(stories);
+const { Default, ErrorVariant, StyleOverride } = composeStories(stories);
 
 describe("ToastShell", () => {
   it("default variant renders gold-toned classes and defaults zIndexClassName to z-50", () => {
@@ -26,5 +26,28 @@ describe("ToastShell", () => {
     const wrapper = screen.getByRole("button").parentElement;
     expect(wrapper?.className).toContain("z-30");
     expect(wrapper?.className).not.toContain("z-50");
+  });
+
+  it("shares the same padding/layout/entrance classes across variants", () => {
+    const { unmount } = render(<Default />);
+    const defaultClass = screen.getByRole("button").className;
+    unmount();
+
+    render(<ErrorVariant />);
+    const errorClass = screen.getByRole("button").className;
+
+    for (const shared of ["px-5", "py-3.5", "gap-4", "max-w-sm", "animate-fade-in-up"]) {
+      expect(defaultClass).toContain(shared);
+      expect(errorClass).toContain(shared);
+    }
+  });
+
+  it("lets an inline style override win over the default entrance class via CSS specificity", () => {
+    render(<StyleOverride />);
+    const button = screen.getByRole("button", { name: "Dismiss notification" });
+    // The class is still present (no conditional dropping)...
+    expect(button.className).toContain("animate-fade-in-up");
+    // ...but the inline style is what actually governs the animation.
+    expect(button.style.animation).toContain("fadeOutDown");
   });
 });

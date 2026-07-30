@@ -34,3 +34,16 @@ export const ErrorVariant: Story = {
     children: <span>playback error</span>,
   },
 };
+
+export const StyleOverride: Story = {
+  name: "Inline style overrides the default entrance animation",
+  args: {
+    variant: "default",
+    ariaLabel: "Dismiss notification",
+    // Mirrors Toast.tsx's own timed enter/exit — verifies the class stays
+    // (no conditional dropping) while the inline style wins via ordinary
+    // CSS specificity.
+    style: { animation: "fadeOutDown 250ms ease-in forwards" },
+    children: <span>exiting</span>,
+  },
+};
