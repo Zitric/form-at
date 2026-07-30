@@ -22,6 +22,7 @@
       "ignoreDependencies": ["tailwindcss", "@form-at/tsconfig"],
       "ignoreBinaries": ["wrangler"]
     },
-    "packages/tsconfig": {}
+    "packages/tsconfig": {},
+    "packages/ui": {}
   }
 }
