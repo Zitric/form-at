@@ -33,7 +33,9 @@ jobs:
       # We need it on disk before tsc can resolve `./routeTree.gen` in router.tsx.
       - run: pnpm -C apps/web exec vite build
       - run: pnpm -C apps/web lint
-      - run: pnpm -C apps/web tsc
+      - run: pnpm -C packages/ui lint
+      # turbo tsc covers @form-at/ui alongside @form-at/web in one task graph.
+      - run: pnpm turbo tsc
 
   # ── Unused files/deps/exports (knip) ─────────────────────────────────────
   knip:
@@ -71,6 +73,31 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm -C apps/web test:run
+      - run: pnpm --filter @form-at/ui test
+
+  # ── Chromatic (Storybook visual regression) ──────────────────────────────
+  chromatic:
+    name: Chromatic
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # Chromatic needs full git history to diff against baseline
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # No Playwright browser involved — Chromatic renders in its own cloud
+      # browsers, so this cannot collide with the e2e job's browser cache key.
+      - uses: chromaui/action@v1
+        with:
+          projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+          workingDir: packages/ui
+          buildScriptName: build-storybook
 
   # ── E2E tests (playwright, chromium + webkit) ─────────────────────────────
   e2e:
