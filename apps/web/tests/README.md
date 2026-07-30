@@ -28,7 +28,8 @@ tests/
 ├── unit/
 │   ├── store/         # Zustand slices (loadTrack, playTrack, togglePlay…)
 │   ├── hooks/         # useFirstLoad and friends
-│   ├── components/    # Card, PlayerIcons, etc.
+│   ├── components/    # BookingsButton, PlayerIcons, etc. (shared design-system
+│   │                  #   components live in packages/ui and are tested there)
 │   └── utils/         # fmtDuration, fmtDate
 ├── e2e/
 │   ├── home.spec.ts        # Manifesto, CTA, social links
