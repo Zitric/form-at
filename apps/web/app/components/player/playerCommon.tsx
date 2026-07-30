@@ -2,7 +2,7 @@
 // Lives here rather than in any single component to avoid coupling unrelated
 // files just to share a 3-line helper.
 
-import { PauseIcon, PlayIcon } from "~/components/icons";
+import { PauseIcon, PlayIcon } from "@form-at/ui";
 
 // Resolves the glyph for a play/pause button. Loading takes priority because a
 // press during load should read as "busy", not as "ready to play".
