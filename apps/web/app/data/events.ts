@@ -35,7 +35,7 @@ export const events: Event[] = [
     lineupIds: ["julz-lever", "hubey", "til", "angel-negrin", "rushford", "dimebug", "3sr"],
     audio: "electro / house / techno",
     runtime: "20:30 — very late",
-    status: "upcoming",
+    status: "past",
     flyer: "events/seafield-sound",
     description:
       "a joint transmission — form:at is one node in this crew, not the sole operator. on the sand at seafield road; if weather breaks, a covered plan b stands 100m inland. this year's rig hits harder than last year's.",
