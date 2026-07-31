@@ -2,7 +2,11 @@
 
 Website for Form:at — a techno collective based in Glasgow.
 
-Live at [formatglasgow.com](https://formatglasgow.com)
+Live at [formatglasgow.com](https://formatglasgow.com). Monorepo — this
+README covers the public site (`apps/web`); there's also an internal
+analytics dashboard (`apps/admin`, deployed separately at
+`admin.formatglasgow.com`, gated by Cloudflare Access) — see `CLAUDE.md`
+for the full apps/packages layout.
 
 ---
 
@@ -97,8 +101,8 @@ pnpm --filter @form-at/web start   # port 4173 — real SW, real Chrome
 
 Two GitHub Actions workflows in `.github/workflows/`:
 
-- **`ci.yml`** — runs on every push (except `main`) and every pull request. Three parallel jobs: `static` (biome + tsc), `unit` (vitest), `e2e` (playwright on Chromium and WebKit).
-- **`deploy.yml`** — runs on push to `main`. Re-runs the same `static` / `unit` / `e2e` jobs as gates, then deploys to Cloudflare Pages only if all pass. Direct pushes to main can't bypass the test suite.
+- **`ci.yml`** — runs on every push (except `main`) and every pull request. Covers both `apps/web` and `apps/admin` (plus `packages/ui`/`packages/data`): `static` (biome + tsc), `unit` (vitest), `e2e` (playwright on Chromium and WebKit).
+- **`deploy.yml`** — runs on push to `main`. Re-runs the same gates for both apps, then deploys each to its own Cloudflare Pages project only if all pass. Direct pushes to main can't bypass the test suite.
 
 Required secrets:
 - `CLOUDFLARE_API_TOKEN`
@@ -172,10 +176,6 @@ Patterns to watch for:
 ---
 
 ## Roadmap
-
-### Pending
-
-- **Analytics query UI** — D1 has `started_at` and `listened_seconds` indexed but there's no internal dashboard page to query plays by date range or top tracks over time.
 
 ### Longer term
 

@@ -8,7 +8,9 @@ Live at [formatglasgow.com](https://formatglasgow.com)
 | App/Package | Path | Purpose |
 |-----|------|---------|
 | web | `apps/web` | Public website + embedded audio player |
+| admin | `apps/admin` | Internal analytics dashboard, deployed separately, Cloudflare Access-gated |
 | ui | `packages/ui` | Shared design system — tokens, primitives, Storybook, Chromatic |
+| data | `packages/data` | Shared sets catalogue + analytics query logic (consumed by web and admin) |
 
 Future apps go in `apps/`. Each app picks its own framework; the default is TanStack Start.
 
@@ -76,6 +78,17 @@ npx wrangler d1 execute form-at-analytics --remote --file=apps/web/schema.sql
 
 ### Auth (not yet built)
 Community features will be gated behind **Better Auth** (self-hosted, open source). The player and sets pages stay fully public — no login required to listen.
+
+### Admin dashboard — `apps/admin`
+A separate TanStack Start app (not a route inside `apps/web`), deployed as its own Cloudflare Pages project at `admin.formatglasgow.com`, protected by **Cloudflare Access at the subdomain level** (Julian configures the Access application and Pages project himself — see "Manual Cloudflare setup" below; never attempt to create/modify Cloudflare resources on his behalf).
+
+**No in-app authentication — deliberate.** Access gates the page load at the edge; the app itself has zero login/session code. **This only protects page loads, not individual server-function calls** — any future *mutating* admin endpoint (there are none today; the dashboard is pure read-only aggregate queries) must verify the Access identity server-side (the `Cf-Access-Jwt-Assertion` header) rather than assuming the page being gated is enough.
+
+**Shares `packages/data` (`@form-at/data`) with `apps/web`**, not a duplicated copy: the static sets catalogue and `fetchSetStats` (the per-set trend query) have two real consumers — the public `/sets/$setId` page and this dashboard's per-set picker. `apps/web`'s own `~/data/sets`/`~/data/set-stats`/`~/utils/audioHost` are thin re-export shims pointing at the package (see `TECH_DEBT.md` item 21 for the deferred follow-up sweep of `apps/web`'s remaining direct references). `admin-stats.ts` (the dashboard's own aggregate queries — install funnel, app launches, plays, push subscribers, clicks) has only ever had one consumer, so it lives entirely in `apps/admin`, not the shared package.
+
+**No charting yet.** Trend rows (install funnel, app launches, per-set plays, push growth) render a `chart pending` placeholder — the underlying trend arrays are still computed and returned by `admin-stats.ts` exactly as before, so adding real charts later is a pure presentation swap with no data-layer work.
+
+**Manual Cloudflare setup** (Julian does this, not Claude): create the `form-at-admin` Pages project (Direct Upload, matching `form-at-web`), add the `DB` D1 binding (Settings → Functions → D1 database bindings → `form-at-analytics`), add the `admin.formatglasgow.com` custom domain, and create a Cloudflare Access application (Zero Trust → Access → Applications → Self-hosted) gating that domain to the team's emails. Verify `CLOUDFLARE_API_TOKEN`'s scope covers the new project — CI deploys will 403 if it was scoped narrowly to `form-at-web` only.
 
 ### Design system — `packages/ui`
 Generic, presentational primitives live in `@form-at/ui` (`packages/ui/src/`), not in `apps/web`. Each component gets its own folder (e.g. `src/Button/Button.tsx`, `Button.stories.tsx`, `Button.test.tsx`) — except `icons/`, which stays a flat directory of pure SVG components. The package has **no build step**: it ships raw `.tsx`/`.css` source (same precedent as `packages/tsconfig`), consumed directly by `apps/web`'s Vite build and by Storybook via the pnpm workspace symlink.
@@ -216,10 +229,13 @@ After `pnpm install`, running `pnpm dev` will auto-generate `apps/web/app/routeT
 - `apps/web/app/hooks/` — custom hooks (useAudioPlayer)
 - `apps/web/vitest.config.ts` / `apps/web/playwright.config.ts` — test configs
 - `apps/web/tests/` — unit + e2e tests, plus README on conventions
+- `apps/admin/app/server.ts` — same Cloudflare entry pattern as `apps/web`'s, minus audio/CSP specifics
+- `apps/admin/wrangler.toml` — own Pages project (`form-at-admin`), same `form-at-analytics` D1 binding as the root config
 - `packages/ui/src/` — design system components, one folder per component (`icons/` stays flat), `tokens.css`/`tokens.ts`
 - `packages/ui/.storybook/` — Storybook config; `packages/ui/vitest.setup.ts` — jsdom `<dialog>` polyfill + jest-dom matchers
-- `.github/workflows/ci.yml` / `deploy.yml` — CI pipeline + gated deploy
-- `wrangler.toml` — at repo root, configures Cloudflare Pages + D1 binding
+- `packages/data/src/` — `sets.ts` (catalogue + `AUDIO_HOST`/`AUDIO_ORIGIN`), `set-stats.ts` (`fetchSetStats` + trend-bucketing helpers)
+- `.github/workflows/ci.yml` / `deploy.yml` — CI pipeline + gated deploy (both apps, `deploy.yml` has a separate `deploy-admin` job)
+- `wrangler.toml` — at repo root, configures `form-at-web`'s Cloudflare Pages + D1 binding (`apps/admin/wrangler.toml` is the second app's own config)
 
 ## Docs to check
 
