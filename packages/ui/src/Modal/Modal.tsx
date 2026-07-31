@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { BracketLabel } from "../BracketLabel/BracketLabel";
 
-// Matches the duration on `@utility animate-fade-out` in global.css. We stay
+// Matches the duration on `@utility animate-fade-out` in tokens.css. We stay
 // mounted just long enough for that animation to finish before unmounting.
 const EXIT_MS = 200;
 
