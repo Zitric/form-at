@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { cn } from "~/utils/cn";
+import { cn } from "../cn";
 
 // Low-emphasis inline text action — the underlined "escape hatch" style used
 // inside modals (SaveGateModal's "already installed?" pair, PushOptInModal's

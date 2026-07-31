@@ -1,9 +1,9 @@
+import { Label, PageTitle, TerminalRow } from "@form-at/ui";
+
 import { Await, createFileRoute, defer } from "@tanstack/react-router";
 import { Suspense } from "react";
 import { PageLayout } from "~/components/PageLayout";
 import { SetCard } from "~/components/SetCard";
-import { TerminalRow } from "~/components/TerminalRow";
-import { Label, PageTitle } from "~/components/Text";
 import { type OverallStats, fetchOverallStats } from "~/data/set-stats";
 import { sets } from "~/data/sets";
 import { fmtDuration } from "~/utils/fmt";

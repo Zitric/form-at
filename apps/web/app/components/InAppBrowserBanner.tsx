@@ -1,5 +1,5 @@
+import { BracketLabel } from "@form-at/ui";
 import { useEffect, useState } from "react";
-import { BracketLabel } from "~/components/BracketLabel";
 import { useNavReady } from "~/hooks/useNavReady";
 import { useStore } from "~/store";
 import { ABOVE_CHROME_BOTTOM, ABOVE_NAV_BOTTOM } from "~/styles/layout";

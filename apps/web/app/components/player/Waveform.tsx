@@ -1,7 +1,7 @@
+import { colors } from "@form-at/ui/tokens";
 import { useDrag } from "@use-gesture/react";
 import { useEffect, useRef, useState } from "react";
 import { useScrubControl } from "~/hooks/useScrubControl";
-import { colors } from "~/styles/tokens";
 import { fmtTimestamp } from "~/utils/fmt";
 
 interface WaveformProps {

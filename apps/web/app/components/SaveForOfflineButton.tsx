@@ -1,5 +1,5 @@
+import { Button } from "@form-at/ui";
 import { useState } from "react";
-import { Button } from "~/components/Button";
 import { CancelDownloadModal } from "~/components/CancelDownloadModal";
 import { QuotaInfoModal } from "~/components/QuotaInfoModal";
 import { SaveGateModal } from "~/components/SaveGateModal";

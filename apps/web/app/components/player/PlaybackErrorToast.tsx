@@ -1,6 +1,6 @@
-import { BracketLabel } from "~/components/BracketLabel";
-import { ToastShell } from "~/components/ToastShell";
+import { BracketLabel, ToastShell } from "@form-at/ui";
 import { useStore } from "~/store";
+import { Z } from "~/styles/z";
 
 // Surfaces a play() failure visibly so users (and the team debugging on Discord)
 // notice when audio silently fails to start. Sits above the player + bottom nav
@@ -52,7 +52,13 @@ export function PlaybackErrorToast() {
   const dismiss = () => setHasError(false);
 
   return (
-    <ToastShell variant="error" onClick={dismiss} ariaLabel="Dismiss playback error" role="alert">
+    <ToastShell
+      variant="error"
+      onClick={dismiss}
+      ariaLabel="Dismiss playback error"
+      role="alert"
+      zIndexClassName={Z.toast}
+    >
       <span className="flex-1">{message}</span>
       <BracketLabel tone="red">x</BracketLabel>
     </ToastShell>

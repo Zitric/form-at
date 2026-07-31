@@ -1,5 +1,6 @@
+import { Button, cn } from "@form-at/ui";
+
 import { useCallback, useEffect, useState } from "react";
-import { Button } from "~/components/Button";
 import { PushOptInModal } from "~/components/PushOptInModal";
 import { useFirstLoad } from "~/hooks/useFirstLoad";
 import {
@@ -9,7 +10,6 @@ import {
 } from "~/hooks/usePushSubscription";
 import { useSaveGate } from "~/hooks/useSaveGate";
 import { useStore, useStoreHydrated } from "~/store";
-import { cn } from "~/utils/cn";
 import { isStandalone } from "~/utils/installCapability";
 
 // Push-notification opt-in CTA — home route, stacked directly below

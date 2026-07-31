@@ -1,5 +1,5 @@
-import { Button } from "~/components/Button";
-import { Modal } from "~/components/Modal";
+import { Button, Modal } from "@form-at/ui";
+
 import { fmtBytes } from "~/utils/fmt";
 
 type Props = {

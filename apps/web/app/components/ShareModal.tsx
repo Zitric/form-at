@@ -1,6 +1,5 @@
-import { BracketLabel } from "~/components/BracketLabel";
-import { Modal } from "~/components/Modal";
-import { TerminalRow } from "~/components/TerminalRow";
+import { BracketLabel, Modal, TerminalRow } from "@form-at/ui";
+
 import { useStore } from "~/store";
 import { getAudioCurrentTime } from "~/store/playerSlice";
 import { buildAndroidIntent, isAndroid } from "~/utils/deeplink";

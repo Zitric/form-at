@@ -1,6 +1,6 @@
+import { PauseIcon, PlayIcon, cn } from "@form-at/ui";
+
 import type React from "react";
-import { PauseIcon, PlayIcon } from "~/components/icons";
-import { cn } from "~/utils/cn";
 
 interface CirclePlayButtonProps {
   isThisPlaying: boolean;

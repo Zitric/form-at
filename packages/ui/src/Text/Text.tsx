@@ -1,7 +1,7 @@
 import { cva } from "class-variance-authority";
 import type { VariantProps } from "class-variance-authority";
 import type React from "react";
-import { cn } from "~/utils/cn";
+import { cn } from "../cn";
 
 type As = "p" | "span" | "div" | "li" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
 
@@ -64,8 +64,6 @@ export function PageTitle({ children, className, as }: Omit<TextProps, "variant"
   return (
     <Heading as={as} className={cn("font-display mb-6 text-grey", className)}>
       <span className="text-gold mr-1">›</span>
-      {/* <span className="animate-blink text-gold! mr-2">{">"}</span> */}
-
       {children}
     </Heading>
   );

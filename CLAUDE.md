@@ -3,11 +3,12 @@
 Monorepo for Form:at — a techno collective based in Glasgow.
 Live at [formatglasgow.com](https://formatglasgow.com)
 
-## Apps
+## Apps & packages
 
-| App | Path | Purpose |
+| App/Package | Path | Purpose |
 |-----|------|---------|
 | web | `apps/web` | Public website + embedded audio player |
+| ui | `packages/ui` | Shared design system — tokens, primitives, Storybook, Chromatic |
 
 Future apps go in `apps/`. Each app picks its own framework; the default is TanStack Start.
 
@@ -76,9 +77,25 @@ npx wrangler d1 execute form-at-analytics --remote --file=apps/web/schema.sql
 ### Auth (not yet built)
 Community features will be gated behind **Better Auth** (self-hosted, open source). The player and sets pages stay fully public — no login required to listen.
 
+### Design system — `packages/ui`
+Generic, presentational primitives live in `@form-at/ui` (`packages/ui/src/`), not in `apps/web`. Each component gets its own folder (e.g. `src/Button/Button.tsx`, `Button.stories.tsx`, `Button.test.tsx`) — except `icons/`, which stays a flat directory of pure SVG components. The package has **no build step**: it ships raw `.tsx`/`.css` source (same precedent as `packages/tsconfig`), consumed directly by `apps/web`'s Vite build and by Storybook via the pnpm workspace symlink.
+
+**What lives here:** `Text` family (`Text`/`Heading`/`Label`/`Body`/`Muted`/`PageTitle`), `BracketLabel`, `Button`, `TextButton`, `TerminalRow`, `Card`, `Modal`, `ToastShell`, the icon set, and the design tokens. Components that are app-specific (asset URL conventions, Zustand-store-coupled, TanStack Router-coupled nav) stay in `apps/web/app/components/` — `packages/ui` only holds things with zero framework/app coupling.
+
+**Design tokens — single source of truth:** `packages/ui/src/tokens.css` (the `@theme` block, keyframes, and `t-*` typography utilities) and `packages/ui/src/tokens.ts` (the JS colour mirror for canvas use, e.g. `Waveform.tsx`). A Vitest test (`tokens.test.ts`) parses both and asserts the colours match — this is a structural assertion, not a snapshot, so it fits the repo's "no snapshot tests" rule. `apps/web/app/styles/global.css` imports `@form-at/ui/tokens.css` and keeps only genuinely app-local CSS (the two keyframes used by non-migrated components, and the base heading reset).
+
+**Tailwind v4 cross-package class detection:** Tailwind's automatic source scanning excludes `node_modules`, and `packages/ui` only reaches `apps/web` via a pnpm workspace symlink — so an explicit `@source "../../../../packages/ui/src";` directive in `global.css` is required for Tailwind to see class names used inside `packages/ui/src/*.tsx`. Don't remove it.
+
+**Storybook + Chromatic:**
+- `pnpm --filter @form-at/ui storybook` — dev server (port 6006). `pnpm --filter @form-at/ui build-storybook` — static build (what CI/Chromatic runs).
+- Interaction tests use Storybook's **Portable Stories API** (`composeStories`) run through plain Vitest + jsdom — deliberately *not* `@storybook/addon-vitest`/test-runner, both of which need a real Playwright/WebdriverIO browser. Given this repo's Playwright-cache-collision history (see CI/CD below), a second browser-install surface is an avoidable failure mode.
+- **Don't mix `vi.fn()` with Storybook's `fn()`.** `storybook/test`'s `fn()` bundles its own `@vitest/spy`, which is a structurally different `Mock` type from the workspace's own `vitest`. Passing a locally-created `vi.fn()` as a prop override on a composed story will fail `tsc` with a confusing type error. Instead, assert against the mock the story already created: `composeStories(stories).Secondary.args.onClick`.
+- Chromatic renders in its own cloud browsers — it cannot collide with the Playwright browser cache (see CI/CD).
+
 ## Principles
 
 - **Top-notch quality is the priority.** This is meant to be a polished, professional app — not a quick prototype or hobby project. When a trade-off comes up between speed and quality, default to quality. Choose the cleaner abstraction over the cheapest one, the correct pattern over the shortcut, the proper UX over "good enough." Don't be cheap with engineering time, refactors, or polish: invest the effort to do things properly the first time. If a suggestion sounds "easier but worse," flag it and propose the better path.
+- **This is a portfolio project as well as a live product.** It's meant to demonstrate professional developer experience and production standards to anyone who reads the repo, not just to ship features. That raises the bar specifically on: documented, tested component APIs (Storybook stories + interaction/a11y coverage for anything in `packages/ui`, not just "it renders"), clean package boundaries (no app-specific imports leaking into a shared package), and CI that actually gates on all of it. When choosing between a quick inline fix and a properly abstracted/documented one in a shared package, default to the latter.
 - **Keep it simple.** Within the quality bar above, prefer the simplest implementation that does the job well. Don't add abstractions until there's a clear need. Three similar lines beats a premature helper — but two coexisting half-built abstractions is *not* simple, it's debt. Simple ≠ shortcut.
 - **No comments that explain what the code does** — names do that. Only comment the non-obvious *why*.
 - **Biome only** — no Prettier, no ESLint. Run `pnpm check` to lint and format everything.
@@ -97,9 +114,10 @@ The user owns commits — you do not create them. The user is the repo owner and
 
 ### Reusable components
 - Extract a component when the same UI or behaviour appears in more than one place, or when a single file is getting hard to scan.
-- Components live in `apps/web/app/components/`. Name them after what they *are*, not where they're used (`TrackRow`, not `SetsPageTrackRow`).
+- **Generic, presentational, framework-agnostic components go in `packages/ui/src/` (`@form-at/ui`)** — see "Design system" above. Anything Zustand-store-coupled, TanStack-Router-coupled, or tied to an app-specific convention (e.g. the R2 image URL scheme) stays in `apps/web/app/components/`.
+- App-specific components live in `apps/web/app/components/`. Name them after what they *are*, not where they're used (`TrackRow`, not `SetsPageTrackRow`).
 - Keep props minimal and typed. Prefer explicit prop interfaces over spreading unknown objects.
-- **Bracket buttons live in `Button.tsx` (variants: `primary` / `secondary` / `fail`); bracket rendering itself lives in `BracketLabel.tsx` for non-button surfaces (`Link`, `<a>`, Toast, NavLinks).** Never hand-roll a `[ label ]` button with inline classes — use `<Button variant="secondary">label</Button>` and let the design system own the bracket colouring.
+- **Bracket buttons live in `@form-at/ui`'s `Button` (variants: `primary` / `secondary` / `fail`); bracket rendering itself lives in `BracketLabel` for non-button surfaces (`Link`, `<a>`, Toast, NavLinks).** Never hand-roll a `[ label ]` button with inline classes — use `<Button variant="secondary">label</Button>` and let the design system own the bracket colouring. `BracketLabel` owns its own `whitespace-nowrap` (a single wrapping `<span>`) — callers don't need to add it themselves.
 
 ### Modern patterns
 - **TypeScript strict mode** — no `any` unless there is a documented reason (e.g. CF env casting). Use `unknown` + narrowing instead.
@@ -125,10 +143,10 @@ JSX should describe **what** the UI is, not **how** it's computed. When an inlin
 
 ### Styling
 - Tailwind utility classes only — no inline `style` props except for dynamic values (e.g. animation offsets).
-- Design tokens are in `apps/web/app/styles/tokens.ts` (JS/canvas use) and mirrored in the `@theme` block of `global.css` (Tailwind use). Keep them in sync.
+- Design tokens are in `packages/ui/src/tokens.ts` (JS/canvas use) and `packages/ui/src/tokens.css` (the `@theme` block, Tailwind use) — see "Design system" above. A Vitest test keeps them in sync; don't hand-edit one without the other.
 - Brand colours: `bg-black` (`#161615`), `text-gold` (`#c58538`), `text-purple` (`#43437a`), `text-grey` (`#cbcbcb`), `font-mono` (Space Mono).
 - **Edges.** Sharp by default — terminal rows, the player bar, headers, status pills, CTA buttons, and structural borders (`border-t`, `border-l`) stay square. Use `rounded-card` (single 4px token, defined in `global.css`) only for **content surfaces the user taps into**: list cards, content images (artwork, flyers). Use `rounded-full` only for genuinely circular elements (e.g. the play button). Never use the freeform Tailwind radius scale (`rounded-md`, `rounded-lg`, `rounded-xl`) — only the two tokens above.
-- **Bracket labels never wrap mid-bracket.** Terminal-style `[ label ]` buttons must keep the whole bracket pair on one line — an orphaned `]` on the next line breaks the visual convention and reads as a layout bug. When a bracket button lives in a flex row that gets tight at narrow viewports (iPhone SE 375px is the test case), add `whitespace-nowrap` to the button class. If the label is long enough that nowrap forces overflow, shorten the label — never let the bracket split. This has bitten us repeatedly (Phase 2 banner `[ × ]`, Phase 3 `[ share_set ]` / `[ save_for_offline ]` row); the rule exists so it stops.
+- **Bracket labels never wrap mid-bracket.** Terminal-style `[ label ]` buttons must keep the whole bracket pair on one line — an orphaned `]` on the next line breaks the visual convention and reads as a layout bug. `BracketLabel` (in `@form-at/ui`) owns `whitespace-nowrap` on itself, so this is now structural rather than a per-caller convention to remember. If a label is long enough that nowrap forces overflow at narrow viewports (iPhone SE 375px is the test case), shorten the label — never let the bracket split. This has bitten us repeatedly (Phase 2 banner `[ × ]`, Phase 3 `[ share_set ]` / `[ save_for_offline ]` row, and a missed case in `AddToCalendarButton`); the fix was moved into the component specifically so it can't be forgotten again.
 
 ## Commands
 
@@ -160,16 +178,28 @@ Notes:
 - Playwright config (`apps/web/playwright.config.ts`) uses `workers: 1` because Vite's dev server races on parallel route loads. The suite is still <15s.
 - Click handlers that call `playTrack` rely on the module-level `audioEl` ref in `playerSlice.ts`. Tests register a fake audio element via `registerAudioElement()` in `beforeEach`.
 
+### Design system (in `packages/ui/`)
+
+```bash
+pnpm --filter @form-at/ui storybook          # Storybook dev server, port 6006
+pnpm --filter @form-at/ui build-storybook    # static build (what CI/Chromatic runs)
+pnpm --filter @form-at/ui test               # vitest — portable-stories interaction tests + tokens sync test
+pnpm --filter @form-at/ui lint               # biome check src
+pnpm --filter @form-at/ui tsc                # tsc --noEmit
+```
+
+Every component gets a co-located `.stories.tsx` (variants + interaction `play` functions + `@storybook/addon-a11y` coverage) and, where there's real behaviour to lock, a `.test.tsx` that runs those stories through Vitest via `composeStories`.
+
 ## CI / CD
 
 Two GitHub Actions workflows in `.github/workflows/`:
 
-- **`ci.yml`** — runs on push (non-main) + pull_request. Three parallel jobs: `static` (biome lint + tsc), `unit` (vitest), `e2e` (playwright on Chromium + WebKit).
-- **`deploy.yml`** — runs on push to `main`. Re-runs the same three jobs as gates, then `deploy` runs only after all pass. A direct push to `main` cannot bypass the test suite.
+- **`ci.yml`** — runs on push (non-main) + pull_request. Jobs: `static` (biome lint + `turbo tsc`, covers both `apps/web` and `packages/ui`), `knip`, `unit` (vitest for both `apps/web` and `packages/ui`), `chromatic` (Storybook visual regression for `packages/ui`), `e2e` (playwright on Chromium + WebKit).
+- **`deploy.yml`** — runs on push to `main`. Re-runs `static`/`unit`/`e2e` as gates (deliberately **not** `chromatic` — see below), then `deploy` runs only after all pass. A direct push to `main` cannot bypass the test suite.
 
-Both workflows use `pnpm/action-setup` pinned to the version in the root `package.json` `packageManager` field, plus `actions/setup-node` with pnpm cache. Playwright browsers are cached at `~/.cache/ms-playwright`, keyed on the **browser set + `pnpm-lock.yaml` hash** — the two workflows install different browser sets (ci: chromium+webkit, deploy: chromium-only) and must never share a cache key (first-writer-wins poisoning, PR #2 2026-07-02).
+Both workflows use `pnpm/action-setup` pinned to the version in the root `package.json` `packageManager` field, plus `actions/setup-node` with pnpm cache. Playwright browsers are cached at `~/.cache/ms-playwright`, keyed on the **browser set + `pnpm-lock.yaml` hash** — the two workflows install different browser sets (ci: chromium+webkit, deploy: chromium-only) and must never share a cache key (first-writer-wins poisoning, PR #2 2026-07-02). The `chromatic` job never installs a Playwright browser (Chromatic renders in its own cloud browsers), so it cannot collide with this cache — deliberately kept PR-only (not duplicated into `deploy.yml`) to avoid roughly doubling Chromatic's snapshot quota consumption for a repo this size.
 
-Required GitHub secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
+Required GitHub secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CHROMATIC_PROJECT_TOKEN`.
 
 ## First run
 
@@ -184,8 +214,18 @@ After `pnpm install`, running `pnpm dev` will auto-generate `apps/web/app/routeT
 - `apps/web/app/server.ts` — custom Cloudflare server entry (do not delete)
 - `apps/web/app/store/` — Zustand store (playerSlice + persist middleware)
 - `apps/web/app/hooks/` — custom hooks (useAudioPlayer)
-- `apps/web/app/styles/tokens.ts` — design token JS source of truth
 - `apps/web/vitest.config.ts` / `apps/web/playwright.config.ts` — test configs
 - `apps/web/tests/` — unit + e2e tests, plus README on conventions
+- `packages/ui/src/` — design system components, one folder per component (`icons/` stays flat), `tokens.css`/`tokens.ts`
+- `packages/ui/.storybook/` — Storybook config; `packages/ui/vitest.setup.ts` — jsdom `<dialog>` polyfill + jest-dom matchers
 - `.github/workflows/ci.yml` / `deploy.yml` — CI pipeline + gated deploy
 - `wrangler.toml` — at repo root, configures Cloudflare Pages + D1 binding
+
+## Docs to check
+
+Besides this file, a few other docs carry context that isn't derivable from the code — check them when relevant, don't assume they're stale:
+
+- **`PWA_PROGRESS.md`** (root) — engineering session-resumption log for phased work (currently PWA/offline). Check when resuming multi-session feature work to see what's already landed vs. in progress.
+- **`TECH_DEBT.md`** (root) — engineering-only tech-debt tracker with an open/invalid/deferred/resolved status table. Check before starting work in an area that might have a known caveat already logged.
+- **`IMPROVEMENTS.md`** (root) — product/feature backlog (checklist of shipped vs. pending ideas). Check when scoping a new feature, so you don't propose something already considered/rejected/planned.
+- **`README.md`** (root) — project overview, stack table, dev commands. The first thing a new contributor (or portfolio reviewer) reads.

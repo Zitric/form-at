@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from "react";
-import { BracketLabel } from "~/components/BracketLabel";
-import { cn } from "~/utils/cn";
+import { BracketLabel } from "../BracketLabel/BracketLabel";
+import { cn } from "../cn";
 
 // Form:at's design-system button. Three variants share the terminal-bracket
 // vocabulary so the whole app reads as one console UI:
@@ -29,9 +29,9 @@ import { cn } from "~/utils/cn";
 type Variant = "primary" | "secondary" | "fail";
 
 const variantClass: Record<Variant, string> = {
-  secondary:
-    "text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer whitespace-nowrap",
-  fail: "text-sm text-red-400 hover:text-red-300 transition-colors tracking-widest cursor-pointer whitespace-nowrap",
+  // whitespace-nowrap now lives on BracketLabel itself, not here.
+  secondary: "text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer",
+  fail: "text-sm text-red-400 hover:text-red-300 transition-colors tracking-widest cursor-pointer",
   primary:
     "flex items-center justify-center gap-4 border-2 border-gold px-6 py-4 text-sm text-grey shadow-[0_0_15px_rgba(197,133,56,0.2)] hover:shadow-[0_0_25px_rgba(197,133,56,0.4)] hover:cursor-pointer transition-all group",
 };

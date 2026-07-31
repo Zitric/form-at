@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
-import { Image } from "~/components/Image";
-import { cn } from "~/utils/cn";
+import { cn } from "../cn";
 
 /** Picks the card's visual treatment:
  *  - `default` — neutral grey border, hover shifts to purple. Use for list items.
@@ -9,10 +8,11 @@ import { cn } from "~/utils/cn";
 type CardVariant = "default" | "cta";
 
 interface CardProps {
-  /** Image src (without base path, e.g., "djs/id" or "sets/id") */
-  imageSrc?: string;
-  /** Image alt text */
-  imageAlt?: string;
+  /** Pre-rendered image element for the artwork slot — the caller renders its
+   *  own `<Image>` (or any element); Card owns only the slot's sizing/border/
+   *  overflow wrapper, not the image internals, since this package doesn't
+   *  know the app's asset URL convention. */
+  image?: ReactNode;
   /** Primary text (title, name, etc.) - optional if using children */
   primary?: string;
   /** Secondary text (artist, subtitle, etc.) - optional if using children */
@@ -41,8 +41,7 @@ const variantClass: Record<CardVariant, string> = {
 };
 
 export function Card({
-  imageSrc,
-  imageAlt,
+  image,
   primary,
   secondary,
   action,
@@ -84,19 +83,14 @@ export function Card({
 
   const content = (
     <>
-      {imageSrc && (
+      {image && (
         <div
           className={cn(
             "shrink-0 w-16 h-16 sm:w-28 sm:h-28 bg-black/40 border border-grey/20 overflow-hidden rounded-card",
             hideImageOnMobile && "hidden sm:block",
           )}
         >
-          <Image
-            src={imageSrc}
-            alt={imageAlt || primary || ""}
-            sizes="(min-width: 640px) 112px, 64px"
-            className="w-full h-full object-cover"
-          />
+          {image}
         </div>
       )}
 
@@ -119,7 +113,11 @@ export function Card({
   // it as activatable.
   if (action) {
     const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (onClick && (e.key === "Enter" || e.key === " ")) {
+      // Only react to keydowns that land on the wrapper itself — otherwise
+      // Enter/Space on a nested action button (which only guards the mouse
+      // path via stopPropagation) would bubble up and fire onClick too,
+      // double-activating: the intended action AND an unwanted navigation.
+      if (onClick && e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
         e.preventDefault();
         onClick();
       }

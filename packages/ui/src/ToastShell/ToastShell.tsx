@@ -1,6 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { Z } from "~/styles/z";
-import { cn } from "~/utils/cn";
+import { cn } from "../cn";
 
 // Shared surface for every toast-style pill — `UpdateToast`, the generic
 // ephemeral `Toast`, and `PlaybackErrorToast` (extracted 2026-07-22: all
@@ -54,6 +53,12 @@ type Props = {
    *  timed fadeInUp/fadeOutDown pair) — see the file doc comment for why no
    *  conditional class-dropping is needed. */
   style?: CSSProperties;
+  /** Stacking-order Tailwind class (e.g. `"z-50"`) for the fixed wrapper —
+   *  this package owns no opinion on app-wide z-index; the app passes its own
+   *  token so ToastShell never hardcodes a value that could collide with the
+   *  app's other fixed surfaces. Defaults to `"z-50"`, matching every current
+   *  consumer. */
+  zIndexClassName?: string;
   children: ReactNode;
 };
 
@@ -64,6 +69,7 @@ export function ToastShell({
   role,
   className,
   style,
+  zIndexClassName = "z-50",
   children,
 }: Props) {
   return (
@@ -71,7 +77,10 @@ export function ToastShell({
       // Bottom math shared byte-for-byte by every fixed toast-style surface:
       // nav (55) + mini-player (50) + safe-area + 12px gap, mobile; static
       // ~78px desktop player, no BottomNav, on `sm:`.
-      className={`fixed inset-x-0 ${Z.toast} flex items-center justify-center pointer-events-none px-4 bottom-[calc(105px+env(safe-area-inset-bottom)+12px)] sm:bottom-[100px]`}
+      className={cn(
+        "fixed inset-x-0 flex items-center justify-center pointer-events-none px-4 bottom-[calc(105px+env(safe-area-inset-bottom)+12px)] sm:bottom-[100px]",
+        zIndexClassName,
+      )}
       role={role}
     >
       <button

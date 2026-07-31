@@ -1,5 +1,4 @@
-import { Button } from "~/components/Button";
-import { Modal } from "~/components/Modal";
+import { Button, Modal } from "@form-at/ui";
 
 type Props = {
   open: boolean;

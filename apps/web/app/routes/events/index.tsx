@@ -1,7 +1,6 @@
+import { Card, PageTitle } from "@form-at/ui";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Card } from "~/components/Card";
 import { PageLayout } from "~/components/PageLayout";
-import { PageTitle } from "~/components/Text";
 import { getPastEvents, getUpcomingEvents } from "~/data/events";
 import { pageHead } from "~/utils/head";
 

@@ -1,10 +1,10 @@
+import { BracketLabel, NextIcon, PrevIcon } from "@form-at/ui";
+
 import { Link } from "@tanstack/react-router";
 import { useDrag } from "@use-gesture/react";
 import { useRef } from "react";
-import { BracketLabel } from "~/components/BracketLabel";
 import { Image } from "~/components/Image";
 import { ShareSetButton } from "~/components/ShareSetButton";
-import { NextIcon, PrevIcon } from "~/components/icons";
 import { CirclePlayButton } from "~/components/player/CirclePlayButton";
 import { PlayerSeeker } from "~/components/player/PlayerSeeker";
 import { useFullPlayerLifecycle } from "~/hooks/useFullPlayerLifecycle";

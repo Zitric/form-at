@@ -29,7 +29,8 @@ jobs:
       # routeTree.gen.ts is gitignored — vite generates it on dev/build start.
       - run: pnpm -C apps/web exec vite build
       - run: pnpm -C apps/web lint
-      - run: pnpm -C apps/web tsc
+      - run: pnpm -C packages/ui lint
+      - run: pnpm turbo tsc
 
   unit:
     runs-on: ubuntu-latest
@@ -43,6 +44,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm -C apps/web test:run
+      - run: pnpm --filter @form-at/ui test
 
   e2e:
     runs-on: ubuntu-latest

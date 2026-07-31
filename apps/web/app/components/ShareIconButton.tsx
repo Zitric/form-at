@@ -1,4 +1,4 @@
-import { ShareIcon } from "~/components/icons";
+import { ShareIcon } from "@form-at/ui";
 import type { MusicSet } from "~/data/sets";
 import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";

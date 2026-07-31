@@ -1,7 +1,7 @@
+import { BracketLabel } from "@form-at/ui";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { BookingsButton } from "~/components/BookingsButton";
-import { BracketLabel } from "~/components/BracketLabel";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
 import { InstallCta } from "~/components/InstallCta";
 import { JsonLd } from "~/components/JsonLd";

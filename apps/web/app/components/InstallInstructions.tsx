@@ -1,5 +1,5 @@
+import { InstallIcon } from "@form-at/ui";
 import { useState } from "react";
-import { InstallIcon } from "~/components/icons";
 import { type FormFactor, detectFormFactor } from "~/utils/deviceFormFactor";
 
 // The two manual-install instruction blocks, extracted from SaveGateModal so
