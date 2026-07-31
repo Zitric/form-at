@@ -28,8 +28,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # routeTree.gen.ts is gitignored — vite generates it on dev/build start.
       - run: pnpm -C apps/web exec vite build
+      - run: pnpm -C apps/admin exec vite build
       - run: pnpm -C apps/web lint
+      - run: pnpm -C apps/admin lint
       - run: pnpm -C packages/ui lint
+      - run: pnpm -C packages/data lint
       - run: pnpm turbo tsc
 
   unit:
@@ -44,6 +47,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm -C apps/web test:run
+      - run: pnpm -C apps/admin test:run
       - run: pnpm --filter @form-at/ui test
 
   e2e:
@@ -74,6 +78,8 @@ jobs:
         if: steps.pw-cache.outputs.cache-hit == 'true'
         run: pnpm -C apps/web exec playwright install-deps chromium
       - run: pnpm -C apps/web test:e2e --project=chromium
+      # Same job, same chromium-only cache above.
+      - run: pnpm -C apps/admin test:e2e --project=chromium
 
   deploy:
     needs: [static, unit, e2e]
@@ -89,6 +95,27 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: npx wrangler pages deploy apps/web/dist/client --project-name=form-at-web --branch=main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  # Separate Cloudflare Pages project, separate job — independent build
+  # output and failure isolation from the apps/web deploy above (one failing
+  # doesn't block or conflate with the other), and they run in parallel.
+  deploy-admin:
+    needs: [static, unit, e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -C apps/admin build
+      - run: npx wrangler pages deploy apps/admin/dist/client --project-name=form-at-admin --branch=main --config apps/admin/wrangler.toml
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

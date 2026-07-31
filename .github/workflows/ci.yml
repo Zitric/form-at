@@ -32,9 +32,13 @@ jobs:
       # routeTree.gen.ts is gitignored — vite generates it on dev/build start.
       # We need it on disk before tsc can resolve `./routeTree.gen` in router.tsx.
       - run: pnpm -C apps/web exec vite build
+      - run: pnpm -C apps/admin exec vite build
       - run: pnpm -C apps/web lint
+      - run: pnpm -C apps/admin lint
       - run: pnpm -C packages/ui lint
-      # turbo tsc covers @form-at/ui alongside @form-at/web in one task graph.
+      - run: pnpm -C packages/data lint
+      # turbo tsc covers every workspace (apps/web, apps/admin, packages/ui,
+      # packages/data) in one task graph.
       - run: pnpm turbo tsc
 
   # ── Unused files/deps/exports (knip) ─────────────────────────────────────
@@ -54,8 +58,10 @@ jobs:
       # routeTree.gen.ts is gitignored — knip traces `router.tsx`'s import of
       # it just like tsc does (same reason the `static` job builds first);
       # without this, knip reports an "Unresolved imports" false failure on
-      # every fresh checkout (verified locally, 2026-07-22).
+      # every fresh checkout (verified locally, 2026-07-22). Both apps' route
+      # trees are needed since knip scans the whole workspace in one pass.
       - run: pnpm -C apps/web exec vite build
+      - run: pnpm -C apps/admin exec vite build
       - run: pnpm knip
 
   # ── Unit tests (vitest, jsdom) ───────────────────────────────────────────
@@ -73,6 +79,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm -C apps/web test:run
+      - run: pnpm -C apps/admin test:run
       - run: pnpm --filter @form-at/ui test
 
   # ── Chromatic (Storybook visual regression) ──────────────────────────────
@@ -135,13 +142,21 @@ jobs:
         if: steps.pw-cache.outputs.cache-hit == 'true'
         run: pnpm -C apps/web exec playwright install-deps chromium webkit
 
-      - name: Run Playwright tests
+      - name: Run Playwright tests (apps/web)
         run: pnpm -C apps/web test:e2e --project=chromium --project=webkit
+
+      # Same job, same cache — apps/admin's playwright.config.ts uses the
+      # same chromium+webkit projects already installed above, on a distinct
+      # port (5174) so it can't collide with apps/web's dev server.
+      - name: Run Playwright tests (apps/admin)
+        run: pnpm -C apps/admin test:e2e --project=chromium --project=webkit
 
       - name: Upload report on failure
         if: failure()
         uses: actions/upload-artifact@v5
         with:
           name: playwright-report
-          path: apps/web/playwright-report/
+          path: |
+            apps/web/playwright-report/
+            apps/admin/playwright-report/
           retention-days: 7
