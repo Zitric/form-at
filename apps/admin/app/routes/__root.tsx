@@ -1,4 +1,5 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
+import { AdminNav } from "~/components/AdminNav";
 import "~/styles/global.css";
 
 export const Route = createRootRoute({
@@ -15,7 +16,10 @@ function Root() {
         <HeadContent />
       </head>
       <body className="bg-black text-white font-mono antialiased min-h-dvh flex flex-col">
-        <Outlet />
+        <AdminNav />
+        <main className="flex-1">
+          <Outlet />
+        </main>
         <Scripts />
       </body>
     </html>
