@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
+    "dev": "vite dev --port 5174",
     "build": "vite build && npx esbuild dist/server/server.js --bundle --format=esm --platform=browser --conditions=workerd --define:process.env.NODE_ENV='\"production\"' --outfile=dist/client/_worker.js --external:node:async_hooks --external:node:stream --external:node:stream/web",
-    "start": "vite preview",
+    "start": "vite preview --port 4174",
     "lint": "biome check app",
     "tsc": "tsc --noEmit",
     "test": "vitest",

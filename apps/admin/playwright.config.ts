@@ -26,7 +26,7 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: "vite dev --port 5174",
+    command: "pnpm dev",
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

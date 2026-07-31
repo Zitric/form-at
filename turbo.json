@@ -12,9 +12,18 @@
       "cache": false,
       "persistent": true
     },
+    "start": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "persistent": true
+    },
     "lint": {},
     "tsc": {
       "dependsOn": ["^build"]
+    },
+    "test:run": {},
+    "test:e2e": {
+      "cache": false
     }
   }
 }
