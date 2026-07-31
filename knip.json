@@ -32,7 +32,7 @@
       "paths": {
         "~/*": ["app/*"]
       },
-      "ignoreDependencies": ["tailwindcss", "@form-at/tsconfig"],
+      "ignoreDependencies": ["tailwindcss"],
       "ignoreBinaries": ["wrangler"]
     },
     "packages/tsconfig": {},
