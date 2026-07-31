@@ -21,6 +21,15 @@
       "ignoreDependencies": ["tailwindcss", "@form-at/tsconfig"],
       "ignoreBinaries": ["wrangler"]
     },
+    "apps/admin": {
+      "entry": ["app/server.ts", "app/router.tsx", "app/routes/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
+      "project": ["app/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
+      "paths": {
+        "~/*": ["app/*"]
+      },
+      "ignoreDependencies": ["tailwindcss", "@form-at/tsconfig"],
+      "ignoreBinaries": ["wrangler"]
+    },
     "packages/tsconfig": {},
     "packages/ui": {},
     "packages/data": {}

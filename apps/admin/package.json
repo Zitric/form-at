@@ -1,0 +1,47 @@
+{
+  "name": "@form-at/admin",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build && npx esbuild dist/server/server.js --bundle --format=esm --platform=browser --conditions=workerd --define:process.env.NODE_ENV='\"production\"' --outfile=dist/client/_worker.js --external:node:async_hooks --external:node:stream --external:node:stream/web",
+    "start": "vite preview",
+    "lint": "biome check app",
+    "tsc": "tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "deploy": "pnpm build && npx wrangler pages deploy dist/client --project-name=form-at-admin --config wrangler.toml --commit-dirty=true"
+  },
+  "dependencies": {
+    "@form-at/data": "workspace:*",
+    "@form-at/ui": "workspace:*",
+    "@tanstack/react-router": "^1.114.0",
+    "@tanstack/react-start": "^1.114.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260505.1",
+    "@form-at/tsconfig": "workspace:*",
+    "@playwright/test": "^1.59.1",
+    "@tailwindcss/vite": "^4.1.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.4.0",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "esbuild": "^0.28.0",
+    "jsdom": "^29.1.1",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.8.0",
+    "vite": "^7.0.0",
+    "vite-tsconfig-paths": "^5.1.0",
+    "vitest": "^4.1.5"
+  }
+}
