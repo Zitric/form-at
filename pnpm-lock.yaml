@@ -102,6 +102,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@form-at/data':
+        specifier: workspace:*
+        version: link:../../packages/data
       '@form-at/ui':
         specifier: workspace:*
         version: link:../../packages/ui

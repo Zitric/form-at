@@ -22,7 +22,12 @@
       "ignoreBinaries": ["wrangler"]
     },
     "apps/admin": {
-      "entry": ["app/server.ts", "app/router.tsx", "app/routes/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
+      "entry": [
+        "app/server.ts",
+        "app/router.tsx",
+        "app/routes/**/*.{ts,tsx}",
+        "tests/**/*.{ts,tsx}"
+      ],
       "project": ["app/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
       "paths": {
         "~/*": ["app/*"]
