@@ -30,21 +30,30 @@ for the full apps/packages layout.
 
 ```bash
 pnpm install       # install all workspaces
-pnpm dev           # start dev server (generates routeTree.gen.ts on first run)
-pnpm build         # production build
-pnpm check         # Biome lint + format, auto-fixing, across the whole repo, then typecheck every workspace
-pnpm lint          # Biome check only (reports, doesn't fix) — same check CI's `static` job runs per-workspace
-pnpm tsc           # typecheck every workspace only, no lint/format
-pnpm format        # Biome format only, auto-fixing, no lint rules or typecheck
-pnpm knip          # find unused files/exports/dependencies across the monorepo
 ```
 
-`lint`/`tsc`/`build`/`dev` are thin Turbo wrappers at the root — they fan
-out to every workspace (`@form-at/web` today; future apps in `apps/` pick
-this up for free). `check` is the one exception: it runs Biome directly
-over the whole repo (not per-workspace) before calling `turbo tsc`. Run a
-single workspace directly with `pnpm -C apps/web <script>` when you don't
-want the others.
+### Root commands (all via Turbo)
+
+| Command | What it does |
+|---|---|
+| `pnpm dev` | Both apps in parallel — web on `:5173`, admin on `:5174` |
+| `pnpm dev:web` / `pnpm dev:admin` | Just one app |
+| `pnpm build` / `pnpm build:web` / `pnpm build:admin` | Production build, whole repo or one app |
+| `pnpm start` / `pnpm start:web` / `pnpm start:admin` | Production preview (builds first automatically) — web `:4173`, admin `:4174` |
+| `pnpm test` | Single-run unit tests, all workspaces (`apps/web` 324, `apps/admin` 23, `packages/ui` 36 → 383) |
+| `pnpm test:web` / `pnpm test:admin` / `pnpm test:design-system` | Unit tests for one workspace |
+| `pnpm test:e2e` / `pnpm test:e2e:web` / `pnpm test:e2e:admin` | Playwright, whole repo or one app |
+| `pnpm storybook` | `packages/ui` Storybook dev server |
+| `pnpm check` / `pnpm lint` / `pnpm tsc` / `pnpm knip` | Biome lint+format+typecheck / lint-only / typecheck-only / unused-code scan — all across the whole repo |
+
+Everything above except `check`/`format`/`knip` is a thin Turbo wrapper —
+Turbo fans a task like `dev` or `test` out to every workspace that defines
+it, and the `:web`/`:admin` variants add a `--filter` to scope it to one
+app. `check` is the one exception: it runs Biome directly over the whole
+repo (not per-workspace) before calling `turbo tsc`. Run a single
+workspace's own scripts directly with `pnpm -C apps/web <script>` (or
+`apps/admin`, `packages/ui`) when you need something not exposed as a root
+command.
 
 ### Scripts (apps/web)
 
