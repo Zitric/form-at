@@ -1,0 +1,23 @@
+{
+  "name": "@form-at/data",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./sets": "./src/sets.ts",
+    "./set-stats": "./src/set-stats.ts"
+  },
+  "scripts": {
+    "lint": "biome check src",
+    "tsc": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/react-start": "^1.114.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260505.1",
+    "@form-at/tsconfig": "workspace:*",
+    "typescript": "^5.8.0"
+  }
+}

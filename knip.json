@@ -22,6 +22,7 @@
       "ignoreBinaries": ["wrangler"]
     },
     "packages/tsconfig": {},
-    "packages/ui": {}
+    "packages/ui": {},
+    "packages/data": {}
   }
 }

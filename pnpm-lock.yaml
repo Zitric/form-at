@@ -142,6 +142,22 @@ importers:
         specifier: ^7.4.1
         version: 7.4.1
 
+  packages/data:
+    dependencies:
+      '@tanstack/react-start':
+        specifier: ^1.114.0
+        version: 1.167.63(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(vite@7.3.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20260505.1
+        version: 4.20260505.1
+      '@form-at/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+
   packages/tsconfig: {}
 
   packages/ui:
