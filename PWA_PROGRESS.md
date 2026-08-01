@@ -1441,6 +1441,110 @@ correct precedent every other overconfident stat should be held to).
 fake `D1Database`. All pre-existing tests (23 before this pass) pass
 unchanged.
 
+### Migrated 2026-07-31 — dashboard moved to its own app, `apps/admin`
+
+**Superseded the section above** — `/admin/dashboard` no longer exists in
+`apps/web`. The whole feature moved to a standalone TanStack Start app,
+`apps/admin`, deployed as its own Cloudflare Pages project at
+`admin.formatglasgow.com`. Branch: `feat/admin-app`.
+
+**Why a separate app, not just a separate route.** The path-level
+Cloudflare Access policy this dashboard was always meant to sit behind
+(see the "No in-app authentication" note above) was never actually
+configured — the route was reachable by anyone who found the URL. A
+subdomain-level Access application is a stronger, simpler boundary to
+reason about (and to configure) than a path-level one on a domain that's
+otherwise fully public. Julian configures the Access application and the
+Cloudflare Pages project himself, outside this repo's scope — see the new
+`apps/admin` section this session added to `CLAUDE.md` for the exact
+manual dashboard steps.
+
+**Data layer — one new shared package, not duplication.** `fetchSetStats`
+(the per-set trend the dashboard's picker calls) already had a second real
+consumer: the public `/sets/$setId` page. Duplicating that query (and the
+static sets catalogue `fetchClickStats` joins against) across two apps
+would have been the exact kind of drift risk this repo's design-system
+work was extracted to avoid. Both moved to a new package, `packages/data`
+(`@form-at/data`) — `apps/web`'s own copies became thin re-export shims
+rather than a 33-file mechanical import sweep bundled into this migration
+(see `TECH_DEBT.md` item 21 for the deferred follow-up). `admin-stats.ts`
+itself has only ever had one consumer (this dashboard), so it moved
+wholesale into `apps/admin` rather than into the shared package.
+
+**ASCII sparklines dropped, not the trend data.** All 6 `asciiBar(...)`
+render call sites (install funnel's three trends, app launches, per-set
+plays, push subscriber growth) became a `chart pending` placeholder with a
+`TODO(charting-phase)` comment. `admin-stats.ts` still computes and
+returns every trend array exactly as before — only the rendering call was
+dropped, so swapping in a real chart later is a pure presentation change,
+no data-layer work. Every honesty caption from the v3 pass above carries
+over verbatim; the per-set picker keeps its identical client-invoked
+`fetchSetStats` pattern (see `dashboard.tsx`'s comments for how it now
+resolves through `@form-at/data` instead of a relative import — the
+mechanism was verified empirically, not just typechecked, since a
+`createServerFn` defined in a shared package and built into two
+independent apps was new territory for this repo).
+
+**Access is a page-load gate, not a request-level one — record this for
+later.** Cloudflare Access protects `admin.formatglasgow.com`'s page
+loads. It does **not** automatically authenticate individual server-
+function calls the way an application-level auth middleware would. This
+dashboard is read-only today, so it's a non-issue — but **any future
+admin endpoint that writes must verify the Access identity server-side
+(the `Cf-Access-Jwt-Assertion` header, or Access's own token-validation
+flow) rather than assuming the page being gated is enough.** A future
+session adding, say, a "resend push notification" button should read this
+note before wiring it up.
+
+Migrated tests: all 23 `admin-stats.test.ts` unit tests move with the data
+file, plus the one e2e smoke test (route path updated to `/dashboard`).
+Both pass unchanged in their new home. apps/web's copies of the route,
+data file, and both test files are removed in the same PR's final commit.
+
+### Fixed 2026-08-01 — `pages.dev` exposure: Access can't cover it, added an app-level host guard
+
+**Field verification found a gap the migration above didn't close.**
+Cloudflare Access gates `admin.formatglasgow.com` at the subdomain
+level — but Access self-hosted applications can only cover hostnames in
+zones we own. Cloudflare's own `*.pages.dev` domain isn't ours to gate, so
+the same deployment was also reachable, unauthenticated, at
+`form-at-admin.pages.dev` and every per-deployment preview URL (e.g.
+`cd9a05fe.form-at-admin.pages.dev`). Access being configured correctly on
+the custom domain gave zero protection on those hosts — the dashboard was
+fully public there.
+
+**Fix: an app-level Host-header guard in `apps/admin/app/server.ts`.** The
+first thing `fetch()` does now is check the request's hostname against an
+allowlist (`apps/admin/app/utils/hostGuard.ts` —
+`ALLOWED_HOST = "admin.formatglasgow.com"`, plus `localhost`/`127.0.0.1`
+for local dev/preview/e2e/manual `wrangler pages dev` testing); anything
+else gets a plain `404` (not a redirect, so the real hostname isn't
+advertised to whoever hit the wrong one) before the request ever reaches
+D1 access or the SSR handler. **This guard is now the only thing standing
+between the dashboard and the public internet on `pages.dev` hosts —
+Access alone does not cover them.** `hostGuard.ts` carries a comment to
+this effect specifically so a future session doesn't remove it as
+redundant with Access.
+
+**Testing.** `isAllowedHost` is a pure function, fully unit tested
+(`tests/unit/utils/hostGuard.test.ts`). The guard's rejection path is also
+tested against the real `server.ts` export (`tests/unit/server.test.ts`)
+— it 404s before `createStartHandler` ever runs. The allowed-host
+pass-through (the actual SSR render) can't be exercised under vitest —
+same harness gap as `sw.ts`: `createStartHandler` resolves a virtual
+module (`#tanstack-router-entry`) that only exists under the
+`tanstackStart` Vite plugin (confirmed by direct probe: it throws
+`ERR_PACKAGE_IMPORT_NOT_DEFINED` outside that plugin). **Manual
+verification step** (build + `wrangler pages dev`, then confirm a real
+host renders and a spoofed one 404s):
+```bash
+pnpm build:admin
+npx wrangler pages dev apps/admin/dist/client --config apps/admin/wrangler.toml
+# note the local URL wrangler prints, then:
+curl -sI http://<local-url>/dashboard -H "Host: form-at-admin.pages.dev"   # expect 404
+curl -sI http://<local-url>/dashboard -H "Host: admin.formatglasgow.com"   # expect 200
+```
+
 ### Fixed 2026-07-05 — M3: `_headers` caching + CSP (TECH_DEBT 19 itself still blocked)
 
 The launch-blocker session ran into hard preconditions: the custom domain

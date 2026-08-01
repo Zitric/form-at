@@ -1,70 +1,47 @@
+import { type SetStats, fetchSetStats } from "@form-at/data/set-stats";
+import { sets } from "@form-at/data/sets";
 import { Button, Label, Muted, PageTitle, TerminalRow } from "@form-at/ui";
 // Internal read-only analytics dashboard. NO IN-APP AUTHENTICATION HERE —
 // this is deliberate, not an oversight. Access is restricted at the edge by
-// Cloudflare Access (Julian configures this himself, outside this repo's
-// scope: a policy on the /admin/* path allowing exactly the team's 3
-// emails). A future session finding no login check on this route should
-// read this comment before "fixing" it — adding in-app auth here would be
-// solving an already-solved problem with a weaker mechanism (client-side
-// checks are trivially bypassed; Cloudflare Access blocks the request
-// before it ever reaches this app).
+// Cloudflare Access on the admin.formatglasgow.com subdomain itself (Julian
+// configures this outside this repo's scope). A future session finding no
+// login check on this route should read this comment before "fixing" it —
+// adding in-app auth here would be solving an already-solved problem with a
+// weaker mechanism (client-side checks are trivially bypassed; Cloudflare
+// Access blocks the request before it ever reaches this app). Any future
+// mutating admin endpoint MUST verify Access identity server-side rather
+// than relying on the page load being gated — Access protects the page,
+// not automatically every server-function call.
 //
 // Pure display: aggregate COUNT/GROUP BY reads only (see
-// `~/data/admin-stats.ts`), no mutations, no forms, nothing that writes.
-// Excluded from the sitemap by construction — `scripts/generate-sitemap.ts`
-// only emits routes from its own explicit `staticRoutes` allowlist plus the
-// data-driven set/dj/event routes; `/admin/dashboard` was never added to
-// either, so there was nothing to exclude. `noindex` below is the second,
-// independent layer (stops indexing even if something crawls it directly).
+// ~/data/admin-stats.ts), no mutations, no forms, nothing that writes.
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { PageLayout } from "~/components/PageLayout";
 import { fetchAdminDashboardStats } from "~/data/admin-stats";
-import { type SetStats, fetchSetStats } from "~/data/set-stats";
-import { sets } from "~/data/sets";
-import { asciiBar, fmtDuration } from "~/utils/fmt";
-import { pageHead } from "~/utils/head";
+import { fmtDuration } from "~/utils/fmt";
 
-export const Route = createFileRoute("/admin/dashboard")({
-  // Awaited directly, not deferred (unlike `/sets`'s `OverallMetrics`) —
-  // there this data is a secondary enhancement below the primary content
-  // (the set cards), so deferring lets the cards paint first. Here the
-  // stats ARE the entire page; deferring would just show a loading
-  // skeleton before the only content there is, for zero benefit on a
-  // low-traffic internal page where a moment's wait is a non-issue.
+export const Route = createFileRoute("/dashboard")({
+  // Awaited directly, not deferred — the stats ARE the entire page, so
+  // deferring would just show a loading skeleton before the only content
+  // there is, for zero benefit on a low-traffic internal page.
   loader: () => fetchAdminDashboardStats(),
-  head: () =>
-    pageHead({
-      title: "Analytics · Form:at",
-      description: "Internal analytics dashboard — Form:at team only.",
-      path: "/admin/dashboard",
-      noindex: true,
-    }),
+  head: () => ({ meta: [{ title: "Analytics · Form:at Admin" }] }),
   component: AdminDashboard,
 });
 
 // Reuses the app's established terminal/gold design system (PageTitle,
-// Label, TerminalRow, asciiBar) rather than a separate plain admin style —
-// justified, not a default: (1) `/sets`'s `OverallMetrics` already renders
-// exactly this kind of label/value metrics block with `TerminalRow`, so
-// this page is more of the same established pattern, not a new one; (2)
-// the monospace font aligns tabular numbers for free; (3) a second visual
-// language for one internal page would be inconsistency for its own sake —
-// nobody viewing this (behind Cloudflare Access) needs a visual cue that
-// it's "different" from the rest of the site.
+// Label, TerminalRow) rather than a separate plain admin style — the
+// monospace font aligns tabular numbers for free, and a second visual
+// language for one internal page would be inconsistency for its own sake.
 function AdminDashboard() {
   const stats = Route.useLoaderData();
 
-  // Reuses `fetchSetStats` — the exact createServerFn `/sets/$setId` already
-  // calls in its own loader — rather than duplicating its query/weekly-trend
-  // shape. `set-stats.ts` is a shared data module, not the public route
-  // itself, so importing it here is no different from `admin-stats.ts`
-  // already importing its trend-bucketing helpers from the same file.
-  //
-  // Called directly from a client effect (not a route loader) — the first
-  // client-invoked `createServerFn` call in this codebase — specifically so
-  // switching the set picker only re-fetches THAT set's stats, not all five
-  // dashboard-wide aggregate queries the main loader already ran once.
+  // Reuses fetchSetStats from @form-at/data — the exact createServerFn
+  // /sets/$setId already calls in apps/web — rather than duplicating its
+  // query/weekly-trend shape. Called directly from a client effect (not a
+  // route loader) so switching the set picker only re-fetches THAT set's
+  // stats, not all five dashboard-wide aggregate queries the main loader
+  // already ran once.
   const topSetId = stats?.plays.topSets[0]?.setId;
   const [selectedSetId, setSelectedSetId] = useState<string | undefined>(topSetId ?? sets[0]?.id);
   const [selectedSetStats, setSelectedSetStats] = useState<SetStats | null>(null);
@@ -99,7 +76,7 @@ function AdminDashboard() {
       : `${Math.round(stats.installToPushConversion.ratio * 100)}%`;
 
   return (
-    <PageLayout>
+    <div className="p-6">
       <PageTitle>analytics</PageTitle>
 
       {!stats ? (
@@ -119,21 +96,13 @@ function AdminDashboard() {
                 dimValue
               />
               <TerminalRow label="conversion" value={installConversionLabel} dimValue />
-              <TerminalRow
-                label="shown_trend"
-                value={asciiBar(stats.installFunnel.shownTrend)}
-                dimValue
-              />
-              <TerminalRow
-                label="accepted_trend"
-                value={asciiBar(stats.installFunnel.acceptedTrend)}
-                dimValue
-              />
-              <TerminalRow
-                label="dismissed_trend"
-                value={asciiBar(stats.installFunnel.dismissedTrend)}
-                dimValue
-              />
+              {/* TODO(charting-phase): stats.installFunnel.shownTrend is already
+                  fetched — this is a pure presentation swap, no data work needed. */}
+              <TerminalRow label="shown_trend" value={<Muted>chart pending</Muted>} dimValue />
+              {/* TODO(charting-phase): stats.installFunnel.acceptedTrend is already fetched. */}
+              <TerminalRow label="accepted_trend" value={<Muted>chart pending</Muted>} dimValue />
+              {/* TODO(charting-phase): stats.installFunnel.dismissedTrend is already fetched. */}
+              <TerminalRow label="dismissed_trend" value={<Muted>chart pending</Muted>} dimValue />
               <TerminalRow label="install_to_push" value={installToPushLabel} dimValue />
             </div>
             <p className="mt-1 text-xs text-grey/70">
@@ -152,11 +121,8 @@ function AdminDashboard() {
             <Label className="mb-2 text-grey tracking-widest">{"// app_launches"}</Label>
             <div className="space-y-1">
               <TerminalRow label="total" value={String(stats.appLaunches.total)} dimValue />
-              <TerminalRow
-                label="last_60d"
-                value={asciiBar(stats.appLaunches.weeklyTrend)}
-                dimValue
-              />
+              {/* TODO(charting-phase): stats.appLaunches.weeklyTrend is already fetched. */}
+              <TerminalRow label="last_60d" value={<Muted>chart pending</Muted>} dimValue />
             </div>
             {stats.eventsTrackingStartDay && (
               <p className="mt-1 text-xs text-grey/70">
@@ -219,11 +185,8 @@ function AdminDashboard() {
                   value={fmtDuration(selectedSetStats.avgSeconds)}
                   dimValue
                 />
-                <TerminalRow
-                  label="trend_60d"
-                  value={asciiBar(selectedSetStats.weeklyPlays)}
-                  dimValue
-                />
+                {/* TODO(charting-phase): selectedSetStats.weeklyPlays is already fetched. */}
+                <TerminalRow label="trend_60d" value={<Muted>chart pending</Muted>} dimValue />
               </div>
             ) : (
               <Muted>no plays yet for this set</Muted>
@@ -246,11 +209,8 @@ function AdminDashboard() {
                 value={`${stats.pushSubscribers.standaloneCount} / ${stats.pushSubscribers.tabCount}`}
                 dimValue
               />
-              <TerminalRow
-                label="growth_60d"
-                value={asciiBar(stats.pushSubscribers.weeklyGrowth)}
-                dimValue
-              />
+              {/* TODO(charting-phase): stats.pushSubscribers.weeklyGrowth is already fetched. */}
+              <TerminalRow label="growth_60d" value={<Muted>chart pending</Muted>} dimValue />
             </div>
             <p className="mt-1 text-xs text-grey/70">
               tab will always read 0 by current product policy — the browser-tab opt-in variant
@@ -284,6 +244,6 @@ function AdminDashboard() {
           </section>
         </div>
       )}
-    </PageLayout>
+    </div>
   );
 }

@@ -7,10 +7,10 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
-- **Open:** 8, 12, 13, 15, 20 (pointer only, not urgent)
+- **Open:** 8, 12, 13, 15, 21 (pointer only, not urgent)
 - **Invalid:** 1 (2026-07-22 — premise was wrong, not stale: both flagged functions are load-bearing behind a live multi-provider calendar picker; do not delete, see item for the full re-verification)
 - **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, ships together post-2026-07-24; see PWA_PROGRESS.md for the deferral rationale)
-- **Resolved:** 2 (2026-07-22 — knip.json config + parallel CI job; see item for a correction to its own original plan), 3 (2026-07-23 — `__root.tsx` split into `fontCSS.ts` / `HydrateStore.tsx` / `rootHead.ts`), 4 (2026-07-23 — beacon queue + Background Sync, with a page-side fallback for Safari/Firefox), 6 (2026-06-28, `10811a4`), 7 (2026-07-02, `d2bbc36` — offline.html redesign, stamped during the 2026-07-06 docs cleanup), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01), 17 (2026-07-02 — gate proven intact via SW-preview experiments; observed bytes were HTTP cache / element buffer, not IDB; silent-blocked-tap toast fixed), 18 (2026-07-02 — not reproducible on current build; all three offline nav modes verified against the SW preview), 5 (absorbed into 19's verification — CORS re-checked on the custom domain 2026-07-06: preflight GET/HEAD + range, ACAO *, Content-Length exposed), 19 (2026-07-06 — audio on cdn.formatglasgow.com, host centralized in utils/audioHost.ts, IDB force-re-download migration in reconcileFromIdb)
+- **Resolved:** 2 (2026-07-22 — knip.json config + parallel CI job; see item for a correction to its own original plan), 3 (2026-07-23 — `__root.tsx` split into `fontCSS.ts` / `HydrateStore.tsx` / `rootHead.ts`), 4 (2026-07-23 — beacon queue + Background Sync, with a page-side fallback for Safari/Firefox), 6 (2026-06-28, `10811a4`), 7 (2026-07-02, `d2bbc36` — offline.html redesign, stamped during the 2026-07-06 docs cleanup), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01), 17 (2026-07-02 — gate proven intact via SW-preview experiments; observed bytes were HTTP cache / element buffer, not IDB; silent-blocked-tap toast fixed), 18 (2026-07-02 — not reproducible on current build; all three offline nav modes verified against the SW preview), 5 (absorbed into 19's verification — CORS re-checked on the custom domain 2026-07-06: preflight GET/HEAD + range, ACAO *, Content-Length exposed), 19 (2026-07-06 — audio on cdn.formatglasgow.com, host centralized in utils/audioHost.ts, IDB force-re-download migration in reconcileFromIdb), 20 (2026-07-31 — superseded by the admin dashboard shipping and then moving to its own app, apps/admin)
 
 Resolved items keep their original section in place with a `✅ Resolved` stamp at the top, so the historical context (cause + fix path) stays readable. Search for `✅ Resolved` to skip to / past them.
 
@@ -666,6 +666,12 @@ happened this session — see there for the full verification record.
 
 ## 20. Analytics query UI — now has real data to query (feeds README's "Pending" item)
 
+**✅ Resolved 2026-07-31.** The admin dashboard this item was pointing at
+shipped 2026-07-27/28 (`/admin/dashboard`, see PWA_PROGRESS.md), reading
+`events` + `plays` together exactly as scoped below, then moved to its own
+app (`apps/admin`) this session. README's Roadmap → Pending bullet removed
+in the same change. Original text kept below for context.
+
 **Not urgent, just a pointer.** The README's Roadmap → Pending lists
 "Analytics query UI — D1 has `started_at` and `listened_seconds` indexed
 but there's no internal dashboard page to query plays by date range or top
@@ -690,4 +696,24 @@ debt on the data side.
 
 ---
 
-_Last updated: 2026-07-08 (item 20 added — Analytics 1 event tracking feeds the README's Analytics query UI item; carries forward the 2026-07-06 cleanup: item 19 resolved — custom domain live; item 14 deferred indefinitely; item 5 absorbed into 19; item 7 stamped resolved — was already fixed 2026-07-02 but unstamped)_
+## 21. Sweep apps/web's remaining `~/data/sets` / `~/data/set-stats` / `~/utils/audioHost` imports to `@form-at/data` directly
+
+**Not urgent, just a pointer.** When `apps/admin` was extracted (2026-07-31),
+the shared sets catalogue and the `fetchSetStats` analytics query moved to
+a new package, `packages/data` (`@form-at/data`). To avoid bundling an
+unrelated ~33-file mechanical import-path rename into that migration,
+`apps/web/app/data/sets.ts`, `apps/web/app/data/set-stats.ts`, and
+`apps/web/app/utils/audioHost.ts` were kept in place as thin re-export
+shims (`export * from "@form-at/data/..."`) rather than updating every
+consumer to import `@form-at/data` directly.
+
+**Scope, when someone picks this up:** grep for `~/data/sets`, `~/data/set-stats`,
+and `~/utils/audioHost` across `apps/web`, update each import to the
+`@form-at/data` equivalent, then delete the three shim files. Purely
+mechanical — same shape as the `@form-at/ui` component migration already
+done in this repo. No behavior change expected; `pnpm check` + `pnpm test:run`
+staying green is the whole verification.
+
+---
+
+_Last updated: 2026-07-31 (item 21 added — apps/admin extraction shims a follow-up sweep; item 20 resolved — admin dashboard shipped then moved to apps/admin, carries forward the 2026-07-08 note: item 20 added — Analytics 1 event tracking feeds the README's Analytics query UI item; and the 2026-07-06 cleanup: item 19 resolved — custom domain live; item 14 deferred indefinitely; item 5 absorbed into 19; item 7 stamped resolved — was already fixed 2026-07-02 but unstamped)_

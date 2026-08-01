@@ -1,0 +1,9 @@
+name = "form-at-admin"
+compatibility_date = "2026-07-31"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "dist/client"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "form-at-analytics"
+database_id = "d2e6f2f0-b4cd-40c0-98b3-04c060ecbffa"

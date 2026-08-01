@@ -1,15 +1,17 @@
+import {
+  TREND_BUCKET_DAYS,
+  TREND_WINDOW_DAYS,
+  bucketByWeek,
+  fillDailyWindow,
+} from "@form-at/data/set-stats";
+import { getSet } from "@form-at/data/sets";
 import { createServerFn } from "@tanstack/react-start";
-import { TREND_BUCKET_DAYS, TREND_WINDOW_DAYS, bucketByWeek, fillDailyWindow } from "./set-stats";
-import { getSet } from "./sets";
 
 // Read-only aggregate queries for the internal admin dashboard
-// (`routes/admin/dashboard.tsx`). Same `createServerFn` + D1 pattern as
-// `set-stats.ts`'s `fetchOverallStats`/`fetchSetStats` — one difference:
-// each query is its OWN exported, directly-callable function (not inlined
-// in the handler) so it's unit-testable with a fake D1Database. Neither
-// `set-stats.ts` function has a test today (verified — no precedent to
-// mirror for that half of "follow the existing pattern"), so this splits
-// the shape to establish one rather than inline everything untestably.
+// (`routes/dashboard.tsx`). Same `createServerFn` + D1 pattern as
+// packages/data/src/set-stats.ts's `fetchSetStats` — one difference: each
+// query is its OWN exported, directly-callable function (not inlined in the
+// handler) so it's unit-testable with a fake D1Database.
 
 export type InstallFunnel = {
   shown: number;
@@ -155,9 +157,8 @@ export function computeInstallToPushConversion(
 
 // Not exported: nothing outside this file references the shape by name —
 // `dashboard.tsx` reads fields dynamically off `Route.useLoaderData()`
-// rather than importing this type the way `SetStats`/`OverallStats` are
-// imported for a standalone helper's parameter (`$setId.tsx`'s
-// `buildStatsRows`). Only used here as the `satisfies` target below.
+// rather than importing this type. Only used here as the `satisfies` target
+// below.
 type AdminDashboardStats = {
   installFunnel: InstallFunnel;
   appLaunches: AppLaunchStats;

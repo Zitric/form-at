@@ -5,17 +5,32 @@
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "dev": "turbo dev",
+    "dev:web": "turbo dev --filter=@form-at/web",
+    "dev:admin": "turbo dev --filter=@form-at/admin",
     "build": "turbo build",
+    "build:web": "turbo build --filter=@form-at/web",
+    "build:admin": "turbo build --filter=@form-at/admin",
+    "start": "turbo start",
+    "start:web": "turbo start --filter=@form-at/web",
+    "start:admin": "turbo start --filter=@form-at/admin",
     "lint": "turbo lint",
     "tsc": "turbo tsc",
     "format": "biome format --write .",
     "check": "biome check --write . && turbo tsc",
-    "knip": "knip"
+    "knip": "knip",
+    "test": "turbo test:run",
+    "test:web": "turbo test:run --filter=@form-at/web",
+    "test:admin": "turbo test:run --filter=@form-at/admin",
+    "test:design-system": "turbo test:run --filter=@form-at/ui",
+    "test:e2e": "turbo test:e2e",
+    "test:e2e:web": "turbo test:e2e --filter=@form-at/web",
+    "test:e2e:admin": "turbo test:e2e --filter=@form-at/admin",
+    "storybook": "pnpm --filter @form-at/ui storybook"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
     "knip": "^6.16.1",
-    "turbo": "^2.3.0",
+    "turbo": "^2.10.7",
     "typescript": "^5.8.0"
   }
 }

@@ -1,3 +1,4 @@
+import { TREND_BUCKET_DAYS, TREND_WINDOW_DAYS } from "@form-at/data/set-stats";
 import { describe, expect, it } from "vitest";
 import {
   computeInstallToPushConversion,
@@ -10,7 +11,6 @@ import {
   fetchPushSubscriberStats,
   fetchPushSubscriptionsTrackingStart,
 } from "~/data/admin-stats";
-import { TREND_BUCKET_DAYS, TREND_WINDOW_DAYS } from "~/data/set-stats";
 
 // No D1-querying loader in this codebase had a test before this file (verified
 // against set-stats.ts's fetchOverallStats/fetchSetStats — neither has one).

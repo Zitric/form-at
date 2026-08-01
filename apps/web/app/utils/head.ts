@@ -2,9 +2,8 @@
 // Keep title/description/og:url/twitter:* in sync; social platforms read from
 // these to render the share card. Pass `image` (path under public/) to use a
 // custom OG banner — otherwise the root default (`/og-image.png`) is reused.
-// Pass `noindex` for pages that should never appear in search results (e.g.
-// the admin dashboard) — same `content="noindex"` value already used by
-// `public/offline.html`.
+// Pass `noindex` for pages that should never appear in search results — same
+// `content="noindex"` value already used by `public/offline.html`.
 
 const SITE = "https://formatglasgow.com";
 
