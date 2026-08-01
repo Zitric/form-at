@@ -166,3 +166,43 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 -- Remove a dead subscription (what the send script does automatically on 404/410):
 --   DELETE FROM push_subscriptions WHERE endpoint = ?;
 
+-- Admin-only: one row per push notification sent from apps/admin's
+-- notifications page (Phase D1, 2026-08-01 — the first mutating admin
+-- feature). Exists so a recent-sends list can be shown on that page,
+-- surfacing an accidental duplicate send (three people have Cloudflare
+-- Access; nothing stops two of them sending the same announcement minutes
+-- apart, or a page refresh re-submitting) BEFORE it happens again, not
+-- just after. `sent_by_email` is the Cloudflare Access identity's verified
+-- email (apps/admin/app/utils/verifyAccessJwt.ts) — never trust a
+-- client-supplied value for this field. apps/web's own scripts/send-push.ts
+-- (the CLI fallback, still available) does not write to this table — it
+-- has no D1 binding to write through and remains a Julian-only local tool.
+--
+-- Not yet applied to the remote database — same "Julian runs it" pattern
+-- as `push_subscriptions` above. Do NOT use `--file=apps/web/schema.sql`
+-- (this file also contains the one-time, non-idempotent
+-- `ALTER TABLE plays ADD COLUMN is_offline` above — running the whole file
+-- fails with a duplicate-column error). Run the isolated statement instead:
+-- npx wrangler d1 execute form-at-analytics --remote --command "CREATE TABLE IF NOT EXISTS admin_push_sends (id INTEGER PRIMARY KEY AUTOINCREMENT, sent_at INTEGER NOT NULL, sent_by_email TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, url TEXT, image TEXT, recipient_count INTEGER NOT NULL, sent_count INTEGER NOT NULL, failed_count INTEGER NOT NULL, dead_removed_count INTEGER NOT NULL)"
+-- Verify it landed:
+-- npx wrangler d1 execute form-at-analytics --remote --command "PRAGMA table_info(admin_push_sends)"
+CREATE TABLE IF NOT EXISTS admin_push_sends (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  sent_at            INTEGER NOT NULL,  -- unix ms
+  sent_by_email      TEXT    NOT NULL,
+  title              TEXT    NOT NULL,
+  body               TEXT    NOT NULL,
+  url                TEXT,
+  image              TEXT,
+  recipient_count    INTEGER NOT NULL,
+  sent_count         INTEGER NOT NULL,
+  failed_count       INTEGER NOT NULL,
+  dead_removed_count INTEGER NOT NULL
+);
+
+-- Useful queries:
+--
+-- Recent sends (what the notifications page shows):
+--   SELECT sent_at, sent_by_email, title, sent_count, failed_count, dead_removed_count
+--   FROM admin_push_sends ORDER BY sent_at DESC LIMIT 10;
+
