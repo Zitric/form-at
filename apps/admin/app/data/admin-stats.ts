@@ -155,11 +155,11 @@ export function computeInstallToPushConversion(
   };
 }
 
-// Not exported: nothing outside this file references the shape by name —
-// `dashboard.tsx` reads fields dynamically off `Route.useLoaderData()`
-// rather than importing this type. Only used here as the `satisfies` target
-// below.
-type AdminDashboardStats = {
+// Exported so the per-tab dashboard components (GrowthTab/UsageTab/SetsTab)
+// can type their `stats` prop — dashboard.tsx now splits across those files
+// instead of reading fields dynamically off `Route.useLoaderData()` in one
+// place.
+export type AdminDashboardStats = {
   installFunnel: InstallFunnel;
   appLaunches: AppLaunchStats;
   plays: PlayStats;
