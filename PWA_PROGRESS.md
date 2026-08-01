@@ -1501,6 +1501,50 @@ file, plus the one e2e smoke test (route path updated to `/dashboard`).
 Both pass unchanged in their new home. apps/web's copies of the route,
 data file, and both test files are removed in the same PR's final commit.
 
+### Fixed 2026-08-01 — `pages.dev` exposure: Access can't cover it, added an app-level host guard
+
+**Field verification found a gap the migration above didn't close.**
+Cloudflare Access gates `admin.formatglasgow.com` at the subdomain
+level — but Access self-hosted applications can only cover hostnames in
+zones we own. Cloudflare's own `*.pages.dev` domain isn't ours to gate, so
+the same deployment was also reachable, unauthenticated, at
+`form-at-admin.pages.dev` and every per-deployment preview URL (e.g.
+`cd9a05fe.form-at-admin.pages.dev`). Access being configured correctly on
+the custom domain gave zero protection on those hosts — the dashboard was
+fully public there.
+
+**Fix: an app-level Host-header guard in `apps/admin/app/server.ts`.** The
+first thing `fetch()` does now is check the request's hostname against an
+allowlist (`apps/admin/app/utils/hostGuard.ts` —
+`ALLOWED_HOST = "admin.formatglasgow.com"`, plus `localhost`/`127.0.0.1`
+for local dev/preview/e2e/manual `wrangler pages dev` testing); anything
+else gets a plain `404` (not a redirect, so the real hostname isn't
+advertised to whoever hit the wrong one) before the request ever reaches
+D1 access or the SSR handler. **This guard is now the only thing standing
+between the dashboard and the public internet on `pages.dev` hosts —
+Access alone does not cover them.** `hostGuard.ts` carries a comment to
+this effect specifically so a future session doesn't remove it as
+redundant with Access.
+
+**Testing.** `isAllowedHost` is a pure function, fully unit tested
+(`tests/unit/utils/hostGuard.test.ts`). The guard's rejection path is also
+tested against the real `server.ts` export (`tests/unit/server.test.ts`)
+— it 404s before `createStartHandler` ever runs. The allowed-host
+pass-through (the actual SSR render) can't be exercised under vitest —
+same harness gap as `sw.ts`: `createStartHandler` resolves a virtual
+module (`#tanstack-router-entry`) that only exists under the
+`tanstackStart` Vite plugin (confirmed by direct probe: it throws
+`ERR_PACKAGE_IMPORT_NOT_DEFINED` outside that plugin). **Manual
+verification step** (build + `wrangler pages dev`, then confirm a real
+host renders and a spoofed one 404s):
+```bash
+pnpm build:admin
+npx wrangler pages dev apps/admin/dist/client --config apps/admin/wrangler.toml
+# note the local URL wrangler prints, then:
+curl -sI http://<local-url>/dashboard -H "Host: form-at-admin.pages.dev"   # expect 404
+curl -sI http://<local-url>/dashboard -H "Host: admin.formatglasgow.com"   # expect 200
+```
+
 ### Fixed 2026-07-05 — M3: `_headers` caching + CSP (TECH_DEBT 19 itself still blocked)
 
 The launch-blocker session ran into hard preconditions: the custom domain

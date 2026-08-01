@@ -1,4 +1,5 @@
 import { createStartHandler, defaultStreamHandler } from "@tanstack/react-start/server";
+import { isAllowedHost } from "~/utils/hostGuard";
 
 const handler = createStartHandler({ handler: defaultStreamHandler });
 
@@ -20,7 +21,14 @@ const DOCUMENT_CSP = [
 
 export default {
   async fetch(request: Request, env: { DB: D1Database; ASSETS: Fetcher } | undefined) {
-    const { pathname } = new URL(request.url);
+    const { hostname, pathname } = new URL(request.url);
+
+    // First check, before routing or D1 access — see hostGuard.ts for why
+    // this exists. Plain 404, not a redirect, so we don't advertise the
+    // real hostname to whatever hit the wrong one.
+    if (!isAllowedHost(hostname)) {
+      return new Response(null, { status: 404 });
+    }
 
     if (env?.ASSETS && /\.[a-z0-9]+$/i.test(pathname)) {
       return env.ASSETS.fetch(request);
