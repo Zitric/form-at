@@ -6,18 +6,23 @@
   "sideEffects": false,
   "exports": {
     "./sets": "./src/sets.ts",
-    "./set-stats": "./src/set-stats.ts"
+    "./set-stats": "./src/set-stats.ts",
+    "./webPush": "./src/webPush.ts"
   },
   "scripts": {
     "lint": "biome check src",
-    "tsc": "tsc --noEmit"
+    "tsc": "tsc --noEmit",
+    "test": "vitest run",
+    "test:run": "vitest run"
   },
   "dependencies": {
+    "@pushforge/builder": "^2.0.5",
     "@tanstack/react-start": "^1.114.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260505.1",
     "@form-at/tsconfig": "workspace:*",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.5"
   }
 }

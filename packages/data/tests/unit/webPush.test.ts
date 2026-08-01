@@ -1,16 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type PushPayload, isDeadSubscriptionStatus, sendWebPush } from "~/utils/webPush";
+import { type PushPayload, isDeadSubscriptionStatus, sendWebPush } from "~/webPush";
 
 // Locks the Web Push spec's permanent-invalidation contract (Phase 2,
 // 2026-07-15): 404 and 410 from the push service mean the subscription is
 // gone for good and must stop being sent to — while transient failures
-// (429 rate limit, 5xx) must NOT be treated as dead, or the send script
-// would delete live subscriptions on a bad day at the push service.
+// (429 rate limit, 5xx) must NOT be treated as dead, or a caller would
+// delete live subscriptions on a bad day at the push service.
 //
 // `sendWebPush`'s status→outcome mapping is tested below with the builder
 // mocked and fetch stubbed — the crypto/signing itself and real
 // push-service responses can only be verified on-device (see
-// PWA_PROGRESS.md's checklist).
+// PWA_PROGRESS.md's checklist). Moved here unchanged from
+// apps/web/tests/unit/utils/webPush.test.ts in Phase D1 (2026-08-01) when
+// the module itself moved to packages/data so apps/admin could import it.
 
 describe("isDeadSubscriptionStatus", () => {
   it("treats 404 as dead", () => {
@@ -37,8 +39,7 @@ describe("isDeadSubscriptionStatus", () => {
 // ECDH + AES-GCM against the stored keys, which is exactly the part that
 // can only be validated by a real push service accepting the result. What
 // THIS suite locks is our own mapping of the service's HTTP status to a
-// SendPushResult — the contract the send script's delete-vs-retry decision
-// hangs on.
+// SendPushResult — the contract callers' delete-vs-retry decision hangs on.
 vi.mock("@pushforge/builder", () => ({
   buildPushHTTPRequest: vi.fn().mockResolvedValue({
     endpoint: "https://push.example.com/send/abc",

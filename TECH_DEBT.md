@@ -696,7 +696,7 @@ debt on the data side.
 
 ---
 
-## 21. Sweep apps/web's remaining `~/data/sets` / `~/data/set-stats` / `~/utils/audioHost` imports to `@form-at/data` directly
+## 21. Sweep apps/web's remaining `~/data/sets` / `~/data/set-stats` / `~/utils/audioHost` / `~/utils/webPush` imports to `@form-at/data` directly
 
 **Not urgent, just a pointer.** When `apps/admin` was extracted (2026-07-31),
 the shared sets catalogue and the `fetchSetStats` analytics query moved to
@@ -705,14 +705,18 @@ unrelated ~33-file mechanical import-path rename into that migration,
 `apps/web/app/data/sets.ts`, `apps/web/app/data/set-stats.ts`, and
 `apps/web/app/utils/audioHost.ts` were kept in place as thin re-export
 shims (`export * from "@form-at/data/..."`) rather than updating every
-consumer to import `@form-at/data` directly.
+consumer to import `@form-at/data` directly. `apps/web/app/utils/webPush.ts`
+joined the same shim list in Phase D1 (2026-08-01) for the same reason, when
+the send-push module moved to `packages/data` so `apps/admin`'s send
+endpoint could import it (three more consumers: `sw.ts`,
+`utils/pushNotification.ts`, `scripts/send-push.ts`).
 
 **Scope, when someone picks this up:** grep for `~/data/sets`, `~/data/set-stats`,
-and `~/utils/audioHost` across `apps/web`, update each import to the
-`@form-at/data` equivalent, then delete the three shim files. Purely
-mechanical — same shape as the `@form-at/ui` component migration already
-done in this repo. No behavior change expected; `pnpm check` + `pnpm test:run`
-staying green is the whole verification.
+`~/utils/audioHost`, and `~/utils/webPush` across `apps/web`, update each
+import to the `@form-at/data` equivalent, then delete the four shim files.
+Purely mechanical — same shape as the `@form-at/ui` component migration
+already done in this repo. No behavior change expected; `pnpm check` +
+`pnpm test:run` staying green is the whole verification.
 
 ---
 
