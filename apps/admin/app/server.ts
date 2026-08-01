@@ -19,8 +19,23 @@ const DOCUMENT_CSP = [
   "frame-ancestors 'self'",
 ].join("; ");
 
+// VAPID_PRIVATE_KEY_JWK/VAPID_CONTACT_EMAIL: Cloudflare Pages secrets on the
+// form-at-admin project (Phase D1, 2026-08-01) — see PWA_PROGRESS.md for the
+// `wrangler pages secret put` commands. CF_ACCESS_TEAM_DOMAIN/CF_ACCESS_AUD:
+// plain (non-secret) vars from apps/admin/wrangler.toml's [vars] block.
+// All four are absent in local dev (no Cloudflare env at all there) —
+// callers must treat them as optional and fail closed, not assume presence.
+type AdminEnv = {
+  DB: D1Database;
+  ASSETS: Fetcher;
+  VAPID_PRIVATE_KEY_JWK?: string;
+  VAPID_CONTACT_EMAIL?: string;
+  CF_ACCESS_TEAM_DOMAIN?: string;
+  CF_ACCESS_AUD?: string;
+};
+
 export default {
-  async fetch(request: Request, env: { DB: D1Database; ASSETS: Fetcher } | undefined) {
+  async fetch(request: Request, env: AdminEnv | undefined) {
     const { hostname, pathname } = new URL(request.url);
 
     // First check, before routing or D1 access — see hostGuard.ts for why
