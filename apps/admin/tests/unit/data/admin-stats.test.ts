@@ -10,7 +10,9 @@ import {
   fetchPlayStats,
   fetchPushSubscriberStats,
   fetchPushSubscriptionsTrackingStart,
+  pickStatsForMissingDb,
 } from "~/data/admin-stats";
+import { SAMPLE_ADMIN_DASHBOARD_STATS } from "~/data/sample-stats";
 
 // No D1-querying loader in this codebase had a test before this file (verified
 // against set-stats.ts's fetchOverallStats/fetchSetStats — neither has one).
@@ -364,5 +366,19 @@ describe("fetchEventsTrackingStart / fetchPushSubscriptionsTrackingStart", () =>
     ]);
 
     expect(await fetchPushSubscriptionsTrackingStart(db)).toBeNull();
+  });
+
+  describe("pickStatsForMissingDb", () => {
+    it("stays honest (null) when a real Cloudflare env is present but D1 isn't bound", () => {
+      expect(pickStatsForMissingDb(true)).toBeNull();
+    });
+
+    it("falls back to the sample fixture when there's no Cloudflare env at all", () => {
+      expect(pickStatsForMissingDb(false)).toBe(SAMPLE_ADMIN_DASHBOARD_STATS);
+    });
+
+    it("treats a missing flag the same as false — defaults to the sample fixture", () => {
+      expect(pickStatsForMissingDb(undefined)).toBe(SAMPLE_ADMIN_DASHBOARD_STATS);
+    });
   });
 });

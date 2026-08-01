@@ -22,6 +22,7 @@ import { GrowthTab } from "~/components/GrowthTab";
 import { SetsTab } from "~/components/SetsTab";
 import { UsageTab } from "~/components/UsageTab";
 import { fetchAdminDashboardStats } from "~/data/admin-stats";
+import { SAMPLE_SET_STATS } from "~/data/sample-stats";
 
 export const Route = createFileRoute("/dashboard")({
   // Awaited directly, not deferred — the stats ARE the entire page, so
@@ -61,6 +62,18 @@ function AdminDashboard() {
 
   useEffect(() => {
     if (!selectedSetId || !stats) return;
+
+    // Sample-data mode substitutes the fixture keyed by set ID instead of
+    // calling the real fetchSetStats — that function is shared with
+    // apps/web's public /sets/$setId page, so it can't gate on
+    // hasCloudflareEnv itself without affecting that page too. Deciding
+    // fixture-vs-real HERE, off the already-loaded stats.isSampleData flag,
+    // keeps the fixture entirely inside apps/admin.
+    if (stats.isSampleData) {
+      setSelectedSetStats(SAMPLE_SET_STATS[selectedSetId] ?? null);
+      return;
+    }
+
     let cancelled = false;
     setSelectedSetLoading(true);
     fetchSetStats({ data: selectedSetId })
@@ -80,7 +93,14 @@ function AdminDashboard() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <PageTitle>analytics</PageTitle>
+      <div className="flex items-baseline gap-3">
+        <PageTitle>analytics</PageTitle>
+        {stats?.isSampleData && (
+          <span className="text-xs font-mono px-2 py-0.5 border border-gold text-gold">
+            sample data
+          </span>
+        )}
+      </div>
 
       {!stats ? (
         <p className="t-body sm:t-body-md text-grey">

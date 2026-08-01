@@ -1659,6 +1659,69 @@ Tests: `DashboardTabs.test.tsx` (tab switching), `SetsTab.state-lifting.test.tsx
 axis-label helper). `admin-stats.test.ts`'s 23 tests untouched — this was
 presentation-only work.
 
+### Added 2026-08-01 — sample-data fallback so the dashboard actually renders locally
+
+Phase C's tabs/grid/charts were real, but invisible without D1 — `pnpm
+dev:admin` and Playwright both hit the `!stats` fallback (no Cloudflare env
+at all under plain `vite dev`), so nobody could actually see the layout
+without deploying. Added a hand-written fixture (`app/data/sample-stats.ts`)
+that `fetchAdminDashboardStats` falls back to instead of `null`.
+
+**Gating signal — `hasCloudflareEnv`, not `env.DB` or `NODE_ENV`.**
+`server.ts` now forwards `env !== undefined` through context alongside the
+existing `env`/`safeEnv` coalescing. This is true under ANY real Cloudflare
+runtime (production, or local `wrangler pages dev`, D1 bound or not) and
+false only when `fetch()` runs entirely outside Cloudflare (`vite dev`/`vite
+preview`, Playwright's e2e server). `admin-stats.ts`'s new
+`pickStatsForMissingDb(hasCloudflareEnv)` returns the fixture only when this
+is false — so a real deployment whose D1 binding is broken or not yet wired
+up (a real scenario: CLAUDE.md's own "must also be added in the CF Pages
+dashboard" manual step) still shows the honest "no data available" state,
+never fake numbers. Gating on bare `env.DB` presence would have gotten this
+wrong; `NODE_ENV` was rejected outright (baked into `_worker.js` at build
+time via esbuild's `--define`, so it reads `"production"` for every built
+worker regardless of where it actually runs).
+
+**Fixture contents — invented, not a D1 dump**, at this project's real
+scale (tens, not thousands), deliberately including shapes real data
+doesn't currently have, to stress rendering the happy path wouldn't:
+`installFunnel.dismissedTrend` is an empty array, `appLaunches.weeklyTrend`
+is all zero, `pushSubscribers.weeklyGrowth` has a spike (15) next to
+single-digit values, and `set-002-brandon-lee-vear`'s `weeklyPlays` is also
+empty (a second, independent empty-array case in the per-set chart).
+`installToPushConversion.ratio` intentionally exceeds 100% — a real
+consequence of the two aggregates sharing no key (see that type's own doc
+comment), demonstrated rather than hidden behind a tidier number. The
+per-set fixture (`SAMPLE_SET_STATS`) is kept out of the shared
+`@form-at/data/set-stats` package deliberately — `fetchSetStats` there is
+also `apps/web`'s public set-detail page's data source, so gating it on
+`hasCloudflareEnv` would require threading that context into `apps/web` too.
+`dashboard.tsx`'s per-set effect instead checks `stats.isSampleData` (set
+once, at the top-level loader) and substitutes the fixture locally when true
+— the shared package is untouched.
+
+**Marker:** a small `[bordered] sample data` tag next to the page title,
+visible only when `isSampleData` is true, so nobody screenshots the fixture
+thinking it's real.
+
+**e2e finally exercises tabs/grid/charts** — with the fallback active, the
+dev server Playwright boots against now returns real (fixture) stats
+instead of `null`, so `dashboard.spec.ts`'s comment explaining "tabs are
+unreachable from e2e" no longer held and was rewritten. New coverage: tab
+switching, the per-set picker's state surviving a tab round trip (the same
+regression `SetsTab.state-lifting.test.tsx` locks, now also observed
+end-to-end), chart `<svg>`s actually rendering, and the card grid collapsing
+to one column at 375px vs. two at desktop width.
+
+**Hydration race found and fixed along the way:** the first e2e run of the
+new click-driven tests failed — clicks were firing before React attached
+event handlers to the tab buttons (a real, known class of flake, not a
+fixture bug). Fixed with the exact pattern `apps/web` already established
+for this (`HydrateStore.tsx`'s `data-hydrated` marker + `gotoAndHydrate`
+helper) — `HydrateMarker.tsx` (new, no store to rehydrate here) stamps
+`body[data-hydrated="true"]` on mount, and `tests/e2e/_helpers.ts` waits for
+it before every `goto`.
+
 ### Fixed 2026-07-05 — M3: `_headers` caching + CSP (TECH_DEBT 19 itself still blocked)
 
 The launch-blocker session ran into hard preconditions: the custom domain

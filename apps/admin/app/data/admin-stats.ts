@@ -6,6 +6,7 @@ import {
 } from "@form-at/data/set-stats";
 import { getSet } from "@form-at/data/sets";
 import { createServerFn } from "@tanstack/react-start";
+import { SAMPLE_ADMIN_DASHBOARD_STATS } from "./sample-stats";
 
 // Read-only aggregate queries for the internal admin dashboard
 // (`routes/dashboard.tsx`). Same `createServerFn` + D1 pattern as
@@ -173,6 +174,11 @@ export type AdminDashboardStats = {
   eventsTrackingStartDay: string | null;
   /** Same idea as `eventsTrackingStartDay`, for `pushSubscribers.weeklyGrowth`. */
   pushTrackingStartDay: string | null;
+  /** True only for the hand-written fixture in sample-stats.ts, substituted
+   *  when there's no real Cloudflare env at all (see fetchAdminDashboardStats
+   *  below) — never true against a real D1 query result. Drives the
+   *  "sample data" marker in dashboard.tsx so nobody mistakes it for real. */
+  isSampleData: boolean;
 };
 
 export async function fetchInstallFunnel(db: D1Database): Promise<InstallFunnel> {
@@ -372,14 +378,31 @@ export async function fetchClickStats(db: D1Database): Promise<ClickStats> {
   };
 }
 
+// `hasCloudflareEnv` (set by server.ts from the raw `env` argument, before
+// it gets coalesced to `{}`) tells apart "no D1 binding because we're not
+// running under Cloudflare at all" (plain `vite dev`/e2e — safe to fake)
+// from "no D1 binding despite a real Cloudflare env" (a real deployment
+// mid-setup, or D1 genuinely down — must stay honest, never show sample
+// data there). NODE_ENV was considered and rejected: it's baked into
+// _worker.js at BUILD time via esbuild's --define, so it reads "production"
+// for every built worker regardless of where that worker actually runs
+// (local `wrangler pages dev` or the real deployment) — it can't make this
+// distinction. Extracted as its own function, like every other query below,
+// so it's directly unit-testable without going through createServerFn.
+export function pickStatsForMissingDb(
+  hasCloudflareEnv: boolean | undefined,
+): AdminDashboardStats | null {
+  return hasCloudflareEnv ? null : SAMPLE_ADMIN_DASHBOARD_STATS;
+}
+
 export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handler(
   async ({ context }) => {
     try {
       const cf = (context as unknown as Record<string, unknown>).cloudflare as
-        | { env: { DB: D1Database } }
+        | { env: { DB: D1Database }; hasCloudflareEnv: boolean }
         | undefined;
       const db = cf?.env?.DB;
-      if (!db) return null;
+      if (!db) return pickStatsForMissingDb(cf?.hasCloudflareEnv);
 
       const [
         installFunnel,
@@ -416,6 +439,7 @@ export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handle
         installToPushConversion,
         eventsTrackingStartDay: computeTrackingStartDay(eventsEarliest),
         pushTrackingStartDay: computeTrackingStartDay(pushEarliest),
+        isSampleData: false,
       } satisfies AdminDashboardStats;
     } catch {
       return null;
