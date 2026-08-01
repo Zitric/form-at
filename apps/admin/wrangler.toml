@@ -7,3 +7,15 @@ pages_build_output_dir = "dist/client"
 binding = "DB"
 database_name = "form-at-analytics"
 database_id = "d2e6f2f0-b4cd-40c0-98b3-04c060ecbffa"
+
+# Non-secret — safe to commit. The AUD tag identifies which Access
+# Application a JWT was issued for; it doesn't let anyone forge a
+# signature (that still requires Cloudflare's own private signing key).
+# TEAM_DOMAIN: Zero Trust → Settings → Custom Pages (or the URL your team
+# login page uses) — https://<team-name>.cloudflareaccess.com.
+# AUD: Zero Trust → Access → Applications → (the admin.formatglasgow.com
+# app) → Overview tab → "Application Audience (AUD) Tag".
+# PLACEHOLDER — Julian fills in the real values (see PWA_PROGRESS.md).
+[vars]
+CF_ACCESS_TEAM_DOMAIN = "https://REPLACE-ME.cloudflareaccess.com"
+CF_ACCESS_AUD = "REPLACE-ME"
