@@ -42,14 +42,35 @@ describe("TrendChart", () => {
     expect(screen.getByText(/1 weeks, latest 42, peak 42/i)).toBeInTheDocument();
   });
 
-  it("renders an all-zero trend as a real chart frame, not a 'no data' message", async () => {
+  it("renders an all-zero trend as a real chart frame, not a 'no data' message — with an explicit note so it doesn't read as broken", async () => {
     render(<TrendChart data={[0, 0, 0, 0]} />);
     // Deliberately distinct from empty: a real window WAS tracked and
     // genuinely nothing happened, which is different from "never tracked".
     expect(await screen.findAllByTestId("chart-bar")).toHaveLength(4);
     expect(screen.queryByText(/no data in this window/i)).not.toBeInTheDocument();
+    // The frame alone reads as broken next to a nonzero number elsewhere on
+    // the card — this note is what makes the flatness read as deliberate.
+    expect(await screen.findByText(/no activity in this window/i)).toBeInTheDocument();
     const container = await screen.findByTestId("trend-chart");
     expect(container.style.height).toBe(`${HEIGHT}px`);
+  });
+
+  it("does not show the all-zero note for a trend that has real activity", async () => {
+    render(<TrendChart data={[1, 2, 3, 4, 5, 6, 7, 8, 9]} />);
+    await screen.findAllByTestId("chart-bar");
+    expect(screen.queryByText(/no activity in this window/i)).not.toBeInTheDocument();
+  });
+
+  it("y-axis ticks are integers only, and a small range doesn't over-produce ticks", async () => {
+    // max value 2 — the exact case that regressed to 5 fractional ticks
+    // (0, 0.5, 1, 1.5, 2) under d3's default "nice step" tick generation.
+    const { container } = render(<TrendChart data={[0, 1, 1, 1, 2, 1, 2, 2, 1]} />);
+    await screen.findAllByTestId("chart-bar");
+    const svg = container.querySelector("svg");
+    const tickTexts = Array.from(svg?.querySelectorAll("text") ?? [])
+      .map((t) => t.textContent ?? "")
+      .filter((text) => /^\d+(\.\d+)?$/.test(text)); // numeric ticks only, not date ticks
+    expect(tickTexts).toEqual(["0", "1", "2"]);
   });
 
   it("renders an explicit 'no data' message for an empty trend, not a near-blank chart frame", async () => {

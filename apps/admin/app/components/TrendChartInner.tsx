@@ -6,6 +6,7 @@ import { ParentSize } from "@visx/responsive";
 import { scaleBand, scaleLinear } from "@visx/scale";
 import { TooltipWithBounds, useTooltip } from "@visx/tooltip";
 import { useMemo } from "react";
+import { niceIntegerTicks } from "~/utils/chartTicks";
 import { bucketStartDates } from "~/utils/trendDates";
 
 interface TrendChartInnerProps {
@@ -34,6 +35,12 @@ export function TrendChartInner({ data, bucketDays }: TrendChartInnerProps) {
   const maxValue = Math.max(1, ...data);
   const latest = data.at(-1) ?? 0;
   const peak = Math.max(0, ...data);
+  // Distinct from the empty-array case below: real buckets exist, every one
+  // is genuinely 0. The chart frame stays (a tracked window where nothing
+  // happened is a different fact from "never tracked"), but a bare axis
+  // frame with no bars reads as broken next to a nonzero total elsewhere on
+  // the card — this note makes the flatness read as deliberate.
+  const isAllZero = data.length > 0 && data.every((value) => value === 0);
 
   const { tooltipData, tooltipLeft, tooltipTop, tooltipOpen, showTooltip, hideTooltip } =
     useTooltip<{
@@ -134,7 +141,8 @@ export function TrendChartInner({ data, bucketDays }: TrendChartInnerProps) {
                 />
                 <AxisLeft
                   scale={yScale}
-                  numTicks={3}
+                  tickValues={niceIntegerTicks(maxValue)}
+                  tickFormat={(v) => String(v)}
                   stroke={colors.grey}
                   tickStroke={colors.grey}
                   tickLabelProps={() => ({
@@ -167,6 +175,7 @@ export function TrendChartInner({ data, bucketDays }: TrendChartInnerProps) {
       <p className="sr-only">
         {data.length} weeks, latest {latest}, peak {peak}
       </p>
+      {isAllZero && <Muted className="text-xs -mt-1">no activity in this window</Muted>}
     </div>
   );
 }

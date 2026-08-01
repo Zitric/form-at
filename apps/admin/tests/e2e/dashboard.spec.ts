@@ -127,6 +127,66 @@ test.describe("admin dashboard", () => {
     await expect(page.getByText(/no data in this window/i)).toBeVisible();
   });
 
+  test("an all-zero trend shows a real chart frame plus an explicit 'no activity' note", async ({
+    page,
+  }) => {
+    await gotoAndHydrate(page, "/dashboard");
+    await page.getByRole("tab", { name: /usage/i }).click();
+    // app_launches.weeklyTrend is the fixture's deliberate all-zero array —
+    // the note is what keeps a flat, real chart frame from reading as
+    // broken next to "total: 63" on the same card.
+    await expect(page.getByText(/no activity in this window/i)).toBeVisible();
+    // .first() (in document order), not a `> svg` direct-child selector —
+    // @visx/text wraps each tick label in its own nested <svg> for
+    // measurement, so the chart wrapper's svg descendants are [outer chart
+    // svg, then one per tick label]; `.first()` is always the outer one
+    // since it's the ancestor of the rest. gotoAndHydrate only proves the
+    // root hydrated, not that this specific lazy-loaded chart chunk finished
+    // rendering — `.toBeVisible()`'s auto-retry covers that gap.
+    const chart = page.locator('[data-testid="trend-chart"]').first();
+    await expect(chart.locator("svg").first()).toBeVisible();
+  });
+
+  test("y-axis ticks are whole numbers, never fractional", async ({ page }) => {
+    await gotoAndHydrate(page, "/dashboard");
+    // accepted_trend's max is 2 — the exact case that regressed to 5
+    // fractional ticks (0, 0.5, 1, 1.5, 2) under d3's default tick step.
+    const acceptedTrendChart = page
+      .locator('[data-testid="dashboard-card"] [data-testid="trend-chart"]')
+      .nth(1);
+    // Wait for the chart to actually finish its lazy import + render before
+    // reading tick text — a one-shot `.allTextContents()` doesn't auto-retry
+    // the way `.toBeVisible()` does, so it can fire before the chunk loads.
+    await expect(acceptedTrendChart.locator("svg").first()).toBeVisible();
+    const tickTexts = await acceptedTrendChart.locator("text").allTextContents();
+    const numericTicks = tickTexts.filter((t) => /^\d+(\.\d+)?$/.test(t));
+    expect(numericTicks.length).toBeGreaterThan(0);
+    for (const tick of numericTicks) {
+      expect(tick).not.toContain(".");
+    }
+  });
+
+  test("cards size to their own content instead of stretching to match a sibling", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await gotoAndHydrate(page, "/dashboard");
+    // install_funnel (3 stacked charts) and push_subscribers (1 chart) sit
+    // in the same grid row. Before `items-start`, CSS Grid's default
+    // `align-items: stretch` forced push_subscribers as tall as
+    // install_funnel, leaving a large empty void under its own content.
+    // Wait for charts to actually render first — comparing card heights
+    // before the lazy-loaded chart chunk resolves would compare two
+    // "chart pending" fallbacks instead of the real content.
+    await expect(page.locator('[data-testid="trend-chart"] svg').first()).toBeVisible();
+    const cards = page.getByTestId("dashboard-card");
+    const installFunnelBox = await cards.nth(0).boundingBox();
+    const pushSubscribersBox = await cards.nth(1).boundingBox();
+    expect(installFunnelBox).not.toBeNull();
+    expect(pushSubscribersBox).not.toBeNull();
+    expect(pushSubscribersBox?.height ?? 0).toBeLessThan((installFunnelBox?.height ?? 0) * 0.7);
+  });
+
   test("the card grid collapses to one column at 375px (iPhone SE)", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await gotoAndHydrate(page, "/dashboard");

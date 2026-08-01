@@ -22,7 +22,7 @@ export function GrowthTab({ stats }: GrowthTabProps) {
       : `${Math.round(stats.installToPushConversion.ratio * 100)}%`;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
       <DashboardCard>
         <Label className="mb-2 text-grey tracking-widest">{"// install_funnel"}</Label>
         <div className="space-y-1">

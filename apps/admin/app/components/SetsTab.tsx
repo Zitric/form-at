@@ -29,7 +29,7 @@ export function SetsTab({
   onSelectSet,
 }: SetsTabProps) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
       <DashboardCard>
         <Label className="mb-2 text-grey tracking-widest">{"// per_set_plays"}</Label>
         <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1">

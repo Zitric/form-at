@@ -11,7 +11,7 @@ interface UsageTabProps {
 // volume with no per-set dimension (that's the Sets tab).
 export function UsageTab({ stats }: UsageTabProps) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
       <DashboardCard>
         <Label className="mb-2 text-grey tracking-widest">{"// app_launches"}</Label>
         <div className="space-y-1">
