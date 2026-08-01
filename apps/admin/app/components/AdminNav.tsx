@@ -4,7 +4,10 @@ import { Link, useRouterState } from "@tanstack/react-router";
 // Sections config — adding "notifications"/"sessions" later is just
 // appending another entry here. Not the public site's Header (that's
 // marketing nav); this is an internal tool's section switcher.
-const links = [{ to: "/dashboard", label: "dashboard" }] as const;
+const links = [
+  { to: "/dashboard", label: "dashboard" },
+  { to: "/notifications", label: "notifications" },
+] as const;
 
 export function AdminNav() {
   const { location } = useRouterState();
