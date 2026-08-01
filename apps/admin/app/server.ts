@@ -35,9 +35,19 @@ export default {
     }
 
     const safeEnv = env || {};
+    // Whether the raw `env` argument was present at all — true under any
+    // real Cloudflare runtime (production, or local `wrangler pages dev`,
+    // D1 bound or not), false only when this fetch() was invoked outside
+    // Cloudflare entirely (plain `vite dev`/`vite preview`, Playwright's
+    // e2e server). admin-stats.ts's sample-data fallback gates on this, not
+    // on `env.DB` alone, so a real deployment whose D1 binding is broken or
+    // not yet wired up still shows the honest "no data" state instead of
+    // fixture data — see sample-stats.ts for why this distinction matters.
+    const hasCloudflareEnv = env !== undefined;
 
     // biome-ignore lint/suspicious/noExplicitAny: CF env is not in BaseContext type
-    const response = await handler(request, { context: { cloudflare: { env: safeEnv } } as any });
+    const context = { cloudflare: { env: safeEnv, hasCloudflareEnv } } as any;
+    const response = await handler(request, { context });
 
     if (response.headers.get("content-type")?.includes("text/html")) {
       const withCsp = new Response(response.body, response);
