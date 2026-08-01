@@ -1,3 +1,4 @@
+import { Muted } from "@form-at/ui";
 import { colors } from "@form-at/ui/tokens";
 import { AxisBottom, AxisLeft } from "@visx/axis";
 import { Group } from "@visx/group";
@@ -12,7 +13,10 @@ interface TrendChartInnerProps {
   bucketDays: number;
 }
 
-const HEIGHT = 140;
+// Exported so tests can assert the container's explicit height matches this
+// constant directly, rather than duplicating the magic number and risking
+// drift (see TrendChart.test.tsx).
+export const HEIGHT = 140;
 const MARGIN = { top: 8, right: 8, bottom: 28, left: 32 };
 
 const shortDateFormat = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
@@ -37,8 +41,38 @@ export function TrendChartInner({ data, bucketDays }: TrendChartInnerProps) {
       date: Date;
     }>();
 
+  // Empty and all-zero are different facts, rendered differently:
+  //   - empty (data.length === 0): nothing was ever fetched for this
+  //     window — an axis frame with zero ticks would just look broken, so
+  //     this says so explicitly instead of drawing a near-blank chart.
+  //   - all-zero (every bucket is 0): a real 60-day window WAS tracked and
+  //     genuinely nothing happened — the chart frame (axes + a flat
+  //     baseline) is the honest rendering, not a "no data" message that
+  //     would misrepresent "tracked, flat" as "untracked".
+  // Both keep the same fixed HEIGHT so switching between charts with and
+  // without data doesn't reflow the page.
+  if (data.length === 0) {
+    return (
+      <div data-testid="trend-chart" style={{ height: HEIGHT }} className="flex items-center">
+        <Muted>no data in this window</Muted>
+      </div>
+    );
+  }
+
   return (
-    <div className="relative">
+    // Explicit height, not left to flow from HEIGHT via the SVG alone —
+    // @visx/responsive's ParentSize sizes its own wrapper div to
+    // `height: 100%`, which resolves to 0 against a height:auto ancestor.
+    // That doesn't shrink the SVG itself (its `height` attribute below is
+    // the hardcoded HEIGHT constant, unaffected), but a 0-height ancestor
+    // still collapses to zero space in normal document flow, so later
+    // siblings (the next TerminalRow, the next chart) get positioned as if
+    // this chart weren't there — painting over it. The chart was never
+    // actually missing; it was rendering correctly underneath whatever
+    // came after it. Confirmed via a real browser: the <rect> bars had
+    // correct, non-zero, data-derived dimensions the whole time — this is
+    // a layout bug, not a data or lazy-loading one.
+    <div data-testid="trend-chart" className="relative" style={{ height: HEIGHT }}>
       <ParentSize>
         {({ width }) => {
           const innerWidth = Math.max(0, width - MARGIN.left - MARGIN.right);
@@ -66,6 +100,7 @@ export function TrendChartInner({ data, bucketDays }: TrendChartInnerProps) {
                   return (
                     <rect
                       key={date.getTime()}
+                      data-testid="chart-bar"
                       x={barX}
                       y={barY}
                       width={barWidth}
