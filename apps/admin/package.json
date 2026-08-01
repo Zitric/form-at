@@ -20,6 +20,11 @@
     "@form-at/ui": "workspace:*",
     "@tanstack/react-router": "^1.114.0",
     "@tanstack/react-start": "^1.114.0",
+    "@visx/axis": "^4.0.0",
+    "@visx/group": "^4.0.0",
+    "@visx/responsive": "^4.0.0",
+    "@visx/scale": "^4.0.0",
+    "@visx/tooltip": "^4.0.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

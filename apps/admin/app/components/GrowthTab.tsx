@@ -1,6 +1,7 @@
-import { Label, Muted, TerminalRow } from "@form-at/ui";
+import { Label, TerminalRow } from "@form-at/ui";
 import type { AdminDashboardStats } from "~/data/admin-stats";
 import { DashboardCard } from "./DashboardCard";
+import { TrendChart } from "./TrendChart";
 
 interface GrowthTabProps {
   stats: AdminDashboardStats;
@@ -29,21 +30,28 @@ export function GrowthTab({ stats }: GrowthTabProps) {
           <TerminalRow label="accepted" value={String(stats.installFunnel.accepted)} dimValue />
           <TerminalRow label="dismissed" value={String(stats.installFunnel.dismissed)} dimValue />
           <TerminalRow label="conversion" value={installConversionLabel} dimValue />
-          {/* TODO(charting-phase): stats.installFunnel.shownTrend is already
-              fetched — this is a pure presentation swap, no data work needed. */}
-          <TerminalRow label="shown_trend" value={<Muted>chart pending</Muted>} dimValue />
-          {/* TODO(charting-phase): stats.installFunnel.acceptedTrend is already fetched. */}
-          <TerminalRow label="accepted_trend" value={<Muted>chart pending</Muted>} dimValue />
-          {/* TODO(charting-phase): stats.installFunnel.dismissedTrend is already fetched. */}
-          <TerminalRow label="dismissed_trend" value={<Muted>chart pending</Muted>} dimValue />
           <TerminalRow label="install_to_push" value={installToPushLabel} dimValue />
         </div>
         <p className="mt-1 text-xs text-grey/70">
           install_to_push is an aggregate approximation, not a tracked per-user funnel — install
           events are anonymous and push_subscriptions shares no key with them.
         </p>
+        <div className="mt-3 space-y-3">
+          <div>
+            <Label className="mb-1 block text-xs text-grey">shown_trend</Label>
+            <TrendChart data={stats.installFunnel.shownTrend} />
+          </div>
+          <div>
+            <Label className="mb-1 block text-xs text-grey">accepted_trend</Label>
+            <TrendChart data={stats.installFunnel.acceptedTrend} />
+          </div>
+          <div>
+            <Label className="mb-1 block text-xs text-grey">dismissed_trend</Label>
+            <TrendChart data={stats.installFunnel.dismissedTrend} />
+          </div>
+        </div>
         {stats.eventsTrackingStartDay && (
-          <p className="mt-1 text-xs text-grey/70">
+          <p className="mt-3 text-xs text-grey/70">
             trends above cover tracking since {stats.eventsTrackingStartDay} — the 60-day window
             shown is mostly not-yet-tracked, not "nothing happened".
           </p>
@@ -59,15 +67,17 @@ export function GrowthTab({ stats }: GrowthTabProps) {
             value={`${stats.pushSubscribers.standaloneCount} / ${stats.pushSubscribers.tabCount}`}
             dimValue
           />
-          {/* TODO(charting-phase): stats.pushSubscribers.weeklyGrowth is already fetched. */}
-          <TerminalRow label="growth_60d" value={<Muted>chart pending</Muted>} dimValue />
         </div>
         <p className="mt-1 text-xs text-grey/70">
           tab will always read 0 by current product policy — the browser-tab opt-in variant never
           subscribes (see PushOptInModal.tsx), it only offers an install nudge instead.
         </p>
+        <div className="mt-3">
+          <Label className="mb-1 block text-xs text-grey">growth_60d</Label>
+          <TrendChart data={stats.pushSubscribers.weeklyGrowth} />
+        </div>
         {stats.pushTrackingStartDay && (
-          <p className="mt-1 text-xs text-grey/70">
+          <p className="mt-3 text-xs text-grey/70">
             tracking since {stats.pushTrackingStartDay} — the 60-day window shown is mostly
             not-yet-tracked, not "nothing happened".
           </p>

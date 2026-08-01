@@ -4,6 +4,7 @@ import { Button, Label, Muted, TerminalRow } from "@form-at/ui";
 import type { AdminDashboardStats } from "~/data/admin-stats";
 import { fmtDuration } from "~/utils/fmt";
 import { DashboardCard } from "./DashboardCard";
+import { TrendChart } from "./TrendChart";
 
 interface SetsTabProps {
   stats: AdminDashboardStats;
@@ -53,17 +54,21 @@ export function SetsTab({
               value={fmtDuration(selectedSetStats.avgSeconds)}
               dimValue
             />
-            {/* TODO(charting-phase): selectedSetStats.weeklyPlays is already fetched. */}
-            <TerminalRow label="trend_60d" value={<Muted>chart pending</Muted>} dimValue />
           </div>
         ) : (
           <Muted>no plays yet for this set</Muted>
         )}
         {selectedSetStats && (
-          <p className="mt-1 text-xs text-grey/70">
-            avg_engaged_listening is cumulative playback time, not furthest position reached — it
-            can exceed the track's own length for a listener who scrubs back and replays sections.
-          </p>
+          <>
+            <p className="mt-1 text-xs text-grey/70">
+              avg_engaged_listening is cumulative playback time, not furthest position reached — it
+              can exceed the track's own length for a listener who scrubs back and replays sections.
+            </p>
+            <div className="mt-3">
+              <Label className="mb-1 block text-xs text-grey">trend_60d</Label>
+              <TrendChart data={selectedSetStats.weeklyPlays} />
+            </div>
+          </>
         )}
       </DashboardCard>
 

@@ -1545,6 +1545,120 @@ curl -sI http://<local-url>/dashboard -H "Host: form-at-admin.pages.dev"   # exp
 curl -sI http://<local-url>/dashboard -H "Host: admin.formatglasgow.com"   # expect 200
 ```
 
+### Added 2026-08-01 — Phase C: tabbed layout, centred grid, real charts
+
+The dashboard was a single long vertical scroll of 6 sections with 6
+`chart pending` placeholders. This phase restructured it into 3 tabs on a
+centred, responsive grid, and replaced all 6 placeholders with real charts.
+Branch: `feat/admin-charts`, two commits (layout, then charts).
+
+**Layout conventions — researched, not invented.** Looked at Plausible,
+PostHog, and Vercel's dashboard docs/templates (public docs only — no
+authenticated access to compare against their live internals). The
+consistent pattern across all three: tabs/sections switched from a menu at
+the top (not one continuous scroll), card-grids that collapse to a single
+column on narrow viewports, and summary numbers living inside the same card
+as their chart. Adopted: a local tab strip (`DashboardTabs.tsx`) built from
+the existing `BracketLabel`, matching `AdminNav`'s own active-state
+convention rather than a new visual language — not folded into `AdminNav`
+itself, since that component is documented as growing *horizontally*
+(future top-level sections like notifications/sessions), a different
+navigational scope than a tab strip nested inside one page.
+
+**Section grouping — 3 tabs, not 6-tabs-for-6-headings.** `install_funnel` +
+`push_subscribers` → **Growth** (both are "is the app spreading," and the
+`install_to_push` approximation caption explains the relationship between
+the two — grouped, it finally sits next to both numbers it's about, instead
+of living only inside `install_funnel`). `app_launches` + `plays` →
+**Usage** (aggregate volume, no per-set dimension). `per_set_plays` +
+`clicks` → **Sets** (both already per-set-scoped).
+
+**Charting library — visx, not Recharts/Chart.js/uPlot.** Evaluated against
+real measured numbers (bundlephobia + npm registry, not blog estimates):
+
+| Library | Real gzip | Type | Notable |
+|---|---|---|---|
+| **visx** (chosen) | ~25-30KB combined (axis 15.2KB incl. shape+scale, tooltip 3.1KB, responsive 1.8KB) | SVG | No default animation; trivially testable under jsdom (plain SVG DOM) |
+| uPlot | 21.9KB | Canvas | Zero deps, but canvas testing would be a first-of-its-kind gap in this repo — `Waveform.tsx`, the only prior canvas component, has never had a test file |
+| Chart.js + react-chartjs-2 | 69.4KB | Canvas | Animates by default (needs explicit disabling); same canvas-testing gap |
+| Recharts v3.10.1 | 147.5KB whole-package | SVG | v3 rewrote its internals on Redux (`@reduxjs/toolkit`, `immer`, `react-redux`) — a lot of machinery for 9-point arrays |
+| Recharts v2.15.4 | 120.4KB whole-package | SVG | Still heavy for this data shape |
+
+Rejected uPlot specifically because canvas rendering can't be exercised
+under this repo's jsdom test harness without inventing new mocking
+infrastructure (`HTMLCanvasElement.prototype.getContext` returns `null` in
+jsdom without the native `canvas` package, which this repo has never
+installed) — visx's SVG output renders natively in jsdom, so "renders
+without throwing" tests needed zero canvas-specific setup (just a
+`ResizeObserver` stub for `@visx/responsive`'s `ParentSize`, which jsdom
+also doesn't implement — a much smaller, standard gap to fill). Ended up
+using only `@visx/axis` + `@visx/scale` + `@visx/group` + `@visx/responsive`
++ `@visx/tooltip` — plain `<rect>` elements for the bars themselves, so
+`@visx/shape` was added then removed once it turned out unused.
+
+**One `<rect>` per weekly bucket, not a line/area.** The 6 trends are all
+`number[]`, 9 weekly buckets (60-day window ÷ 7-day buckets, confirmed
+against `TREND_WINDOW_DAYS`/`TREND_BUCKET_DAYS` in
+`packages/data/src/set-stats.ts`) — 9 discrete points don't genuinely
+interpolate between each other, so bars are the honest shape, and discrete
+bars make hover trivial (one `onPointerEnter`/`onPointerLeave` pair per bar,
+no nearest-point math). This mirrors the ASCII-bar convention
+`apps/web/app/utils/fmt.ts`'s `asciiBar` already uses on the public
+set-detail page for the same shape of data — same idea, real rendering, no
+shared code between the two apps (confirmed: zero `apps/admin` references
+in `apps/web`, `asciiBar` untouched).
+
+**SSR isolation — a real dynamic `import()`, not just `ClientOnly`.**
+`ClientOnly` (from `@tanstack/react-router`) is a *render guard*, not a
+code-splitting mechanism — a static top-level import of visx would still
+land in the SSR bundle even inside it. `TrendChart.tsx` wraps a genuine
+`lazy(() => import("./TrendChartInner"))` in `ClientOnly` + `Suspense`, so
+the chart module is a separate chunk the SSR build never executes.
+Verified, not just asserted — measured `apps/admin/dist/client/_worker.js`'s
+gzip size before and after:
+
+- Before: 217,937 bytes
+- After: 218,448 bytes (+511 bytes — noise from the `ClientOnly`/`Suspense`
+  wiring itself, not visx)
+- The real cost lands entirely in a separate, lazy-loaded client chunk:
+  `TrendChartInner-*.js`, 62.6KB raw / 23.0KB gzip, downloaded only when a
+  user actually visits `/dashboard` and the chart mounts — never touching
+  `_worker.js` or the initial `index-*.js` bundle.
+
+**Colours from `@form-at/ui/tokens`, not hardcoded hex** — same JS
+colour-mirror pattern `Waveform.tsx` already established for canvas use;
+here it feeds `fill`/`stroke` props on SVG elements instead.
+
+**Accessibility:** SVG bars carry nothing for screen readers (`aria-hidden`
+on the `<svg>`), so each `TrendChart` renders a visually-hidden (`sr-only`)
+text summary of the same data alongside it.
+
+**Reduced motion:** no new handling needed — visx's static primitives don't
+animate, and the one CSS `transition-colors` hover class added is already
+covered by the existing global rule at `packages/ui/src/tokens.css:157-166`.
+
+**State-lifting (Julian's review correction):** the per-set-picker's
+selected-set state must stay owned by `dashboard.tsx`, not `SetsTab.tsx` —
+otherwise switching tabs away and back would unmount it, losing the
+selection and re-firing `fetchSetStats`. Verified with a real test
+(`SetsTab.state-lifting.test.tsx`) that renders the actual `SetsTab`/
+`DashboardTabs` components, clicks between tabs via `userEvent`, and asserts
+the mocked fetch fires exactly once across the round trip — not just
+reasoned about.
+
+**e2e spec left deliberately unchanged.** Read `dashboard.spec.ts`'s
+assertions first: both only exercise the `!stats` fallback branch, since
+the dev server has no D1 binding and can never reach the `stats`-truthy
+branch where tabs/charts live. The restructure never touches that branch,
+so nothing needed updating — a comment records this reasoning so a future
+session doesn't wonder why tabs aren't e2e-covered.
+
+Tests: `DashboardTabs.test.tsx` (tab switching), `SetsTab.state-lifting.test.tsx`
+(the regression above), `TrendChart.test.tsx` (renders without throwing —
+9-point, empty, single-point, all-zero data), `trendDates.test.ts` (the pure
+axis-label helper). `admin-stats.test.ts`'s 23 tests untouched — this was
+presentation-only work.
+
 ### Fixed 2026-07-05 — M3: `_headers` caching + CSP (TECH_DEBT 19 itself still blocked)
 
 The launch-blocker session ran into hard preconditions: the custom domain

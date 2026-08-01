@@ -1,6 +1,7 @@
-import { Label, Muted, TerminalRow } from "@form-at/ui";
+import { Label, TerminalRow } from "@form-at/ui";
 import type { AdminDashboardStats } from "~/data/admin-stats";
 import { DashboardCard } from "./DashboardCard";
+import { TrendChart } from "./TrendChart";
 
 interface UsageTabProps {
   stats: AdminDashboardStats;
@@ -15,11 +16,13 @@ export function UsageTab({ stats }: UsageTabProps) {
         <Label className="mb-2 text-grey tracking-widest">{"// app_launches"}</Label>
         <div className="space-y-1">
           <TerminalRow label="total" value={String(stats.appLaunches.total)} dimValue />
-          {/* TODO(charting-phase): stats.appLaunches.weeklyTrend is already fetched. */}
-          <TerminalRow label="last_60d" value={<Muted>chart pending</Muted>} dimValue />
+        </div>
+        <div className="mt-3">
+          <Label className="mb-1 block text-xs text-grey">last_60d</Label>
+          <TrendChart data={stats.appLaunches.weeklyTrend} />
         </div>
         {stats.eventsTrackingStartDay && (
-          <p className="mt-1 text-xs text-grey/70">
+          <p className="mt-3 text-xs text-grey/70">
             tracking since {stats.eventsTrackingStartDay} — the 60-day window shown is mostly
             not-yet-tracked, not "nothing happened".
           </p>
