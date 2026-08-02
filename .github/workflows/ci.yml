@@ -81,6 +81,7 @@ jobs:
       - run: pnpm -C apps/web test:run
       - run: pnpm -C apps/admin test:run
       - run: pnpm --filter @form-at/ui test
+      - run: pnpm --filter @form-at/data test
 
   # ── Chromatic (Storybook visual regression) ──────────────────────────────
   chromatic:

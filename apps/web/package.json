@@ -25,7 +25,6 @@
   "dependencies": {
     "@form-at/data": "workspace:*",
     "@form-at/ui": "workspace:*",
-    "@pushforge/builder": "^2.0.5",
     "@tanstack/react-router": "^1.114.0",
     "@tanstack/react-start": "^1.114.0",
     "@use-gesture/react": "^10.3.1",

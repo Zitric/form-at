@@ -50,6 +50,9 @@ importers:
       '@visx/tooltip':
         specifier: ^4.0.0
         version: 4.0.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      jose:
+        specifier: ^6.2.7
+        version: 6.2.7
       react:
         specifier: ^19.1.0
         version: 19.2.5
@@ -123,9 +126,6 @@ importers:
       '@form-at/ui':
         specifier: workspace:*
         version: link:../../packages/ui
-      '@pushforge/builder':
-        specifier: ^2.0.5
-        version: 2.0.5
       '@tanstack/react-router':
         specifier: ^1.114.0
         version: 1.169.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -241,6 +241,9 @@ importers:
 
   packages/data:
     dependencies:
+      '@pushforge/builder':
+        specifier: ^2.0.5
+        version: 2.0.5
       '@tanstack/react-start':
         specifier: ^1.114.0
         version: 1.167.63(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(vite@7.3.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
@@ -254,6 +257,9 @@ importers:
       typescript:
         specifier: ^5.8.0
         version: 5.9.3
+      vitest:
+        specifier: ^4.1.5
+        version: 4.1.5(@types/node@25.6.0)(@vitest/ui@4.1.5)(jsdom@29.1.1)(vite@7.3.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
 
   packages/tsconfig: {}
 
@@ -2706,6 +2712,9 @@ packages:
   jiti@2.7.0:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
     hasBin: true
+
+  jose@6.2.7:
+    resolution: {integrity: sha512-hq1OB1bALKfydZNoViyg6hPVGV4i93ny9Op+n4zP5RSf7SCZEXa/TsG2O3IEr7+WlHRTPnpqDmHfMH6qXAD60w==}
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
@@ -5627,6 +5636,8 @@ snapshots:
   jiti@2.6.1: {}
 
   jiti@2.7.0: {}
+
+  jose@6.2.7: {}
 
   js-tokens@4.0.0: {}
 

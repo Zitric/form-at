@@ -1722,6 +1722,148 @@ helper) — `HydrateMarker.tsx` (new, no store to rehydrate here) stamps
 `body[data-hydrated="true"]` on mount, and `tests/e2e/_helpers.ts` waits for
 it before every `goto`.
 
+### Added 2026-08-01 — Phase D1: send push notifications from the admin dashboard
+
+**The first mutating admin feature.** Every admin endpoint before this was
+read-only. `routes/dashboard.tsx`'s top-of-file comment and this file's own
+"Migrated 2026-07-31" section both carried a note written for exactly this
+moment: Cloudflare Access gates page loads, not individual server-function
+calls, so a writing endpoint must verify the Access identity server-side
+rather than assuming the page being gated is enough. That note's own
+example — "a future session adding, say, a 'resend push notification'
+button" — is this feature, named in advance.
+
+**Access JWT verification — `apps/admin/app/utils/verifyAccessJwt.ts`.** No
+first-party Cloudflare helper exists for this (checked Cloudflare's current
+docs directly, not memory: the `cloudflare-one/.../validating-json/` and
+`access/setting-up-access/validate-jwt-tokens/` pages). Both recommend the
+same thing this uses: the `jose` package (v6, zero dependencies, lists
+Cloudflare Workers as a supported runtime in its own description) with
+`createRemoteJWKSet` + `jwtVerify` against
+`https://<team-domain>/cdn-cgi/access/certs`, checking `iss` (team domain),
+`aud` (the Access Application's AUD tag), and `exp` (implicit). The token is
+read from the `Cf-Access-Jwt-Assertion` header first, falling back to the
+`CF_Authorization` cookie — Cloudflare's own docs prefer the header since
+the cookie "is not guaranteed to be passed." `payload.email` (confirmed via
+Cloudflare's own Workers example code on that docs page) is logged as who
+sent it. Everything collapses to `null` — missing config, missing token,
+bad signature, wrong issuer/audience, expired — no distinction surfaced
+beyond "not authorized."
+
+**Deliberately no dev-mode bypass — different from the sample-data
+gating, and that's the right call, not an oversight.** The sample-data
+dashboard fallback (above) exists because showing placeholder numbers
+locally is harmless. This endpoint, if it ran, sends real notifications to
+real subscribers' devices — irreversible, real-world blast radius. Local
+dev has no D1 binding at all (same fact the sample-data fallback is built
+on), so there's nothing genuine to unlock with a bypass — no subscribers
+are reachable locally either way. The workable local path instead: the JWT
+verification logic is unit-tested against a locally-generated keypair and a
+mocked `fetch` for the JWKS endpoint (the real `jose` code path, zero
+network dependency — valid/expired/wrong-audience/wrong-issuer/missing-email
+cases all covered), the confirm-before-send UI flow is tested with a mocked
+`fetch("/api/send-push")` response, and **`apps/web/scripts/send-push.ts`,
+the original CLI script, stays exactly as it was** — the fallback for
+anyone who needs to actually send locally against real D1.
+
+One real bug surfaced while writing the JWT tests: signing a second test
+JWT after a `vi.stubGlobal`/`unstubAllGlobals` cycle threw `payload must be
+an instance of Uint8Array` from inside jose's own sign path — a jsdom/Node
+cross-realm mismatch (jsdom's global `Uint8Array` is a distinct constructor
+from Node's). Fixed by forcing `// @vitest-environment node` on that one
+test file (it has zero DOM surface anyway) rather than presigning around
+the interaction — Node is also the more honest environment for a module
+that never touches a browser API.
+
+**`webPush.ts` moved to `packages/data`.** It was always written to be
+reusable (its own header comment already said "intended for the future
+admin panel to import directly"), but it lived in `apps/web`, and apps
+never import each other's code directly in this monorepo — only
+`packages/*` are shared. Moved verbatim to `packages/data/src/webPush.ts`,
+`apps/web/app/utils/webPush.ts` becomes a re-export shim (added to
+`TECH_DEBT.md` item 21's existing sweep list, not a new item). Its test
+suite moved with it unchanged — `packages/data` had no test setup at all
+before this (only `lint`/`tsc`), so a minimal `vitest` config (`node`
+environment — nothing in this package touches the DOM) was added alongside
+it, now wired into both CI workflows' `unit` jobs.
+
+**`admin_push_sends` — a new table, proposed not applied.** One row per
+send: `sent_at`, `sent_by_email` (the verified Access identity, never a
+client-supplied value), `title`, `body`, `url`, `image`,
+`recipient_count`/`sent_count`/`failed_count`/`dead_removed_count`. Added to
+`apps/web/schema.sql` — the canonical schema file for the one shared
+`form-at-analytics` database (`push_subscriptions` already set this
+precedent: a table only `apps/admin` writes to, defined in a file that
+lives under `apps/web`). **Not yet applied to the remote database** — same
+"Julian runs it" pattern as every other migration in this file. The
+whole-file command does NOT work here either, same reason as
+`push_subscriptions`'s own note (the one-time, non-idempotent
+`ALTER TABLE plays ADD COLUMN is_offline` duplicate-column-errors on
+re-run):
+```bash
+npx wrangler d1 execute form-at-analytics --remote --command "CREATE TABLE IF NOT EXISTS admin_push_sends (id INTEGER PRIMARY KEY AUTOINCREMENT, sent_at INTEGER NOT NULL, sent_by_email TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, url TEXT, image TEXT, recipient_count INTEGER NOT NULL, sent_count INTEGER NOT NULL, failed_count INTEGER NOT NULL, dead_removed_count INTEGER NOT NULL)"
+# verify it landed:
+npx wrangler d1 execute form-at-analytics --remote --command "PRAGMA table_info(admin_push_sends)"
+```
+
+**Recent-sends list, added on review — surfaces a duplicate before it
+happens, not after.** Three people have Cloudflare Access; nothing stops
+two of them sending the same announcement minutes apart, or a page refresh
+resubmitting. The notifications page shows the last 10 sends (timestamp,
+sender email, title, sent/failed/dead-removed counts) directly above the
+form — one extra query (`fetchRecentPushSends`) against a table already
+being built for the send record itself.
+
+**The endpoint** (`routes/api/send-push.ts`, `server.handlers` POST — the
+established mutating-route pattern, `CLAUDE.md`'s documented replacement
+for `createAPIFileRoute`, modeled on `api/push-subscribe.ts`'s
+exported-`validate()` convention): verifies the Access JWT, validates the
+payload, `SELECT`s subscriptions, loops `sendWebPush` sequentially
+(matching the CLI script's own sequencing), deletes dead subscriptions via
+the real D1 binding (`.bind()`, not the script's manual SQL-string escaping
+— that only existed because the script talks to D1 through the `wrangler`
+CLI, not a binding), records the send, returns
+`{ total, sent, failed, deadRemoved }`.
+
+**Scale limit — documented, not solved.** This loop runs inside one
+Worker/Pages Function request. Cloudflare's current docs: the free plan
+caps CPU time at **10ms per request** (paid: 30s default, up to 5 min), and
+CPU time explicitly **excludes** time spent waiting on `fetch()` — so the
+wall-clock POST to each push service isn't the constraint. The constraint
+is the VAPID JWT **signing** `@pushforge/builder` does per subscriber (real
+Web Crypto ECDH/ECDSA work), which *is* CPU time and scales with subscriber
+count. No precise per-signing-operation benchmark could be produced without
+an actual Workers deploy to measure — so treat "breaks at N subscribers" as
+an estimate, not a verified fact: typical ECDSA P-256 Web Crypto signing is
+commonly low single-digit milliseconds, which would put the free plan's
+10ms budget under real pressure somewhere in the tens of subscribers, well
+before "thousands." Fine at today's 5. **Revisit trigger:** if subscriber
+count climbs into the tens, check the actual Cloudflare dashboard CPU-time
+metric on a real send (or add a temporary timing log) before assuming it
+still works — the likely fix at that point is chunking the loop across
+multiple invocations (a Cloudflare Queue consumer, or batching the
+subscriber list across separately-triggered runs), not something built now.
+
+**The UI** (`routes/notifications.tsx` + `components/SendPushForm.tsx` +
+`PushPreview.tsx` + `RecentPushSends.tsx`): `AdminNav.tsx`'s `links` array
+gained `{ to: "/notifications", label: "notifications" }` — exactly what
+its own comment said adding a new section would be. Subscriber count and
+recent-sends list load before the form. The preview is a plain,
+clearly-labeled text block (title/body/deep-link), deliberately **not** a
+skeuomorphic OS-notification mockup — real notification rendering varies by
+OS/browser (Android/iOS/desktop Chrome all differ), so faking pixel
+fidelity would be dishonest; the same block is reused, frozen, inside the
+confirm modal. No single-click send: clicking "send" opens
+`@form-at/ui`'s `Modal` echoing the exact payload and subscriber count,
+requiring an explicit "confirm send" click. The confirm button disables
+and reads "sending…" for the duration of the request — a second click
+during that window fires zero additional requests (locked by
+`SendPushForm.test.tsx`). A real bug surfaced writing that test: the
+preview's title/body fallback text was `<Muted>` (renders a `<p>`) nested
+inside another `<p>` — invalid HTML, caught by a React console warning
+during the test run, fixed by switching the wrapping elements to `<div>`
+and passing `as="span"` to the nested `Muted`.
+
 ### Fixed 2026-07-05 — M3: `_headers` caching + CSP (TECH_DEBT 19 itself still blocked)
 
 The launch-blocker session ran into hard preconditions: the custom domain
