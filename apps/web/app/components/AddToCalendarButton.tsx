@@ -2,6 +2,7 @@ import { BracketLabel, Button, Modal, TerminalRow } from "@form-at/ui";
 
 import { useState } from "react";
 import type { Event } from "~/data/events";
+import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { isAndroid } from "~/utils/deeplink";
 import { buildGoogleCalendarTargetUrl, buildIcs, buildOutlookCalendarTargetUrl } from "~/utils/ics";
 
@@ -18,11 +19,13 @@ type CalendarLink = { label: string; href: string };
 
 export function AddToCalendarButton({ event }: { event: Event }) {
   const [open, setOpen] = useState(false);
+  const trackEvent = useTrackEvent();
 
   // The .ics route is best for Apple Calendar — on iOS Safari it triggers the
   // native "Add to Calendar" sheet directly; on desktop it downloads the file
   // and the user opens it with their default calendar app.
   const downloadIcs = () => {
+    trackEvent("calendar_add_click");
     const ics = buildIcs(event);
     const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -76,7 +79,10 @@ export function AddToCalendarButton({ event }: { event: Event }) {
                 href={href}
                 target={isIntent ? undefined : "_blank"}
                 rel={isIntent ? undefined : "noopener noreferrer"}
-                onClick={() => setOpen(false)}
+                onClick={() => {
+                  trackEvent("calendar_add_click");
+                  setOpen(false);
+                }}
                 className={anchorRowClass}
               >
                 <BracketLabel>{label}</BracketLabel>
