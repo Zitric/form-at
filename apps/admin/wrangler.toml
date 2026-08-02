@@ -17,5 +17,5 @@ database_id = "d2e6f2f0-b4cd-40c0-98b3-04c060ecbffa"
 # app) → Overview tab → "Application Audience (AUD) Tag".
 # PLACEHOLDER — Julian fills in the real values (see PWA_PROGRESS.md).
 [vars]
-CF_ACCESS_TEAM_DOMAIN = "https://REPLACE-ME.cloudflareaccess.com"
-CF_ACCESS_AUD = "REPLACE-ME"
+CF_ACCESS_TEAM_DOMAIN = "https://holy-pine-0064.cloudflareaccess.com"
+CF_ACCESS_AUD = "6844a056d71815043f047d8132dcc15d4e62aff500338aa60188f89c235ff377"
