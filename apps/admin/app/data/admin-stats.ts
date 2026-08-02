@@ -80,6 +80,40 @@ export type ClickStats = {
   }[];
 };
 
+// Below this many `promptShown` impressions, `NotifyFunnel.acceptedRate`
+// suppresses to `null` instead of rendering a computed percentage.
+// Motivating case (2026-08-02, real remote data): notify_accepted ÷
+// notify_prompt_shown was 2 ÷ 2 — a bare ratio would show "100%", which reads
+// as high-confidence off two people. The existing null-when-zero pattern
+// (see InstallFunnel.conversionRate) doesn't catch this, since 2/2 isn't
+// zero. 10 is a plain "at least a double-digit sample" floor, not tuned to
+// make today's number disappear — don't remove this as fussiness without
+// addressing the underlying small-n problem it guards against.
+export const MIN_SAMPLE_FOR_RATE = 10;
+
+export type NotifyFunnel = {
+  /** Standalone subscribe soft-prompt becoming visible. */
+  promptShown: number;
+  /** Browser-tab install nudge becoming visible instead (tab visitors can't
+   *  get a real push permission prompt — see PushOptInModal.tsx). */
+  installNudgeShown: number;
+  accepted: number;
+  /** Closing either variant without accepting — PushOptInModal.tsx's
+   *  handleClose fires this for BOTH surfaces with no distinguishing field,
+   *  so this total can't be attributed to one surface from the data alone. */
+  declined: number;
+  /** accepted ÷ promptShown, or `null` below MIN_SAMPLE_FOR_RATE — see that
+   *  constant's doc comment. */
+  acceptedRate: number | null;
+};
+
+export type CalendarAddStats = {
+  /** AddToCalendarButton clicks, merged across all three destinations
+   *  (google/outlook/.ics) — see trackableEvents.ts's calendar_add_click
+   *  comment for why destination isn't split out. */
+  total: number;
+};
+
 export type InstallToPushConversion = {
   installAccepted: number;
   pushSubscribers: number;
@@ -166,6 +200,8 @@ export type AdminDashboardStats = {
   plays: PlayStats;
   pushSubscribers: PushSubscriberStats;
   clicks: ClickStats;
+  notifyFunnel: NotifyFunnel;
+  calendarAdds: CalendarAddStats;
   installToPushConversion: InstallToPushConversion;
   /** Non-null only when real tracking history is shorter than the 60-day
    *  trend window — see `computeTrackingStartDay`'s doc comment. Shared by
@@ -292,6 +328,40 @@ export async function fetchPlayStats(db: D1Database): Promise<PlayStats> {
   };
 }
 
+// No trend arrays here — same call as ClickStats: ~16 total events across
+// four types would make a 60-day sparkline near-empty noise, not a useful
+// chart.
+export async function fetchNotifyFunnel(db: D1Database): Promise<NotifyFunnel> {
+  const totals = await db
+    .prepare(
+      `SELECT event_type, COUNT(*) as n FROM events
+       WHERE event_type IN ('notify_prompt_shown', 'notify_accepted', 'notify_declined', 'notify_install_nudge_shown')
+       GROUP BY event_type`,
+    )
+    .all<{ event_type: string; n: number }>();
+
+  const counts = Object.fromEntries(totals.results.map((r) => [r.event_type, r.n]));
+  const promptShown = counts.notify_prompt_shown ?? 0;
+  const installNudgeShown = counts.notify_install_nudge_shown ?? 0;
+  const accepted = counts.notify_accepted ?? 0;
+  const declined = counts.notify_declined ?? 0;
+
+  return {
+    promptShown,
+    installNudgeShown,
+    accepted,
+    declined,
+    acceptedRate: promptShown >= MIN_SAMPLE_FOR_RATE ? accepted / promptShown : null,
+  };
+}
+
+export async function fetchCalendarAddStats(db: D1Database): Promise<CalendarAddStats> {
+  const row = await db
+    .prepare("SELECT COUNT(*) as total FROM events WHERE event_type = 'calendar_add_click'")
+    .first<{ total: number }>();
+  return { total: row?.total ?? 0 };
+}
+
 // ⚠️ Only ever SELECTs `is_standalone` / `created_at` (plus COUNT) from
 // `push_subscriptions` — never `endpoint` / `p256dh` / `auth`. Per
 // schema.sql's own comment on this table: a subscription's `endpoint` is
@@ -410,6 +480,8 @@ export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handle
         plays,
         pushSubscribers,
         clicks,
+        notifyFunnel,
+        calendarAdds,
         eventsEarliest,
         pushEarliest,
       ] = await Promise.all([
@@ -418,6 +490,8 @@ export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handle
         fetchPlayStats(db),
         fetchPushSubscriberStats(db),
         fetchClickStats(db),
+        fetchNotifyFunnel(db),
+        fetchCalendarAddStats(db),
         fetchEventsTrackingStart(db),
         fetchPushSubscriptionsTrackingStart(db),
       ]);
@@ -436,6 +510,8 @@ export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handle
         plays,
         pushSubscribers,
         clicks,
+        notifyFunnel,
+        calendarAdds,
         installToPushConversion,
         eventsTrackingStartDay: computeTrackingStartDay(eventsEarliest),
         pushTrackingStartDay: computeTrackingStartDay(pushEarliest),

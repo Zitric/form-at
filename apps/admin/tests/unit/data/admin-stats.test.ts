@@ -1,12 +1,15 @@
 import { TREND_BUCKET_DAYS, TREND_WINDOW_DAYS } from "@form-at/data/set-stats";
 import { describe, expect, it } from "vitest";
 import {
+  MIN_SAMPLE_FOR_RATE,
   computeInstallToPushConversion,
   computeTrackingStartDay,
   fetchAppLaunchStats,
+  fetchCalendarAddStats,
   fetchClickStats,
   fetchEventsTrackingStart,
   fetchInstallFunnel,
+  fetchNotifyFunnel,
   fetchPlayStats,
   fetchPushSubscriberStats,
   fetchPushSubscriptionsTrackingStart,
@@ -286,6 +289,90 @@ describe("fetchClickStats", () => {
         shareClicks: 0,
       },
     ]);
+  });
+});
+
+describe("fetchNotifyFunnel", () => {
+  const totalsRoute = (all: Record<string, unknown>[]): FakeRoute => ({
+    match: /COUNT\(\*\) as n/,
+    all,
+  });
+
+  it("maps all four notify_* counts independently", async () => {
+    const { db } = createFakeD1([
+      totalsRoute([
+        { event_type: "notify_prompt_shown", n: 30 },
+        { event_type: "notify_install_nudge_shown", n: 45 },
+        { event_type: "notify_accepted", n: 12 },
+        { event_type: "notify_declined", n: 18 },
+      ]),
+    ]);
+
+    const result = await fetchNotifyFunnel(db);
+
+    expect(result).toMatchObject({
+      promptShown: 30,
+      installNudgeShown: 45,
+      accepted: 12,
+      declined: 18,
+    });
+  });
+
+  it("defaults every count to 0 when no rows exist", async () => {
+    const { db } = createFakeD1([totalsRoute([])]);
+
+    const result = await fetchNotifyFunnel(db);
+
+    expect(result).toEqual({
+      promptShown: 0,
+      installNudgeShown: 0,
+      accepted: 0,
+      declined: 0,
+      acceptedRate: null,
+    });
+  });
+
+  it("suppresses acceptedRate to null below MIN_SAMPLE_FOR_RATE (2/2 = 100% off two people)", async () => {
+    const { db } = createFakeD1([
+      totalsRoute([
+        { event_type: "notify_prompt_shown", n: 2 },
+        { event_type: "notify_accepted", n: 2 },
+      ]),
+    ]);
+
+    const result = await fetchNotifyFunnel(db);
+
+    expect(result.promptShown).toBeLessThan(MIN_SAMPLE_FOR_RATE);
+    expect(result.acceptedRate).toBeNull();
+  });
+
+  it("computes a real acceptedRate at or above MIN_SAMPLE_FOR_RATE", async () => {
+    const { db } = createFakeD1([
+      totalsRoute([
+        { event_type: "notify_prompt_shown", n: MIN_SAMPLE_FOR_RATE },
+        { event_type: "notify_accepted", n: 5 },
+      ]),
+    ]);
+
+    const result = await fetchNotifyFunnel(db);
+
+    expect(result.acceptedRate).toBe(5 / MIN_SAMPLE_FOR_RATE);
+  });
+});
+
+describe("fetchCalendarAddStats", () => {
+  it("passes through the total", async () => {
+    const { db } = createFakeD1([
+      { match: /event_type = 'calendar_add_click'/, first: { total: 7 } },
+    ]);
+
+    expect(await fetchCalendarAddStats(db)).toEqual({ total: 7 });
+  });
+
+  it("defaults to 0 when there are no rows yet", async () => {
+    const { db } = createFakeD1([{ match: /event_type = 'calendar_add_click'/, first: null }]);
+
+    expect(await fetchCalendarAddStats(db)).toEqual({ total: 0 });
   });
 });
 
