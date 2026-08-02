@@ -36,6 +36,13 @@ describe("validate (api/event)", () => {
     }
   });
 
+  // Same reasoning as the quartet above — locks the PRESENCE of
+  // calendar_add_click (feat/calendar-tracking-and-dashboard, 2026-08-02),
+  // fired by AddToCalendarButton for all three calendar destinations.
+  it("keeps calendar_add_click on the allowlist", () => {
+    expect(TRACKABLE_EVENT_TYPES).toContain("calendar_add_click");
+  });
+
   it("rejects a missing event_type", () => {
     expect(validate({ is_standalone: true })).toBeNull();
   });

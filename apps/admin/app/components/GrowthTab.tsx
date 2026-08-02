@@ -1,5 +1,5 @@
 import { Label, TerminalRow } from "@form-at/ui";
-import type { AdminDashboardStats } from "~/data/admin-stats";
+import { type AdminDashboardStats, MIN_SAMPLE_FOR_RATE } from "~/data/admin-stats";
 import { DashboardCard } from "./DashboardCard";
 import { TrendChart } from "./TrendChart";
 
@@ -10,7 +10,10 @@ interface GrowthTabProps {
 // install_funnel + push_subscribers — both are "is the app spreading," and
 // install_to_push (below) explains the relationship between the two, so
 // grouping them lets that caption sit next to both numbers it's about
-// instead of living awkwardly inside install_funnel alone.
+// instead of living awkwardly inside install_funnel alone. notify_funnel is
+// a THIRD, separate card here rather than merged into either: it's the push
+// PERMISSION funnel, not the PWA install funnel, despite the structural
+// resemblance — conflating them would blur two different features.
 export function GrowthTab({ stats }: GrowthTabProps) {
   const installConversionLabel =
     stats.installFunnel.conversionRate == null
@@ -20,9 +23,16 @@ export function GrowthTab({ stats }: GrowthTabProps) {
     stats.installToPushConversion.ratio == null
       ? "—"
       : `${Math.round(stats.installToPushConversion.ratio * 100)}%`;
+  const notifyAcceptedRateLabel =
+    stats.notifyFunnel.acceptedRate == null
+      ? "—"
+      : `${Math.round(stats.notifyFunnel.acceptedRate * 100)}%`;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+    // lg:grid-cols-3 — checked visually before picking this: at md's 2
+    // columns, the 3rd card wraps to its own row with a large empty gap
+    // beside it (unbalanced). 3 even columns at lg reads cleanly instead.
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
       <DashboardCard>
         <Label className="mb-2 text-grey tracking-widest">{"// install_funnel"}</Label>
         <div className="space-y-1">
@@ -80,6 +90,38 @@ export function GrowthTab({ stats }: GrowthTabProps) {
           <p className="mt-3 text-xs text-grey/70">
             tracking since {stats.pushTrackingStartDay} — the 60-day window shown is mostly
             not-yet-tracked, not "nothing happened".
+          </p>
+        )}
+      </DashboardCard>
+
+      <DashboardCard>
+        <Label className="mb-2 text-grey tracking-widest">{"// notify_funnel"}</Label>
+        <div className="space-y-1">
+          <TerminalRow
+            label="prompt_shown"
+            value={String(stats.notifyFunnel.promptShown)}
+            dimValue
+          />
+          <TerminalRow
+            label="install_nudge_shown"
+            value={String(stats.notifyFunnel.installNudgeShown)}
+            dimValue
+          />
+          <TerminalRow label="accepted" value={String(stats.notifyFunnel.accepted)} dimValue />
+          <TerminalRow label="declined" value={String(stats.notifyFunnel.declined)} dimValue />
+          <TerminalRow label="accepted_rate" value={notifyAcceptedRateLabel} dimValue />
+        </div>
+        <p className="mt-1 text-xs text-grey/70">
+          prompt_shown is the standalone subscribe soft-prompt; install_nudge_shown is the
+          browser-tab install nudge shown instead (tab visitors can't get a real push permission
+          prompt — see push_subscribers above). declined is fired by closing either variant and
+          isn't split by surface in the data — it can't be attributed to one or the other, though
+          install_nudge_shown far exceeding prompt_shown suggests most declines are nudge-side.
+        </p>
+        {stats.notifyFunnel.acceptedRate == null && (
+          <p className="mt-1 text-xs text-grey/70">
+            accepted_rate hidden — fewer than {MIN_SAMPLE_FOR_RATE} prompt_shown so far. A computed
+            percentage at this sample size reads far more confident than it is.
           </p>
         )}
       </DashboardCard>

@@ -2174,6 +2174,67 @@ post-merge review's fix.
 
 ---
 
+### Added 2026-08-02 — calendar-add tracking + surfacing collected-but-unshown events
+
+Two commits, `feat/calendar-tracking-and-dashboard`. Followed a no-code audit
+this session that found: `AddToCalendarButton` fired zero tracking events,
+and all four `notify_*` event types were collected in D1 but never read by
+`apps/admin`.
+
+**Commit 1 — `calendar_add_click`.** One new `event_type`, fired identically
+for all three destinations (google/outlook/.ics) in `AddToCalendarButton.tsx`
+— same minimal-cardinality precedent `save_click`/`share_click` already set
+for not differentiating method, even though (unlike `share_click`, which
+genuinely can't see past `navigator.share()`'s OS picker) this button *could*
+know the destination. Deliberately carries **no** `set_id`/event-id: `events`
+has no generic entity-id column — `set_id` is validated against `getSet()`
+in `routes/api/event.ts` and is sets-only, so an event's id would never
+resolve there. Carrying it would need a genuinely new column; flagged here
+as a separate, not-yet-needed decision rather than forced in (the button
+only ever appears in the context of one event per page load — no known
+report needs a per-event breakdown today).
+
+**Commit 2 — display.**
+- **`notify_funnel`** — new 3rd card in `GrowthTab.tsx`, own card rather than
+  merged into `install_funnel` or `push_subscribers` (it's the push
+  *permission* funnel, a different feature from the PWA *install* funnel,
+  despite the structural resemblance). Shows `prompt_shown` (standalone
+  subscribe soft-prompt) and `install_nudge_shown` (browser-tab install
+  nudge shown instead) as two separate rows, never summed — `declined` is
+  fired by closing *either* variant with no distinguishing field, so it
+  can't be attributed to one surface from the data alone; keeping the two
+  "shown" counts visible is what lets a reader notice `install_nudge_shown`
+  far exceeding `prompt_shown` and infer most declines are nudge-side.
+- **Small-n honesty.** Added `MIN_SAMPLE_FOR_RATE = 10` (`admin-stats.ts`) —
+  `notify_funnel.accepted_rate` renders `—` (not a computed percentage)
+  below that many `prompt_shown` impressions. Motivating case: today's real
+  remote counts have `notify_accepted ÷ notify_prompt_shown` = 2 ÷ 2, and a
+  bare ratio would show "100%" — confident-looking off two people. The
+  existing `null`-when-zero pattern (`InstallFunnel.conversionRate`) doesn't
+  catch this, since 2/2 isn't zero. Suppressing (not just captioning next to
+  the number) stops the misleading figure from rendering at all. This is
+  additive, not a retrofit — every other `conversionRate`/`ratio` field in
+  `admin-stats.ts` keeps its existing null-vs-zero-only behavior.
+- **`calendar_adds`** — new 3rd card in `UsageTab.tsx` (fits its "aggregate
+  volume, no per-set dimension" framing — `calendar_add_click` carries no
+  set/event id, same shape as `app_launches`). No trend chart yet (nothing
+  to bucket — collection had zero deploy history at merge time). Shows a
+  `Muted` "nothing recorded yet" note when `total === 0`, so the honestly-
+  empty state reads as "not yet tracked," not broken — this card will read
+  zero for a while after deploy.
+- **Grid layout.** Both tabs went from 2 to 3 cards; checked visually
+  (screenshots at 1280px/1600px/375px, not just reasoned about) before
+  picking a treatment — a bare 3rd item in `md:grid-cols-2` wrapped to its
+  own row with a large empty gap beside it. Landed on `lg:grid-cols-3` (all
+  three cards evenly sized at desktop width; still 1 column on mobile, 2 on
+  `md`) — reads cleanly at both widths tested, no orphaned gap.
+- **Sample fixture** (`sample-stats.ts`) uses `notifyFunnel` values *above*
+  `MIN_SAMPLE_FOR_RATE` (30/45/12/18 → 40% accepted_rate) so the rendered-
+  rate case is visible during a local dev pass; the suppressed (`null`)
+  case is covered by `admin-stats.test.ts` instead, not the fixture.
+  `calendarAdds.total: 0` demonstrates the empty state, matching reality at
+  merge time.
+
 ## Reference — key design decisions from the PWA work
 
 ### App-gated capability pattern (2026-07-17)

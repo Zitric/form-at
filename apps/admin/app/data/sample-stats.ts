@@ -92,6 +92,21 @@ export const SAMPLE_ADMIN_DASHBOARD_STATS: AdminDashboardStats = {
       },
     ],
   },
+  notifyFunnel: {
+    // Above MIN_SAMPLE_FOR_RATE so acceptedRate renders as a real number
+    // during a local visual pass — the suppressed (below-threshold) case is
+    // covered by admin-stats.test.ts, not this fixture.
+    promptShown: 30,
+    installNudgeShown: 45,
+    accepted: 12,
+    declined: 18,
+    acceptedRate: 12 / 30,
+  },
+  calendarAdds: {
+    // Genuinely 0 today — collection hasn't been deployed long enough to
+    // accumulate any. Demonstrates the "nothing recorded yet" empty state.
+    total: 0,
+  },
   installToPushConversion: {
     installAccepted: 9,
     pushSubscribers: 17,

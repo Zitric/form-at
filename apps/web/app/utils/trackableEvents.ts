@@ -27,6 +27,15 @@ export const TRACKABLE_EVENT_TYPES = [
   "notify_accepted",
   "notify_declined",
   "notify_install_nudge_shown",
+  // AddToCalendarButton (feat/calendar-tracking-and-dashboard, 2026-08-02) —
+  // one type for all three destinations (google/outlook/.ics), same
+  // minimal-cardinality precedent as save_click/share_click not
+  // differentiating method. Deliberately carries no set_id/event_id: `events`
+  // has no generic entity-id column (set_id is validated against getSet() in
+  // routes/api/event.ts, sets-only), and this button only ever appears in the
+  // context of one event per page load — adding an id column is a separate,
+  // not-yet-needed schema decision.
+  "calendar_add_click",
 ] as const;
 
 export type TrackableEventType = (typeof TRACKABLE_EVENT_TYPES)[number];
