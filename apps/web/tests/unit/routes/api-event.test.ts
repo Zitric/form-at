@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { sets } from "~/data/sets";
 import { validate } from "~/routes/api/event";
 import { TRACKABLE_EVENT_TYPES } from "~/utils/trackableEvents";
@@ -10,16 +10,22 @@ import { TRACKABLE_EVENT_TYPES } from "~/utils/trackableEvents";
 const realSetId = sets[0]?.id;
 if (!realSetId) throw new Error("test needs at least one set in the catalogue");
 
+// `validate` is `async` (PR3) — set_id existence now goes through
+// `isKnownSetId`, snapshot-first then D1-fallback-on-miss. `undefined` here
+// means "no D1 binding at all" (matches local `vite dev`), which
+// `isKnownSetId` already treats as "snapshot-only, reject on miss".
 describe("validate (api/event)", () => {
-  it("accepts every allowlisted event_type with no set_id", () => {
+  it("accepts every allowlisted event_type with no set_id", async () => {
     for (const eventType of TRACKABLE_EVENT_TYPES) {
-      const result = validate({ event_type: eventType, is_standalone: true });
+      const result = await validate({ event_type: eventType, is_standalone: true }, undefined);
       expect(result).toEqual({ eventType, setId: null, isStandalone: true });
     }
   });
 
-  it("rejects an event_type not on the allowlist", () => {
-    expect(validate({ event_type: "totally_made_up_event", is_standalone: false })).toBeNull();
+  it("rejects an event_type not on the allowlist", async () => {
+    expect(
+      await validate({ event_type: "totally_made_up_event", is_standalone: false }, undefined),
+    ).toBeNull();
   });
 
   // The accept-everything loop above would pass even if these were dropped
@@ -43,34 +49,91 @@ describe("validate (api/event)", () => {
     expect(TRACKABLE_EVENT_TYPES).toContain("calendar_add_click");
   });
 
-  it("rejects a missing event_type", () => {
-    expect(validate({ is_standalone: true })).toBeNull();
+  it("rejects a missing event_type", async () => {
+    expect(await validate({ is_standalone: true }, undefined)).toBeNull();
   });
 
-  it("rejects a non-boolean is_standalone", () => {
-    expect(validate({ event_type: "app_launch", is_standalone: "yes" })).toBeNull();
-  });
-
-  it("accepts a real set_id and passes it through", () => {
-    const result = validate({ event_type: "save_click", set_id: realSetId, is_standalone: true });
-    expect(result).toEqual({ eventType: "save_click", setId: realSetId, isStandalone: true });
-  });
-
-  it("rejects a set_id that doesn't resolve to a known set (anti-spam, same rule as api/signal.ts)", () => {
+  it("rejects a non-boolean is_standalone", async () => {
     expect(
-      validate({ event_type: "save_click", set_id: "not-a-real-set", is_standalone: true }),
+      await validate({ event_type: "app_launch", is_standalone: "yes" }, undefined),
     ).toBeNull();
   });
 
-  it("treats a null set_id the same as an absent one", () => {
-    const result = validate({ event_type: "app_launch", set_id: null, is_standalone: true });
+  it("accepts a real set_id and passes it through", async () => {
+    const result = await validate(
+      { event_type: "save_click", set_id: realSetId, is_standalone: true },
+      undefined,
+    );
+    expect(result).toEqual({ eventType: "save_click", setId: realSetId, isStandalone: true });
+  });
+
+  it("rejects a set_id that doesn't resolve to a known set (anti-spam, same rule as api/signal.ts)", async () => {
+    expect(
+      await validate(
+        { event_type: "save_click", set_id: "not-a-real-set", is_standalone: true },
+        undefined,
+      ),
+    ).toBeNull();
+  });
+
+  it("treats a null set_id the same as an absent one", async () => {
+    const result = await validate(
+      { event_type: "app_launch", set_id: null, is_standalone: true },
+      undefined,
+    );
     expect(result).toEqual({ eventType: "app_launch", setId: null, isStandalone: true });
   });
 
-  it("rejects non-object / null / primitive payloads", () => {
-    expect(validate(null)).toBeNull();
-    expect(validate(undefined)).toBeNull();
-    expect(validate("string")).toBeNull();
-    expect(validate(42)).toBeNull();
+  it("rejects non-object / null / primitive payloads", async () => {
+    expect(await validate(null, undefined)).toBeNull();
+    expect(await validate(undefined, undefined)).toBeNull();
+    expect(await validate("string", undefined)).toBeNull();
+    expect(await validate(42, undefined)).toBeNull();
+  });
+
+  // Validation precedence (PR3, item 2): snapshot first — free, covers every
+  // set that existed at last deploy — D1 only on a miss. Proven here via a
+  // fake D1 whose `.first()` is a spy: a snapshot-hit id must never reach it.
+  it("snapshot-hit set_id never touches D1", async () => {
+    const first = vi.fn();
+    const fakeDb = { prepare: () => ({ bind: () => ({ first }) }) } as unknown as D1Database;
+
+    const result = await validate(
+      { event_type: "save_click", set_id: realSetId, is_standalone: true },
+      fakeDb,
+    );
+
+    expect(result).toEqual({ eventType: "save_click", setId: realSetId, isStandalone: true });
+    expect(first).not.toHaveBeenCalled();
+  });
+
+  it("snapshot-miss set_id falls back to exactly one D1 query, and accepts on a D1 hit", async () => {
+    const first = vi.fn().mockResolvedValue({ 1: 1 });
+    const fakeDb = { prepare: () => ({ bind: () => ({ first }) }) } as unknown as D1Database;
+
+    const result = await validate(
+      { event_type: "save_click", set_id: "uploaded-since-last-deploy", is_standalone: true },
+      fakeDb,
+    );
+
+    expect(result).toEqual({
+      eventType: "save_click",
+      setId: "uploaded-since-last-deploy",
+      isStandalone: true,
+    });
+    expect(first).toHaveBeenCalledTimes(1);
+  });
+
+  it("snapshot-miss + D1-miss rejects", async () => {
+    const first = vi.fn().mockResolvedValue(null);
+    const fakeDb = { prepare: () => ({ bind: () => ({ first }) }) } as unknown as D1Database;
+
+    expect(
+      await validate(
+        { event_type: "save_click", set_id: "not-a-real-set", is_standalone: true },
+        fakeDb,
+      ),
+    ).toBeNull();
+    expect(first).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,6 +1,6 @@
 import { sets as staticSnapshot } from "@form-at/data/sets";
-import { describe, expect, it } from "vitest";
-import { getAllSetsWithFallback, getSetByIdWithFallback } from "~/data/sets";
+import { describe, expect, it, vi } from "vitest";
+import { getAllSetsWithFallback, getSetByIdWithFallback, isKnownSetId } from "~/data/sets";
 
 // Admin set-upload feature, PR2 (2026-08): the D1-error → snapshot-only
 // fallback is the specific thing this PR's plan review flagged as needing a
@@ -84,5 +84,52 @@ describe("getSetByIdWithFallback", () => {
 
   it("returns null when there's no D1 binding and the id isn't in the snapshot", async () => {
     expect(await getSetByIdWithFallback(undefined, "set-999-uploaded-only")).toBeNull();
+  });
+});
+
+// PR3, item 2: `isKnownSetId` is the anti-spam existence check used by
+// `routes/api/event.ts`/`.../signal.ts`. Deliberately the OPPOSITE precedence
+// from `getSetByIdWithFallback` above (snapshot-first, D1 only on a miss) —
+// see the comment on `isKnownSetId` in ~/data/sets.ts for why that's correct
+// here even though the read path is D1-first.
+describe("isKnownSetId", () => {
+  it("resolves a snapshot id as true with zero D1 calls", async () => {
+    const staticSet = staticSnapshot[0];
+    if (!staticSet) throw new Error("snapshot is empty — test fixture assumption broken");
+    const db = createFakeD1([{ match: /./, throws: true }]);
+
+    expect(await isKnownSetId(db, staticSet.id)).toBe(true);
+  });
+
+  it("falls back to D1 on a snapshot miss and resolves true on a D1 hit", async () => {
+    const db = createFakeD1([{ match: /FROM sets WHERE id = \?/, first: { 1: 1 } }]);
+
+    expect(await isKnownSetId(db, "uploaded-since-last-deploy")).toBe(true);
+  });
+
+  it("resolves false on a snapshot miss + D1 miss", async () => {
+    const db = createFakeD1([{ match: /FROM sets WHERE id = \?/, first: null }]);
+
+    expect(await isKnownSetId(db, "not-a-real-set")).toBe(false);
+  });
+
+  it("resolves false (fails closed) on a snapshot miss + D1 error", async () => {
+    const db = createFakeD1([{ match: /./, throws: true }]);
+
+    expect(await isKnownSetId(db, "not-a-real-set")).toBe(false);
+  });
+
+  it("resolves false when there's no D1 binding and the id isn't in the snapshot", async () => {
+    expect(await isKnownSetId(undefined, "not-a-real-set")).toBe(false);
+  });
+
+  it("never calls db.prepare at all on a snapshot hit", async () => {
+    const staticSet = staticSnapshot[0];
+    if (!staticSet) throw new Error("snapshot is empty — test fixture assumption broken");
+    const prepare = vi.fn();
+    const db = { prepare } as unknown as D1Database;
+
+    expect(await isKnownSetId(db, staticSet.id)).toBe(true);
+    expect(prepare).not.toHaveBeenCalled();
   });
 });

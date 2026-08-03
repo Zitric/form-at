@@ -71,3 +71,28 @@ export const fetchAllSets = createServerFn({ method: "GET" }).handler(({ context
 export const fetchSetForDetailPage = createServerFn({ method: "GET" })
   .inputValidator((id: string) => id)
   .handler(({ data: id, context }) => getSetByIdWithFallback(getDb(context), id));
+
+// Existence check for `routes/api/event.ts`/`routes/api/signal.ts`'s
+// anti-spam validation — deliberately the OPPOSITE precedence from
+// `getSetByIdWithFallback`/`mergeSets` above. Those are the READ path, where
+// D1 wins because a direct-SQL edit should show up immediately (PR3
+// review). Validation only cares whether an id EXISTS at all, never which
+// copy is "fresher" — so checking the free, always-available static
+// snapshot FIRST and only touching D1 on a miss is strictly better here: it
+// resolves every set that existed at the last deploy with zero D1 reads
+// (the overwhelming majority of real traffic — this project's `plays`
+// table sits around ~300 rows total), and only pays a D1 read for a set
+// genuinely uploaded since then. Fails CLOSED on a D1 error (reject, don't
+// assume valid) — matching this table's own "reject, don't sanitize"
+// philosophy (trackableEvents.ts): a D1 hiccup should not become a window
+// where arbitrary set_ids get accepted.
+export async function isKnownSetId(db: D1Database | undefined, id: string): Promise<boolean> {
+  if (getSet(id)) return true;
+  if (!db) return false;
+  try {
+    const row = await db.prepare("SELECT 1 FROM sets WHERE id = ?").bind(id).first();
+    return row !== null;
+  } catch {
+    return false;
+  }
+}

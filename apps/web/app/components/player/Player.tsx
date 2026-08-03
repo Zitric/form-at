@@ -2,14 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { DesktopPlayer } from "~/components/player/DesktopPlayer";
 import { FullPlayer } from "~/components/player/FullPlayer";
 import { MobileMiniPlayer } from "~/components/player/MobileMiniPlayer";
-import { sets } from "~/data/sets";
 import { useAudioPlayer } from "~/hooks/useAudioPlayer";
 import { useStore } from "~/store";
+import { getAdjacentSets } from "~/store/catalogueSlice";
 import { registerAudioElement } from "~/store/playerSlice";
 
 // Player orchestrator. Owns the single <audio> element, runs `useAudioPlayer`
-// once, derives the prev/next set from the global `sets` list, and composes
-// the four surfaces:
+// once, derives the prev/next set from the merged catalogue (live D1 +
+// build-time snapshot — see catalogueSlice.ts), and composes the four
+// surfaces:
 //   - <MobileMiniPlayer>  : sub-1fr-grid bar above the BottomNav (mobile)
 //   - <DesktopPlayer>     : fixed bottom bar with the full transport (desktop)
 //   - <FullPlayer>        : tap-to-expand full-screen overlay (mobile)
@@ -21,6 +22,7 @@ export function Player() {
   const nowPlaying = useStore((s) => s.nowPlaying);
   const isPlaying = useStore((s) => s.isPlaying);
   const playTrack = useStore((s) => s.playTrack);
+  const catalogueSets = useStore((s) => s.catalogueSets);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { loading, hasError, togglePlay, seek, audioProps } = useAudioPlayer(audioRef);
@@ -40,9 +42,7 @@ export function Player() {
     return () => registerAudioElement(null);
   }, []);
 
-  const currentIdx = sets.findIndex((s) => s.id === nowPlaying?.id);
-  const prevSet = currentIdx > 0 ? sets[currentIdx - 1] : null;
-  const nextSet = currentIdx < sets.length - 1 ? sets[currentIdx + 1] : null;
+  const { prev: prevSet, next: nextSet } = getAdjacentSets(catalogueSets, nowPlaying?.id);
 
   const onPrev = useCallback(() => prevSet && playTrack(prevSet), [prevSet, playTrack]);
   const onNext = useCallback(() => nextSet && playTrack(nextSet), [nextSet, playTrack]);

@@ -2235,6 +2235,102 @@ report needs a per-event breakdown today).
   `calendarAdds.total: 0` demonstrates the empty state, matching reality at
   merge time.
 
+### Added 2026-08-03 — admin set-upload feature, PR3: swapped remaining synchronous catalogue consumers onto the merged live+snapshot source
+
+Context: the catalogue moved from a hardcoded compile-time array to a D1-backed
+system (PR1: `sets` table + migration; PR2: build-time snapshot
+`sets.generated.ts` + live-D1-overlay loaders for the `/sets` pages, with a
+client-side offline-catch fix and a Turborepo strict-env-mode CI fix found
+along the way). PR3 is the third phase: five remaining code paths still read
+the old synchronous `sets` array/`getSet()` directly — `Player.tsx`,
+`useAudioPlayer.ts`, `store/index.ts`'s persist `merge()`, `offlineSlice.ts`,
+`SaveForOfflineButton.tsx` — plus two API routes (`routes/api/event.ts`,
+`.../signal.ts`) whose anti-spam `validate()` called `getSet()` synchronously.
+
+**New `apps/web/app/store/catalogueSlice.ts`** — a Zustand slice: `catalogueSets`
+(starts as the bare build-time snapshot, replaced wholesale by the live-merged
+result once the boot fetch in the new `CatalogueSync.tsx` component succeeds)
+and `catalogueReady` (false until that boot fetch has settled — success,
+failure, or an 8s timeout — **never** persisted, **never** inferred from
+`catalogueSets` being non-empty). `getCatalogueSet`/`getAdjacentSets` are the
+plain lookup helpers all five consumers now call instead of touching `sets`
+directly. `store/index.ts` composes the slice into `AppStore`, persists
+`catalogueSets` (so a later fully-offline boot has more than the bare snapshot
+to work with) but deliberately not `catalogueReady`, and its `merge()` forces
+`catalogueReady: false` on every rehydrate regardless of what's in the
+persisted blob.
+
+**Item 1 — the reconciliation danger (highest risk item, closed with a
+structural guard, not just a call-site convention).** `offlineSlice.ts`'s
+`reconcileFromIdb` treats "id not found in the catalogue" as "removed,
+safe to purge the user's saved offline bytes" (pass 2 of its two-pass IDB
+sync). Under the old compile-time array this was always safe — the catalogue
+was always complete. Under the new merged async source, `catalogueSets` can
+be non-empty (the bare snapshot default) while still not having had a chance
+to load the live overlay — a false "not found" here would incorrectly evict
+a real saved set the user never touched, on a 220MB+ download, for no
+user-visible reason. Fix: `reconcileFromIdb` now checks
+`get().catalogueReady !== true` as its very first line and no-ops (returns
+before touching IDB or the offline-state map) if the catalogue hasn't
+confirmed itself complete yet. This is a guard *inside the slice itself*,
+not just in the calling component (`OfflineReconciler.tsx`, which also gates
+its effect on `catalogueReady` as a second, redundant layer) — so the safety
+property holds even if some future call site forgets to check readiness.
+Test: `tests/unit/store/reconcileUrlMigration.test.ts` — the new
+"catalogueReady: false" case reuses the exact old-host fixture that the
+adjacent test proves *does* get purged under `catalogueReady: true`, and
+asserts nothing happens (no IDB read, no purge, state unchanged) when it's
+false.
+
+**Item 2 — validation precedence, deliberately the opposite of PR2's
+"live wins" read-path rule.** New `isKnownSetId(db, id)` in
+`apps/web/app/data/sets.ts`: checks the free, always-available static
+snapshot first, only queries D1 on a miss, and fails closed (rejects) on a
+D1 error. This is the opposite precedence from `getSetByIdWithFallback`
+(D1-first, snapshot-fallback) — deliberately, because validation only cares
+whether an id *exists at all*, never which copy is fresher, so resolving the
+overwhelming majority of real traffic (every set that existed at the last
+deploy) with zero D1 reads is strictly better than PR2's read-path rule
+would be here. `plays` sits around ~300 rows total, so D1 read volume was
+never the real concern — this is about not paying a D1 round-trip on every
+beacon for sets that resolve for free. Both `routes/api/event.ts` and
+`.../signal.ts`'s `validate()` are now `async` and take `db` as a second
+parameter, threaded in from the handler (which now extracts `context.cloudflare`
+*before* calling `validate`, rather than after). `signal.ts`'s `validate` is
+now exported too, matching `event.ts`'s existing convention (both had a
+"pre-existing gap" note about this predating the convention; closed here
+since both are now async and worth testing symmetrically).
+
+**Item 3 — offline degradation, folded into item 1's design rather than a
+separate mechanism.** All five swapped consumers read `catalogueSets`, which
+is *always* populated (bare snapshot at minimum) — none of them can render
+empty or throw from a slow/failed boot fetch. Specifics: `Player.tsx` and
+`useAudioPlayer.ts`'s media-session prev/next handlers use
+`getAdjacentSets(catalogueSets, ...)`, degrading to the snapshot's ordering
+if the live fetch hasn't resolved. `SaveForOfflineButton.tsx`'s "downloading"
+modal title looks up `getCatalogueSet(catalogueSets, set.id)?.artist ?? set.artist`
+— falls back to the prop it already has if the id isn't resolvable yet (e.g.
+a very recent upload this device's catalogue fetch hasn't picked up).
+`store/index.ts`'s `merge()` resolves a persisted `nowPlayingId` via
+`getCatalogueSet(catalogueSets, id) ?? getSet(id) ?? null` — the second
+fallback covers a payload persisted before `catalogueSets` existed at all.
+
+Tests: full existing player/offline/tracking suites stayed green with the
+swap (two isolated-store test files —
+`tests/unit/store/reconcileUrlMigration.test.ts`,
+`tests/unit/store/offlineFailureClassification.test.ts` — needed their
+`makeStore()` helpers updated to compose `CatalogueSlice` alongside
+`OfflineSlice`, since `startDownload`/`reconcileFromIdb` now read
+`catalogueSets` off `get()`). New: `tests/unit/store/catalogueSlice.test.ts`
+(pure `getCatalogueSet`/`getAdjacentSets` behaviour), a `catalogueSlice`
+describe block in `tests/unit/store/persistRehydrate.test.ts` (restores from
+a seeded payload, falls back to the bare snapshot for a pre-PR3 payload,
+`catalogueReady` always starts false even against a maliciously-seeded
+`true`), and `isKnownSetId` precedence tests in
+`tests/unit/data/sets.test.ts` + `tests/unit/routes/api-event.test.ts` (fake
+D1 proving a snapshot-hit never calls `db.prepare`, a snapshot-miss makes
+exactly one D1 query).
+
 ## Reference — key design decisions from the PWA work
 
 ### App-gated capability pattern (2026-07-17)

@@ -4,10 +4,11 @@ import { CancelDownloadModal } from "~/components/CancelDownloadModal";
 import { QuotaInfoModal } from "~/components/QuotaInfoModal";
 import { SaveGateModal } from "~/components/SaveGateModal";
 import { SavedManageModal } from "~/components/SavedManageModal";
-import { type MusicSet, getSet } from "~/data/sets";
+import type { MusicSet } from "~/data/sets";
 import { useOfflineStateFor, useTriggerDownload } from "~/hooks/useOfflineDownload";
 import { useSaveGate } from "~/hooks/useSaveGate";
 import { useStore } from "~/store";
+import { getCatalogueSet } from "~/store/catalogueSlice";
 import { fmtBytes } from "~/utils/fmt";
 
 // `save_for_offline` trigger on the set detail page.
@@ -35,6 +36,7 @@ export function SaveForOfflineButton({ set }: Props) {
   const cancelDownload = useStore((s) => s.cancelDownload);
   const removeOfflineSet = useStore((s) => s.removeOfflineSet);
   const setToast = useStore((s) => s.setToast);
+  const catalogueSets = useStore((s) => s.catalogueSets);
   const triggerDownload = useTriggerDownload(set.id);
 
   const [gateOpen, setGateOpen] = useState(false);
@@ -79,9 +81,12 @@ export function SaveForOfflineButton({ set }: Props) {
 
     case "downloading": {
       const pct = Math.floor((offlineState.bytesDownloaded / offlineState.bytesTotal) * 100);
-      // Title from getSet rather than props in case the modal stays mounted
-      // after a navigation — getSet is the source of truth either way.
-      const titleForModal = getSet(set.id)?.artist ?? set.artist;
+      // Title from the catalogue rather than props in case the modal stays
+      // mounted after a navigation — the catalogue is the source of truth
+      // either way (and gracefully falls back to the prop if this id
+      // somehow isn't resolvable yet, e.g. a very recent upload this
+      // device's catalogue fetch hasn't picked up).
+      const titleForModal = getCatalogueSet(catalogueSets, set.id)?.artist ?? set.artist;
       return (
         <>
           <Button variant="secondary" onClick={() => setCancelOpen(true)}>

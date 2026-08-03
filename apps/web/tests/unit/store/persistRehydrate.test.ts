@@ -17,6 +17,10 @@ import { useStore } from "~/store";
 describe("persist rehydration", () => {
   beforeEach(() => {
     localStorage.clear();
+    // merge() falls back to `current.catalogueSets` when a payload omits the
+    // field — reset to the bare snapshot so an earlier test's seeded value
+    // can't leak into a later test via the shared store singleton.
+    useStore.setState({ catalogueSets: sets });
   });
 
   it("completes on a true first visit (no storage key)", async () => {
@@ -96,5 +100,90 @@ describe("persist rehydration", () => {
     );
     await useStore.persist.rehydrate();
     expect(useStore.getState().pushOptInDismissed).toBe(true);
+  });
+
+  // Admin set-upload feature (PR3) — catalogueSlice persist/hydrate.
+  describe("catalogueSlice", () => {
+    it("restores catalogueSets from a seeded payload", async () => {
+      const uploadedSet = {
+        id: "set-999-persisted",
+        title: "Form:at 999",
+        artist: "Persisted Artist",
+        date: "2026-09-01",
+        venue: null,
+        description: null,
+        duration: null,
+        src: "https://cdn.formatglasgow.com/sets/set-999-persisted/audio.mp3",
+        artwork: null,
+        peaks: null,
+        sizeBytes: undefined,
+      };
+      localStorage.setItem(
+        "format-player",
+        JSON.stringify({
+          state: {
+            nowPlayingId: null,
+            positions: {},
+            peaksCache: {},
+            durations: {},
+            pwaInstalled: false,
+            pwaInstallDismissed: false,
+            pushOptInDismissed: false,
+            offlineSets: {},
+            hasRequestedPersist: false,
+            catalogueSets: [uploadedSet],
+          },
+          version: 0,
+        }),
+      );
+      await useStore.persist.rehydrate();
+      expect(useStore.getState().catalogueSets).toEqual([uploadedSet]);
+    });
+
+    it("falls back to the bare snapshot when catalogueSets is absent (pre-PR3 payload)", async () => {
+      localStorage.setItem(
+        "format-player",
+        JSON.stringify({
+          state: {
+            nowPlayingId: null,
+            positions: {},
+            peaksCache: {},
+            durations: {},
+            pwaInstalled: false,
+            pwaInstallDismissed: false,
+            pushOptInDismissed: false,
+            offlineSets: {},
+            hasRequestedPersist: false,
+          },
+          version: 0,
+        }),
+      );
+      await useStore.persist.rehydrate();
+      expect(useStore.getState().catalogueSets).toEqual(sets);
+    });
+
+    it("always starts catalogueReady false, even against a maliciously/stale-seeded true", async () => {
+      localStorage.setItem(
+        "format-player",
+        JSON.stringify({
+          state: {
+            nowPlayingId: null,
+            positions: {},
+            peaksCache: {},
+            durations: {},
+            pwaInstalled: false,
+            pwaInstallDismissed: false,
+            pushOptInDismissed: false,
+            offlineSets: {},
+            hasRequestedPersist: false,
+            catalogueSets: sets,
+            catalogueReady: true,
+          },
+          version: 0,
+        }),
+      );
+      await useStore.persist.rehydrate();
+      expect(useStore.getState().catalogueReady).toBe(false);
+    });
   });
 });

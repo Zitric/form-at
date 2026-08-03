@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { create } from "zustand";
 import { sets } from "~/data/sets";
+import { type CatalogueSlice, createCatalogueSlice } from "~/store/catalogueSlice";
 import {
   type OfflineSlice,
   classifyDownloadFailure,
@@ -36,7 +37,16 @@ describe("startDownload quota pre-flight", () => {
   const testSet = sets.find((s) => s.sizeBytes !== undefined);
   if (!testSet) throw new Error("test needs a catalogue set with sizeBytes");
 
-  const makeStore = () => create<OfflineSlice>()(createOfflineSlice);
+  // Composes CatalogueSlice alongside OfflineSlice (PR3) — `startDownload`
+  // resolves the target set via `getCatalogueSet(get().catalogueSets, ...)`
+  // now, so an isolated OfflineSlice-only store would find no set at all.
+  // The default `catalogueSets` (the bare snapshot) already contains `sets`,
+  // so no extra seeding is needed beyond composing the slice.
+  const makeStore = () =>
+    create<OfflineSlice & CatalogueSlice>()((...a) => ({
+      ...createOfflineSlice(...a),
+      ...createCatalogueSlice(...a),
+    }));
 
   beforeEach(() => {
     vi.unstubAllGlobals();

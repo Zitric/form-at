@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { create } from "zustand";
 import { sets } from "~/data/sets";
+import { type CatalogueSlice, createCatalogueSlice } from "~/store/catalogueSlice";
 import { type OfflineSlice, createOfflineSlice } from "~/store/offlineSlice";
 
 // TECH_DEBT 19 migration lock: IDB entries are keyed by full URL and the SW
@@ -35,10 +36,19 @@ const entry = (url: string, kind: "mp3" | "peaks") => ({
   savedAt: 111,
 });
 
-function makeStore() {
-  const store = create<OfflineSlice>()(createOfflineSlice);
+// Composes CatalogueSlice alongside OfflineSlice (PR3) — `reconcileFromIdb`
+// now gates on `catalogueReady`, so an isolated OfflineSlice-only store would
+// silently no-op every call here. `catalogueReady: true` matches these
+// tests' intent: they're exercising the purge logic itself, not the readiness
+// gate (that gets its own dedicated test below).
+function makeStore(catalogueReady = true) {
+  const store = create<OfflineSlice & CatalogueSlice>()((...a) => ({
+    ...createOfflineSlice(...a),
+    ...createCatalogueSlice(...a),
+  }));
   store.setState({
     offlineSets: { [testSet.id]: { status: "saved", bytesTotal: 2000, savedAt: 111 } },
+    catalogueReady,
   });
   return store;
 }
@@ -90,5 +100,28 @@ describe("reconcileFromIdb URL migration", () => {
 
     expect(store.getState().offlineSets[testSet.id]?.status).toBe("saved");
     expect(deleteOfflineSetEntries.mock.calls.flat(2)).toEqual([oldPeaks]);
+  });
+
+  it("catalogueReady: false — no-ops entirely, nothing read from IDB or purged (PR3 safety guard)", async () => {
+    // Same old-host fixture as the very first test above, which — with
+    // catalogueReady: true — purges and evicts. Here it must do NOTHING:
+    // this is the exact scenario the guard exists for (a momentarily
+    // incomplete catalogue must never be treated as ground truth for
+    // deciding a saved set was "removed").
+    getAllOfflineEntries.mockResolvedValue([
+      entry(oldSrc, "mp3"),
+      ...(oldPeaks ? [entry(oldPeaks, "peaks")] : []),
+    ]);
+    const store = makeStore(false);
+
+    await store.getState().reconcileFromIdb();
+
+    expect(store.getState().offlineSets[testSet.id]).toEqual({
+      status: "saved",
+      bytesTotal: 2000,
+      savedAt: 111,
+    });
+    expect(getAllOfflineEntries).not.toHaveBeenCalled();
+    expect(deleteOfflineSetEntries).not.toHaveBeenCalled();
   });
 });
