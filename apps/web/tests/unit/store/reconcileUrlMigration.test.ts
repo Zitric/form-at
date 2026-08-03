@@ -26,9 +26,9 @@ vi.mock("~/data/offline-audio", () => ({
   putOfflineAudioPair: vi.fn(),
 }));
 
-const entry = (url: string, kind: "mp3" | "peaks") => ({
+const entry = (url: string, kind: "mp3" | "peaks", setId = testSet.id) => ({
   url,
-  setId: testSet.id,
+  setId,
   kind,
   blob: new Blob(["x"]),
   bytesTotal: 1000,
@@ -38,10 +38,12 @@ const entry = (url: string, kind: "mp3" | "peaks") => ({
 
 // Composes CatalogueSlice alongside OfflineSlice (PR3) — `reconcileFromIdb`
 // now gates on `catalogueReady`, so an isolated OfflineSlice-only store would
-// silently no-op every call here. `catalogueReady: true` matches these
-// tests' intent: they're exercising the purge logic itself, not the readiness
-// gate (that gets its own dedicated test below).
-function makeStore(catalogueReady = true) {
+// silently no-op every call here. `catalogueReady: true, catalogueConfirmed:
+// true` matches most of these tests' intent: they're exercising the purge
+// logic itself, not either readiness/confirmation gate (those get their own
+// dedicated tests below — `catalogueReady` and `catalogueConfirmed` answer
+// different questions, see catalogueSlice.ts).
+function makeStore(catalogueReady = true, catalogueConfirmed = true) {
   const store = create<OfflineSlice & CatalogueSlice>()((...a) => ({
     ...createOfflineSlice(...a),
     ...createCatalogueSlice(...a),
@@ -49,6 +51,7 @@ function makeStore(catalogueReady = true) {
   store.setState({
     offlineSets: { [testSet.id]: { status: "saved", bytesTotal: 2000, savedAt: 111 } },
     catalogueReady,
+    catalogueConfirmed,
   });
   return store;
 }
@@ -123,5 +126,63 @@ describe("reconcileFromIdb URL migration", () => {
     });
     expect(getAllOfflineEntries).not.toHaveBeenCalled();
     expect(deleteOfflineSetEntries).not.toHaveBeenCalled();
+  });
+
+  // The bug this locks: `catalogueReady` goes true on a FAILED/timed-out
+  // boot fetch too, not just a successful one (see CatalogueSync.tsx) — at
+  // that point `catalogueSets` is whatever was already known, which is NOT
+  // confirmed complete. An id genuinely saved by the user but missing from
+  // that unconfirmed catalogue (e.g. uploaded since the last deploy, on a
+  // device whose persisted catalogueSets was cleared) must NOT be purged.
+  it("catalogueReady: true, catalogueConfirmed: false — an unrecognized id is left alone, nothing purged", async () => {
+    const unknownId = "set-999-uploaded-since-last-deploy";
+    getAllOfflineEntries.mockResolvedValue([entry(`${OLD_HOST}/999/audio.mp3`, "mp3", unknownId)]);
+    const store = makeStore(true, false);
+    store.setState({
+      offlineSets: {
+        ...store.getState().offlineSets,
+        [unknownId]: { status: "saved", bytesTotal: 5000, savedAt: 222 },
+      },
+    });
+
+    await store.getState().reconcileFromIdb();
+
+    expect(store.getState().offlineSets[unknownId]).toEqual({
+      status: "saved",
+      bytesTotal: 5000,
+      savedAt: 222,
+    });
+    expect(deleteOfflineSetEntries).not.toHaveBeenCalled();
+  });
+
+  // Complements the test above: once the catalogue IS confirmed (a genuinely
+  // successful live fetch), an id that still doesn't resolve really is gone
+  // — the purge must still fire in that case, proving the fix narrows the
+  // gate rather than disabling the purge outright.
+  it("catalogueReady: true, catalogueConfirmed: true — an unrecognized id IS purged", async () => {
+    const unknownId = "set-999-genuinely-removed";
+    const url = `${OLD_HOST}/999/audio.mp3`;
+    getAllOfflineEntries.mockResolvedValue([entry(url, "mp3", unknownId)]);
+    const store = makeStore(true, true);
+    store.setState({
+      offlineSets: {
+        ...store.getState().offlineSets,
+        [unknownId]: { status: "saved", bytesTotal: 5000, savedAt: 222 },
+      },
+    });
+
+    await store.getState().reconcileFromIdb();
+
+    // Pass 1 already found a matching IDB entry for this id, so the
+    // Zustand-level "saved" state is untouched either way (it only flips to
+    // `evicted` on the NEXT reconciliation, once IDB genuinely has no
+    // record) — the actual purge this test locks is the IDB delete call
+    // below, which is what pass 2's comment means by "queue for deletion."
+    expect(store.getState().offlineSets[unknownId]).toEqual({
+      status: "saved",
+      bytesTotal: 5000,
+      savedAt: 222,
+    });
+    expect(deleteOfflineSetEntries.mock.calls.flat(2)).toEqual([url]);
   });
 });

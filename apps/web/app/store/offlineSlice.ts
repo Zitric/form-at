@@ -410,17 +410,17 @@ export const createOfflineSlice: StateCreator<
     // Structural guard (admin set-upload feature, PR3 review) — not just a
     // courtesy for OfflineReconciler's own gate, since that's the only
     // current caller but shouldn't be the only thing standing between a
-    // future caller and this function's destructive branch. The catalogue
-    // is now a merged live-D1 + build-time-snapshot source that can be
-    // partially loaded — "not found in the catalogue" only means "removed"
-    // if we've actually finished learning the full catalogue this session
-    // (`catalogueReady`, see catalogueSlice.ts). Before that, an absence
-    // just as easily means "the live fetch hasn't resolved yet," and pass 2
-    // below would otherwise queue a genuinely-saved set's real IDB bytes
-    // for permanent deletion over nothing the user did. Strict `!== true`
-    // (not just falsy) so a store that never composed CatalogueSlice at all
-    // (some isolated tests) fails the same safe way as one that composed it
-    // but hasn't settled yet.
+    // future caller and this function's destructive branch. `catalogueReady`
+    // only means the boot fetch has SETTLED (success, failure, OR timeout —
+    // see catalogueSlice.ts) — before that, there's no point running
+    // reconciliation at all. Strict `!== true` (not just falsy) so a store
+    // that never composed CatalogueSlice at all (some isolated tests) fails
+    // the same safe way as one that composed it but hasn't settled yet.
+    //
+    // NOTE: this does NOT by itself make pass 2's catalogue-membership
+    // purge safe — see the separate `catalogueConfirmed` check inside pass
+    // 2 below, and catalogueSlice.ts's comment on why the two flags are
+    // different questions.
     if (get().catalogueReady !== true) {
       if (process.env.NODE_ENV === "development") {
         console.warn(
@@ -471,11 +471,25 @@ export const createOfflineSlice: StateCreator<
 
     // Pass 2: IDB entries — orphans (no persisted state) become saved;
     // catalogue-removed (no catalogue match) entries get queued for
-    // auto-purge. Safe to treat a miss here as genuine removal ONLY because
-    // the guard above already confirmed catalogueReady — see its comment.
+    // auto-purge. Safe to treat a miss here as genuine removal ONLY when
+    // `catalogueConfirmed` is true — i.e. this session's live fetch actually
+    // SUCCEEDED, not merely settled (`catalogueReady`, checked above, also
+    // goes true on a failed/timed-out fetch, which tells us nothing about
+    // whether `catalogueSets` is complete). Without this extra check, a
+    // failed boot fetch on a device whose persisted catalogueSets was
+    // cleared would see the bare snapshot, find a genuinely-saved
+    // recently-uploaded set missing from it, and permanently delete real
+    // user data over a network blip — see catalogueSlice.ts's comment on
+    // why `catalogueReady` alone was the wrong gate for this.
     for (const [setId, entries] of bySetId) {
       const catalogueSet = getCatalogueSet(get().catalogueSets, setId);
       if (!catalogueSet) {
+        if (get().catalogueConfirmed !== true) {
+          // Unconfirmed catalogue — we genuinely don't know whether this id
+          // was removed or simply hasn't loaded yet. Leave it alone
+          // entirely: no purge, no state change either way.
+          continue;
+        }
         // Set is no longer in the catalogue — no UI path to play it anymore.
         // Queue the URLs for deletion and DON'T add to state. See TECH_DEBT
         // item 13 for the policy + future revision criteria.

@@ -50,8 +50,8 @@ export const useStore = create<AppStore>()(
         // last successful boot fetch — persisted so a later fully-offline
         // boot has more than just the bare snapshot to work with (narrows
         // the "uploaded and saved in the same deploy window" gap PR2's docs
-        // already name). Deliberately NOT `catalogueReady` — that must
-        // start false every session; see catalogueSlice.ts.
+        // already name). Deliberately NOT `catalogueReady`/`catalogueConfirmed`
+        // — both must start false every session; see catalogueSlice.ts.
         catalogueSets: state.catalogueSets,
       }),
       merge: (persisted, current) => {
@@ -96,8 +96,10 @@ export const useStore = create<AppStore>()(
           catalogueSets,
           // ALWAYS false on rehydrate, regardless of what a previous
           // session (or a hand-edited localStorage blob) might claim —
-          // this session hasn't confirmed anything yet. See catalogueSlice.ts.
+          // this session hasn't settled or confirmed anything yet. See
+          // catalogueSlice.ts for why these are two distinct flags.
           catalogueReady: false,
+          catalogueConfirmed: false,
           // Prefer the merged catalogue (covers a set uploaded since the
           // last deploy that this device has already fetched once) over the
           // bare static snapshot; `getSet` stays as the final fallback for a

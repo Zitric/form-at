@@ -35,13 +35,20 @@ export function CatalogueSync() {
 
     Promise.race([fetchAllSets(), timeout])
       .then((live) => {
-        if (!cancelled) useStore.getState().setCatalogueSets(live);
+        if (cancelled) return;
+        useStore.getState().setCatalogueSets(live);
+        // Only the success path confirms the catalogue is complete — see
+        // catalogueSlice.ts's comment on `catalogueConfirmed` vs
+        // `catalogueReady`. A failure/timeout below deliberately does NOT
+        // call this, even though it still calls markCatalogueReady() in the
+        // `finally`.
+        useStore.getState().markCatalogueConfirmed();
       })
       .catch(() => {
         // Network failure or timeout — leave catalogueSets exactly as it
         // was (persisted-from-before, or the bare snapshot default). See
         // the top-of-file comment for why this must not overwrite with a
-        // worse fallback.
+        // worse fallback. Deliberately does NOT mark catalogueConfirmed.
       })
       .finally(() => {
         if (!cancelled) useStore.getState().markCatalogueReady();

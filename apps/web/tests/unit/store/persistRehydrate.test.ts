@@ -185,5 +185,34 @@ describe("persist rehydration", () => {
       await useStore.persist.rehydrate();
       expect(useStore.getState().catalogueReady).toBe(false);
     });
+
+    // Same defensive assertion for `catalogueConfirmed` — the flag
+    // `reconcileFromIdb`'s destructive purge actually gates on (see
+    // catalogueSlice.ts). A stale/malicious `true` here would be far worse
+    // than for `catalogueReady`: it's the one thing standing between an
+    // offline boot and permanently deleting a user's saved sets.
+    it("always starts catalogueConfirmed false, even against a maliciously/stale-seeded true", async () => {
+      localStorage.setItem(
+        "format-player",
+        JSON.stringify({
+          state: {
+            nowPlayingId: null,
+            positions: {},
+            peaksCache: {},
+            durations: {},
+            pwaInstalled: false,
+            pwaInstallDismissed: false,
+            pushOptInDismissed: false,
+            offlineSets: {},
+            hasRequestedPersist: false,
+            catalogueSets: sets,
+            catalogueConfirmed: true,
+          },
+          version: 0,
+        }),
+      );
+      await useStore.persist.rehydrate();
+      expect(useStore.getState().catalogueConfirmed).toBe(false);
+    });
   });
 });

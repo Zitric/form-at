@@ -2249,38 +2249,70 @@ the old synchronous `sets` array/`getSet()` directly — `Player.tsx`,
 
 **New `apps/web/app/store/catalogueSlice.ts`** — a Zustand slice: `catalogueSets`
 (starts as the bare build-time snapshot, replaced wholesale by the live-merged
-result once the boot fetch in the new `CatalogueSync.tsx` component succeeds)
-and `catalogueReady` (false until that boot fetch has settled — success,
-failure, or an 8s timeout — **never** persisted, **never** inferred from
-`catalogueSets` being non-empty). `getCatalogueSet`/`getAdjacentSets` are the
-plain lookup helpers all five consumers now call instead of touching `sets`
-directly. `store/index.ts` composes the slice into `AppStore`, persists
-`catalogueSets` (so a later fully-offline boot has more than the bare snapshot
-to work with) but deliberately not `catalogueReady`, and its `merge()` forces
-`catalogueReady: false` on every rehydrate regardless of what's in the
-persisted blob.
+result once the boot fetch in the new `CatalogueSync.tsx` component succeeds),
+`catalogueReady`, and `catalogueConfirmed` (both **never** persisted, **never**
+inferred from `catalogueSets` being non-empty — see item 1 for why there are
+two flags, not one). `getCatalogueSet`/`getAdjacentSets` are the plain lookup
+helpers all five consumers now call instead of touching `sets` directly.
+`store/index.ts` composes the slice into `AppStore`, persists `catalogueSets`
+(so a later fully-offline boot has more than the bare snapshot to work with)
+but deliberately not either readiness flag, and its `merge()` forces both to
+`false` on every rehydrate regardless of what's in the persisted blob.
 
-**Item 1 — the reconciliation danger (highest risk item, closed with a
-structural guard, not just a call-site convention).** `offlineSlice.ts`'s
-`reconcileFromIdb` treats "id not found in the catalogue" as "removed,
-safe to purge the user's saved offline bytes" (pass 2 of its two-pass IDB
-sync). Under the old compile-time array this was always safe — the catalogue
-was always complete. Under the new merged async source, `catalogueSets` can
-be non-empty (the bare snapshot default) while still not having had a chance
-to load the live overlay — a false "not found" here would incorrectly evict
-a real saved set the user never touched, on a 220MB+ download, for no
-user-visible reason. Fix: `reconcileFromIdb` now checks
-`get().catalogueReady !== true` as its very first line and no-ops (returns
-before touching IDB or the offline-state map) if the catalogue hasn't
-confirmed itself complete yet. This is a guard *inside the slice itself*,
-not just in the calling component (`OfflineReconciler.tsx`, which also gates
-its effect on `catalogueReady` as a second, redundant layer) — so the safety
-property holds even if some future call site forgets to check readiness.
-Test: `tests/unit/store/reconcileUrlMigration.test.ts` — the new
-"catalogueReady: false" case reuses the exact old-host fixture that the
-adjacent test proves *does* get purged under `catalogueReady: true`, and
-asserts nothing happens (no IDB read, no purge, state unchanged) when it's
-false.
+**Item 1 — the reconciliation danger (highest risk item; closed with a
+structural guard, then had a real hole found and fixed one review pass
+later).** `offlineSlice.ts`'s `reconcileFromIdb` treats "id not found in the
+catalogue" as "removed, safe to purge the user's saved offline bytes" (pass 2
+of its two-pass IDB sync). Under the old compile-time array this was always
+safe — the catalogue was always complete. Under the new merged async source,
+`catalogueSets` can be non-empty (the bare snapshot default) while still not
+having had a chance to load the live overlay.
+
+First pass at the fix: `reconcileFromIdb` gated its whole body on
+`get().catalogueReady !== true`. **This had a hole**, caught in review:
+`catalogueReady` goes true once the boot fetch has *settled* — on success,
+on failure, **or on an 8s timeout** — so it says nothing about whether
+`catalogueSets` is actually complete. Booting offline (or with a flaky
+connection) makes the fetch fail, `catalogueReady` flips true anyway, and
+`catalogueSets` is left at whatever was already known (persisted, or the
+bare snapshot) — not confirmed. A set uploaded since the last deploy,
+genuinely saved by this user, on a device whose persisted `catalogueSets`
+had been cleared, is missing from that catalogue for a reason that has
+nothing to do with removal — and the original guard would have let pass 2
+permanently delete its real IDB bytes. This is the same edge case PR2's own
+docs already named ("uploaded and saved within the same deploy window, on a
+device whose persisted cache was then cleared") — but escalated from a
+*rendering* gap ("that set won't show up") to a *data-destruction* gap
+("that set's saved bytes get deleted"), which was never the intent.
+
+Fix: split the question in two. `catalogueReady` keeps its original meaning
+("the boot fetch has stopped, for any reason") and still gates whether
+`reconcileFromIdb` runs its non-destructive work at all (pass 1's
+IDB-vs-persisted eviction check doesn't depend on catalogue completeness).
+A new `catalogueConfirmed` flag — true **only** on a successful live fetch,
+set inside `CatalogueSync.tsx`'s `.then()` and deliberately never in its
+`.catch()`/`.finally()` — is the one pass 2's actual purge branch (`!catalogueSet`
+→ queue for deletion) now checks. If the catalogue isn't confirmed, that
+branch does nothing at all: no purge, no state change, the id is left
+exactly as it was. Both flags live in `catalogueSlice.ts` as a guard *inside
+the slice itself*, not just in the calling component (`OfflineReconciler.tsx`,
+which still gates its effect on `catalogueReady` as a second, redundant
+layer, since there's no point calling a function that will immediately
+no-op) — so the safety property holds even if some future call site forgets
+to check.
+
+Tests, `tests/unit/store/reconcileUrlMigration.test.ts`: the original
+"catalogueReady: false" case (no-ops entirely, nothing read from IDB) stayed
+as one layer; two new cases lock the actual fix — `catalogueReady: true,
+catalogueConfirmed: false` with an unrecognized id proves nothing is purged
+and the persisted state is untouched, and a complementary `catalogueReady:
+true, catalogueConfirmed: true` case proves the purge still correctly fires
+once the catalogue really has been confirmed complete (so the fix narrows
+the gate rather than disabling the purge outright).
+`tests/unit/store/persistRehydrate.test.ts` gained the same "always false
+even against a maliciously-seeded true" defensive test for `catalogueConfirmed`
+that `catalogueReady` already had — arguably more important here, since this
+is the one flag standing between an offline boot and permanent data loss.
 
 **Item 2 — validation precedence, deliberately the opposite of PR2's
 "live wins" read-path rule.** New `isKnownSetId(db, id)` in
@@ -2299,7 +2331,13 @@ parameter, threaded in from the handler (which now extracts `context.cloudflare`
 *before* calling `validate`, rather than after). `signal.ts`'s `validate` is
 now exported too, matching `event.ts`'s existing convention (both had a
 "pre-existing gap" note about this predating the convention; closed here
-since both are now async and worth testing symmetrically).
+since both are now async and worth testing symmetrically) — that symmetry
+claim was initially unbacked (`api-event.test.ts` got the precedence tests,
+`signal.ts` had no test file at all), caught in the same review pass as item
+1's guard hole; new `tests/unit/routes/api-signal.test.ts` now covers
+`signal.ts`'s own field validation (setId/setTitle/setArtist/listenedSeconds
+bounds, `isOffline`'s null-fallback) plus the identical snapshot-hit/
+snapshot-miss-then-D1/D1-miss precedence coverage `api-event.test.ts` has.
 
 **Item 3 — offline degradation, folded into item 1's design rather than a
 separate mechanism.** All five swapped consumers read `catalogueSets`, which
@@ -2322,14 +2360,16 @@ swap (two isolated-store test files —
 `makeStore()` helpers updated to compose `CatalogueSlice` alongside
 `OfflineSlice`, since `startDownload`/`reconcileFromIdb` now read
 `catalogueSets` off `get()`). New: `tests/unit/store/catalogueSlice.test.ts`
-(pure `getCatalogueSet`/`getAdjacentSets` behaviour), a `catalogueSlice`
+(pure `getCatalogueSet`/`getAdjacentSets` behaviour); a `catalogueSlice`
 describe block in `tests/unit/store/persistRehydrate.test.ts` (restores from
 a seeded payload, falls back to the bare snapshot for a pre-PR3 payload,
-`catalogueReady` always starts false even against a maliciously-seeded
-`true`), and `isKnownSetId` precedence tests in
-`tests/unit/data/sets.test.ts` + `tests/unit/routes/api-event.test.ts` (fake
-D1 proving a snapshot-hit never calls `db.prepare`, a snapshot-miss makes
-exactly one D1 query).
+`catalogueReady` **and** `catalogueConfirmed` both always start false even
+against a maliciously-seeded `true`); `isKnownSetId` precedence tests in
+`tests/unit/data/sets.test.ts` + `tests/unit/routes/api-event.test.ts` +
+new `tests/unit/routes/api-signal.test.ts` (fake D1 proving a snapshot-hit
+never calls `db.prepare`, a snapshot-miss makes exactly one D1 query); and
+the two `catalogueReady`/`catalogueConfirmed` combination tests in
+`reconcileUrlMigration.test.ts` described above.
 
 ## Reference — key design decisions from the PWA work
 
