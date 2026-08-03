@@ -1,8 +1,12 @@
+/// <reference types="@cloudflare/workers-types" />
+import { sets } from "./sets.generated";
+
 // THE canonical audio host (TECH_DEBT 19 — custom domain in front of the
 // form-at-sets R2 bucket; no rate limit, Cloudflare edge caching, the
 // production-recommended path).
 //
-// Worker-safe module (zero imports, no window/navigator): `apps/web/app/sw.ts`
+// Worker-safe module (no window/navigator, and the one import above is a
+// plain data array with zero browser globals of its own): `apps/web/app/sw.ts`
 // imports the hostname for its audio route matcher and type-checks under
 // WebWorker libs. Every code reference to the audio host goes through these
 // consts — the ONE place that changes if the host ever moves again.
@@ -30,66 +34,109 @@ export type MusicSet = {
   sizeBytes?: number;
 };
 
-// Add your sets here. src should be the public Cloudflare R2 URL for the MP3.
-export const sets: MusicSet[] = [
-  {
-    id: "set-002-til",
-    title: "Form:at 002",
-    artist: "t.i.l.",
-    date: "2026-04-24",
-    venue: "Find the red door, Glasgow",
-    description:
-      "Opening transmission for sequence 002. Establishing the initial connection with deep, hypnotic dub techno.",
-    duration: "45:18",
-    src: `${AUDIO_ORIGIN}/002/Form_at%20002%20-%20t.i.l.mp3`,
-    peaks: `${AUDIO_ORIGIN}/002/Form_at%20002%20-%20t.i.l.json`,
-    artwork: "sets/002",
-    sizeBytes: 108761280,
-  },
-  {
-    id: "set-002-hubey",
-    title: "Form:at 002",
-    artist: "hubey",
-    date: "2026-04-24",
-    venue: "Find the red door, Glasgow",
-    description:
-      "Mid-sequence escalation. Elevating the frequency with a high-energy blend of acid, electro, and driving grooves that took total control of the dancefloor.",
-    duration: "1:31:55",
-    src: `${AUDIO_ORIGIN}/002/Form_at%20002%20-%20hubey.mp3`,
-    peaks: `${AUDIO_ORIGIN}/002/Form_at%20002%20-%20hubey.json`,
-    artwork: "sets/002",
-    sizeBytes: 220613760,
-  },
-  {
-    id: "set-002-brandon-lee-vear",
-    title: "Form:at 002",
-    artist: "Brandon Lee Vear",
-    date: "2026-04-24",
-    venue: "Find the red door, Glasgow",
-    description:
-      "External operator integrated. A two-hour sustained transmission of deep, hypnotic techno, locking the dancefloor into a continuous loop during peak system hours.",
-    duration: "2:01:55",
-    src: `${AUDIO_ORIGIN}/002/Form_at%20002%20-%20Brandon%20Lee%20Vear.mp3.mp3`,
-    peaks: `${AUDIO_ORIGIN}/002/Form_at%20002%20-%20Brandon%20Lee%20Vear.mp3.json`,
-    artwork: "sets/002",
-    sizeBytes: 292611840,
-  },
-  {
-    id: "set-002-julz-lever",
-    title: "Form:at 002",
-    artist: "Julz Lever",
-    date: "2026-04-24",
-    venue: "Find the red door, Glasgow",
-    description:
-      "Closing protocol for sequence 002. High-fidelity techno pushing the system's architecture to its absolute limit.",
-    duration: "1:39:30",
-    src: `${AUDIO_ORIGIN}/002/Form_at%20002%20-%20Julz%20Lever.mp3`,
-    peaks: `${AUDIO_ORIGIN}/002/Form_at%20002%20-%20Julz%20Lever.json`,
-    artwork: "sets/002",
-    sizeBytes: 238804800,
-  },
-];
+// `sets` is no longer a hand-maintained literal — the catalogue moved to a
+// D1 `sets` table (admin set-upload feature, 2026-08). `sets.generated.ts`
+// (imported above) is a build-time snapshot regenerated from that table by
+// `pnpm generate-sets-snapshot` (apps/web/scripts/generate-sets-snapshot.ts)
+// and COMMITTED to git (not gitignored) — deliberately, so `pnpm dev`, tsc,
+// and every CI job keep working with zero Cloudflare credentials, exactly
+// like today. Only `deploy.yml`'s `deploy` job (apps/web) regenerates it
+// live immediately before the production build; nothing else touches it.
+//
+// This snapshot is the offline-survival baseline: it's what the public
+// catalogue falls back to, in full, with zero network dependency, if a live
+// D1 fetch fails or hasn't happened yet (first-ever hydration, an evicted
+// cache, or any device that's simply offline) — see `fetchUploadedSets`/
+// `mergeSets` below for the live-overlay half of that design.
+export { sets };
 
 export function getSet(id: string): MusicSet | undefined {
   return sets.find((s) => s.id === id);
+}
+
+// Raw shape of a row from the `sets` D1 table — snake_case columns, plus the
+// two fields (`artwork_original_url`, `peaks_status`) that exist for the
+// upload feature but aren't part of the public `MusicSet` type at all call
+// sites don't need to know about them.
+type SetRow = {
+  id: string;
+  title: string;
+  artist: string;
+  date: string;
+  venue: string | null;
+  description: string | null;
+  duration: string | null;
+  src: string;
+  artwork: string | null;
+  peaks: string | null;
+  size_bytes: number | null;
+  created_at: number;
+};
+
+// Shared by the runtime fetch functions below AND
+// apps/web/scripts/generate-sets-snapshot.ts (imported from this package), so
+// the D1-row-to-MusicSet mapping exists in exactly one place.
+export function mapD1RowToMusicSet(row: SetRow): MusicSet {
+  return {
+    id: row.id,
+    title: row.title,
+    artist: row.artist,
+    date: row.date,
+    venue: row.venue ?? undefined,
+    description: row.description ?? undefined,
+    duration: row.duration ?? undefined,
+    src: row.src,
+    artwork: row.artwork ?? undefined,
+    peaks: row.peaks ?? undefined,
+    sizeBytes: row.size_bytes ?? undefined,
+  };
+}
+
+// The current, complete state of the `sets` table — newest upload first.
+// When this succeeds it's already a superset of the build-time snapshot
+// (nothing is ever removed from this table today, so live state only grows
+// relative to whatever was true when the snapshot was generated); callers
+// still merge it with the snapshot via `mergeSets` rather than using it
+// alone, since that merge is what makes the D1-unreachable case degrade to
+// "render the snapshot" instead of a bespoke second code path.
+export async function fetchUploadedSets(db: D1Database): Promise<MusicSet[]> {
+  const { results } = await db.prepare("SELECT * FROM sets ORDER BY created_at DESC").all<SetRow>();
+  return results.map(mapD1RowToMusicSet);
+}
+
+// D1 (live) wins over the static snapshot — same precedence `mergeSets`
+// below applies, and deliberately consistent with it. Fixed from an earlier
+// version of this function that checked the snapshot first and only queried
+// D1 on a miss: that meant the list page (via `mergeSets`, live-wins) and
+// this detail lookup (static-wins) could show DIFFERENT data for the same
+// id — and since the documented stopgap for a typo fix is a direct
+// `UPDATE sets SET ... WHERE id = ?` against production (edit/delete proper
+// is deferred, see PR6 notes), static-wins would have kept serving the old
+// value on the detail page until the next deploy regenerated the snapshot,
+// while the list page already showed the correction. Falling back to the
+// snapshot only on a genuine D1 miss keeps both paths honest about the same
+// fact: D1 is authoritative, the snapshot is the offline/outage fallback.
+export async function fetchSetById(db: D1Database, id: string): Promise<MusicSet | undefined> {
+  const row = await db.prepare("SELECT * FROM sets WHERE id = ?").bind(id).first<SetRow>();
+  return row ? mapD1RowToMusicSet(row) : getSet(id);
+}
+
+// Combines a live D1 fetch with the build-time snapshot, deduping by id
+// (live wins on overlap, same precedence `fetchSetById` above applies —
+// D1 is authoritative, the snapshot is the offline/outage fallback, not a
+// competing source). Concatenating live-then-snapshot (rather than a real
+// merge-sort) is correct as long as every live-only entry is newer than
+// every snapshot entry, which holds by construction: `live` reflects the
+// table's current state and `snapshot` reflects an earlier point in time,
+// so anything not yet in the snapshot was necessarily uploaded after it was
+// generated.
+export function mergeSets(live: MusicSet[], snapshot: MusicSet[]): MusicSet[] {
+  const seen = new Set<string>();
+  const merged: MusicSet[] = [];
+  for (const set of [...live, ...snapshot]) {
+    if (seen.has(set.id)) continue;
+    seen.add(set.id);
+    merged.push(set);
+  }
+  return merged;
 }
