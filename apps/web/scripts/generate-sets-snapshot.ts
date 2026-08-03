@@ -93,6 +93,16 @@ import type { MusicSet } from "./sets";
 export const sets: MusicSet[] = ${JSON.stringify(sets, null, 2)};
 `;
   writeFileSync(OUT_PATH, body);
+
+  // JSON.stringify always quotes object keys — Biome's style doesn't, for
+  // plain identifier keys. CI's per-package `lint` runs `biome check`
+  // read-only (no --write), so a quoted-key file fails it outright rather
+  // than just looking untidy; this can't depend on whoever regenerates the
+  // file remembering to run `pnpm check` afterward. Self-format on every
+  // run instead, so the committed output is always correct regardless of
+  // how it was produced.
+  execFileSync("npx", ["biome", "check", "--write", OUT_PATH], { stdio: "inherit" });
+
   console.log(`✓ ${OUT_PATH} (${sets.length} sets)`);
 }
 
