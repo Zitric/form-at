@@ -55,8 +55,19 @@ function queryD1(): SetRow[] {
       { encoding: "utf-8" },
     );
   } catch (err) {
+    // `execFileSync` captures stderr/stdout on the thrown error rather than
+    // printing them — without surfacing them explicitly, a CI failure here
+    // shows only this wrapper message, not wrangler's own reason (auth
+    // failure, wrong account, network error, etc.), turning every future
+    // failure into a guessing game instead of a CI-log read. Learned this
+    // the hard way: the first production failure of this script (missing
+    // CLOUDFLARE_API_TOKEN/CLOUDFLARE_ACCOUNT_ID visibility — turbo's
+    // default strict env mode was filtering them before this task ever
+    // ran, see turbo.json's `build.env`) only showed this generic message
+    // in the Actions log, not wrangler's actual error text.
+    const e = err as { stderr?: string; stdout?: string; message?: string };
     throw new Error(
-      `generate-sets-snapshot: wrangler d1 execute failed — is CLOUDFLARE_API_TOKEN/CLOUDFLARE_ACCOUNT_ID set? (${err})`,
+      `generate-sets-snapshot: wrangler d1 execute failed — is CLOUDFLARE_API_TOKEN/CLOUDFLARE_ACCOUNT_ID set and visible to this task (check turbo.json's env passthrough)?\nstderr: ${e.stderr ?? "(none)"}\nstdout: ${e.stdout ?? "(none)"}\n${e.message ?? e}`,
     );
   }
 
