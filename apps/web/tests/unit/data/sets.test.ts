@@ -1,6 +1,11 @@
 import { sets as staticSnapshot } from "@form-at/data/sets";
 import { describe, expect, it, vi } from "vitest";
-import { getAllSetsWithFallback, getSetByIdWithFallback, isKnownSetId } from "~/data/sets";
+import {
+  getAllSetsLive,
+  getAllSetsWithFallback,
+  getSetByIdWithFallback,
+  isKnownSetId,
+} from "~/data/sets";
 
 // Admin set-upload feature, PR2 (2026-08): the D1-error → snapshot-only
 // fallback is the specific thing this PR's plan review flagged as needing a
@@ -64,6 +69,47 @@ describe("getAllSetsWithFallback", () => {
     const db = createFakeD1([{ match: /FROM sets/, throws: true }]);
 
     expect(await getAllSetsWithFallback(db)).toEqual(staticSnapshot);
+  });
+});
+
+// PR3 review fix: `getAllSetsLive` exists specifically because
+// `getAllSetsWithFallback` above resolves (never rejects) on both "no D1
+// binding" and "the live query threw" — indistinguishable from a genuine
+// merged result to a caller that just does `.then()`. `CatalogueSync.tsx`
+// needs that distinction to decide `catalogueConfirmed` correctly (see
+// catalogueSlice.ts) — every case that resolves successfully above must
+// instead REJECT here.
+describe("getAllSetsLive", () => {
+  it("rejects when there's no D1 binding at all (local dev) — does NOT resolve with the snapshot", async () => {
+    await expect(getAllSetsLive(undefined)).rejects.toThrow();
+  });
+
+  it("rejects when the live D1 query throws — does NOT resolve with the snapshot", async () => {
+    const db = createFakeD1([{ match: /FROM sets/, throws: true }]);
+    await expect(getAllSetsLive(db)).rejects.toThrow();
+  });
+
+  it("resolves with the merged result when D1 is genuinely reachable", async () => {
+    const uploaded = {
+      id: "set-999-new",
+      title: "Form:at 999",
+      artist: "New Artist",
+      date: "2026-09-01",
+      venue: null,
+      description: null,
+      duration: null,
+      src: "https://cdn.formatglasgow.com/sets/set-999-new/audio.mp3",
+      artwork: null,
+      peaks: null,
+      size_bytes: null,
+      created_at: 9999999999999,
+    };
+    const db = createFakeD1([{ match: /FROM sets/, all: [uploaded] }]);
+
+    const result = await getAllSetsLive(db);
+
+    expect(result[0]).toMatchObject({ id: "set-999-new", artist: "New Artist" });
+    expect(result).toHaveLength(staticSnapshot.length + 1);
   });
 });
 

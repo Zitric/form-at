@@ -2314,6 +2314,67 @@ even against a maliciously-seeded true" defensive test for `catalogueConfirmed`
 that `catalogueReady` already had — arguably more important here, since this
 is the one flag standing between an offline boot and permanent data loss.
 
+**Item 1, round 2 — the split was right, but the WIRING that sets
+`catalogueConfirmed` was still broken (caught one review pass later).** The
+flag itself is correct; the bug was in what fed it. `CatalogueSync.tsx`
+originally called the same `fetchAllSets` every other consumer uses — but
+`fetchAllSets`/`getAllSetsWithFallback` *resolve successfully* with the bare
+snapshot in two cases: no D1 binding at all (`getDb(context)` returns
+`undefined` — true for every plain local `pnpm dev` session, since there's
+no Cloudflare env), and a genuine D1 outage server-side (`fetchUploadedSets`
+throws, caught and swallowed into the snapshot). Neither of those is a
+network failure the client can see — the HTTP round-trip to the server
+function still succeeds, it's just that the *handler* substituted a
+fallback internally. So `CatalogueSync`'s `.then()` couldn't tell "a live D1
+read actually succeeded" apart from "some fallback was substituted
+server-side," and called `markCatalogueConfirmed()` in both cases — arming
+`reconcileFromIdb`'s destructive purge against a snapshot-only catalogue via
+exactly the class of case item 1 was written to prevent, just reached
+through a server-side D1 failure (or plain local dev) instead of a
+client-side network failure. The earlier reconciliation test suite didn't
+catch this because it seeded `catalogueConfirmed` directly — nothing
+exercised how the flag actually gets set.
+
+Verified directly (not assumed): confirmed via `pnpm dev`'s reality that
+`getDb(context)` returns `undefined` with no Cloudflare env, and via
+`getAllSetsWithFallback`'s own source that both its `!db` and `catch`
+branches return `sets` — a successful resolution either way. Also confirmed
+against `@tanstack/start-client-core`'s actual `createServerFn` client
+wrapper source (`if (result.error) throw result.error;`) that a handler
+throwing server-side genuinely rejects the client-side call, rather than
+assuming that from memory — the fix depends on that being true.
+
+Fix: added `getAllSetsLive`/`fetchAllSetsLive` (`apps/web/app/data/sets.ts`)
+— a non-swallowing sibling to `getAllSetsWithFallback`/`fetchAllSets` that
+**rejects** (throws `NO_D1_BINDING` synchronously, lets `fetchUploadedSets`'s
+error propagate) instead of substituting the snapshot, in exactly the two
+cases the existing function swallows. `CatalogueSync.tsx` now calls this
+instead — its `.then()`/`.catch()` split is now a trustworthy success/failure
+signal, so `markCatalogueConfirmed()` only ever fires on a genuine live
+success. Kept as an entirely separate function rather than changing
+`getAllSetsWithFallback`'s contract, since that function (and `fetchAllSets`)
+has other real consumers (`fetchAllSetsForRoute`, the `/sets` route loader)
+that legitimately want the swallow-to-snapshot behavior and would have
+broken from a shape change.
+
+Answering the specific question this raised: **yes, before this fix, every
+plain local `pnpm dev` session (no Cloudflare env, so no D1 binding) marked
+the catalogue confirmed** — the purge branch was armed against a
+snapshot-only catalogue on every local dev boot with saved sets in IDB, not
+just in a production D1-outage scenario. Locked by a new test in
+`tests/unit/components/CatalogueSync.test.tsx` mocking exactly that
+rejection.
+
+Tests, new `tests/unit/components/CatalogueSync.test.tsx` (the first test
+file for this component) — renders the real component against a mocked
+`fetchAllSetsLive` rather than seeding flags directly, so it exercises the
+actual wiring: a genuine live success adopts the result and marks
+`catalogueConfirmed`; a rejection (`NO_D1_BINDING`, or any other error) does
+neither, and pre-existing `catalogueSets` (persisted-from-before or the bare
+snapshot) is left untouched rather than regressed. `tests/unit/data/sets.test.ts`
+gained a parallel `getAllSetsLive` describe block asserting rejection in
+both cases `getAllSetsWithFallback` resolves in.
+
 **Item 2 — validation precedence, deliberately the opposite of PR2's
 "live wins" read-path rule.** New `isKnownSetId(db, id)` in
 `apps/web/app/data/sets.ts`: checks the free, always-available static

@@ -49,6 +49,20 @@ import { type MusicSet, sets } from "~/data/sets";
 // branch actually needs; `catalogueReady` remains correct for anything that
 // only needs "the boot fetch is done, one way or another" (e.g. gating when
 // reconciliation's non-destructive work runs at all).
+//
+// A second bug surfaced one review pass later, in the WIRING rather than
+// this slice: `markCatalogueConfirmed()` is only ever safe to call from a
+// caller that can actually tell "a live D1 read succeeded" apart from "some
+// fallback got substituted." `CatalogueSync.tsx` originally called the
+// swallowing `fetchAllSets`, which resolves successfully with the bare
+// snapshot both when there's no D1 binding at all (plain local `pnpm dev`)
+// and when the live D1 query throws server-side — neither of those is a
+// network failure the client can see, so a plain `.then()` couldn't tell
+// them apart from a genuine merged result. Fixed by adding
+// `fetchAllSetsLive`/`getAllSetsLive` (apps/web/app/data/sets.ts) — a
+// non-swallowing sibling that rejects instead of substituting — and
+// switching CatalogueSync onto it. See that file's comment for the full
+// trace.
 export type CatalogueSlice = {
   catalogueSets: MusicSet[];
   catalogueReady: boolean;
