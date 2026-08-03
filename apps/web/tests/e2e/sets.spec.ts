@@ -33,4 +33,24 @@ test.describe("sets page", () => {
     await expect(page).toHaveURL(/\/sets\/.+/);
     await expect(page.getByRole("link", { name: /sets_archive/i })).toBeVisible();
   });
+
+  // The offline-click-nav fallback (fetchAllSetsForRoute/fetchSetForRoute in
+  // ~/data/sets, PR2 2026-08) is deliberately NOT e2e-tested here. Tried it
+  // first: reproducing real offline conditions in dev mode also hits an
+  // unrelated, pre-existing gap — SaveForOfflineIconButton's own import
+  // chain (SaveGateModal/useOfflineDownload) fails to load offline in dev
+  // (Vite serves unbundled native ESM per-file; a failed import anywhere in
+  // a route's transitive graph fails the WHOLE route component, not just
+  // that sub-tree), which crashed the entire /sets page regardless of my
+  // fix — confirmed with a throwaway debug script logging
+  // `requestfailed`/`pageerror` events, unrelated to any of this PR's
+  // changes. That's a real, separate bug (flagged to Julian directly, not
+  // silently absorbed here) — but building an e2e test around it would mean
+  // either fixing it too (real scope creep) or narrowing the test until it
+  // stopped testing anything meaningful. The actual client-side-rejection
+  // fix is covered directly instead, in
+  // tests/unit/data/sets.test.ts, by mocking fetchAllSets/
+  // fetchSetForDetailPage to reject and asserting the wrapper still
+  // resolves to the snapshot — reliable, fast, and exercises the exact real
+  // code path without needing dev's module graph to fully cooperate.
 });

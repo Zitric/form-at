@@ -10,7 +10,7 @@ import { SaveForOfflineButton } from "~/components/SaveForOfflineButton";
 import { ShareSetButton } from "~/components/ShareSetButton";
 import { fetchSetStats } from "~/data/set-stats";
 import type { SetStats } from "~/data/set-stats";
-import { getSet } from "~/data/sets";
+import { fetchSetForRoute } from "~/data/setsForRoute";
 import { useTypedOnce } from "~/hooks/useTypedOnce";
 import { useStore } from "~/store";
 import { asciiBar, countryFlag, fmtDate, fmtTimestamp } from "~/utils/fmt";
@@ -24,7 +24,10 @@ export const Route = createFileRoute("/sets/$setId")({
     return Number.isFinite(n) && n > 0 ? { t: Math.floor(n) } : {};
   },
   loader: async ({ params }) => {
-    const set = getSet(params.setId);
+    // fetchSetForRoute (~/data/setsForRoute) owns the client-side offline
+    // catch on top of fetchSetForDetailPage/getSetByIdWithFallback's
+    // server-side one — see its comment there for why both layers are needed.
+    const set = await fetchSetForRoute(params.setId);
     if (!set) throw notFound();
     const stats = await fetchSetStats({ data: params.setId }).catch(() => null);
     return { set, stats };

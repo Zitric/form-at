@@ -5,21 +5,31 @@ import { Suspense } from "react";
 import { PageLayout } from "~/components/PageLayout";
 import { SetCard } from "~/components/SetCard";
 import { type OverallStats, fetchOverallStats } from "~/data/set-stats";
-import { sets } from "~/data/sets";
+import { fetchAllSetsForRoute } from "~/data/setsForRoute";
 import { fmtDuration } from "~/utils/fmt";
 import { pageHead } from "~/utils/head";
 
-// The list of sets is a static module import → page renders instantly.
-// Overall stats come from D1 — return an UN-AWAITED promise so the loader
-// resolves immediately; the OverallMetrics component reads it via <Await>
-// inside Suspense so the cards never wait on stats.
+// The catalogue is a merged live-D1 + build-time-snapshot fetch (see
+// fetchAllSetsForRoute in ~/data/setsForRoute, which owns the client-side
+// offline catch on top of fetchAllSets/getAllSetsWithFallback's server-side
+// one) — awaited directly, not deferred: a single indexed SELECT is fast,
+// and the snapshot fallback means this never blocks on network the way
+// `overallStats` legitimately can. Overall stats come from D1 separately —
+// return an UN-AWAITED promise so the loader resolves immediately; the
+// OverallMetrics component reads it via <Await> inside Suspense so the
+// cards never wait on stats.
 export const Route = createFileRoute("/sets/")({
-  // `.catch(() => null)` degrades the deferred server-fn to the designed
-  // `null` fallback offline. Without it, an offline click-nav to /sets/
-  // rejects the loader → "Something went wrong" error boundary. The reload
-  // path works because `pages-v1` SWR serves the SSR'd HTML; only client
-  // loaders run on link-click navigation.
-  loader: () => ({ overallStats: defer(fetchOverallStats().catch(() => null)) }),
+  // `overallStats`'s `.catch(() => null)` degrades the deferred server-fn to
+  // the designed `null` fallback offline. Without it, an offline click-nav
+  // to /sets rejects the loader → "Something went wrong" error boundary. The
+  // reload path works because `pages-v1` SWR serves the SSR'd HTML; only
+  // client loaders run on link-click navigation. `fetchAllSetsForRoute`
+  // carries the equivalent catch for the sets list itself — see its own
+  // comment in ~/data/setsForRoute.ts.
+  loader: async () => ({
+    sets: await fetchAllSetsForRoute(),
+    overallStats: defer(fetchOverallStats().catch(() => null)),
+  }),
   staleTime: 5 * 60 * 1000,
   gcTime: 30 * 60 * 1000,
   head: () =>
@@ -76,7 +86,7 @@ function OverallMetrics({ promise }: { promise: Promise<OverallStats | null> }) 
 }
 
 function Sets() {
-  const { overallStats } = Route.useLoaderData();
+  const { sets, overallStats } = Route.useLoaderData();
 
   const groups = sets.reduce<Record<string, typeof sets>>((acc, set) => {
     if (!acc[set.title]) acc[set.title] = [];
