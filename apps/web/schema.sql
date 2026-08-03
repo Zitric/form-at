@@ -206,3 +206,91 @@ CREATE TABLE IF NOT EXISTS admin_push_sends (
 --   SELECT sent_at, sent_by_email, title, sent_count, failed_count, dead_removed_count
 --   FROM admin_push_sends ORDER BY sent_at DESC LIMIT 10;
 
+-- The sets catalogue (PR1 of the admin set-upload feature, 2026-08-02).
+-- Until this feature, `MusicSet` records were a hardcoded array in
+-- packages/data/src/sets.ts with no database behind them at all. This table
+-- unifies the catalogue in one place going forward — the 4 existing sets are
+-- migrated in below with their EXACT current ids, so every existing `plays`/
+-- `events` row (keyed by a plain `set_id` string, decoupled from where the
+-- MusicSet record itself lives) keeps working unchanged. No split-brain
+-- catalogue: this is the one source of truth, not a second copy alongside
+-- the static array.
+--
+-- Nothing reads from or writes to this table yet — that's later PRs
+-- (packages/data/src/sets.ts gaining D1-aware query functions, the public
+-- /sets and /sets/$id loaders switching to them, and finally the admin
+-- upload UI that writes new rows). This PR is pure groundwork: the table
+-- exists and the 4 legacy sets are in it, verified to match the static
+-- array field-for-field, with nothing else changed.
+--
+-- `artwork` mirrors the existing bare-path convention (`Image` resolves it
+-- to `/images/{artwork}-{width}.{ext}`) for both legacy and future uploaded
+-- sets alike. `artwork_original_url` is upload-only (the as-uploaded R2
+-- original, used as the always-available fallback until a build generates
+-- optimized variants for it — see the upload feature's design notes).
+-- `peaks_status` defaults to 'ready' since the upload flow (Option 1: admin
+-- runs the existing scripts/generate-peaks.mjs locally and uploads the
+-- result) never leaves a set in a pending state — the column exists now so
+-- a possible future automated-peaks-generation phase doesn't need a second
+-- migration.
+--
+-- `created_at` (unix ms) is upload/migration recency, NOT the user-entered
+-- `date` field — sorting DESC on it is what makes a newly uploaded set
+-- "appear at the top of the list". The 4 legacy rows below get 4 DISTINCT
+-- values one second apart (not the same migration timestamp) specifically
+-- so DESC ordering is deterministic — SQLite gives no guaranteed order
+-- among ties, and four rows inserted with an identical timestamp could
+-- reorder between requests.
+CREATE TABLE IF NOT EXISTS sets (
+  id                   TEXT    PRIMARY KEY,
+  title                TEXT    NOT NULL,
+  artist               TEXT    NOT NULL,
+  date                 TEXT    NOT NULL,
+  venue                TEXT,
+  description          TEXT,
+  duration             TEXT,
+  src                  TEXT    NOT NULL,
+  artwork              TEXT,
+  artwork_original_url TEXT,
+  peaks                TEXT,
+  peaks_status         TEXT    NOT NULL DEFAULT 'ready',
+  size_bytes           INTEGER,
+  created_at           INTEGER NOT NULL  -- unix ms
+);
+
+-- No secondary index yet — every query this table serves so far is either
+-- "all rows, newest first" (the public catalogue merge) or "one row by id"
+-- (both served fine by the primary key / a full table scan at this table's
+-- realistic size). Add one if a real filtered query need shows up later.
+
+-- Not yet applied to the remote database — same "Julian runs it" pattern as
+-- every other table in this file. Do NOT use `--file=apps/web/schema.sql`
+-- (this file also contains the one-time, non-idempotent
+-- `ALTER TABLE plays ADD COLUMN is_offline` above). Run the isolated
+-- statements instead, in order:
+--
+-- 1. Create the table:
+-- npx wrangler d1 execute form-at-analytics --remote --command "CREATE TABLE IF NOT EXISTS sets (id TEXT PRIMARY KEY, title TEXT NOT NULL, artist TEXT NOT NULL, date TEXT NOT NULL, venue TEXT, description TEXT, duration TEXT, src TEXT NOT NULL, artwork TEXT, artwork_original_url TEXT, peaks TEXT, peaks_status TEXT NOT NULL DEFAULT 'ready', size_bytes INTEGER, created_at INTEGER NOT NULL)"
+--
+-- 2. Migrate the 4 existing sets (exact current ids/fields from
+--    packages/data/src/sets.ts; created_at values one second apart,
+--    highest-first in the static array's current order, so `ORDER BY
+--    created_at DESC` reproduces it exactly):
+-- npx wrangler d1 execute form-at-analytics --remote --command "INSERT INTO sets (id, title, artist, date, venue, description, duration, src, artwork, peaks, size_bytes, created_at) VALUES ('set-002-til', 'Form:at 002', 't.i.l.', '2026-04-24', 'Find the red door, Glasgow', 'Opening transmission for sequence 002. Establishing the initial connection with deep, hypnotic dub techno.', '45:18', 'https://cdn.formatglasgow.com/002/Form_at%20002%20-%20t.i.l.mp3', 'sets/002', 'https://cdn.formatglasgow.com/002/Form_at%20002%20-%20t.i.l.json', 108761280, 1785707552000)"
+-- npx wrangler d1 execute form-at-analytics --remote --command "INSERT INTO sets (id, title, artist, date, venue, description, duration, src, artwork, peaks, size_bytes, created_at) VALUES ('set-002-hubey', 'Form:at 002', 'hubey', '2026-04-24', 'Find the red door, Glasgow', 'Mid-sequence escalation. Elevating the frequency with a high-energy blend of acid, electro, and driving grooves that took total control of the dancefloor.', '1:31:55', 'https://cdn.formatglasgow.com/002/Form_at%20002%20-%20hubey.mp3', 'sets/002', 'https://cdn.formatglasgow.com/002/Form_at%20002%20-%20hubey.json', 220613760, 1785707551000)"
+-- npx wrangler d1 execute form-at-analytics --remote --command "INSERT INTO sets (id, title, artist, date, venue, description, duration, src, artwork, peaks, size_bytes, created_at) VALUES ('set-002-brandon-lee-vear', 'Form:at 002', 'Brandon Lee Vear', '2026-04-24', 'Find the red door, Glasgow', 'External operator integrated. A two-hour sustained transmission of deep, hypnotic techno, locking the dancefloor into a continuous loop during peak system hours.', '2:01:55', 'https://cdn.formatglasgow.com/002/Form_at%20002%20-%20Brandon%20Lee%20Vear.mp3.mp3', 'sets/002', 'https://cdn.formatglasgow.com/002/Form_at%20002%20-%20Brandon%20Lee%20Vear.mp3.json', 292611840, 1785707550000)"
+-- npx wrangler d1 execute form-at-analytics --remote --command "INSERT INTO sets (id, title, artist, date, venue, description, duration, src, artwork, peaks, size_bytes, created_at) VALUES ('set-002-julz-lever', 'Form:at 002', 'Julz Lever', '2026-04-24', 'Find the red door, Glasgow', 'Closing protocol for sequence 002. High-fidelity techno pushing the system''s architecture to its absolute limit.', '1:39:30', 'https://cdn.formatglasgow.com/002/Form_at%20002%20-%20Julz%20Lever.mp3', 'sets/002', 'https://cdn.formatglasgow.com/002/Form_at%20002%20-%20Julz%20Lever.json', 238804800, 1785707549000)"
+--
+-- 3. Verify all 4 landed, newest-first order intact:
+-- npx wrangler d1 execute form-at-analytics --remote --command "SELECT id, artist, created_at FROM sets ORDER BY created_at DESC"
+
+-- Useful queries:
+--
+-- Everything, newest upload first (what the public /sets page merges with
+-- the build-time static snapshot):
+--   SELECT * FROM sets ORDER BY created_at DESC;
+--
+-- One set by id (detail-page fallback when it's not in the static snapshot):
+--   SELECT * FROM sets WHERE id = ?;
+
+
