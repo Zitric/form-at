@@ -9,8 +9,8 @@ Each item is written to be picked up cold — no conversation context required.
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
 - **Open:** 8, 12, 13, 15
 - **Invalid:** 1 (2026-07-22 — premise was wrong, not stale: both flagged functions are load-bearing behind a live multi-provider calendar picker; do not delete, see item for the full re-verification)
-- **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, ships together post-2026-07-24; see PWA_PROGRESS.md for the deferral rationale)
-- **Resolved:** 2 (2026-07-22 — knip.json config + parallel CI job; see item for a correction to its own original plan), 3 (2026-07-23 — `__root.tsx` split into `fontCSS.ts` / `HydrateStore.tsx` / `rootHead.ts`), 4 (2026-07-23 — beacon queue + Background Sync, with a page-side fallback for Safari/Firefox), 6 (2026-06-28, `10811a4`), 7 (2026-07-02, `d2bbc36` — offline.html redesign, stamped during the 2026-07-06 docs cleanup), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01), 17 (2026-07-02 — gate proven intact via SW-preview experiments; observed bytes were HTTP cache / element buffer, not IDB; silent-blocked-tap toast fixed), 18 (2026-07-02 — not reproducible on current build; all three offline nav modes verified against the SW preview), 5 (absorbed into 19's verification — CORS re-checked on the custom domain 2026-07-06: preflight GET/HEAD + range, ACAO *, Content-Length exposed), 19 (2026-07-06 — audio on cdn.formatglasgow.com, host centralized in utils/audioHost.ts, IDB force-re-download migration in reconcileFromIdb), 20 (2026-07-31 — superseded by the admin dashboard shipping and then moving to its own app, apps/admin), 21 (2026-08-04 — import sweep to `@form-at/data`, four shim files reduced to two deleted + two trimmed to their genuinely-local code)
+- **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, real trigger is ~10-15 sets in the catalogue, not a calendar date; see item for why that arrives faster now)
+- **Resolved:** 2 (2026-07-22 — knip.json config + parallel CI job; see item for a correction to its own original plan), 3 (2026-07-23 — `__root.tsx` split into `fontCSS.ts` / `HydrateStore.tsx` / `rootHead.ts`), 4 (2026-07-23 — beacon queue + Background Sync, with a page-side fallback for Safari/Firefox), 6 (2026-06-28, `10811a4`), 7 (2026-07-02, `d2bbc36` — offline.html redesign, stamped during the 2026-07-06 docs cleanup), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01), 17 (2026-07-02 — gate proven intact via SW-preview experiments; observed bytes were HTTP cache / element buffer, not IDB; silent-blocked-tap toast fixed), 18 (2026-07-02 — not reproducible on current build; all three offline nav modes verified against the SW preview), 5 (absorbed into 19's verification — CORS re-checked on the custom domain 2026-07-06: preflight GET/HEAD + range, ACAO *, Content-Length exposed), 19 (2026-07-06 — audio on cdn.formatglasgow.com, host centralized in `@form-at/data/sets` since item 21's sweep, IDB force-re-download migration in reconcileFromIdb), 20 (2026-07-31 — superseded by the admin dashboard shipping and then moving to its own app, apps/admin), 21 (2026-08-04 — import sweep to `@form-at/data`, four shim files reduced to two deleted + two trimmed to their genuinely-local code)
 
 Resolved items keep their original section in place with a `✅ Resolved` stamp at the top, so the historical context (cause + fix path) stays readable. Search for `✅ Resolved` to skip to / past them.
 
@@ -412,13 +412,15 @@ If any of those reproduce, the mitigation is to stream chunks directly into IDB 
 2. Persisted-saved entry whose IDB blobs are gone → transition to `evicted`.
 3. IDB entry with no persisted state → adopt as `saved` (orphan recovery).
 
-There's a fourth case the current code handles silently with auto-purge: **IDB entries whose `setId` is no longer in `sets.ts`**. Reconciliation deletes both the MP3 and peaks blobs in a single readwrite transaction, removes the entry from state, and `console.warn`s the purged set IDs. Rationale: if `sets.ts` doesn't list the set, no UI path exists for the user to play it offline — keeping ~100 MB of blobs is dead storage.
+There's a fourth case the current code handles silently with auto-purge: **IDB entries whose `setId` is no longer in the catalogue**. Reconciliation deletes both the MP3 and peaks blobs in a single readwrite transaction, removes the entry from state, and `console.warn`s the purged set IDs. Rationale: if the catalogue doesn't list the set, no UI path exists for the user to play it offline — keeping ~100 MB of blobs is dead storage.
 
-**When to revisit:** if `sets.ts` ever gains an "archived" status (set hidden from listings but technically still in the catalogue), the auto-purge rule needs revising to NOT purge archived sets. At that point, either:
-- Filter `getSet()` to exclude archived from listings but include from reconciliation lookups, OR
-- Surface orphans in a "Manage offline sets" view (Phase 4 polish) instead of auto-purging, giving the user a "this set is no longer in the catalogue — remove from library?" prompt.
+**Update (2026-08-04) — the catalogue this checks against changed shape, the auto-purge rule didn't need to.** When this was written, "the catalogue" meant the hand-maintained `sets.ts` array. Since the admin set-upload feature (2026-08), it's `catalogueSlice.ts`'s `catalogueSets` — a live-wins merge (`mergeSets`) of the D1 `sets` table and the build-time snapshot, gated by `catalogueConfirmed` so this purge can't fire against an unconfirmed/failed boot fetch (see `offlineSlice.ts`'s `reconcileFromIdb` and `catalogueSlice.ts`). The auto-purge logic itself is unchanged and still correct against the new source. **This item's hypothetical fourth case is no longer hypothetical**: PR6 (2026-08) added a real admin delete endpoint, so "a set the user saved offline gets removed from the catalogue" is now a real, reachable path, not just a future "archived status" feature. The precise delete timeline (why it doesn't purge immediately, why the union in `mergeSets` means the deploy boundary is what actually matters) is traced in full in `PWA_PROGRESS.md`'s PR6 entry — read that alongside this item before touching either.
 
-Current behaviour is intentional and load-bearing; this entry exists so a future "archived sets" feature doesn't accidentally lose data.
+**When to revisit:** if the catalogue ever gains an "archived" status (set hidden from listings but technically still in the catalogue, distinct from admin-deleted), the auto-purge rule needs revising to NOT purge archived sets. At that point, either:
+- Filter `getSet()`/`getCatalogueSet()` to exclude archived from listings but include from reconciliation lookups, OR
+- Surface orphans in a "Manage offline sets" view (Phase 4 polish, item 16 below) instead of auto-purging, giving the user a "this set is no longer in the catalogue — remove from library?" prompt.
+
+Current behaviour is intentional and load-bearing; this entry exists so a future "archived sets" feature (or the already-shipped admin delete) doesn't accidentally get treated as a bug.
 
 ---
 
@@ -476,6 +478,8 @@ Discovered during chunk 3c verification. The pre-3c-Option-B `startDownload` did
 - If we ever want to add a server-fresh size read for the UI (e.g., to validate `sizeBytes` is in sync), HEAD is the natural primitive — we'd need to figure out the browser failure first.
 - Likely candidates: a Chromium-specific privacy filter, a corporate proxy injecting headers that bump it out of "simple request" territory, or an interaction with R2's `Vary: Origin` caching that Chrome handles differently than curl.
 
+**Update (2026-08-04) — new evidence narrows this to browser-only.** The admin set-upload feature (PR4, 2026-07) added `verifyR2ObjectsExist` (`apps/admin/app/routes/api/sets.ts`), which does exactly this — a plain `fetch(url, { method: "HEAD" })` against the same public R2 CDN URLs — and it works without issue, because it runs server-side in the Cloudflare Worker, not a browser tab. That's a real data point, not a guess: the failure mode here is specifically a browser-context thing (this item's own candidates — Chromium privacy filter, proxy header injection — are consistent with that), not an R2/CORS config problem, since the identical request shape succeeds reliably from a Worker.
+
 Not blocking anything currently. Filed for visibility.
 
 ---
@@ -490,7 +494,7 @@ The symmetric path is NOT implemented: warmed variants stay in `artwork-v1` when
 2. **The same `artwork` path is shared across sets.** All four shipping sets use `artwork: "sets/002"`, so per-set deletion is ambiguous — removing variants for one would break offline display for another saved set sharing the path. NOT deleting isn't just simpler, it's more correct.
 3. **The opportunistic SWR path repopulates** on next online visit anyway, so the worst-case offline experience for a removed-then-re-saved set is one online visit away from being right.
 
-**When to revisit:** coupled with the deferred "Manage offline sets" view (see PWA_PROGRESS.md → "Deferred — post-2026-07-24"). The prune algorithm — sweep `artwork-v1` by computing the union of `artwork` paths across currently-saved sets and dropping anything outside that set — naturally lives inside the manage-view's remove flow. Ship the prune with the manage view; standalone earlier would duplicate the iteration logic. Both items earn their place once the catalogue grows past ~10-15 sets.
+**When to revisit:** coupled with the deferred "Manage offline sets" view (PWA_PROGRESS.md, `IMPROVEMENTS.md` #8 Phase 4, item 13 below) — the prune algorithm (sweep `artwork-v1` by computing the union of `artwork` paths across currently-saved sets and dropping anything outside that set) naturally lives inside the manage-view's remove flow. Ship the prune with the manage view; standalone earlier would duplicate the iteration logic. **Real trigger, not a calendar date:** both items earn their place once the catalogue grows past ~10-15 sets — a fixed "post-2026-07-24" target was written here and in PWA_PROGRESS.md before that date, and has since passed with the catalogue still at 4 sets, so it's dropped in favour of the actual condition. **That condition now arrives faster than either doc originally assumed**: `apps/admin` shipped a self-serve upload form (PR4, 2026-07) after this item was written, so hitting ~10-15 sets is gated on upload cadence, not an engineering task — check the live count (`packages/data/src/sets.generated.ts`, or the admin sets list) rather than assuming it's still 4.
 
 ---
 
@@ -582,10 +586,10 @@ Separate system from the audio read-path — this is route data, not playback. N
 (custom domain connected by Julian, verified: Range GET → 206 with correct
 content-range; CORS preflight GET/HEAD + range; ACAO `*`; Content-Length
 exposed). Code sweep complete — the hostname is centralized in
-`apps/web/app/utils/audioHost.ts` (worker-safe: sw.ts imports the matcher
-host; sets.ts builds URLs from `AUDIO_ORIGIN`; server.ts CSP uses it;
-`_headers` carries a keep-in-sync comment; `appContext.test.ts` imports the
-const). IDB migration: force re-download via URL validation in
+`packages/data/src/sets.ts` (moved here from `apps/web/app/utils/audioHost.ts`
+by item 21's import sweep, 2026-08-04 — still worker-safe: sw.ts imports the
+matcher host; server.ts CSP uses it; `_headers` carries a keep-in-sync
+comment; `appContext.test.ts` imports the const). IDB migration: force re-download via URL validation in
 `reconcileFromIdb` (unit-locked in `reconcileUrlMigration.test.ts`) — the
 guard also self-heals future object renames. Verified against the
 production preview with SW active: streaming, `?ctx=app` IDB hit on
@@ -743,4 +747,4 @@ already done in this repo. No behavior change expected; `pnpm check` +
 
 ---
 
-_Last updated: 2026-07-31 (item 21 added — apps/admin extraction shims a follow-up sweep; item 20 resolved — admin dashboard shipped then moved to apps/admin, carries forward the 2026-07-08 note: item 20 added — Analytics 1 event tracking feeds the README's Analytics query UI item; and the 2026-07-06 cleanup: item 19 resolved — custom domain live; item 14 deferred indefinitely; item 5 absorbed into 19; item 7 stamped resolved — was already fixed 2026-07-02 but unstamped)_
+_Last updated: 2026-08-04 (docs honesty pass — item 21 stamped resolved (import sweep to `@form-at/data` shipped); item 19's audioHost.ts reference corrected to its new location; item 16's stale `post-2026-07-24` calendar trigger replaced with the real ~10-15-sets condition, noted as now-accelerated by the admin upload feature; item 13 updated for the catalogue's move from static `sets.ts` to the D1-backed merge, and cross-referenced to PR6's now-real delete feature; item 15 updated with confirmation from PR4's `verifyR2ObjectsExist` that the HEAD failure is browser-only, not an R2/CORS problem; items 8 and 12 re-read and confirmed their trigger conditions still hold, no change needed. Carries forward the 2026-07-31 note: item 21 added — apps/admin extraction shims a follow-up sweep; item 20 resolved — admin dashboard shipped then moved to apps/admin, carries forward the 2026-07-08 note: item 20 added — Analytics 1 event tracking feeds the README's Analytics query UI item; and the 2026-07-06 cleanup: item 19 resolved — custom domain live; item 14 deferred indefinitely; item 5 absorbed into 19; item 7 stamped resolved — was already fixed 2026-07-02 but unstamped)_
