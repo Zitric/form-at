@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "pnpm generate-sets-snapshot && pnpm og && pnpm sitemap && vite build && npx esbuild dist/server/server.js --bundle --format=esm --platform=browser --conditions=workerd --define:process.env.NODE_ENV='\"production\"' --outfile=dist/client/_worker.js --external:node:async_hooks --external:node:stream --external:node:stream/web",
+    "build": "pnpm generate-sets-snapshot && pnpm optimize-images && pnpm og && pnpm sitemap && vite build && npx esbuild dist/server/server.js --bundle --format=esm --platform=browser --conditions=workerd --define:process.env.NODE_ENV='\"production\"' --outfile=dist/client/_worker.js --external:node:async_hooks --external:node:stream --external:node:stream/web",
     "start": "vite preview",
     "lint": "biome check app",
     "tsc": "tsc --noEmit && tsc -p tsconfig.sw.json --noEmit",
@@ -14,7 +14,7 @@
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "optimize-images": "node scripts/optimize-images.mjs",
+    "optimize-images": "tsx scripts/optimize-images.ts",
     "generate-sets-snapshot": "tsx scripts/generate-sets-snapshot.ts",
     "og": "tsx scripts/generate-og.ts",
     "sitemap": "tsx scripts/generate-sitemap.ts",

@@ -254,7 +254,14 @@ export const Route = createFileRoute("/api/sets")({
           description: body.description ?? null,
           duration: body.duration ?? null,
           src: keys.publicAudioUrl,
-          artwork: `sets/${body.id}`,
+          // `uploads/{id}`, NOT `sets/{id}` — deliberately a different local
+          // /images/ directory than the 4 legacy sets' committed variants.
+          // apps/web/scripts/optimize-images.ts (PR5) generates this set's
+          // responsive variants there, and only there, specifically so a
+          // path-based .gitignore can tell an uploaded set's generated
+          // files apart from a legacy set's committed ones in the same
+          // `sets/` folder — see that script's UPLOADED_OUT comment.
+          artwork: `uploads/${body.id}`,
           artworkOriginalUrl: keys.publicArtworkUrl,
           peaks: keys.publicPeaksUrl,
           sizeBytes: body.sizeBytes ?? null,

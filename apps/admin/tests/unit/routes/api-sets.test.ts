@@ -95,7 +95,7 @@ const sampleRow = {
   description: null,
   duration: null,
   src: "https://cdn.formatglasgow.com/sets/set-003-new-artist/audio.mp3",
-  artwork: "sets/set-003-new-artist",
+  artwork: "uploads/set-003-new-artist",
   artworkOriginalUrl: "https://cdn.formatglasgow.com/sets/set-003-new-artist/artwork.jpg",
   peaks: "https://cdn.formatglasgow.com/sets/set-003-new-artist/peaks.json",
   sizeBytes: null,
