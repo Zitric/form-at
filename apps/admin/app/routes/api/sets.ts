@@ -106,6 +106,23 @@ export function validate(raw: unknown): CreateSetBody | null {
 // shape on its own INSERT (the "id was reused since delete" case) — this
 // exact string check is the load-bearing part, not worth a second copy that
 // could silently drift out of sync with what D1 actually throws.
+//
+// Verified empirically (not assumed) that db.batch() surfaces this
+// identically to a direct .run() — restoreSetFromLog's INSERT runs inside
+// a batch(), not a standalone .run() like insertSetWithRetry's, so this
+// mattered: batch() could plausibly have wrapped/reshaped the error into
+// something this check misses, silently turning the id-reuse 409 into a
+// 500. Checked against a real local D1 database (`wrangler dev --local`,
+// a genuine miniflare-backed SQLite engine, not a guess from docs) with
+// the conflicting INSERT in the SAME position restoreSetFromLog uses it
+// (first statement in the batch array, a harmless second statement
+// after it) — the thrown error's `.message` was byte-for-byte identical
+// to a direct `.run()`'s: `D1_ERROR: UNIQUE constraint failed: <table>.id:
+// SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_PRIMARYKEY)`, position in
+// the batch array made no difference. Confirms `.includes("UNIQUE
+// constraint failed")` — a substring check, deliberately not tied to the
+// `D1_ERROR:` prefix or `SQLITE_CONSTRAINT` suffix — matches the real
+// production string from both call sites.
 export function isUniqueConstraintError(e: unknown): boolean {
   return e instanceof Error && e.message.includes("UNIQUE constraint failed");
 }

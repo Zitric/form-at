@@ -124,7 +124,15 @@ describe("restoreSetFromLog", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 200 })));
     const { db, batch } = createFakeD1(
       [{ match: /SELECT \* FROM admin_deleted_sets WHERE id/, first: sampleLogRow }],
-      { batchThrows: "UNIQUE constraint failed: sets.id" },
+      {
+        // The exact string a real db.batch() throws for this — verified
+        // empirically against a local D1 database (wrangler dev --local),
+        // with the conflicting INSERT in the same first-statement position
+        // restoreSetFromLog uses, not approximated. See isUniqueConstraintError's
+        // comment in routes/api/sets.ts for the full verification.
+        batchThrows:
+          "D1_ERROR: UNIQUE constraint failed: sets.id: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_PRIMARYKEY)",
+      },
     );
 
     const outcome = await restoreSetFromLog(db, 7);

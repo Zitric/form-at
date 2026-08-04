@@ -3086,6 +3086,19 @@ generic "restore failed":**
    and shared rather than duplicated — and returns a 409 with an explicit
    "a set with this id already exists" message. The existing row is never
    touched or overwritten under any circumstance.
+   **Verified empirically, not assumed**: restore's INSERT runs inside a
+   `db.batch()`, not a standalone `.run()` like `insertSetWithRetry`'s —
+   `batch()` could plausibly have wrapped or reshaped the thrown error
+   into something `isUniqueConstraintError`'s string check misses, quietly
+   turning this 409 into a 500. Checked against a real local D1 database
+   (`wrangler dev --local`, genuine miniflare/SQLite, not docs alone), with
+   the conflicting `INSERT` in the same first-statement position
+   `restoreSetFromLog` uses: the thrown error's message was byte-for-byte
+   identical to a direct `.run()`'s (`D1_ERROR: UNIQUE constraint failed:
+   <table>.id: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_PRIMARYKEY)`),
+   and identical regardless of which position in the batch array the
+   conflict came from. The unit test's fixture string was updated to this
+   exact real value rather than an approximation.
 2. **`created_at` uses the log's ORIGINAL value, not `Date.now()`.** A
    restore undoes a mistake; it isn't a new upload. Using the current time
    would visually announce "just uploaded" on a set that's actually been
