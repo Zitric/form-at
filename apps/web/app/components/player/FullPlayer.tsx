@@ -191,6 +191,7 @@ export function FullPlayer({
                 sizes="280px"
                 priority
                 className="w-full h-full object-cover"
+                originalUrl={nowPlaying.artworkOriginalUrl}
               />
             </div>
           )}

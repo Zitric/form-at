@@ -141,6 +141,7 @@ function SetDetail() {
             sizes="(min-width: 768px) 448px, 100vw"
             priority
             className="w-full max-w-md aspect-square object-cover mb-6 mx-auto rounded-card"
+            originalUrl={set.artworkOriginalUrl}
           />
         )}
 

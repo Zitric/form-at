@@ -42,7 +42,11 @@ export function SetCard({ set, index }: Props) {
 
   return (
     <Card
-      image={set.artwork && <CardArtwork src={set.artwork} alt={set.title} />}
+      image={
+        set.artwork && (
+          <CardArtwork src={set.artwork} alt={set.title} originalUrl={set.artworkOriginalUrl} />
+        )
+      }
       hideImageOnMobile
       onClick={() => navigate({ to: "/sets/$setId", params: { setId: set.id } })}
       action={

@@ -52,6 +52,7 @@ const sampleRow = {
   duration: null,
   src: "https://cdn.formatglasgow.com/sets/set-003-new-artist/audio.mp3",
   artwork: "sets/set-003-new-artist",
+  artwork_original_url: "https://cdn.formatglasgow.com/sets/set-003-new-artist/artwork.jpg",
   peaks: "https://cdn.formatglasgow.com/sets/set-003-new-artist/peaks.json",
   size_bytes: 12345,
   created_at: 1785800000000,
@@ -69,9 +70,19 @@ describe("mapD1RowToMusicSet", () => {
       duration: undefined,
       src: "https://cdn.formatglasgow.com/sets/set-003-new-artist/audio.mp3",
       artwork: "sets/set-003-new-artist",
+      artworkOriginalUrl: "https://cdn.formatglasgow.com/sets/set-003-new-artist/artwork.jpg",
       peaks: "https://cdn.formatglasgow.com/sets/set-003-new-artist/peaks.json",
       sizeBytes: 12345,
     } satisfies MusicSet);
+  });
+
+  // PR4 (Image.tsx fallback): unlike `peaks_status`, this column IS surfaced
+  // on the public MusicSet type now — it's the fallback source `Image.tsx`
+  // renders when a set has no optimized artwork variants yet. Locking the
+  // null path explicitly since it's the common case for the 4 legacy sets.
+  it("maps a null artwork_original_url to undefined (the legacy-sets case)", () => {
+    const row = { ...sampleRow, artwork_original_url: null };
+    expect(mapD1RowToMusicSet(row).artworkOriginalUrl).toBeUndefined();
   });
 });
 

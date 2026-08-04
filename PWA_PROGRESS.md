@@ -2432,6 +2432,239 @@ never calls `db.prepare`, a snapshot-miss makes exactly one D1 query); and
 the two `catalogueReady`/`catalogueConfirmed` combination tests in
 `reconcileUrlMigration.test.ts` described above.
 
+### Added 2026-08-04 — admin set-upload feature, PR4: the upload flow, direct-to-R2 via presigned URLs
+
+`feat/admin-set-upload`, branched off `main` after PR3 merged. `apps/admin` gains
+a third nav section (`sets`) — an Access-gated form that writes new rows into
+the D1 `sets` table (PR1) via presigned direct-to-R2 uploads, appearing on
+the public `/sets` page without a deploy. Six things were flagged for
+resolution before/while implementing; two of them (upload progress, the
+peaks JSON's real shape) weren't in the original high-level plan and
+materially changed the implementation. All were verified, not assumed —
+grounded claims below, file:line-level where it matters.
+
+**Item 1 — upload progress on a 220MB file.** Confirmed via web search
+(2026): `fetch()` still has no upload-progress API — no `onUploadProgress`,
+and the ReadableStream-request-body workaround has inconsistent
+cross-browser support. `XMLHttpRequest.upload.onprogress` is the mechanism
+that actually works, and is what `apps/admin/app/utils/uploadWithProgress.ts`
+uses for all three PUTs (a small Promise wrapper — this repo had no
+XHR-based upload helper before this). `UploadSetForm.tsx` uploads
+sequentially (audio → artwork → peaks, simpler progress math than parallel)
+and shows both which file is uploading and an overall percentage weighted
+by each file's byte size, so the 220MB audio file dominates the bar
+realistically. A `beforeunload` handler is registered for the duration of
+the upload and removed in a `finally` — the direct mitigation for orphaned
+R2 objects, since most orphans come from an admin thinking the tab hung and
+closing it, not a genuine create-step failure. Stated limitation: a single
+presigned PUT (not multipart) has no resume — verified R2's single-PUT
+limit is 35 GiB (Cloudflare's docs), so multipart isn't *required* at
+220MB, but a dropped connection restarts that file's PUT from zero. Accepted
+for v1.
+
+**Item 2 — peaks JSON's actual shape, fetched from real R2, not assumed.**
+Pulled the t.i.l. set's real peaks file
+(`https://cdn.formatglasgow.com/002/Form_at%20002%20-%20t.i.l.json`) and
+inspected it directly: `{ "peaks": [1.042, 0.831, ...] }` — a single top-level
+key, exactly **1000** elements (confirmed against `scripts/generate-peaks.mjs`'s
+`const PEAKS = 1000`, not duration-dependent), values **not bounded to
+[0,1]** (real observed max: 1.137, min: 0.026 — the block-max-of-absolute-PCM-
+sample computation in that script can exceed 1.0). The originally-planned
+`Array.isArray` check alone was an under-check; a very-natural-seeming
+`[0,1]` range guess would have actively rejected real files.
+`validateUpload.ts`'s `validatePeaksFile` checks: parses, has a `peaks` key,
+`Array.isArray`, `length === 1000` (exact — the one tool that produces these
+files is hardcoded to that count), every element finite and in `[0, 2]`
+(generous headroom above the observed max).
+
+**Item 3 — double-submit / in-flight state mirrors `SendPushForm.tsx`
+exactly**, not a new interaction invented for this form: a hard confirm-modal
+second step, a `uploading` boolean that (once true) entirely replaces the
+confirm/cancel buttons with the progress display rather than merely
+disabling them, and result/error state that persists rather than being
+silently discarded. A failed upload keeps the modal open with the error
+visible and the confirm button available again — retrying restarts the
+whole presign→3-PUTs→create sequence from scratch (re-presigning first,
+since URLs may have partially been consumed/expired) rather than tracking
+partial per-file completion across a retry — a deliberate scope cut, not a
+silently-built partial-resume system.
+
+**Item 4 — the success screen's three claims, each verified against the
+actual merge/build code, not assumed:**
+- *"Appears on `/sets` immediately"* — confirmed true: `fetchUploadedSets`
+  (`packages/data/src/sets.ts`) runs `SELECT * FROM sets ORDER BY created_at
+  DESC` live against D1 on every request, no caching layer between. One real
+  nuance found: `routes/sets/index.tsx`'s `staleTime: 5 * 60 * 1000` means a
+  browser tab *already sitting on* `/sets` won't re-run the loader and show
+  the new set until reloaded or revisited after that window — worded
+  precisely on the success screen rather than an unqualified "immediately."
+- *Responsive artwork vs. OG banner — two different truths.* The OG banner
+  is fixed by the next deploy (`generate-og.ts` reads the build-time
+  snapshot, which `deploy.yml`'s `deploy` job regenerates live from D1
+  before every production build). Responsive artwork variants are **not**
+  "next deploy" — see the `Image.tsx` section below; that gap needed its own
+  fix, landed in this PR rather than left open until PR5.
+- *DJ-page linkage* — confirmed unchanged from the original plan: `djs.ts`'s
+  `setIds` array has zero structural link to `sets.artist`. Stated on the
+  success screen: which DJ, which id, which file to edit.
+
+**Item 5 — the id slug matches the real convention, not an invented one.**
+Read the actual migrated rows (`schema.sql`, `sets.generated.ts`):
+`set-002-til`, `set-002-hubey`, `set-002-brandon-lee-vear`,
+`set-002-julz-lever` — the pattern is `set-{eventSequence}-{artistSlug}`,
+where `002` is the *event* number (shared across all 4, all titled "Form:at
+002"), not a slug of the title. `slugifySetId.ts` extracts the sequence from
+a `/Form:at\s+0*(\d+)/i`-matching title (zero-padded to 3 digits) and
+kebab-slugifies the artist; falls back to a plain title+artist slug for a
+non-matching title (a one-off event). The field stays editable regardless —
+the fallback path doesn't need to be bulletproof, and in fact doesn't
+reproduce one real legacy artist's unusual naming (`t.i.l.` → `t-i-l`, not
+the hand-typed `til`) — an accepted, minor, expected mismatch given that
+constraint. Scoping note: the 4 legacy sets share one `artwork` value
+(`sets/002`, one photo per *event*); going forward each upload gets its own
+artwork key derived from its own id (`sets/{id}/artwork.{ext}`) — a
+deliberate simplification, not an attempt to replicate the legacy
+one-photo-per-event convention.
+
+**Item 6 — manual Cloudflare steps** (R2 API token scoped to `form-at-sets`
+Object R/W; a *new, separate* bucket CORS rule for the admin app's
+presigned PUTs — `AllowedMethods: ["PUT"]`, `AllowedHeaders: ["*"]`,
+production + `localhost:5174` origins; three new `form-at-admin` Pages
+secrets, `R2_ACCOUNT_ID`/`R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`) were
+handed to Julian before implementation started, so they ran in parallel
+with the build. No new D1 binding, no R2 *binding* (`[[r2_buckets]]`) —
+presigned URLs are pure REST/SigV4 signing against R2's S3-compatible
+endpoint, so upload bytes never pass through the Worker.
+
+**`Image.tsx` fallback — pulled into this PR, not left for PR5, with three
+follow-up findings.** Reviewing item 4(b) surfaced a gap not in the original
+plan at all: `Image.tsx` had zero `onError` handling, so an uploaded set's
+artwork — no optimized AVIF/WebP variants exist for it until
+`optimize-images.mjs` gains D1-awareness — would 404 and render as a
+genuinely broken image (not just "non-responsive") on `/sets`, the set
+detail page, and the full player, for as long as the gap between this PR
+and that future one lasted. Decided: pull the fallback-*rendering* half of
+PR5's already-designed fix into this PR; leave `optimize-images.mjs`'s
+D1-awareness (generating the real variants) as PR5's sole remaining scope.
+
+1. **State-tree replacement, not a `src` swap** — a `<picture>`'s `<source>`
+   elements govern the `<img>`'s resolved URL for as long as they're in the
+   DOM, so mutating `src` directly is a no-op. `Image.tsx` now flips a
+   boolean state to replace the whole `<picture>`/`<source>` subtree with a
+   bare `<img src={originalUrl}>` on failure.
+2. **`artwork_original_url` didn't reach `MusicSet` at all** — confirmed by
+   re-reading `packages/data/src/sets.ts`: `SetRow`'s own comment said this
+   field "aren't part of the public `MusicSet` type... at all call sites
+   don't need to know about them," a deliberate prior exclusion PR4 now
+   reverses. Added `MusicSet.artworkOriginalUrl?`, mapped it through
+   `SetRow`/`mapD1RowToMusicSet`, and updated
+   `generate-sets-snapshot.ts`'s own *duplicated* `SetRow` type (doesn't
+   import the shared one) to match, or its `rows.map(mapD1RowToMusicSet)`
+   call stops typechecking. The 4 legacy rows have this column `NULL` (the
+   migration `INSERT` never listed it) — harmless, since legacy artwork
+   already has committed optimized variants and never hits the fallback.
+   `originalUrl` is optional throughout; DJ-photo/event-flyer callers of
+   `Image`/`CardArtwork` simply omit it, unaffected.
+3. **Pre-hydration race, confirmed real for this app.** `app/server.ts`
+   (`createStartHandler({ handler: defaultStreamHandler })`, comment "all
+   SSR documents") confirms this app genuinely SSRs, with no `ssr: false`
+   opt-out anywhere — so the optimized `<img src>` ships in the
+   server-rendered HTML, and the browser can start (and finish failing)
+   that request before React hydrates and attaches `onError` (`error`/
+   `load` don't bubble, so React can only catch them via a listener wired
+   up at hydration). Whether a given real page load's 404 actually "wins"
+   that race is a runtime timing fact, not provable statically either way
+   — so the mitigation is unconditional: a mount effect checks
+   `img.complete && img.naturalWidth === 0` (the standard "already failed,
+   no error event coming" signal) and flips the same fallback state
+   `onError` would.
+4. **SW `cacheWillUpdate` guard — checked directly against the pinned
+   source, found unnecessary.** The original plan flagged this as needing
+   verification ("whether Workbox's current default already excludes
+   non-ok responses... not confident enough in that default from memory").
+   Read `workbox-strategies@7.4.1`'s actual installed source (the exact
+   pinned version): `StaleWhileRevalidate`'s constructor auto-prepends
+   `cacheOkAndOpaquePlugin` whenever no plugin defines `cacheWillUpdate`,
+   and that plugin's `cacheWillUpdate` returns `null` (don't cache) for any
+   non-`200`/non-`0` response. `artwork-v1`'s route passes no `plugins`
+   option, so a 404 is already never cached — confirmed, not assumed. No
+   SW change made; an explicit guard would have been dead code duplicating
+   an already-correct default.
+
+Tests: `apps/web/tests/unit/components/Image.test.tsx` (new — no test file
+existed for this component before); `packages/data/tests/unit/sets.test.ts`
+gained the `artworkOriginalUrl` mapping case. `apps/admin`: `r2Sets.test.ts`
+(`isValidSetId`/`deriveSetR2Keys`, including the fail-closed throw on an
+invalid id and explicit path-traversal-shaped rejection cases —
+see the id-validation section below); `slugifySetId.test.ts`; `fmt.test.ts`
+(`fmtSetDuration` against the real stored row values); `validateUpload.test.ts`
+(peaks/artwork/audio, including an `Audio()`-instance-capture technique
+for jsdom, which doesn't decode real media); `api-sets-presign.test.ts` and
+`api-sets.test.ts` (`validate()`, the conflict-before-any-presign path via a
+fake-D1 `.prepare` spy, and `insertSetWithRetry`'s retry-then-fail
+semantics); `UploadSetForm.test.tsx` (the full presign→3-PUTs→create
+sequence, with a small reusable fake `XMLHttpRequest` class — this repo had
+no XHR mock harness before this PR).
+
+### Id validation — the client-controlled structural input, closed with defense in depth
+
+Review flagged: the upload id is client-generated (`slugifySetId`) but
+user-editable, and becomes both an R2 object key path segment
+(`sets/{id}/...`) AND a public URL path segment (`/sets/{id}`) — the one
+place in this whole flow the client controls something structural. A slash,
+a `..`, a percent-encoded byte, or a unicode lookalike is a
+path-traversal-shaped risk, not a cosmetic one.
+
+`isValidSetId` (`apps/admin/app/utils/r2Sets.ts`): a strict allowlist —
+lowercase ASCII `a-z0-9` and single hyphens only, bounded length, no
+leading/trailing hyphen, no empty segments. No denylist, no
+encoding-aware special-casing — the allowlist rejects slashes, `..`,
+percent-encoded bytes, uppercase, whitespace, and non-ASCII by construction.
+
+Enforced at three deliberately redundant points: (1) `validate()` in both
+`/api/sets/presign` and `/api/sets` rejects a bad id before anything else
+runs; (2) `deriveSetR2Keys` — the function that actually turns an id into a
+key/URL — calls `isValidSetId` itself and throws if it fails, so it fails
+closed even if some future call site or refactor forgets to validate first;
+(3) the create endpoint re-derives public URLs from `{id, exts}` via this
+same function rather than trusting any client-supplied URL string. Tested
+explicitly against a slash, a literal `..` segment, a percent-encoded byte,
+uppercase, whitespace, a unicode-lookalike digit/letter, and leading/
+trailing/empty hyphen segments.
+
+### Security decisions — server-derived keys, the real race guarantee, orphan policy
+
+- **R2 keys are entirely server-derived** from a validated id — never a
+  client-supplied path. `deriveSetR2Keys` is the single source of truth,
+  used by both the presign and create endpoints, so there's no path where a
+  client-controlled string becomes a bucket key or public URL without
+  going through the id allowlist.
+- **The `sets.id` `PRIMARY KEY` constraint at the create step's `INSERT` —
+  not the presign step's earlier uniqueness check — is the actual
+  race-proof guarantee.** The presign check is a UX-friendly early signal
+  (a fast 409 before an admin does any uploading), not the safety story:
+  two admins racing the same id could both pass the presign check if timed
+  right, but the second `INSERT` fails on the constraint and that admin
+  gets a 409 at the create step instead. `insertSetWithRetry` distinguishes
+  a `UNIQUE constraint failed` error (the real thing, returned as `conflict`
+  immediately, never retried) from a generic/transient D1 error (retried
+  twice with backoff, `failed` only after both retries are exhausted).
+- **Orphaned R2 objects on a genuine (non-retryable) create failure** —
+  accepted, documented, manual-cleanup gap, same as the original plan.
+  Mitigated in practice by item 1's `beforeunload` warning, which addresses
+  the more common real-world cause (an admin closing the tab mid-upload),
+  and by the retry logic absorbing transient create failures before they'd
+  ever reach that state.
+
+### PR5, now shrunk to exactly one thing
+
+Originally scoped as the responsive-artwork gap closure in full. After this
+PR pulled `Image.tsx`'s fallback-rendering fix forward, PR5's remaining
+scope is just: teach `optimize-images.mjs` to read the snapshot, fetch R2
+originals for uploaded sets, and generate their real AVIF/WebP responsive
+variants at build time. No `Image.tsx` changes, no SW changes — both
+already landed here.
+
 ## Reference — key design decisions from the PWA work
 
 ### App-gated capability pattern (2026-07-17)

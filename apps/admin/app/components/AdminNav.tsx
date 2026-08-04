@@ -7,6 +7,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 const links = [
   { to: "/dashboard", label: "dashboard" },
   { to: "/notifications", label: "notifications" },
+  { to: "/sets", label: "sets" },
 ] as const;
 
 export function AdminNav() {
