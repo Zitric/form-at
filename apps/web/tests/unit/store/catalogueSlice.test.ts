@@ -1,5 +1,5 @@
+import type { MusicSet } from "@form-at/data/sets";
 import { describe, expect, it } from "vitest";
-import type { MusicSet } from "~/data/sets";
 import { getAdjacentSets, getCatalogueSet } from "~/store/catalogueSlice";
 
 const set = (id: string): MusicSet => ({

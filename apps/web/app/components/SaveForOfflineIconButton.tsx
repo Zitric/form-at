@@ -1,9 +1,9 @@
 import { DownloadIcon, SavedIcon, cn } from "@form-at/ui";
 
+import type { MusicSet } from "@form-at/data/sets";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { SaveGateModal } from "~/components/SaveGateModal";
-import type { MusicSet } from "~/data/sets";
 import { useOfflineStateFor, useTriggerDownload } from "~/hooks/useOfflineDownload";
 import { useSaveGate } from "~/hooks/useSaveGate";
 import { useStore } from "~/store";

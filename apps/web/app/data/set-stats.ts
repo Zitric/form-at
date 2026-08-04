@@ -1,16 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 
-// Transitional re-export — fetchSetStats/SetStats moved to
-// packages/data/src/set-stats.ts (apps/admin's per-set picker needs the
-// exact same query). The trend-bucketing helpers (TREND_WINDOW_DAYS etc.)
-// lived here too but had no consumer left in this app once admin-stats.ts
-// moved to apps/admin, so they're not re-exported — apps/admin imports them
-// from @form-at/data/set-stats directly. fetchOverallStats below has only
-// one consumer (this app's /sets listing page) so it stays local. See
-// TECH_DEBT.md item 21 for the proposed follow-up sweep of apps/web's
-// remaining `~/data/set-stats` import sites to `@form-at/data` directly.
-export { fetchSetStats, type SetStats } from "@form-at/data/set-stats";
-
+// fetchOverallStats has exactly one consumer (this app's /sets listing
+// page), so it stays local rather than moving to @form-at/data/set-stats —
+// TECH_DEBT.md item 21's import sweep moved fetchSetStats/SetStats
+// consumers to import from @form-at/data/set-stats directly instead of
+// through a re-export here.
 export type OverallStats = {
   totalPlays: number;
   totalSeconds: number;

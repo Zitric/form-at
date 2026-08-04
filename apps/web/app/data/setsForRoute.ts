@@ -1,6 +1,5 @@
-import type { MusicSet } from "@form-at/data/sets";
+import { type MusicSet, getSet, sets } from "@form-at/data/sets";
 import { fetchAllSets, fetchSetForDetailPage } from "~/data/sets";
-import { getSet, sets } from "~/data/sets";
 
 // `fetchAllSets`/`fetchSetForDetailPage` are createServerFn calls — from the
 // CLIENT, that's a network request to the server. Offline, that request

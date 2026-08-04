@@ -1,6 +1,6 @@
+import type { MusicSet } from "@form-at/data/sets";
 import { useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
-import type { MusicSet } from "~/data/sets";
 
 type Args = {
   /** Current open/closed flag for the overlay (from uiSlice). */

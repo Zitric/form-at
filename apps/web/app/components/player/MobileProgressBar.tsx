@@ -1,6 +1,6 @@
+import type { MusicSet } from "@form-at/data/sets";
 import { useDrag } from "@use-gesture/react";
 import { memo, useEffect, useRef, useState } from "react";
-import type { MusicSet } from "~/data/sets";
 import { useScrubControl } from "~/hooks/useScrubControl";
 import { useStore } from "~/store";
 

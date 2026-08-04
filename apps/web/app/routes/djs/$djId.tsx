@@ -1,3 +1,4 @@
+import { getSet } from "@form-at/data/sets";
 import { BracketLabel, Card, PageTitle, TerminalRow } from "@form-at/ui";
 import { Link, createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { BrandTitle } from "~/components/BrandTitle";
@@ -9,7 +10,6 @@ import { SetCard } from "~/components/SetCard";
 import { SocialLink } from "~/components/SocialLink";
 import { getDJ } from "~/data/djs";
 import { events } from "~/data/events";
-import { getSet } from "~/data/sets";
 import { useTypedOnce } from "~/hooks/useTypedOnce";
 import { pageHead } from "~/utils/head";
 import { djLd } from "~/utils/jsonld";

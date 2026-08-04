@@ -1,6 +1,6 @@
+import type { MusicSet } from "@form-at/data/sets";
 import { memo, useEffect, useState } from "react";
 import { Waveform } from "~/components/player/Waveform";
-import type { MusicSet } from "~/data/sets";
 import { useStore } from "~/store";
 import { withAppContext } from "~/utils/audioUrl";
 import { fmtTimestamp } from "~/utils/fmt";

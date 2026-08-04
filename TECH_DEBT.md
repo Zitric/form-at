@@ -7,10 +7,10 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
-- **Open:** 8, 12, 13, 15, 21 (pointer only, not urgent)
+- **Open:** 8, 12, 13, 15
 - **Invalid:** 1 (2026-07-22 — premise was wrong, not stale: both flagged functions are load-bearing behind a live multi-provider calendar picker; do not delete, see item for the full re-verification)
 - **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, ships together post-2026-07-24; see PWA_PROGRESS.md for the deferral rationale)
-- **Resolved:** 2 (2026-07-22 — knip.json config + parallel CI job; see item for a correction to its own original plan), 3 (2026-07-23 — `__root.tsx` split into `fontCSS.ts` / `HydrateStore.tsx` / `rootHead.ts`), 4 (2026-07-23 — beacon queue + Background Sync, with a page-side fallback for Safari/Firefox), 6 (2026-06-28, `10811a4`), 7 (2026-07-02, `d2bbc36` — offline.html redesign, stamped during the 2026-07-06 docs cleanup), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01), 17 (2026-07-02 — gate proven intact via SW-preview experiments; observed bytes were HTTP cache / element buffer, not IDB; silent-blocked-tap toast fixed), 18 (2026-07-02 — not reproducible on current build; all three offline nav modes verified against the SW preview), 5 (absorbed into 19's verification — CORS re-checked on the custom domain 2026-07-06: preflight GET/HEAD + range, ACAO *, Content-Length exposed), 19 (2026-07-06 — audio on cdn.formatglasgow.com, host centralized in utils/audioHost.ts, IDB force-re-download migration in reconcileFromIdb), 20 (2026-07-31 — superseded by the admin dashboard shipping and then moving to its own app, apps/admin)
+- **Resolved:** 2 (2026-07-22 — knip.json config + parallel CI job; see item for a correction to its own original plan), 3 (2026-07-23 — `__root.tsx` split into `fontCSS.ts` / `HydrateStore.tsx` / `rootHead.ts`), 4 (2026-07-23 — beacon queue + Background Sync, with a page-side fallback for Safari/Firefox), 6 (2026-06-28, `10811a4`), 7 (2026-07-02, `d2bbc36` — offline.html redesign, stamped during the 2026-07-06 docs cleanup), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01), 17 (2026-07-02 — gate proven intact via SW-preview experiments; observed bytes were HTTP cache / element buffer, not IDB; silent-blocked-tap toast fixed), 18 (2026-07-02 — not reproducible on current build; all three offline nav modes verified against the SW preview), 5 (absorbed into 19's verification — CORS re-checked on the custom domain 2026-07-06: preflight GET/HEAD + range, ACAO *, Content-Length exposed), 19 (2026-07-06 — audio on cdn.formatglasgow.com, host centralized in utils/audioHost.ts, IDB force-re-download migration in reconcileFromIdb), 20 (2026-07-31 — superseded by the admin dashboard shipping and then moving to its own app, apps/admin), 21 (2026-08-04 — import sweep to `@form-at/data`, four shim files reduced to two deleted + two trimmed to their genuinely-local code)
 
 Resolved items keep their original section in place with a `✅ Resolved` stamp at the top, so the historical context (cause + fix path) stays readable. Search for `✅ Resolved` to skip to / past them.
 
@@ -698,7 +698,30 @@ debt on the data side.
 
 ## 21. Sweep apps/web's remaining `~/data/sets` / `~/data/set-stats` / `~/utils/audioHost` / `~/utils/webPush` imports to `@form-at/data` directly
 
-**Not urgent, just a pointer.** When `apps/admin` was extracted (2026-07-31),
+**✅ Resolved 2026-08-04.** Every consumer across `apps/web` now imports the
+canonical exports (`MusicSet`, `sets`, `getSet`, `mergeSets`, `fetchSetById`,
+`fetchUploadedSets`, `AUDIO_HOST`, `AUDIO_ORIGIN`, `fetchSetStats`,
+`SetStats`, `sendWebPush`, `PushPayload`, `PushSubscriptionRecord`,
+`SendPushResult`) directly from `@form-at/data/sets` / `@form-at/data/set-stats`
+/ `@form-at/data/webPush`. `apps/web/app/utils/audioHost.ts` and
+`apps/web/app/utils/webPush.ts` — both 100% pure re-exports — are deleted.
+`apps/web/app/data/sets.ts` and `apps/web/app/data/set-stats.ts` were NOT
+pure shims by the time this landed (each had gained real, app-specific code
+during the catalogue-unification/upload work) — only their re-export halves
+were removed; the local wrapping (`getAllSetsWithFallback`,
+`getSetByIdWithFallback`, `fetchAllSets`, `getAllSetsLive`,
+`fetchAllSetsLive`, `fetchSetForDetailPage`, `isKnownSetId` in `sets.ts`;
+`fetchOverallStats`/`OverallStats` in `set-stats.ts`) stays exactly where it
+was, since it's genuinely this app's own D1-fallback/createServerFn
+plumbing, not catalogue data. `sw.ts`'s `AUDIO_HOST` import was the one
+worker-safety-sensitive site (`tsconfig.sw.json`'s `WebWorker` lib) —
+`tsc -p tsconfig.sw.json --noEmit` stayed green, confirming
+`@form-at/data/sets` has no DOM/window/navigator dependency to leak in.
+Verification: both `tsc` passes, `pnpm check`, `pnpm knip`, `apps/web`
+unit (387/387) and e2e (62 passed / 6 pre-existing viewport-conditional
+skips) all green, no behavior change.
+
+**Original entry, kept for context:** when `apps/admin` was extracted (2026-07-31),
 the shared sets catalogue and the `fetchSetStats` analytics query moved to
 a new package, `packages/data` (`@form-at/data`). To avoid bundling an
 unrelated ~33-file mechanical import-path rename into that migration,

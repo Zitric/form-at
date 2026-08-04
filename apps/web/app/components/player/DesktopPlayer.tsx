@@ -1,8 +1,8 @@
+import type { MusicSet } from "@form-at/data/sets";
 import { useEffect, useState } from "react";
 import { PlayerControls } from "~/components/player/PlayerControls";
 import { PlayerSeeker } from "~/components/player/PlayerSeeker";
 import { metaSeparator } from "~/components/player/playerCommon";
-import type { MusicSet } from "~/data/sets";
 import { Z } from "~/styles/z";
 
 type Props = {

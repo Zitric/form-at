@@ -16,6 +16,8 @@
 // `tsconfig.sw.json` — `Window` types are intentionally absent because the SW
 // can't touch the DOM and we'd rather fail at typecheck than at runtime.
 
+import { AUDIO_HOST } from "@form-at/data/sets";
+import type { PushPayload } from "@form-at/data/webPush";
 import { clientsClaim } from "workbox-core";
 import { matchPrecache, precacheAndRoute } from "workbox-precaching";
 import { createPartialResponse } from "workbox-range-requests";
@@ -24,9 +26,7 @@ import { StaleWhileRevalidate } from "workbox-strategies";
 import { SYNC_TAG, replaySignalQueue } from "~/data/beacon-queue";
 import { getOfflineAudio } from "~/data/offline-audio";
 import { stripAppContext } from "~/utils/appContext";
-import { AUDIO_HOST } from "~/utils/audioHost";
 import { buildNotificationOptions, resolveNotificationClickUrl } from "~/utils/pushNotification";
-import type { PushPayload } from "~/utils/webPush";
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ revision: string | null; url: string }>;

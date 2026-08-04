@@ -1,3 +1,4 @@
+import type { MusicSet } from "@form-at/data/sets";
 /**
  * Schema.org JSON-LD builders. Each one produces the structured-data payload
  * that goes inside <script type="application/ld+json"> on its route.
@@ -11,7 +12,6 @@
 import type { DJ } from "~/data/djs";
 import { djs } from "~/data/djs";
 import type { Event } from "~/data/events";
-import type { MusicSet } from "~/data/sets";
 import { SOCIALS, SOCIAL_ORDER } from "./socials";
 
 const SITE = "https://formatglasgow.com";

@@ -7,7 +7,7 @@ import { stripAppContext } from "~/utils/appContext";
 // one — rebuilding drops the Range header under the request-no-cors guard),
 // so this marker logic is the only URL manipulation left in the handler.
 
-import { AUDIO_ORIGIN } from "~/utils/audioHost";
+import { AUDIO_ORIGIN } from "@form-at/data/sets";
 
 const R2 = AUDIO_ORIGIN;
 

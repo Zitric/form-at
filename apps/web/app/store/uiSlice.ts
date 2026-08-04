@@ -1,5 +1,5 @@
+import type { MusicSet } from "@form-at/data/sets";
 import type { StateCreator } from "zustand";
-import type { MusicSet } from "~/data/sets";
 
 // Subset of the experimental BeforeInstallPromptEvent spec we actually touch.
 // Not in lib.dom.d.ts because the API is Chromium-only and not in the WHATWG

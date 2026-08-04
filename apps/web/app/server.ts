@@ -1,5 +1,5 @@
+import { AUDIO_ORIGIN } from "@form-at/data/sets";
 import { createStartHandler, defaultStreamHandler } from "@tanstack/react-start/server";
-import { AUDIO_ORIGIN } from "~/utils/audioHost";
 
 const handler = createStartHandler({ handler: defaultStreamHandler });
 
@@ -17,7 +17,7 @@ const handler = createStartHandler({ handler: defaultStreamHandler });
 //     style attributes.
 //   img-src data:              — favicon/data URIs.
 //   media-src / connect-src — the <audio> stream and the peaks-JSON /
-//     download fetches from the audio host (see utils/audioHost.ts, the
+//     download fetches from the audio host (see @form-at/data/sets, the
 //     canonical home of the hostname).
 const DOCUMENT_CSP = [
   "default-src 'self'",

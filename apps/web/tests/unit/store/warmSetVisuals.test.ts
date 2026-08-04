@@ -1,5 +1,5 @@
+import type { MusicSet } from "@form-at/data/sets";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { MusicSet } from "~/data/sets";
 import { warmSetVisuals } from "~/store/offlineSlice";
 
 // warmSetVisuals warms the artwork-v1 cache for every page describing a

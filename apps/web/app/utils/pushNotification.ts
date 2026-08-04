@@ -1,4 +1,4 @@
-import type { PushPayload } from "~/utils/webPush";
+import type { PushPayload } from "@form-at/data/webPush";
 
 // Shapes a received push payload into `showNotification()`'s options, and
 // resolves a `notificationclick` tap into a navigation target (or none).
