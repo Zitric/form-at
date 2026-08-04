@@ -102,7 +102,11 @@ export function validate(raw: unknown): CreateSetBody | null {
   };
 }
 
-function isUniqueConstraintError(e: unknown): boolean {
+// Exported so routes/api/sets/restore.ts can classify the same D1 error
+// shape on its own INSERT (the "id was reused since delete" case) — this
+// exact string check is the load-bearing part, not worth a second copy that
+// could silently drift out of sync with what D1 actually throws.
+export function isUniqueConstraintError(e: unknown): boolean {
   return e instanceof Error && e.message.includes("UNIQUE constraint failed");
 }
 
@@ -127,10 +131,18 @@ function sleep(ms: number): Promise<void> {
 // a HEAD failure here means something real; the admin's own resubmit (which
 // restarts the whole presign→PUTs→create sequence) is the retry path.
 // Exported for unit tests — mocked-fetch coverage of the "some object is
-// missing" and "R2 request throws" paths, independent of the route
-// handler's Access/validate/insert wrapping.
-export async function verifyR2ObjectsExist(keys: SetR2Keys): Promise<boolean> {
-  const urls = [keys.publicAudioUrl, keys.publicArtworkUrl, keys.publicPeaksUrl];
+// missing" and "R2 request throws" paths, independent of any caller's own
+// wrapping (create's Access/validate/insert, restore's log lookup).
+//
+// Takes a plain URL list rather than a `SetR2Keys` object — extracted from
+// `verifyR2ObjectsExist` below (which now just calls this with its 3 known
+// URLs) so the restore feature (routes/api/sets/restore.ts) can check
+// however many URLs a given deleted-set log row actually recorded, since
+// legacy sets never had an `artwork_original_url` (see that file's own
+// comment on how "never had one" vs "had one, now gone" is decided BEFORE
+// calling this — this function only ever sees URLs its caller already
+// decided are real).
+export async function verifyUrlsExist(urls: string[]): Promise<boolean> {
   const checks = await Promise.all(
     urls.map(async (url) => {
       try {
@@ -142,6 +154,10 @@ export async function verifyR2ObjectsExist(keys: SetR2Keys): Promise<boolean> {
     }),
   );
   return checks.every(Boolean);
+}
+
+export async function verifyR2ObjectsExist(keys: SetR2Keys): Promise<boolean> {
+  return verifyUrlsExist([keys.publicAudioUrl, keys.publicArtworkUrl, keys.publicPeaksUrl]);
 }
 
 // Exported for unit tests — the retry-then-fail path (transient D1 error

@@ -338,18 +338,42 @@ CREATE TABLE IF NOT EXISTS admin_deleted_sets (
   play_count_at_deletion INTEGER NOT NULL DEFAULT 0
 );
 
+-- restored_at (one-click restore feature, 2026-08) — added after this table
+-- already shipped, so it's a separate ALTER rather than part of the CREATE
+-- above. Deliberately NOT also added to the CREATE TABLE's own column list
+-- (unlike a fresh table's columns, which just get written into the CREATE
+-- directly) — same reasoning `plays.is_offline` above already established:
+-- keeping the base CREATE exactly as originally applied and adding
+-- everything since via ALTER, uniformly, means there's only ONE path
+-- (fresh DB or existing) to keep correct, not two that could drift apart.
+-- A fresh/dev database runs the CREATE TABLE above, THEN this ALTER, same
+-- as an existing production database.
+--
+-- ⚠️ ONE-TIME MANUAL MIGRATION — NOT idempotent, same confirmed limitation
+-- as `plays.is_offline` above (line 25): D1 does NOT support
+-- `ADD COLUMN IF NOT EXISTS` the way vanilla SQLite ≥3.35 does — confirmed
+-- there via a real `SQLITE_ERROR` when that form was tried against remote
+-- D1. Use the bare form below, and do not re-run it once applied (a second
+-- run fails with a duplicate-column error).
+--
+-- npx wrangler d1 execute form-at-analytics --remote --command "ALTER TABLE admin_deleted_sets ADD COLUMN restored_at INTEGER"
+-- Verify it landed:
+-- npx wrangler d1 execute form-at-analytics --remote --command "PRAGMA table_info(admin_deleted_sets)"
+ALTER TABLE admin_deleted_sets ADD COLUMN restored_at INTEGER;
+
 -- No secondary index — this table only ever serves "most recent N deletions"
 -- (the admin sets page's recently-deleted list) or a full scan when actually
--- recovering a specific set by hand.
+-- recovering a specific set.
 
 -- Useful queries:
 --
--- Recently deleted sets (what the admin sets page shows):
---   SELECT deleted_at, deleted_by_email, set_id, title, artist, play_count_at_deletion
---   FROM admin_deleted_sets ORDER BY deleted_at DESC LIMIT 10;
+-- Recently deleted sets not yet restored (what the admin sets page shows):
+--   SELECT id, deleted_at, deleted_by_email, set_id, title, artist, play_count_at_deletion
+--   FROM admin_deleted_sets WHERE restored_at IS NULL ORDER BY deleted_at DESC LIMIT 10;
 --
--- Re-create a deleted set's row by hand (the actual recovery path — the R2
--- objects are still there if the same id is reused, see PR6's docs):
---   SELECT * FROM admin_deleted_sets WHERE set_id = ? ORDER BY deleted_at DESC LIMIT 1;
+-- Restore a deleted set (the one-click admin action does exactly this —
+-- INSERT the log row's stored columns back into `sets`, then mark this log
+-- entry restored — see routes/api/sets/restore.ts's restoreSetFromLog):
+--   SELECT * FROM admin_deleted_sets WHERE id = ? AND restored_at IS NULL;
 
 

@@ -23,7 +23,18 @@ function fmtWhen(ms: number): string {
 // notifications page. Also the thing that makes the admin_deleted_sets
 // audit log (PR6 review item 2a) actually visible day-to-day, rather than
 // a write-only table Julian would need `wrangler` to inspect.
-function RecentlyDeletedSets({ deletions }: { deletions: RecentDeletedSet[] }) {
+//
+// One-click restore feature (2026-08): each entry gets a `[ restore ]`
+// action. Entries drop off this list once restored (fetchRecentDeletedSets
+// filters `restored_at IS NULL`), so there's no stale "restore" button left
+// pointing at a set that's already back.
+function RecentlyDeletedSets({
+  deletions,
+  onRestoreClick,
+}: {
+  deletions: RecentDeletedSet[];
+  onRestoreClick: (deletion: RecentDeletedSet) => void;
+}) {
   return (
     <div className="border border-grey/30 p-4">
       <Label className="mb-2 text-grey tracking-widest">{"// recently_deleted"}</Label>
@@ -31,17 +42,116 @@ function RecentlyDeletedSets({ deletions }: { deletions: RecentDeletedSet[] }) {
         <Muted>nothing deleted yet</Muted>
       ) : (
         <div className="space-y-1">
-          {deletions.map((d, i) => (
-            <TerminalRow
-              key={`${d.deletedAt}-${i}`}
-              label={`${fmtWhen(d.deletedAt)} · ${d.deletedByEmail} · ${d.title} (${d.artist})`}
-              value={`${d.playCountAtDeletion} plays at deletion · id: ${d.setId}`}
-              dimValue
-            />
+          {deletions.map((d) => (
+            <div key={d.logId} className="flex items-center justify-between gap-4">
+              <TerminalRow
+                label={`${fmtWhen(d.deletedAt)} · ${d.deletedByEmail} · ${d.title} (${d.artist})`}
+                value={`${d.playCountAtDeletion} plays at deletion · id: ${d.setId}`}
+                dimValue
+              />
+              <Button variant="secondary" onClick={() => onRestoreClick(d)} className="shrink-0">
+                restore
+              </Button>
+            </div>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+// One-click restore (2026-08) — restore-from-log, not soft delete. Single
+// click, deliberately NOT typed-confirmation-gated like delete's
+// play-count-scaled gate: that gate scales friction with a measurable
+// signal (how much play history is at stake); restoring has no analogous
+// per-entry metric — whether a deleted set SHOULD come back is a binary
+// human judgement (wrong file, a rights issue, an artist's takedown
+// request) that no count could express, so an arbitrary typed field would
+// just be friction with no signal behind it. The real mitigation is the
+// entry point itself (this button only exists after deliberately opening
+// "recently deleted" and picking a specific named entry, not a bulk action
+// or something reachable by a stray click) plus copy that leads with the
+// actual consequence — restoring republishes to the public site
+// IMMEDIATELY (the live-D1 read on every /sets request, unlike delete's
+// deploy-lagged disappearance), not "safe because non-destructive."
+function RestoreConfirmModal({
+  deletion,
+  onClose,
+  onRestored,
+}: {
+  deletion: RecentDeletedSet;
+  onClose: () => void;
+  onRestored: () => void;
+}) {
+  const [restoring, setRestoring] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleRestore = async () => {
+    setRestoring(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/sets/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: deletion.logId }),
+      });
+      if (!response.ok) {
+        if (response.status === 401) {
+          setError("not authorized");
+          return;
+        }
+        // 404/422/409 all carry a specific { message } body (routes/api/sets/restore.ts) —
+        // surface it verbatim rather than a generic "restore failed", since each
+        // failure mode needs its own explanation (already restored, files gone,
+        // id reused).
+        const body = (await response.json().catch(() => null)) as { message?: string } | null;
+        setError(body?.message ?? "restore failed — try again");
+        return;
+      }
+      onRestored();
+    } catch {
+      setError("restore failed — check your connection and try again");
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  return (
+    <Modal
+      open
+      onClose={() => {
+        if (!restoring) onClose();
+      }}
+      title={<Label className="text-grey">confirm restore</Label>}
+      ariaLabel="Confirm set restore"
+    >
+      <div className="space-y-3">
+        {restoring ? (
+          <p className="text-sm text-grey">restoring…</p>
+        ) : (
+          <>
+            <p className="t-body sm:t-body-md text-grey">
+              Restoring makes <span className="text-white">{deletion.title}</span> by{" "}
+              <span className="text-white">{deletion.artist}</span> live on the public site again,
+              immediately.
+            </p>
+            <p className="text-xs text-grey/70">
+              If it already disappeared from someone's offline downloads before now, restoring the
+              row does not bring those back — they'd need to save it again.
+            </p>
+            {error && <p className="text-xs text-red-400">{error}</p>}
+            <div className="flex gap-4">
+              <Button variant="primary" onClick={handleRestore}>
+                confirm restore
+              </Button>
+              <Button variant="secondary" onClick={onClose}>
+                cancel
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -163,6 +273,7 @@ function DeleteConfirmModal({
 export function SetsList({ sets, recentDeletions, onChanged }: SetsListProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingSet, setDeletingSet] = useState<SetWithPlayCount | null>(null);
+  const [restoringDeletion, setRestoringDeletion] = useState<RecentDeletedSet | null>(null);
 
   return (
     <div className="space-y-6">
@@ -205,7 +316,7 @@ export function SetsList({ sets, recentDeletions, onChanged }: SetsListProps) {
         )}
       </div>
 
-      <RecentlyDeletedSets deletions={recentDeletions} />
+      <RecentlyDeletedSets deletions={recentDeletions} onRestoreClick={setRestoringDeletion} />
 
       {deletingSet && (
         <DeleteConfirmModal
@@ -213,6 +324,17 @@ export function SetsList({ sets, recentDeletions, onChanged }: SetsListProps) {
           onClose={() => setDeletingSet(null)}
           onDeleted={() => {
             setDeletingSet(null);
+            onChanged();
+          }}
+        />
+      )}
+
+      {restoringDeletion && (
+        <RestoreConfirmModal
+          deletion={restoringDeletion}
+          onClose={() => setRestoringDeletion(null)}
+          onRestored={() => {
+            setRestoringDeletion(null);
             onChanged();
           }}
         />

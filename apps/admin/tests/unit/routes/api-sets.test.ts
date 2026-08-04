@@ -6,6 +6,7 @@ import {
   validate,
   validateEdit,
   verifyR2ObjectsExist,
+  verifyUrlsExist,
 } from "~/routes/api/sets";
 
 const validBody = {
@@ -211,6 +212,44 @@ describe("verifyR2ObjectsExist", () => {
     for (const call of fetchMock.mock.calls) {
       expect(call[1]).toMatchObject({ method: "HEAD" });
     }
+  });
+});
+
+// One-click restore feature (2026-08): verifyR2ObjectsExist's 3-URL HEAD
+// loop was extracted into this lower-level primitive so restore can check
+// however many URLs a deleted-set log row actually recorded (a legacy set
+// never had an artwork_original_url) — see routes/api/sets/restore.ts.
+describe("verifyUrlsExist", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns true when every url responds ok", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 200 })));
+
+    expect(
+      await verifyUrlsExist(["https://cdn.formatglasgow.com/a", "https://cdn.formatglasgow.com/b"]),
+    ).toBe(true);
+  });
+
+  it("returns true for an empty list (nothing to check, e.g. a row with no optional URLs)", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await verifyUrlsExist([])).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns false when any one url 404s", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "https://cdn.formatglasgow.com/b") return new Response(null, { status: 404 });
+      return new Response(null, { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(
+      await verifyUrlsExist(["https://cdn.formatglasgow.com/a", "https://cdn.formatglasgow.com/b"]),
+    ).toBe(false);
   });
 });
 
