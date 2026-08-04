@@ -2837,6 +2837,177 @@ no test suite here can prove):
    set's variants (skip-if-exists working against real files, not just the
    unit-tested synthetic case).
 
+### Added 2026-08-05 — admin set-upload feature, PR6: minimal edit/delete, and why delete needed six things resolved first
+
+`feat/admin-set-edit-delete`, branched off `main` after PR5 merged. Closes
+the set-upload arc: a list of existing sets on the admin `/sets` page, a
+metadata-only edit form, and a delete action. Edit is the easy half — delete
+interacts with three systems that don't know about each other (offline-
+download reconciliation, the build-time snapshot's merge semantics, and the
+analytics tables), and each interaction was traced precisely before deciding
+what to build. Two more findings surfaced mid-review, on top of the six
+originally flagged, and are folded in below at the point they apply.
+
+**Items 1 + 2 — the delete timeline, traced through the actual merge/
+reconciliation code, not assumed.** `mergeSets(live, snapshot)`
+(`packages/data/src/sets.ts`) is a *union* keyed by id: an id present in the
+snapshot and absent from live still appears in the merged result, because a
+union has no memory of what it doesn't contain — it can't tell "not yet
+uploaded" apart from "removed." Same shape of gap in `fetchSetById`: a D1
+miss falls back to the snapshot's stale copy. Precise consequence: at
+delete time, the currently-deployed JS bundle still ships the old
+snapshot, so the deleted set keeps appearing on `/sets`, the detail page,
+and — critically — in the client-side `catalogueSets` store, *regardless
+of whether the client's boot fetch succeeds* (a successful fetch computes
+`mergeSets(freshLive, staleSnapshot)`, and the stale half still has the
+entry). `reconcileFromIdb`'s destructive purge (PR3) therefore does **not**
+fire on any device, no matter how fresh its boot is, until the *next
+deploy* regenerates the snapshot without the deleted row — and even then,
+only for a device that gets the new bundle and completes a
+`catalogueConfirmed` boot. An installed PWA that stays offline can hold a
+"deleted" set's saved bytes for an arbitrarily long time past that.
+
+**Decision: this is the correct behavior, not a bug — the fix is honesty in
+the UI, not a redesign.** Eventually reclaiming a stale download once a set
+is genuinely gone is the right outcome; anything faster means either a
+synchronous cross-device purge mechanism or an immediate local delete with
+no server record to reconcile against later (worse). **The tombstone
+alternative — a deleted-ids table the merge step also consults, making
+delete take effect before the next deploy — was named explicitly and
+declined**, per the standing instruction not to build a scope increase
+without flagging it first: a union has no way to close this gap on its own,
+and closing it needs a real, standalone mechanism this PR doesn't build.
+The delete confirmation modal states the full chain in plain language
+instead (see the UI section below).
+
+**Item 1a (new, surfaced during review) — the admin list makes no
+distinction between a set uploaded five minutes ago and one of the 4
+legacy sets with hundreds of real plays.** `fetchUploadedSets` returns
+every row identically. A hardcoded "these 4 ids are legacy" check was
+rejected as the signal — it's coincidental and stops meaning anything once
+more sets accumulate real history. **Actual play count is the real
+signal**, and `admin-stats.ts` already computes it per set. The sets-list
+loader (`fetchSetsWithPlayCounts`, `apps/admin/app/data/sets-admin.ts`)
+joins it in with one extra query (`SELECT set_id, COUNT(*) AS n FROM plays
+GROUP BY set_id`), not one query per set. A zero-play set gets the normal
+single-confirm modal; any recorded plays requires typing the set's exact id
+before the confirm button enables — proportionate friction for a delete
+that isn't soft, scaling automatically as history accumulates instead of a
+list that needs remembering to extend.
+
+**Item 2a (new, surfaced during review) — nothing recorded what was
+deleted, so "recoverable in principle" (item 3's R2 objects survive) wasn't
+actually recoverable in practice.** Two options were on the table: return
+the deleted row in the response and display it for the admin to copy
+before navigating away, or log it persistently. **Chose the persistent
+log** — the display-only approach depends on the admin actually copying the
+data in that exact moment, in that tab; one accidental navigation and the
+surviving R2 objects become unrecoverable anyway for lack of the metadata
+needed to reconstruct the row. A new `admin_deleted_sets` table
+(`apps/web/schema.sql`, proposed — Julian applies it himself via
+`--command`, same convention as every table in that file) mirrors
+`admin_push_sends` exactly: full row data, who deleted it (the verified
+Access identity, never client-supplied), when, and the play count at
+deletion for context. `SetsList.tsx` also renders a `RecentlyDeletedSets`
+list below the main list — mirroring `RecentPushSends`'s exact placement
+reasoning (visible before a new delete, so an accidental repeat is caught
+the same way an accidental duplicate send already is) — so the log is
+actually visible day-to-day, not a table Julian would need `wrangler` to
+inspect.
+
+**Item 3 — R2 objects on delete: left in place, documented, same policy as
+PR4's create-failure orphans.** Deleting the objects immediately would
+break anyone mid-playback via the live network stream and anyone whose
+device still has the set from the stale snapshot (items 1/2). R2 storage
+is cheap; a few orphaned files cost nothing meaningful. No code for this —
+it's a decision not to build R2 cleanup, same class of accepted gap PR4
+already established for the other direction.
+
+**Item 4 — orphaned analytics rows: verified already handled, not built.**
+Checked both places a `set_id` resolves to a display title.
+`fetchPlayStats` (the dashboard's "top sets" widget) denormalizes
+`set_title`/`set_artist` directly into each `plays` row at write time and
+never touches the catalogue — deleting a set has zero effect here,
+historical titles keep showing correctly forever, exactly right for
+"historical data is the point." `fetchClickStats` does map through
+`getSet()`, but already has a graceful fallback (`setTitle: set?.title ??
+setId`, `setArtist: set?.artist ?? "unknown"`) that was already tested
+before this PR. **No code changes needed.** One minor, accepted cosmetic
+gap found and left alone: the dashboard's per-set picker seeds its initial
+selection from the top set's id, and if that set was since deleted, no
+picker button highlights as selected — but the stats themselves still load
+correctly by raw id regardless. Cosmetic, not a data-integrity issue, out
+of scope for "minimal."
+
+**Item 5 — id immutability: enforced structurally, not by validation.**
+`updateSet` (`apps/admin/app/routes/api/sets.ts`) never includes `id` in
+its `UPDATE ... SET` clause — it appears exactly once, in the final
+`WHERE`. Even a client-sent mismatched id has no code path that could act
+on it as anything other than "which row to update." Tested by asserting
+the actual SQL text, not just the observable outcome — the only way to
+prove `id` never reaches the `SET` position regardless of what's passed.
+
+**Item 6 — edit precedence: confirmed via source, zero new data-layer
+code.** `fetchSetById` (D1-first) and `mergeSets` (live-wins) already read
+the live table on every request — this precedence was fixed in PR2
+specifically so a direct-SQL edit shows up immediately. An edit through the
+new `PATCH` endpoint is just another `UPDATE` against the same table these
+already-shipped functions query, so it shows up on both the list and the
+detail page the moment the request completes. Same `staleTime: 5 * 60 *
+1000` caveat from PR4 still applies — stated in the edit success UI.
+
+**Scope decision: edit is metadata-only — title/artist/date/venue/
+description/duration, no file replacement — for a reason beyond smaller
+scope.** Replacing a set's audio/artwork/peaks at the *same id* means the
+R2 key and public URL are unchanged, so every user who already saved that
+set offline keeps the *old* bytes forever: `reconcileFromIdb` only checks
+catalogue *membership* by id, never content freshness, so a same-id file
+swap is entirely invisible to it (unlike delete, which eventually evicts
+the id). Replace the audio without the peaks and the waveform silently
+stops matching what's playing, with no error anywhere. A real fix needs
+versioned R2 keys or a forced-eviction path — recorded here specifically so
+a future file-replacement PR starts from the actual hard part instead of
+assuming it's just "the upload flow again, for an existing row."
+
+**Item 6a (new) — verified PATCH/DELETE dispatch on the same route as
+POST, empirically, before writing any real logic.** This repo had only
+ever had single-method API routes. Read `@tanstack/start-server-core`'s
+actual dispatch code (`handlers[requestMethod] ?? handlers["ANY"]` — a
+plain object keyed by HTTP method) as first evidence, then proved it live:
+added temporary `PATCH`/`DELETE` handlers returning a distinguishable fixed
+response, started the real dev server, and `curl -X PATCH`/`-X DELETE`
+against `/api/sets` — both reached their own handler correctly, and a
+`POST` in the same run still reached the real (401-returning) create
+logic, confirming the three methods dispatch independently on one route
+file. Only after that did the real Access/validate/D1 logic replace the
+stubs.
+
+**Security/enforcement summary**: R2 keys are entirely server-derived
+(unchanged from PR4); the `PRIMARY KEY` constraint remains the real
+create-time race guarantee; id immutability on edit is structural (item 5);
+delete never touches R2, `plays`, or `events`, only reads a play count from
+`plays` for context and the audit log.
+
+**Set-upload arc, now fully closed.** PR1 (D1 groundwork) → PR2 (live
+overlay) → PR3 (remaining consumers + the `catalogueConfirmed` fix) → PR4
+(upload, Access-gated, R2-verified) → PR5 (responsive artwork for uploaded
+sets) → PR6 (edit/delete, with the delete-consequences chain made explicit
+in the UI rather than left implicit). Everything from PR4 onward is
+deployed but has never been exercised by a real upload — the on-device
+checklists in PR5's and this entry's own manual-verification sections are
+what close that gap, not anything further to build.
+
+**Manual verification for this PR** (mirrors PR4/PR5's "waiting on a real
+event" honesty): edit a real set, confirm the change appears immediately
+on both `/sets` and its detail page without a deploy; delete a zero-play
+test set, confirm the single-click flow; delete (or attempt to delete) a
+set with real plays, confirm the type-to-confirm gate actually blocks the
+button until the id matches; confirm the deleted row appears in
+`RecentlyDeletedSets` and in `admin_deleted_sets` via `wrangler`; confirm
+the deleted set keeps rendering on the public site until the next deploy,
+then disappears after it (the one part of this PR that only a real deploy
+boundary can prove).
+
 ## Reference — key design decisions from the PWA work
 
 ### App-gated capability pattern (2026-07-17)

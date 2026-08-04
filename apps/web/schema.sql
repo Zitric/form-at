@@ -293,4 +293,63 @@ CREATE TABLE IF NOT EXISTS sets (
 -- One set by id (detail-page fallback when it's not in the static snapshot):
 --   SELECT * FROM sets WHERE id = ?;
 
+-- Admin-only: a full-row audit log for every set deleted through the admin
+-- panel's delete action (PR6 of the admin set-upload feature, 2026-08).
+-- Deleting a `sets` row is NOT soft-delete — the row is genuinely gone, and
+-- nothing else in this system remembers what it contained (R2 objects are
+-- deliberately left in place on delete, see PR6's docs, but they're just
+-- bytes at a URL with no title/artist/date attached). Without this table, a
+-- delete is only "recoverable in principle" — true only if whoever deleted
+-- it still remembers the exact metadata to re-create the row. This table
+-- makes that recovery actually practical: every column needed to
+-- reconstruct the row via a plain INSERT, plus who deleted it, when, and
+-- how many real plays it had at the time (context for how consequential
+-- the delete was, shown on the admin sets page's "recently deleted" list —
+-- same idea as `admin_push_sends` surfacing recent activity, applied to a
+-- destructive action instead of a repeatable one).
+--
+-- `deleted_by_email` is the Cloudflare Access identity's verified email
+-- (apps/admin/app/utils/verifyAccessJwt.ts) — never a client-supplied value,
+-- same rule `admin_push_sends.sent_by_email` already follows.
+--
+-- Not yet applied to the remote database — same "Julian runs it" pattern as
+-- every other table in this file. Do NOT use `--file=apps/web/schema.sql`.
+-- Run the isolated statement instead:
+-- npx wrangler d1 execute form-at-analytics --remote --command "CREATE TABLE IF NOT EXISTS admin_deleted_sets (id INTEGER PRIMARY KEY AUTOINCREMENT, deleted_at INTEGER NOT NULL, deleted_by_email TEXT NOT NULL, set_id TEXT NOT NULL, title TEXT NOT NULL, artist TEXT NOT NULL, date TEXT NOT NULL, venue TEXT, description TEXT, duration TEXT, src TEXT NOT NULL, artwork TEXT, artwork_original_url TEXT, peaks TEXT, size_bytes INTEGER, created_at INTEGER NOT NULL, play_count_at_deletion INTEGER NOT NULL DEFAULT 0)"
+-- Verify it landed:
+-- npx wrangler d1 execute form-at-analytics --remote --command "PRAGMA table_info(admin_deleted_sets)"
+CREATE TABLE IF NOT EXISTS admin_deleted_sets (
+  id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+  deleted_at             INTEGER NOT NULL,  -- unix ms
+  deleted_by_email       TEXT    NOT NULL,
+  set_id                 TEXT    NOT NULL,
+  title                  TEXT    NOT NULL,
+  artist                 TEXT    NOT NULL,
+  date                   TEXT    NOT NULL,
+  venue                  TEXT,
+  description            TEXT,
+  duration               TEXT,
+  src                    TEXT    NOT NULL,
+  artwork                TEXT,
+  artwork_original_url   TEXT,
+  peaks                  TEXT,
+  size_bytes             INTEGER,
+  created_at             INTEGER NOT NULL,  -- the row's original created_at, not this log entry's
+  play_count_at_deletion INTEGER NOT NULL DEFAULT 0
+);
+
+-- No secondary index — this table only ever serves "most recent N deletions"
+-- (the admin sets page's recently-deleted list) or a full scan when actually
+-- recovering a specific set by hand.
+
+-- Useful queries:
+--
+-- Recently deleted sets (what the admin sets page shows):
+--   SELECT deleted_at, deleted_by_email, set_id, title, artist, play_count_at_deletion
+--   FROM admin_deleted_sets ORDER BY deleted_at DESC LIMIT 10;
+--
+-- Re-create a deleted set's row by hand (the actual recovery path — the R2
+-- objects are still there if the same id is reused, see PR6's docs):
+--   SELECT * FROM admin_deleted_sets WHERE set_id = ? ORDER BY deleted_at DESC LIMIT 1;
+
 

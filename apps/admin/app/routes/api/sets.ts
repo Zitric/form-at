@@ -200,6 +200,184 @@ export async function insertSetWithRetry(
   return "failed";
 }
 
+// Set-edit/delete feature (PR6).
+
+type EditSetBody = {
+  id: string;
+  title: string;
+  artist: string;
+  date: string;
+  venue?: string;
+  description?: string;
+  duration?: string;
+};
+
+// Exported for unit tests — same convention as `validate` above. Notably
+// does NOT reject a mismatched/malicious `id` the way `validate` rejects a
+// bad `audioExt`, because there's nothing to reject: `id` is used exactly
+// once, in `updateSet`'s `WHERE` clause — see that function's comment for
+// why this is enforced structurally rather than by validation.
+export function validateEdit(raw: unknown): EditSetBody | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+
+  if (typeof r.id !== "string" || r.id.length === 0) return null;
+  if (typeof r.title !== "string" || r.title.length === 0 || r.title.length > MAX_TITLE_LEN) {
+    return null;
+  }
+  if (typeof r.artist !== "string" || r.artist.length === 0 || r.artist.length > MAX_ARTIST_LEN) {
+    return null;
+  }
+  if (typeof r.date !== "string" || !DATE_PATTERN.test(r.date)) return null;
+  if (r.venue !== undefined && (typeof r.venue !== "string" || r.venue.length > MAX_VENUE_LEN)) {
+    return null;
+  }
+  if (
+    r.description !== undefined &&
+    (typeof r.description !== "string" || r.description.length > MAX_DESCRIPTION_LEN)
+  ) {
+    return null;
+  }
+  if (
+    r.duration !== undefined &&
+    (typeof r.duration !== "string" || r.duration.length > MAX_DURATION_LEN)
+  ) {
+    return null;
+  }
+
+  return {
+    id: r.id,
+    title: r.title,
+    artist: r.artist,
+    date: r.date,
+    venue: r.venue as string | undefined,
+    description: r.description as string | undefined,
+    duration: r.duration as string | undefined,
+  };
+}
+
+// The id is never something this function CAN change, by construction —
+// not merely validated-and-rejected. `id` appears exactly once, in the
+// final `WHERE`; the `SET` clause's bind params are strictly
+// title/artist/date/venue/description/duration. Even a malicious or
+// mismatched `body.id` has no code path here that could act on it as
+// anything other than "which row to update" — the id is the R2 key path,
+// the public URL, and the analytics join key across `plays`/`events`
+// (PR6 review item 5), so changing it would orphan all three.
+//
+// Exported for unit tests — asserts `result.meta.changes` (D1's affected-
+// row count) distinguishes a genuine update from "no row had this id"
+// (e.g. deleted by someone else moments before this request landed).
+export async function updateSet(
+  db: D1Database,
+  body: EditSetBody,
+): Promise<"updated" | "not_found"> {
+  const result = await db
+    .prepare(
+      "UPDATE sets SET title = ?, artist = ?, date = ?, venue = ?, description = ?, duration = ? WHERE id = ?",
+    )
+    .bind(
+      body.title,
+      body.artist,
+      body.date,
+      body.venue ?? null,
+      body.description ?? null,
+      body.duration ?? null,
+      body.id,
+    )
+    .run();
+  return result.meta.changes > 0 ? "updated" : "not_found";
+}
+
+type DeletedSetRow = {
+  id: string;
+  title: string;
+  artist: string;
+  date: string;
+  venue: string | null;
+  description: string | null;
+  duration: string | null;
+  src: string;
+  artwork: string | null;
+  artwork_original_url: string | null;
+  peaks: string | null;
+  size_bytes: number | null;
+  created_at: number;
+};
+
+// Delete is NOT soft-delete — the row is genuinely gone, R2 objects are
+// deliberately left in place (PR6 review item 3, documented, manual
+// cleanup — same class of decision as PR4's create-failure orphan policy),
+// and `plays`/`events` rows are untouched (item 4 — already-shipped
+// fallback logic in admin-stats.ts's fetchClickStats handles an
+// unresolvable set_id gracefully; fetchPlayStats denormalizes title/artist
+// and never looks at the catalogue at all).
+//
+// The audit INSERT and the sets DELETE are issued as a single db.batch()
+// call, not two separate .run()s. Cloudflare confirms batch() is a real
+// transaction — every statement succeeds or the whole batch rolls back on
+// any exception — so an un-migrated admin_deleted_sets table (or any other
+// INSERT failure) fails the DELETE too, by construction, rather than by
+// luck of ordering. The array order (INSERT, then DELETE) is kept anyway as
+// belt-and-suspenders: if D1's atomicity guarantee were ever weaker than
+// documented, "log, then delete" still fails in the safe direction (row
+// intact, error surfaced) rather than the reverse.
+//
+// The play-count read is metadata about the deletion, not a precondition
+// for it — a failure there must not block the delete itself, so it's
+// wrapped separately and defaults to 0 rather than propagating.
+//
+// Exported for unit tests.
+export async function deleteSetWithAudit(
+  db: D1Database,
+  id: string,
+  deletedByEmail: string,
+): Promise<"deleted" | "not_found"> {
+  const row = await db.prepare("SELECT * FROM sets WHERE id = ?").bind(id).first<DeletedSetRow>();
+  if (!row) return "not_found";
+
+  let playCount = 0;
+  try {
+    const playCountRow = await db
+      .prepare("SELECT COUNT(*) AS n FROM plays WHERE set_id = ?")
+      .bind(id)
+      .first<{ n: number }>();
+    playCount = playCountRow?.n ?? 0;
+  } catch {
+    playCount = 0;
+  }
+
+  const insertAudit = db
+    .prepare(
+      `INSERT INTO admin_deleted_sets
+        (deleted_at, deleted_by_email, set_id, title, artist, date, venue, description, duration, src, artwork, artwork_original_url, peaks, size_bytes, created_at, play_count_at_deletion)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(
+      Date.now(),
+      deletedByEmail,
+      row.id,
+      row.title,
+      row.artist,
+      row.date,
+      row.venue,
+      row.description,
+      row.duration,
+      row.src,
+      row.artwork,
+      row.artwork_original_url,
+      row.peaks,
+      row.size_bytes,
+      row.created_at,
+      playCount,
+    );
+  const deleteRow = db.prepare("DELETE FROM sets WHERE id = ?").bind(id);
+
+  await db.batch([insertAudit, deleteRow]);
+
+  return "deleted";
+}
+
 export const Route = createFileRoute("/api/sets")({
   server: {
     handlers: {
@@ -271,6 +449,77 @@ export const Route = createFileRoute("/api/sets")({
         if (outcome === "conflict") return new Response(null, { status: 409 });
         if (outcome === "failed") return new Response(null, { status: 500 });
         return Response.json({ id: body.id }, { status: 201 });
+      },
+      PATCH: async ({ request, context }) => {
+        const cf = (context as unknown as Record<string, unknown>).cloudflare as
+          | {
+              env: {
+                DB: D1Database;
+                CF_ACCESS_TEAM_DOMAIN?: string;
+                CF_ACCESS_AUD?: string;
+              };
+            }
+          | undefined;
+        const env = cf?.env;
+
+        const teamDomain = env?.CF_ACCESS_TEAM_DOMAIN;
+        const aud = env?.CF_ACCESS_AUD;
+        if (!teamDomain || !aud) return new Response(null, { status: 401 });
+        const token = extractAccessToken(request);
+        if (!token) return new Response(null, { status: 401 });
+        const identity = await verifyAccessJwt(token, { teamDomain, aud });
+        if (!identity) return new Response(null, { status: 401 });
+
+        let body: EditSetBody | null;
+        try {
+          body = validateEdit(await request.json());
+        } catch {
+          body = null;
+        }
+        if (!body) return new Response(null, { status: 400 });
+
+        const db = env?.DB;
+        if (!db) return new Response(null, { status: 503 });
+
+        const outcome = await updateSet(db, body);
+        if (outcome === "not_found") return new Response(null, { status: 404 });
+        return Response.json({ id: body.id }, { status: 200 });
+      },
+      DELETE: async ({ request, context }) => {
+        const cf = (context as unknown as Record<string, unknown>).cloudflare as
+          | {
+              env: {
+                DB: D1Database;
+                CF_ACCESS_TEAM_DOMAIN?: string;
+                CF_ACCESS_AUD?: string;
+              };
+            }
+          | undefined;
+        const env = cf?.env;
+
+        const teamDomain = env?.CF_ACCESS_TEAM_DOMAIN;
+        const aud = env?.CF_ACCESS_AUD;
+        if (!teamDomain || !aud) return new Response(null, { status: 401 });
+        const token = extractAccessToken(request);
+        if (!token) return new Response(null, { status: 401 });
+        const identity = await verifyAccessJwt(token, { teamDomain, aud });
+        if (!identity) return new Response(null, { status: 401 });
+
+        let id: string | null;
+        try {
+          const parsed = (await request.json()) as Record<string, unknown>;
+          id = typeof parsed.id === "string" && parsed.id.length > 0 ? parsed.id : null;
+        } catch {
+          id = null;
+        }
+        if (!id) return new Response(null, { status: 400 });
+
+        const db = env?.DB;
+        if (!db) return new Response(null, { status: 503 });
+
+        const outcome = await deleteSetWithAudit(db, id, identity.email);
+        if (outcome === "not_found") return new Response(null, { status: 404 });
+        return new Response(null, { status: 200 });
       },
     },
   },
