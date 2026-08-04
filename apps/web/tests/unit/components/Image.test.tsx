@@ -50,6 +50,40 @@ describe("Image — optimized-variant fallback", () => {
     expect(container.innerHTML).toBe("");
   });
 
+  // Regression: FullPlayer renders one <Image> against `nowPlaying.artwork`,
+  // which changes as the user moves between tracks WITHOUT the component
+  // unmounting (same type, same position — React preserves its state). A
+  // fix-less version of this component let a single failure poison every
+  // later, perfectly-fine src shown in that same slot for the rest of the
+  // session — confirmed by reproducing it (render, fail, re-render with a
+  // different src, the fallback stayed stuck) before writing the fix.
+  it("recovers for a later, different src after an earlier src failed (no state leak across props)", () => {
+    const { container, rerender, getByAltText } = render(
+      <Image src="sets/set-A" alt="artwork" sizes="100vw" />,
+    );
+
+    fireEvent.error(getByAltText("artwork"));
+    expect(container.querySelector("picture")).toBeNull();
+
+    rerender(<Image src="sets/set-B" alt="artwork" sizes="100vw" />);
+
+    expect(container.querySelector("picture")).not.toBeNull();
+    expect(container.querySelectorAll("source")).toHaveLength(2);
+  });
+
+  it("does NOT reset the failed state on a re-render with the SAME src (only a real src change recovers)", () => {
+    const { container, rerender, getByAltText } = render(
+      <Image src="sets/set-A" alt="artwork" sizes="100vw" />,
+    );
+
+    fireEvent.error(getByAltText("artwork"));
+    expect(container.querySelector("picture")).toBeNull();
+
+    rerender(<Image src="sets/set-A" alt="artwork" sizes="100vw" priority />);
+
+    expect(container.querySelector("picture")).toBeNull();
+  });
+
   // Simulates the pre-hydration race: an image that had already failed
   // (browser tried and failed before hydration ever attached `onError`) —
   // `.complete === true` + `.naturalWidth === 0` is the standard signal for

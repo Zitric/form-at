@@ -63,6 +63,23 @@ export function Image({
   const [optimizedFailed, setOptimizedFailed] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
 
+  // This component doesn't remount when `src` changes — FullPlayer renders
+  // one <Image> against `nowPlaying.artwork`, which changes as the user
+  // moves between tracks while the component instance (and its state)
+  // survives. Without this, a single failed image would poison every
+  // later, perfectly-fine `src` shown in that same slot for the rest of the
+  // session (confirmed by reproducing it: render, fail, re-render with a
+  // different src, the fallback stays stuck). Comparing against the
+  // previous `src` during render — not inside an effect — is React's own
+  // documented pattern for resetting state when a prop changes without
+  // forcing a remount; it re-renders with the reset value before ever
+  // committing the stale one to the DOM.
+  const [prevSrc, setPrevSrc] = useState(src);
+  if (src !== prevSrc) {
+    setPrevSrc(src);
+    setOptimizedFailed(false);
+  }
+
   // This app SSRs (see app/server.ts) — the optimized <img src> ships in the
   // server-rendered HTML, so the browser can start (and finish failing)
   // that request before React ever hydrates and attaches `onError` on this

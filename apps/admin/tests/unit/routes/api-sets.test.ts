@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { insertSetWithRetry, validate } from "~/routes/api/sets";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { insertSetWithRetry, validate, verifyR2ObjectsExist } from "~/routes/api/sets";
 
 const validBody = {
   id: "set-003-new-artist",
@@ -147,5 +147,62 @@ describe("insertSetWithRetry", () => {
 
     expect(await insertSetWithRetry(db, sampleRow)).toBe("failed");
     expect(run).toHaveBeenCalledTimes(3);
+  });
+});
+
+const sampleKeys = {
+  audioKey: "sets/set-003-new-artist/audio.mp3",
+  artworkKey: "sets/set-003-new-artist/artwork.jpg",
+  peaksKey: "sets/set-003-new-artist/peaks.json",
+  publicAudioUrl: "https://cdn.formatglasgow.com/sets/set-003-new-artist/audio.mp3",
+  publicArtworkUrl: "https://cdn.formatglasgow.com/sets/set-003-new-artist/artwork.jpg",
+  publicPeaksUrl: "https://cdn.formatglasgow.com/sets/set-003-new-artist/peaks.json",
+};
+
+// Review item: nothing checked that the 3 R2 uploads the client reported as
+// successful actually landed — a row pointing at a 404 would otherwise
+// reach the public site. These lock the "some object missing" and
+// "R2 request itself throws" paths, both of which must refuse to verify
+// rather than assume success.
+describe("verifyR2ObjectsExist", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns true when all 3 objects respond ok", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 200 })));
+
+    expect(await verifyR2ObjectsExist(sampleKeys)).toBe(true);
+  });
+
+  it("returns false when any one object 404s", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === sampleKeys.publicArtworkUrl) return new Response(null, { status: 404 });
+      return new Response(null, { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await verifyR2ObjectsExist(sampleKeys)).toBe(false);
+  });
+
+  it("returns false (doesn't assume success) when the HEAD request itself throws", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network error")));
+
+    expect(await verifyR2ObjectsExist(sampleKeys)).toBe(false);
+  });
+
+  it("HEADs all 3 public URLs", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await verifyR2ObjectsExist(sampleKeys);
+
+    const calledUrls = fetchMock.mock.calls.map((c) => c[0]);
+    expect(calledUrls).toContain(sampleKeys.publicAudioUrl);
+    expect(calledUrls).toContain(sampleKeys.publicArtworkUrl);
+    expect(calledUrls).toContain(sampleKeys.publicPeaksUrl);
+    for (const call of fetchMock.mock.calls) {
+      expect(call[1]).toMatchObject({ method: "HEAD" });
+    }
   });
 });

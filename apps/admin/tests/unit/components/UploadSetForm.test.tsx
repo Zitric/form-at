@@ -129,4 +129,35 @@ describe("UploadSetForm — submit sequence", () => {
     await waitFor(() => expect(screen.getByText(/already taken/i)).toBeInTheDocument());
     expect(FakeXHR.instances).toHaveLength(0);
   });
+
+  // The server-side R2-existence check (review item) surfaces as a 422 from
+  // /api/sets — locks that the form shows a message distinct from the
+  // generic "saving the set failed" one, so an admin isn't left guessing
+  // whether to re-upload or just retry the save.
+  it("shows a files-not-found error when create returns 422 after all 3 PUTs succeeded", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/sets-presign") {
+        return new Response(
+          JSON.stringify({
+            audioUploadUrl: "https://r2.example.com/audio",
+            artworkUploadUrl: "https://r2.example.com/artwork",
+            peaksUploadUrl: "https://r2.example.com/peaks",
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === "/api/sets") {
+        return new Response(null, { status: 422 });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const user = await fillAndSelectFiles();
+    await user.click(screen.getByText("upload"));
+    await user.click(screen.getByRole("button", { name: "confirm upload" }));
+
+    await waitFor(() => expect(screen.getByText(/couldn't be found on R2/i)).toBeInTheDocument());
+    expect(FakeXHR.instances).toHaveLength(3);
+  });
 });

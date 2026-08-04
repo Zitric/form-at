@@ -7,7 +7,10 @@ import { extractAccessToken, verifyAccessJwt } from "~/utils/verifyAccessJwt";
 // client-side (see UploadSetForm.tsx) — this endpoint never sees file
 // bytes, only re-derives the same public URLs the presign step already
 // handed out via `deriveSetR2Keys` (never trusts a client-supplied URL
-// string for anything structural).
+// string for anything structural). Re-VERIFIES that claim server-side too
+// (see `verifyR2ObjectsExist` below) rather than taking the client's word
+// for it — a row pointing at a 404 lands on the public site, not just the
+// admin's own screen.
 //
 // The `sets.id` PRIMARY KEY constraint at the INSERT below is the actual
 // race-proof guarantee — not the presign step's earlier uniqueness check.
@@ -107,6 +110,40 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Nothing before this point actually checks that the 3 R2 uploads
+// succeeded — this endpoint takes the client's word for it. Access-gated,
+// so the threat model is an honest mistake (a bug in the form's error
+// handling, a retry racing a failure, a direct call skipping the uploads
+// entirely), not an attacker — but the consequence lands on the PUBLIC
+// site: a row whose src/artwork/peaks point at 404s. A HEAD against each
+// public URL closes that for the cost of 3 cheap requests on an operation
+// that already took minutes. Plain `fetch` against the public CDN URLs
+// (not a signed R2 API call) — this runs server-side in the Worker, so the
+// browser-side HEAD-against-R2 CORS quirk (TECH_DEBT.md item 15) doesn't
+// apply, and R2 has strong read-after-write consistency (confirmed against
+// Cloudflare's own docs) so there's no eventual-consistency flakiness to
+// retry around here. Deliberately no retry on a genuine 404/error — by the
+// time this runs, the client has already reported all 3 PUTs succeeded, so
+// a HEAD failure here means something real; the admin's own resubmit (which
+// restarts the whole presign→PUTs→create sequence) is the retry path.
+// Exported for unit tests — mocked-fetch coverage of the "some object is
+// missing" and "R2 request throws" paths, independent of the route
+// handler's Access/validate/insert wrapping.
+export async function verifyR2ObjectsExist(keys: SetR2Keys): Promise<boolean> {
+  const urls = [keys.publicAudioUrl, keys.publicArtworkUrl, keys.publicPeaksUrl];
+  const checks = await Promise.all(
+    urls.map(async (url) => {
+      try {
+        const res = await fetch(url, { method: "HEAD" });
+        return res.ok;
+      } catch {
+        return false;
+      }
+    }),
+  );
+  return checks.every(Boolean);
+}
+
 // Exported for unit tests — the retry-then-fail path (transient D1 error
 // retried with backoff; a UNIQUE-constraint error is the real thing, not a
 // blip, and is never retried) is exactly the behavior PR4's review asked to
@@ -202,6 +239,10 @@ export const Route = createFileRoute("/api/sets")({
           keys = deriveSetR2Keys(body.id, { audio: body.audioExt, artwork: body.artworkExt });
         } catch {
           return new Response(null, { status: 400 });
+        }
+
+        if (!(await verifyR2ObjectsExist(keys))) {
+          return new Response(null, { status: 422 });
         }
 
         const outcome = await insertSetWithRetry(db, {

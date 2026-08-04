@@ -223,7 +223,9 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
         setError(
           createResponse.status === 409
             ? "this id is already taken — edit it and try again"
-            : "upload finished but saving the set failed — try again",
+            : createResponse.status === 422
+              ? "the uploaded files couldn't be found on R2 — try uploading again"
+              : "upload finished but saving the set failed — try again",
         );
         return;
       }
