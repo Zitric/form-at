@@ -6,7 +6,8 @@ import {
   getAllOfflineEntries,
   putOfflineAudioPair,
 } from "~/data/offline-audio";
-import { type MusicSet, getSet } from "~/data/sets";
+import type { MusicSet } from "~/data/sets";
+import { type CatalogueSlice, getCatalogueSet } from "~/store/catalogueSlice";
 
 // Phase 4 chunk 3b — offline audio download + IDB-backed state.
 //
@@ -203,7 +204,12 @@ export async function warmSetVisuals(musicSet: MusicSet): Promise<void> {
   await Promise.all(urls.map((url) => fetch(url).catch(() => {})));
 }
 
-export const createOfflineSlice: StateCreator<OfflineSlice, [], [], OfflineSlice> = (set, get) => ({
+export const createOfflineSlice: StateCreator<
+  OfflineSlice & CatalogueSlice,
+  [],
+  [],
+  OfflineSlice
+> = (set, get) => ({
   offlineSets: {},
   activeDownloadId: null,
   hasRequestedPersist: false,
@@ -213,7 +219,7 @@ export const createOfflineSlice: StateCreator<OfflineSlice, [], [], OfflineSlice
 
   startDownload: async (setId) => {
     if (get().activeDownloadId) throw new Error("ONE_DOWNLOAD_AT_A_TIME");
-    const musicSet = getSet(setId);
+    const musicSet = getCatalogueSet(get().catalogueSets, setId);
     if (!musicSet) throw new Error(`UNKNOWN_SET: ${setId}`);
     // sizeBytes is the source of size truth for the QUOTA pre-flight (display
     // hint + quota check). The actual buffer preallocation reads the real
@@ -388,7 +394,7 @@ export const createOfflineSlice: StateCreator<OfflineSlice, [], [], OfflineSlice
   },
 
   removeOfflineSet: async (setId) => {
-    const musicSet = getSet(setId);
+    const musicSet = getCatalogueSet(get().catalogueSets, setId);
     const urls: string[] = [];
     if (musicSet) {
       urls.push(musicSet.src);
@@ -401,6 +407,29 @@ export const createOfflineSlice: StateCreator<OfflineSlice, [], [], OfflineSlice
   },
 
   reconcileFromIdb: async () => {
+    // Structural guard (admin set-upload feature, PR3 review) — not just a
+    // courtesy for OfflineReconciler's own gate, since that's the only
+    // current caller but shouldn't be the only thing standing between a
+    // future caller and this function's destructive branch. `catalogueReady`
+    // only means the boot fetch has SETTLED (success, failure, OR timeout —
+    // see catalogueSlice.ts) — before that, there's no point running
+    // reconciliation at all. Strict `!== true` (not just falsy) so a store
+    // that never composed CatalogueSlice at all (some isolated tests) fails
+    // the same safe way as one that composed it but hasn't settled yet.
+    //
+    // NOTE: this does NOT by itself make pass 2's catalogue-membership
+    // purge safe — see the separate `catalogueConfirmed` check inside pass
+    // 2 below, and catalogueSlice.ts's comment on why the two flags are
+    // different questions.
+    if (get().catalogueReady !== true) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn(
+          "[offline] reconcileFromIdb skipped — catalogue not ready yet (this should self-resolve once the boot fetch settles)",
+        );
+      }
+      return;
+    }
+
     let allEntries: OfflineAudioEntry[];
     try {
       allEntries = await getAllOfflineEntries();
@@ -441,13 +470,29 @@ export const createOfflineSlice: StateCreator<OfflineSlice, [], [], OfflineSlice
     }
 
     // Pass 2: IDB entries — orphans (no persisted state) become saved;
-    // catalogue-removed (no `getSet`) entries get queued for auto-purge.
+    // catalogue-removed (no catalogue match) entries get queued for
+    // auto-purge. Safe to treat a miss here as genuine removal ONLY when
+    // `catalogueConfirmed` is true — i.e. this session's live fetch actually
+    // SUCCEEDED, not merely settled (`catalogueReady`, checked above, also
+    // goes true on a failed/timed-out fetch, which tells us nothing about
+    // whether `catalogueSets` is complete). Without this extra check, a
+    // failed boot fetch on a device whose persisted catalogueSets was
+    // cleared would see the bare snapshot, find a genuinely-saved
+    // recently-uploaded set missing from it, and permanently delete real
+    // user data over a network blip — see catalogueSlice.ts's comment on
+    // why `catalogueReady` alone was the wrong gate for this.
     for (const [setId, entries] of bySetId) {
-      const catalogueSet = getSet(setId);
+      const catalogueSet = getCatalogueSet(get().catalogueSets, setId);
       if (!catalogueSet) {
-        // Set is no longer in sets.ts — no UI path to play it anymore. Queue
-        // the URLs for deletion and DON'T add to state. See TECH_DEBT item 13
-        // for the policy + future revision criteria.
+        if (get().catalogueConfirmed !== true) {
+          // Unconfirmed catalogue — we genuinely don't know whether this id
+          // was removed or simply hasn't loaded yet. Leave it alone
+          // entirely: no purge, no state change either way.
+          continue;
+        }
+        // Set is no longer in the catalogue — no UI path to play it anymore.
+        // Queue the URLs for deletion and DON'T add to state. See TECH_DEBT
+        // item 13 for the policy + future revision criteria.
         for (const e of entries) orphanUrlsToPurge.push(e.url);
         continue;
       }

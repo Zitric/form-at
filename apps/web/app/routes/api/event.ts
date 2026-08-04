@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { getSet } from "~/data/sets";
+import { isKnownSetId } from "~/data/sets";
 import { type TrackableEventType, isTrackableEventType } from "~/utils/trackableEvents";
 
 // Wire shape is snake_case (event_type / set_id / is_standalone) rather
@@ -18,7 +18,16 @@ const MAX_STR = 200;
 // `canFetchPlaybackBytes` / `classifyDownloadFailure` elsewhere in this repo.
 // `api/signal.ts`'s own `validate` predates that convention and isn't
 // exported; not fixing that pre-existing gap here, out of scope.
-export function validate(raw: unknown): EventBody | null {
+//
+// `async` (PR3) — the set_id existence check is now `isKnownSetId`, which
+// only touches D1 on a snapshot miss (see the precedence comment on
+// `isKnownSetId` itself in ~/data/sets.ts). `db` is threaded in from the
+// handler rather than read here, so this stays a plain, directly-testable
+// function against a fake D1 — same convention as `getAllSetsWithFallback`.
+export async function validate(
+  raw: unknown,
+  db: D1Database | undefined,
+): Promise<EventBody | null> {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
 
@@ -36,7 +45,7 @@ export function validate(raw: unknown): EventBody | null {
     if (typeof r.set_id !== "string" || r.set_id.length === 0 || r.set_id.length > MAX_STR) {
       return null;
     }
-    if (!getSet(r.set_id)) return null;
+    if (!(await isKnownSetId(db, r.set_id))) return null;
     setId = r.set_id;
   }
 
@@ -48,14 +57,14 @@ export const Route = createFileRoute("/api/event")({
     handlers: {
       POST: async ({ request, context }) => {
         try {
-          const body = validate(await request.json());
-          // Always 204 — don't leak what we accepted/rejected to potential abusers.
-          if (!body) return new Response(null, { status: 204 });
-
           const cf = (context as unknown as Record<string, unknown>).cloudflare as
             | { env: { DB: D1Database } }
             | undefined;
           const db = cf?.env?.DB;
+
+          const body = await validate(await request.json(), db);
+          // Always 204 — don't leak what we accepted/rejected to potential abusers.
+          if (!body) return new Response(null, { status: 204 });
 
           if (db) {
             await db

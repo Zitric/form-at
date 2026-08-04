@@ -68,6 +68,53 @@ export const fetchAllSets = createServerFn({ method: "GET" }).handler(({ context
   getAllSetsWithFallback(getDb(context)),
 );
 
+// Boot-confirmation path for CatalogueSync.tsx (admin set-upload feature,
+// PR3 review fix) — deliberately NOT `getAllSetsWithFallback`. That function
+// resolves successfully with the bare snapshot both when there's no D1
+// binding and when the live query throws, which makes a genuine merged
+// result indistinguishable from a substituted fallback to anything awaiting
+// its promise. CatalogueSync needs exactly that distinction: it only marks
+// the catalogue `catalogueConfirmed` (see catalogueSlice.ts) when a live D1
+// read actually succeeded — never when any fallback was substituted
+// anywhere in the chain, including server-side ones the client never sees
+// as a network failure. So this rejects (never swallows) on both "no D1
+// binding" and "the live query threw," giving the caller a real promise
+// rejection to `.catch()` on instead of a falsely-successful snapshot.
+export async function getAllSetsLive(db: D1Database | undefined): Promise<MusicSet[]> {
+  if (!db) throw new Error("NO_D1_BINDING");
+  const live = await fetchUploadedSets(db);
+  return mergeSets(live, sets);
+}
+
+export const fetchAllSetsLive = createServerFn({ method: "GET" }).handler(({ context }) =>
+  getAllSetsLive(getDb(context)),
+);
+
 export const fetchSetForDetailPage = createServerFn({ method: "GET" })
   .inputValidator((id: string) => id)
   .handler(({ data: id, context }) => getSetByIdWithFallback(getDb(context), id));
+
+// Existence check for `routes/api/event.ts`/`routes/api/signal.ts`'s
+// anti-spam validation — deliberately the OPPOSITE precedence from
+// `getSetByIdWithFallback`/`mergeSets` above. Those are the READ path, where
+// D1 wins because a direct-SQL edit should show up immediately (PR3
+// review). Validation only cares whether an id EXISTS at all, never which
+// copy is "fresher" — so checking the free, always-available static
+// snapshot FIRST and only touching D1 on a miss is strictly better here: it
+// resolves every set that existed at the last deploy with zero D1 reads
+// (the overwhelming majority of real traffic — this project's `plays`
+// table sits around ~300 rows total), and only pays a D1 read for a set
+// genuinely uploaded since then. Fails CLOSED on a D1 error (reject, don't
+// assume valid) — matching this table's own "reject, don't sanitize"
+// philosophy (trackableEvents.ts): a D1 hiccup should not become a window
+// where arbitrary set_ids get accepted.
+export async function isKnownSetId(db: D1Database | undefined, id: string): Promise<boolean> {
+  if (getSet(id)) return true;
+  if (!db) return false;
+  try {
+    const row = await db.prepare("SELECT 1 FROM sets WHERE id = ?").bind(id).first();
+    return row !== null;
+  } catch {
+    return false;
+  }
+}

@@ -1,12 +1,13 @@
 import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { getSet } from "~/data/sets";
+import { type MusicSet, getSet } from "~/data/sets";
+import { type CatalogueSlice, createCatalogueSlice, getCatalogueSet } from "./catalogueSlice";
 import { type OfflineSetState, type OfflineSlice, createOfflineSlice } from "./offlineSlice";
 import { type PlayerSlice, createPlayerSlice } from "./playerSlice";
 import { type UiSlice, createUiSlice } from "./uiSlice";
 
-export type AppStore = PlayerSlice & UiSlice & OfflineSlice;
+export type AppStore = PlayerSlice & UiSlice & OfflineSlice & CatalogueSlice;
 
 export const useStore = create<AppStore>()(
   persist(
@@ -14,6 +15,7 @@ export const useStore = create<AppStore>()(
       ...createPlayerSlice(...a),
       ...createUiSlice(...a),
       ...createOfflineSlice(...a),
+      ...createCatalogueSlice(...a),
     }),
     {
       name: "format-player",
@@ -44,6 +46,13 @@ export const useStore = create<AppStore>()(
           Object.entries(state.offlineSets).filter(([, s]) => s.status === "saved"),
         ),
         hasRequestedPersist: state.hasRequestedPersist,
+        // Admin set-upload feature (PR3): the live-merged catalogue from the
+        // last successful boot fetch — persisted so a later fully-offline
+        // boot has more than just the bare snapshot to work with (narrows
+        // the "uploaded and saved in the same deploy window" gap PR2's docs
+        // already name). Deliberately NOT `catalogueReady`/`catalogueConfirmed`
+        // — both must start false every session; see catalogueSlice.ts.
+        catalogueSets: state.catalogueSets,
       }),
       merge: (persisted, current) => {
         // zustand calls merge(undefined, current) when the storage key does
@@ -64,6 +73,7 @@ export const useStore = create<AppStore>()(
           pushOptInDismissed,
           offlineSets,
           hasRequestedPersist,
+          catalogueSets: persistedCatalogueSets,
         } = persisted as {
           nowPlayingId: string | null;
           positions: Record<string, number>;
@@ -74,10 +84,29 @@ export const useStore = create<AppStore>()(
           pushOptInDismissed?: boolean;
           offlineSets?: Record<string, OfflineSetState>;
           hasRequestedPersist?: boolean;
+          catalogueSets?: MusicSet[];
         };
+        // Falls back to `current.catalogueSets` (the bare snapshot default
+        // from createCatalogueSlice) for a payload persisted before this
+        // field existed — never `undefined`, so the lookup below always has
+        // something to check.
+        const catalogueSets = persistedCatalogueSets ?? current.catalogueSets;
         return {
           ...current,
-          nowPlaying: nowPlayingId ? (getSet(nowPlayingId) ?? null) : null,
+          catalogueSets,
+          // ALWAYS false on rehydrate, regardless of what a previous
+          // session (or a hand-edited localStorage blob) might claim —
+          // this session hasn't settled or confirmed anything yet. See
+          // catalogueSlice.ts for why these are two distinct flags.
+          catalogueReady: false,
+          catalogueConfirmed: false,
+          // Prefer the merged catalogue (covers a set uploaded since the
+          // last deploy that this device has already fetched once) over the
+          // bare static snapshot; `getSet` stays as the final fallback for a
+          // payload predating catalogueSets entirely.
+          nowPlaying: nowPlayingId
+            ? (getCatalogueSet(catalogueSets, nowPlayingId) ?? getSet(nowPlayingId) ?? null)
+            : null,
           positions: positions ?? {},
           peaksCache: peaksCache ?? {},
           durations: durations ?? {},

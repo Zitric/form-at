@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { queueSignalForReplay } from "~/data/beacon-queue";
-import { type MusicSet, sets } from "~/data/sets";
+import type { MusicSet } from "~/data/sets";
 import { useStore } from "~/store";
+import { getAdjacentSets } from "~/store/catalogueSlice";
 import { wasServedFromIdb } from "~/store/playerSlice";
 import { withAppContext } from "~/utils/audioUrl";
 
@@ -243,14 +244,14 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
       }
     });
     navigator.mediaSession.setActionHandler("previoustrack", () => {
-      const i = sets.findIndex((s) => s.id === useStore.getState().nowPlaying?.id);
-      const prev = sets[i - 1];
-      if (i > 0 && prev) useStore.getState().playTrack(prev);
+      const state = useStore.getState();
+      const { prev } = getAdjacentSets(state.catalogueSets, state.nowPlaying?.id);
+      if (prev) state.playTrack(prev);
     });
     navigator.mediaSession.setActionHandler("nexttrack", () => {
-      const i = sets.findIndex((s) => s.id === useStore.getState().nowPlaying?.id);
-      const next = sets[i + 1];
-      if (i < sets.length - 1 && next) useStore.getState().playTrack(next);
+      const state = useStore.getState();
+      const { next } = getAdjacentSets(state.catalogueSets, state.nowPlaying?.id);
+      if (next) state.playTrack(next);
     });
   }, [nowPlaying, setIsPlaying, audioRef]);
 
@@ -299,8 +300,7 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
       sendPlay(nowPlaying);
       setIsPlaying(false);
       if (nowPlaying) setLastPosition(nowPlaying.id, 0);
-      const i = sets.findIndex((s) => s.id === nowPlaying?.id);
-      const nextSet = i < sets.length - 1 ? sets[i + 1] : null;
+      const { next: nextSet } = getAdjacentSets(useStore.getState().catalogueSets, nowPlaying?.id);
       if (nextSet) playTrack(nextSet);
     },
   };
