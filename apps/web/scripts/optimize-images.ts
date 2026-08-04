@@ -14,8 +14,8 @@
 import { mkdir, readdir, stat } from "node:fs/promises";
 import { dirname, join, parse, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { sets } from "@form-at/data/sets";
 import sharp from "sharp";
-import { sets } from "../app/data/sets";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(ROOT, "images-source");
