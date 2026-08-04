@@ -172,7 +172,7 @@ describe("SetsList", () => {
   // request, and each distinct failure mode (404/422/409/401/network) shows
   // its own message rather than a generic one.
   describe("restore confirmation", () => {
-    it("clicking restore opens a confirm modal stating the immediate-republish consequence and the offline-download caveat", async () => {
+    it("clicking restore opens a confirm modal stating the immediate-republish consequence, the offline-download caveat, and the missing-optimized-artwork caveat", async () => {
       const user = userEvent.setup();
       render(<SetsList sets={[]} recentDeletions={recentDeletions} onChanged={vi.fn()} />);
 
@@ -181,6 +181,9 @@ describe("SetsList", () => {
       expect(screen.getByText(/live on the public site again, immediately/i)).toBeInTheDocument();
       expect(
         screen.getByText(/does not bring those back — they'd need to save it again/i),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(/it'll show the original image until the next deploy/i),
       ).toBeInTheDocument();
     });
 

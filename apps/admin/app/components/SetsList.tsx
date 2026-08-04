@@ -139,6 +139,11 @@ function RestoreConfirmModal({
               If it already disappeared from someone's offline downloads before now, restoring the
               row does not bring those back — they'd need to save it again.
             </p>
+            <p className="text-xs text-grey/70">
+              Its optimized artwork may not exist yet either, if a deploy happened while this was
+              deleted — it'll show the original image until the next deploy regenerates the
+              responsive variants. Expected, not a bug.
+            </p>
             {error && <p className="text-xs text-red-400">{error}</p>}
             <div className="flex gap-4">
               <Button variant="primary" onClick={handleRestore}>

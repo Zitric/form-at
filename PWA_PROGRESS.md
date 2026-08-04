@@ -3147,9 +3147,28 @@ deliberately opening "recently deleted" and clicking a specific named
 entry (not a bulk action or a stray click in a busy list), and the confirm
 modal leads with the real consequence — *"Restoring makes `<title>` by
 `<artist>` live on the public site again, immediately"* — rather than
-burying it under the offline-download caveat (item 5's honesty note, same
-register as the delete modal: restoring the row does not bring back copies
-already purged from someone's offline downloads before the restore).
+burying it under the two honesty caveats that follow it (same register as
+the delete modal):
+- Restoring the row does not bring back copies already purged from
+  someone's offline downloads before the restore (item 5).
+- **The set's optimized artwork variants may not exist either, if a deploy
+  happened while it was deleted.** `optimize-images.ts` (PR5) only
+  processes sets it finds in the freshly-regenerated build-time snapshot,
+  and writes into `public/images/uploads/` — gitignored, and NOT cached
+  between deploys (checked `.github/workflows/deploy.yml`: only pnpm's
+  dependency cache and the Playwright browser cache persist across runs),
+  so it starts empty on every single deploy. If a deploy ran while this
+  set was deleted, that deploy's build never saw it in the snapshot, so it
+  never generated its variants — they simply don't exist in the currently-
+  deployed static assets, restore or no restore. `Image.tsx`'s existing
+  fallback (PR4 — falls back to the raw `artworkOriginalUrl` when the
+  optimized `-1080.webp` 404s) is exactly the mechanism this relies on:
+  the restored set renders correctly via the original image, not broken,
+  just not yet responsive/optimized — until the next deploy's
+  `optimize-images` run sees it in the snapshot again and regenerates
+  them. Correct behavior, not a bug — worth stating plainly so it doesn't
+  read as one the first time it happens. Doesn't apply to the 4 legacy
+  sets, whose variants are committed to git, not gitignored.
 
 **Manual verification for this feature**: delete a zero-play test set,
 restore it, confirm it reappears in the sets list immediately and drops
