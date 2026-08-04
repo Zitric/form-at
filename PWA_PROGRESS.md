@@ -2915,6 +2915,38 @@ the same way an accidental duplicate send already is) — so the log is
 actually visible day-to-day, not a table Julian would need `wrangler` to
 inspect.
 
+**Post-review fix — item 2a's log was written in the wrong order, and the
+first real delete would have hit it.** The initial version issued `DELETE
+FROM sets` then `INSERT INTO admin_deleted_sets` as two separate `.run()`
+calls. `admin_deleted_sets` doesn't exist in the remote DB until Julian runs
+the migration — so the first delete after deploy, before that migration
+runs, would have deleted the row and then thrown on the missing table:
+gone, unlogged, exactly what item 2a exists to prevent. The tests didn't
+catch it because they only asserted both statements were issued
+(`calls.some(...)`), which is order-blind.
+
+Fixed two ways:
+- **Real atomicity via `db.batch()`**, confirmed against Cloudflare's docs
+  rather than assumed from the name: batched statements run as one SQL
+  transaction — any statement's failure rolls back the entire batch, not
+  just that statement. `deleteSetWithAudit` now passes `[insertAudit,
+  deleteRow]` to a single `db.batch()` call, so a failing INSERT (e.g. the
+  un-migrated-table case) leaves the DELETE uncommitted too, by
+  construction — not by luck of statement ordering.
+- **Log-first ordering kept anyway**, as the fallback: the array order is
+  INSERT then DELETE, so even if D1's atomicity guarantee were ever weaker
+  than documented, this still fails in the safe direction (row intact,
+  error surfaced) rather than the reverse.
+- **The play-count read no longer aborts the delete on failure** — it's
+  metadata about the deletion, not a precondition for it, so it's wrapped
+  in its own `try`/`catch` and defaults to 0.
+- **New tests lock the ordering directly**: one asserts the exact array
+  passed to the fake `db.batch()` (`[INSERT, DELETE]` in that order, not
+  just "both were called somewhere"); another sets the fake batch to throw
+  and asserts the whole call rejects with both statements still bundled in
+  the one batch invocation that failed; a third asserts a throwing
+  play-count read still results in `"deleted"` with `0` logged.
+
 **Item 3 — R2 objects on delete: left in place, documented, same policy as
 PR4's create-failure orphans.** Deleting the objects immediately would
 break anyone mid-playback via the live network stream and anyone whose
