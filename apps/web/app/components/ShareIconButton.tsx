@@ -1,5 +1,5 @@
+import type { MusicSet } from "@form-at/data/sets";
 import { ShareIcon } from "@form-at/ui";
-import type { MusicSet } from "~/data/sets";
 import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";
 

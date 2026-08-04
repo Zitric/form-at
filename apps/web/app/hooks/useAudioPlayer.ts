@@ -1,7 +1,7 @@
+import type { MusicSet } from "@form-at/data/sets";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { queueSignalForReplay } from "~/data/beacon-queue";
-import type { MusicSet } from "~/data/sets";
 import { useStore } from "~/store";
 import { getAdjacentSets } from "~/store/catalogueSlice";
 import { wasServedFromIdb } from "~/store/playerSlice";

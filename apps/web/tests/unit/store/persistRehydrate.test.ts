@@ -1,5 +1,5 @@
+import { sets } from "@form-at/data/sets";
 import { beforeEach, describe, expect, it } from "vitest";
-import { sets } from "~/data/sets";
 import { useStore } from "~/store";
 
 // Regression tests for the first-visit hydration failure (2026-07-02 Android

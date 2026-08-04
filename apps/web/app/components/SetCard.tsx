@@ -1,10 +1,10 @@
+import type { MusicSet } from "@form-at/data/sets";
 import { Card } from "@form-at/ui";
 import { useNavigate } from "@tanstack/react-router";
 import { CardArtwork } from "~/components/CardArtwork";
 import { SaveForOfflineIconButton } from "~/components/SaveForOfflineIconButton";
 import { ShareIconButton } from "~/components/ShareIconButton";
 import { CirclePlayButton } from "~/components/player";
-import type { MusicSet } from "~/data/sets";
 import { useStore } from "~/store";
 
 // Unified set-list card — consolidates two component paths that had drifted

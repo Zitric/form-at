@@ -1,9 +1,9 @@
+import type { MusicSet } from "@form-at/data/sets";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createJSONStorage } from "zustand/middleware";
 import { ShareModal } from "~/components/ShareModal";
-import type { MusicSet } from "~/data/sets";
 import { useStore } from "~/store";
 
 const testSet: MusicSet = {

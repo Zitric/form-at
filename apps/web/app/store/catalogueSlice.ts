@@ -1,5 +1,5 @@
+import { type MusicSet, sets } from "@form-at/data/sets";
 import type { StateCreator } from "zustand";
-import { type MusicSet, sets } from "~/data/sets";
 
 // Admin set-upload feature, PR3 (2026-08): replaces the plain `import {
 // sets }` most of the app used to read the catalogue synchronously. The

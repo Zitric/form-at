@@ -1,11 +1,8 @@
-// Transitional re-export — the canonical source moved to packages/data/src/sets.ts
-// so apps/admin can read the same catalogue without duplicating it. Kept as a
-// shim here (rather than sweeping all ~33 `~/data/sets` import sites across
-// apps/web to `@form-at/data/sets` directly) to keep this migration scoped to
-// standing up apps/admin, not an unrelated mechanical rename. See TECH_DEBT.md
-// item 21 for the proposed follow-up sweep.
-export * from "@form-at/data/sets";
-
+// This app's own D1-fallback wrapping around @form-at/data/sets's plain
+// fetchUploadedSets/mergeSets/fetchSetById — TECH_DEBT.md item 21's import
+// sweep moved every consumer of the catalogue's canonical exports
+// (MusicSet, sets, getSet, AUDIO_HOST, etc.) to `@form-at/data/sets`
+// directly; only this app-specific wrapping stays here.
 import {
   type MusicSet,
   fetchSetById,

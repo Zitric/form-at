@@ -1,10 +1,10 @@
+import type { MusicSet } from "@form-at/data/sets";
 import { Button } from "@form-at/ui";
 import { useState } from "react";
 import { CancelDownloadModal } from "~/components/CancelDownloadModal";
 import { QuotaInfoModal } from "~/components/QuotaInfoModal";
 import { SaveGateModal } from "~/components/SaveGateModal";
 import { SavedManageModal } from "~/components/SavedManageModal";
-import type { MusicSet } from "~/data/sets";
 import { useOfflineStateFor, useTriggerDownload } from "~/hooks/useOfflineDownload";
 import { useSaveGate } from "~/hooks/useSaveGate";
 import { useStore } from "~/store";

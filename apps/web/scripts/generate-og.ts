@@ -12,10 +12,10 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { type MusicSet, sets } from "@form-at/data/sets";
 import sharp from "sharp";
 import { type DJ, djs } from "../app/data/djs";
 import { events, type Event } from "../app/data/events";
-import { type MusicSet, sets } from "../app/data/sets";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");

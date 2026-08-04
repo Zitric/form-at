@@ -1,5 +1,6 @@
 import { Button, Label, PageTitle, PauseIcon, PlayIcon, TerminalRow } from "@form-at/ui";
 
+import { type SetStats, fetchSetStats } from "@form-at/data/set-stats";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
@@ -8,8 +9,6 @@ import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
 import { SaveForOfflineButton } from "~/components/SaveForOfflineButton";
 import { ShareSetButton } from "~/components/ShareSetButton";
-import { fetchSetStats } from "~/data/set-stats";
-import type { SetStats } from "~/data/set-stats";
 import { fetchSetForRoute } from "~/data/setsForRoute";
 import { useTypedOnce } from "~/hooks/useTypedOnce";
 import { useStore } from "~/store";

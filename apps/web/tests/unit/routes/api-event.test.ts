@@ -1,5 +1,5 @@
+import { sets } from "@form-at/data/sets";
 import { describe, expect, it, vi } from "vitest";
-import { sets } from "~/data/sets";
 import { validate } from "~/routes/api/event";
 import { TRACKABLE_EVENT_TYPES } from "~/utils/trackableEvents";
 

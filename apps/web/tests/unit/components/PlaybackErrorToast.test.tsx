@@ -1,7 +1,7 @@
+import { sets } from "@form-at/data/sets";
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { PlaybackErrorToast } from "~/components/player/PlaybackErrorToast";
-import { sets } from "~/data/sets";
 import { useStore } from "~/store";
 
 // Locks the blocked-tap visibility rule (TECH_DEBT 17 follow-up,

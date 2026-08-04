@@ -1,6 +1,6 @@
+import { sets } from "@form-at/data/sets";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { create } from "zustand";
-import { sets } from "~/data/sets";
 import { type CatalogueSlice, createCatalogueSlice } from "~/store/catalogueSlice";
 import {
   type OfflineSlice,

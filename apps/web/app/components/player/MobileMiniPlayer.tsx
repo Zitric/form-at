@@ -1,8 +1,8 @@
+import type { MusicSet } from "@form-at/data/sets";
 import { useDrag } from "@use-gesture/react";
 import { useEffect, useRef, useState } from "react";
 import { MobileProgressBar } from "~/components/player/MobileProgressBar";
 import { metaSeparator, playToggleIcon } from "~/components/player/playerCommon";
-import type { MusicSet } from "~/data/sets";
 import { useNavReady } from "~/hooks/useNavReady";
 import { useStore } from "~/store";
 import { ABOVE_NAV_BOTTOM, LAYOUT } from "~/styles/layout";

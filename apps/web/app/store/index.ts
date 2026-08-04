@@ -1,7 +1,7 @@
+import { type MusicSet, getSet } from "@form-at/data/sets";
 import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { type MusicSet, getSet } from "~/data/sets";
 import { type CatalogueSlice, createCatalogueSlice, getCatalogueSet } from "./catalogueSlice";
 import { type OfflineSetState, type OfflineSlice, createOfflineSlice } from "./offlineSlice";
 import { type PlayerSlice, createPlayerSlice } from "./playerSlice";

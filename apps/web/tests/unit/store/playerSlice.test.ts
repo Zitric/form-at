@@ -1,6 +1,6 @@
+import type { MusicSet } from "@form-at/data/sets";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { create } from "zustand";
-import type { MusicSet } from "~/data/sets";
 import {
   canFetchPlaybackBytes,
   createPlayerSlice,

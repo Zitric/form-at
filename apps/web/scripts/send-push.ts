@@ -49,7 +49,7 @@ import {
   type PushSubscriptionRecord,
   type SendPushResult,
   sendWebPush,
-} from "../app/utils/webPush";
+} from "@form-at/data/webPush";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..", "..", "..");

@@ -1,3 +1,4 @@
+import type { MusicSet } from "@form-at/data/sets";
 import type { StateCreator } from "zustand";
 import { djs } from "~/data/djs";
 import {
@@ -6,7 +7,6 @@ import {
   getAllOfflineEntries,
   putOfflineAudioPair,
 } from "~/data/offline-audio";
-import type { MusicSet } from "~/data/sets";
 import { type CatalogueSlice, getCatalogueSet } from "~/store/catalogueSlice";
 
 // Phase 4 chunk 3b — offline audio download + IDB-backed state.

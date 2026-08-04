@@ -1,8 +1,8 @@
+import type { MusicSet } from "@form-at/data/sets";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SaveForOfflineButton } from "~/components/SaveForOfflineButton";
-import type { MusicSet } from "~/data/sets";
 import type { SaveGate } from "~/hooks/useSaveGate";
 
 // Mock the gate hook to drive each branch. The SaveGateModal it renders

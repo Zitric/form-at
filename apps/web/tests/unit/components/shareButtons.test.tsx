@@ -1,9 +1,9 @@
+import { sets } from "@form-at/data/sets";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ShareIconButton } from "~/components/ShareIconButton";
 import { ShareSetButton } from "~/components/ShareSetButton";
-import { sets } from "~/data/sets";
 
 // share_click (2026-07-08): both share surfaces (list-card icon + detail
 // page text button) must fire the event before opening the share modal.
