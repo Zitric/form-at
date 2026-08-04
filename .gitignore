@@ -28,6 +28,15 @@ CLAUDE.local.md
 # Heavy image originals — optimized variants in apps/web/public/images/ are committed
 apps/*/images-source/
 
+# Uploaded-set artwork variants — regenerated on every build by
+# scripts/optimize-images.ts from each set's R2 artworkOriginalUrl. A
+# SEPARATE directory from public/images/sets/ (legacy sets' committed
+# variants) deliberately: a path-based ignore can't tell an uploaded set's
+# `{id}-640.avif` apart from a legacy one's `002-640.avif` in the same
+# folder — they're the same shape of file. See optimize-images.ts's own
+# comment on UPLOADED_OUT for the full reasoning.
+apps/*/public/images/uploads/
+
 # Per-route OG banners — regenerated on every build by scripts/generate-og.ts
 apps/*/public/og/
 

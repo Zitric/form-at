@@ -2665,6 +2665,178 @@ originals for uploaded sets, and generate their real AVIF/WebP responsive
 variants at build time. No `Image.tsx` changes, no SW changes — both
 already landed here.
 
+**Done — see the PR5 entry below.** `optimize-images.mjs` → `optimize-images.ts`
+(needed real TS imports, see that entry for why) gained exactly this scope
+and nothing else.
+
+### Added 2026-08-04 — admin set-upload feature, PR5: responsive artwork variants for uploaded sets
+
+`feat/uploaded-artwork-variants`, branched off `main` after PR4 merged. Last
+piece of the set-upload arc: `optimize-images.ts` now generates real
+AVIF/WebP responsive variants for uploaded-set artwork, closing the gap
+`Image.tsx`'s fallback (PR4) has been covering since it landed. Four things
+were flagged for resolution first; all four changed the plan once actually
+checked rather than assumed.
+
+**Item 1 — was `optimize-images` even in the automated build? No — confirmed
+by reading `apps/web/package.json` directly.** `"build"` was
+`generate-sets-snapshot && og && sitemap && vite build && ...` — PR2 only
+ever added `generate-sets-snapshot`; `optimize-images` remained a standalone
+manual script Julian runs locally before committing `images-source/`
+originals, exactly as `CLAUDE.md` already documented. Wiring it in was
+genuinely part of this PR's scope, not a check that came back clean.
+
+Confirmed the script already skips up-to-date output (mtime comparison,
+`optimize-images.ts`'s `processOne`) before relying on that for the
+build-time-cost argument — then measured, not guessed: ran
+`pnpm optimize-images` against this repo's real `images-source/` (9 real
+git-tracked images) — **0.357s total, "Processed 0, skipped 9 (up-to-date)."**
+More importantly: in a **fresh CI checkout, `images-source/` doesn't exist
+at all** (it's gitignored, never committed) — `main()`'s own `tryStat(SRC)`
+guard means the git-tracked-image half of the script no-ops almost
+instantly in CI regardless of mtime logic. The only real cost CI ever pays
+is the uploaded-sets half, and only once per NEW upload (existence-only
+skip after that — see item 2's design). Net: adding this to the build costs
+effectively nothing today (zero uploaded sets, `images-source/` absent in
+CI) and stays small going forward, bounded by upload count, not catalogue
+size. `"build"` is now
+`generate-sets-snapshot && optimize-images && og && sitemap && vite build && ...`
+— ordered first among the three snapshot-consuming scripts, matching the
+original plan. No `turbo.json` env changes needed: unlike
+`generate-sets-snapshot` (needs `wrangler d1 execute`, hence
+`CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID`), this script only fetches
+each set's *public* `artworkOriginalUrl` over plain HTTPS — no credentials
+of any kind.
+
+**Item 2 — the gitignore problem, the one genuinely hard part.** Legacy
+sets' variants live in `public/images/sets/` and are **committed**.
+Uploaded sets' variants would need to land in the same directory (same
+`{something}-{w}.{ext}` shape) but must **never** be committed — CI
+generates them fresh from R2 every build and can't commit back, and a
+path-based `.gitignore` cannot distinguish an uploaded set's
+`{id}-640.avif` from a legacy set's `002-640.avif` in the same folder —
+they're identical in shape.
+
+**Decision: uploaded-set variants get their own directory,
+`public/images/uploads/`, gitignored wholesale** — not a gitignore pattern
+keyed off something structural within `sets/`. Reasoning: this repo already
+has the exact precedent for "a whole build-regenerated directory, ignored
+wholesale, living beside committed content" — `public/og/` (per-route OG
+banners, regenerated every build, gitignored as a directory) sits right next
+to committed static assets with zero ambiguity. The alternative (an
+allowlist-based gitignore naming the 4 legacy ids, or a manifest file
+tracking which ids are "legacy" vs "uploaded") is strictly worse: fragile
+(needs updating if a legacy image were ever hand-added again), and
+semantically backwards for `.gitignore`'s exclude-by-default model.
+
+**What this means for `Image.tsx`: nothing — zero changes needed, confirmed
+by re-reading it.** `Image` only ever resolves whatever base path
+`MusicSet.artwork` hands it (`/images/${artwork}-${w}.${ext}`); it has no
+opinion about directory structure. The actual change is one line, in
+already-shipped PR4 code: `apps/admin/app/routes/api/sets.ts`'s create
+handler set `artwork: \`sets/${body.id}\`` — changed to
+`artwork: \`uploads/${body.id}\``. Safe to change now, before this PR:
+**zero uploaded sets exist in the table yet**, so there's no existing row
+using the old convention that would need a migration. (The R2 *object* key
+convention — `sets/{id}/audio.mp3` etc., `deriveSetR2Keys` in
+`apps/admin/app/utils/r2Sets.ts` — is unrelated and unchanged; that's the
+bucket's own key structure, not the local `/images/` path.)
+
+**Item 3 — failure policy: skip and warn, never fail the build.** Argued
+explicitly, not picked silently: `generate-sets-snapshot.ts` fails loudly by
+design (`process.exit(1)` on any error) because a bad snapshot ships a
+broken catalogue to every visitor — unacceptable. This is a different
+shape of consequence: a missing/failed variant degrades to `Image.tsx`'s
+already-shipped fallback (PR4), which renders correctly — just the plain,
+un-optimized original instead of a responsive variant. Failing the whole
+build over one set's bad artwork (R2 unreachable, a 404'd
+`artworkOriginalUrl`, a file sharp can't decode) would block every other
+set's deploy over a degrade-gracefully case. `processUploadedSet` catches
+per-set, logs the reason, and continues — mirrors this same script's own
+existing precedent (`processOne`'s undersized-source case is also a
+warning, not a thrown error).
+
+**Item 4 — honest about what's actually tested vs. what needs a real
+upload.** With zero uploaded sets in the table today, the genuine
+production path — a real `artworkOriginalUrl`, fetched over a real network
+from R2, through a real deploy, with `Image.tsx` actually picking up the
+generated variant instead of its fallback — is unexercisable by any
+automated test. What's meaningfully covered in
+`apps/web/tests/unit/scripts/optimize-images.test.ts` (new — no test file
+existed for any `scripts/*` file before this PR): `fetch` mocked (no real
+network dependency in CI), but **sharp itself is real** — a synthetic
+in-memory PNG goes through the actual resize/encode/write pipeline, not a
+re-implemented stand-in. Covers: real variant files written to
+`public/images/uploads/{id}-{w}.{ext}`; confirms nothing is ever written
+into `public/images/sets/`; skip-if-exists (existence-only, not mtime,
+confirmed correct for R2-fetched bytes with no local source to compare
+against); the failure policy against a mocked non-ok response AND a
+rejected fetch, both returning a `failed` outcome rather than throwing; a
+set with no `artworkOriginalUrl` skipped without ever calling `fetch`; the
+no-upscale behavior for a narrow source. Before writing that suite, manually
+verified the real end-to-end mechanism once, live (not assumed): served a
+real repo image over a local HTTP server, pointed `processUploadedSet` at
+it, confirmed a real fetch → real sharp decode → real file write round
+trip, then confirmed skip-on-second-run and both failure paths — the exact
+thing the automated suite now covers with a mocked fetch. **Genuinely
+unverifiable pre-production, added to the manual checklist below.**
+
+**Also fixed while here (found during this work, not scope creep — same
+file, same review pass):**
+- `processOne`'s undersized-source warning referenced an undefined `file`
+  variable (should have been `rel`) — a real latent bug that would have
+  thrown a `ReferenceError` the first time any git-tracked source narrower
+  than 1080px was processed. Fixed.
+- Converted `optimize-images.mjs` → `optimize-images.ts`, run via `tsx`
+  (matching `generate-og.ts`/`generate-sitemap.ts`'s own convention) —
+  required because this script now needs a real import of the committed
+  snapshot (`../app/data/sets`), which plain `node` can't load from a `.ts`
+  file without a build step.
+- Guarded the script's `main()` auto-execution behind an
+  `import.meta.url === file://${process.argv[1]}` check — without it,
+  importing `processUploadedSet` for the new unit tests re-ran the ENTIRE
+  git-tracked-image pipeline as a side effect every time the module loaded
+  (caught while writing the manual verification script, before it ever
+  reached the automated suite).
+- Extracted the shared per-width-per-format sharp resize/write loop
+  (`generateVariants`) used by both the git-tracked path and the new
+  uploaded-set path — the loop itself was substantial enough (not "three
+  similar lines") that duplicating it wholesale risked the two copies
+  drifting if `WIDTHS`/`FORMATS` ever changed.
+
+**Set-upload arc, closed out — what's verified in production vs. still
+waiting on a first real upload:**
+| Piece | Status |
+|---|---|
+| D1 `sets` table + 4 legacy sets migrated (PR1) | ✅ Live in production, serving real traffic |
+| Live D1 + snapshot merge on `/sets`, `/sets/$id` (PR2) | ✅ Live in production |
+| Remaining catalogue consumers on the merged source; `catalogueConfirmed` fix (PR3) | ✅ Live in production |
+| Access-gated presign/create endpoints, id validation, R2 existence check (PR4) | ✅ Deployed, Access-gated — **never exercised by a real upload yet** |
+| `Image.tsx` fallback + the state-leak fix (PR4 review) | ✅ Deployed — currently a no-op in production (no uploaded set exists to trigger the fallback path), verified only by the unit suite's simulated failures |
+| `optimize-images.ts` uploaded-set variant generation (PR5) | ✅ Deployed, wired into every build — **has never run against a real uploaded set**; the `sets.filter(s => s.artworkOriginalUrl)` check will simply keep finding zero until then |
+| DJ-page linkage for an uploaded set (`djs.ts`'s `setIds`) | Manual step, unautomated by design (§4 of the original plan) — untested because nothing has been uploaded to link yet |
+
+**On-device / manual checklist for the first real upload** (the one thing
+no test suite here can prove):
+1. Upload a real set through the admin form. Confirm the 3 R2 objects land
+   (audio, artwork, peaks), the presign→PUTs→create sequence completes, and
+   the row appears in D1.
+2. Confirm it appears on a fresh load of `/sets` (per PR4's staleTime
+   caveat — a tab already open on `/sets` needs a reload).
+3. Before the next deploy: confirm the artwork renders via `Image.tsx`'s
+   fallback (the plain original, not broken) on both `/sets` and the set
+   detail page.
+4. Run (or wait for) a deploy. Confirm `optimize-images.ts` actually finds
+   the new set (`sets.filter(s => s.artworkOriginalUrl)` picks it up from
+   the regenerated snapshot), fetches its real R2 artwork, and writes real
+   variants to `public/images/uploads/`.
+5. Confirm `Image.tsx` now renders the OPTIMIZED `<picture>` (not the
+   fallback) for that set post-deploy — the actual proof this whole PR
+   exists for.
+6. Confirm a second, no-op deploy after that doesn't regenerate the same
+   set's variants (skip-if-exists working against real files, not just the
+   unit-tested synthetic case).
+
 ## Reference — key design decisions from the PWA work
 
 ### App-gated capability pattern (2026-07-17)
