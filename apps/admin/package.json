@@ -25,6 +25,7 @@
     "@visx/responsive": "^4.0.0",
     "@visx/scale": "^4.0.0",
     "@visx/tooltip": "^4.0.0",
+    "aws4fetch": "^1.0.20",
     "jose": "^6.2.7",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
