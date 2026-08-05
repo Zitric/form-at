@@ -2913,7 +2913,10 @@ list below the main list — mirroring `RecentPushSends`'s exact placement
 reasoning (visible before a new delete, so an accidental repeat is caught
 the same way an accidental duplicate send already is) — so the log is
 actually visible day-to-day, not a table Julian would need `wrangler` to
-inspect.
+inspect. **Update (2026-08, one-click restore feature, entry below):** the
+log's actual recovery path is no longer "read this via `wrangler`, hand-
+write an `INSERT`" — `RecentlyDeletedSets` now has a `[ restore ]` action
+that does exactly that automatically.
 
 **Post-review fix — item 2a's log was written in the wrong order, and the
 first real delete would have hit it.** The initial version issued `DELETE
@@ -3035,10 +3038,144 @@ on both `/sets` and its detail page without a deploy; delete a zero-play
 test set, confirm the single-click flow; delete (or attempt to delete) a
 set with real plays, confirm the type-to-confirm gate actually blocks the
 button until the id matches; confirm the deleted row appears in
-`RecentlyDeletedSets` and in `admin_deleted_sets` via `wrangler`; confirm
-the deleted set keeps rendering on the public site until the next deploy,
+`RecentlyDeletedSets`, and — since one-click restore now exists (entry
+below) — confirm it can also be restored via the UI, and that a second
+restore attempt on the same (now-restored) entry 404s; confirm the
+deleted set keeps rendering on the public site until the next deploy,
 then disappears after it (the one part of this PR that only a real deploy
 boundary can prove).
+
+---
+
+## One-click restore for deleted sets (2026-08)
+
+PR6 shipped a delete audit log (`admin_deleted_sets`) specifically so a
+delete would be "recoverable in practice" — but the only recovery path was
+manual: read the log row via `wrangler`, hand-write an `INSERT INTO sets`.
+This closes that gap with a `[ restore ]` action on each entry in
+`RecentlyDeletedSets`.
+
+**Restore-from-log, explicitly NOT soft delete.** `admin_deleted_sets`
+already stores every column needed to reconstruct a `sets` row (all of
+them except `peaks_status`, which is `DEFAULT 'ready'` and — confirmed via
+grep before writing any code — never set to anything else anywhere in the
+codebase; omitting it from the restore `INSERT` lets it default correctly).
+R2 objects were deliberately never deleted (PR6 item 3). So a restore is
+just: read the log row, `INSERT` it back into `sets`, mark the log entry
+restored. **Nothing about `mergeSets`, `fetchUploadedSets`, `fetchSetById`,
+or the snapshot generator changed** — a soft-delete/tombstone design would
+have needed all of those touched; restore-from-log needed none of them,
+which is the whole reason this didn't become a bigger feature than it is.
+
+**New route, not a 4th handler on the existing one.** `POST
+/api/sets/restore` lives in `routes/api/sets/restore.ts`, a nested file
+alongside the existing flat `routes/api/sets.ts` — a genuinely different
+path needs its own route. Verified live (temporary stub handler + `pnpm
+dev` + curl against both `/api/sets` and `/api/sets/restore`) that this
+coexists with the flat route with zero collision, before any real logic
+was written — same rigor PR6 item 6a used to verify multi-method dispatch
+on a single route file.
+
+**Four real failure modes, each surfaced with an actual message, not a
+generic "restore failed":**
+1. **The id may have been reused.** Someone could upload a new, unrelated
+   set reusing the deleted id since the delete happened. The restore
+   `INSERT` hits the same `PRIMARY KEY` constraint the create endpoint
+   already relies on for its own race-safety (PR4) — caught via the same
+   `isUniqueConstraintError` check `insertSetWithRetry` uses, now exported
+   and shared rather than duplicated — and returns a 409 with an explicit
+   "a set with this id already exists" message. The existing row is never
+   touched or overwritten under any circumstance.
+   **Verified empirically, not assumed**: restore's INSERT runs inside a
+   `db.batch()`, not a standalone `.run()` like `insertSetWithRetry`'s —
+   `batch()` could plausibly have wrapped or reshaped the thrown error
+   into something `isUniqueConstraintError`'s string check misses, quietly
+   turning this 409 into a 500. Checked against a real local D1 database
+   (`wrangler dev --local`, genuine miniflare/SQLite, not docs alone), with
+   the conflicting `INSERT` in the same first-statement position
+   `restoreSetFromLog` uses: the thrown error's message was byte-for-byte
+   identical to a direct `.run()`'s (`D1_ERROR: UNIQUE constraint failed:
+   <table>.id: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_PRIMARYKEY)`),
+   and identical regardless of which position in the batch array the
+   conflict came from. The unit test's fixture string was updated to this
+   exact real value rather than an approximation.
+2. **`created_at` uses the log's ORIGINAL value, not `Date.now()`.** A
+   restore undoes a mistake; it isn't a new upload. Using the current time
+   would visually announce "just uploaded" on a set that's actually been
+   live for months, misleading anyone reading the catalogue by recency —
+   the log already stores the original value specifically for this reason
+   (see PR6's `admin_deleted_sets` schema comment).
+3. **The log entry needs its own `restored_at` marker, not a `sets`-
+   membership check.** Considered filtering `RecentlyDeletedSets` by "is
+   this `set_id` currently in `sets`" instead of a new column — rejected,
+   because that check goes stale the instant someone uploads a *different,
+   unrelated* set reusing the same id (a real scenario now that failure
+   mode 1 exists): the old log entry would silently vanish from the list
+   even though nothing was restored. A nullable `admin_deleted_sets
+   .restored_at` column, set only by restoring THIS specific log row (its
+   own autoincrement id, not just `set_id`, since the same set id can be
+   deleted-then-restored more than once over time), has no such ambiguity.
+   The log row itself is never deleted — the audit trail survives, only
+   this specific entry drops out of the "still needs attention" view.
+4. **R2 objects are re-verified before inserting**, reusing PR4's
+   `verifyR2ObjectsExist` — extracted its HEAD-check loop into a lower-level
+   `verifyUrlsExist(urls: string[])` (zero behavior change for the create
+   path, same exported name/signature, existing PR4 tests untouched) so
+   restore can check however many URLs a given log row actually recorded.
+   **The null-handling is structural, not a loose truthy filter**: legacy
+   sets never had an `artwork_original_url` (`NULL` in the log, copied
+   verbatim from the live row at delete time) — that's "never had one,"
+   skipped. A URL the row DID record that now 404s is a genuine
+   `r2_missing`, never silently skipped. The two cases can't collapse into
+   each other because the log's nullness is a byte-for-byte copy of what
+   was true of the original row at deletion time.
+
+**Considered whether restore needed delete's typed-confirmation gate —
+decided no, but not because "it's not destructive."** Restore republishes
+the set to the public site **immediately** (confirmed: `getAllSetsWithFallback`
+reads live D1 on every `/sets` request, not just at build time — unlike
+delete, there's no snapshot-staleness delay working in restore's favor).
+If a set was deleted for a reason — wrong file, a rights issue, an artist's
+takedown request — one careless click puts it back live, which is a real
+consequence. The reason it still doesn't get a typed-id gate: that gate
+scales friction with a *measurable* signal (play count — how much history
+is at stake). Restore has no analogous per-entry metric; whether it
+*should* come back is a binary human judgement no count could express, so
+gating on an arbitrary typed field would be friction without a signal
+behind it. The actual mitigations: reaching the restore button requires
+deliberately opening "recently deleted" and clicking a specific named
+entry (not a bulk action or a stray click in a busy list), and the confirm
+modal leads with the real consequence — *"Restoring makes `<title>` by
+`<artist>` live on the public site again, immediately"* — rather than
+burying it under the two honesty caveats that follow it (same register as
+the delete modal):
+- Restoring the row does not bring back copies already purged from
+  someone's offline downloads before the restore (item 5).
+- **The set's optimized artwork variants may not exist either, if a deploy
+  happened while it was deleted.** `optimize-images.ts` (PR5) only
+  processes sets it finds in the freshly-regenerated build-time snapshot,
+  and writes into `public/images/uploads/` — gitignored, and NOT cached
+  between deploys (checked `.github/workflows/deploy.yml`: only pnpm's
+  dependency cache and the Playwright browser cache persist across runs),
+  so it starts empty on every single deploy. If a deploy ran while this
+  set was deleted, that deploy's build never saw it in the snapshot, so it
+  never generated its variants — they simply don't exist in the currently-
+  deployed static assets, restore or no restore. `Image.tsx`'s existing
+  fallback (PR4 — falls back to the raw `artworkOriginalUrl` when the
+  optimized `-1080.webp` 404s) is exactly the mechanism this relies on:
+  the restored set renders correctly via the original image, not broken,
+  just not yet responsive/optimized — until the next deploy's
+  `optimize-images` run sees it in the snapshot again and regenerates
+  them. Correct behavior, not a bug — worth stating plainly so it doesn't
+  read as one the first time it happens. Doesn't apply to the 4 legacy
+  sets, whose variants are committed to git, not gitignored.
+
+**Manual verification for this feature**: delete a zero-play test set,
+restore it, confirm it reappears in the sets list immediately and drops
+off `RecentlyDeletedSets`; attempt a second restore on that same (now-
+restored) entry, confirm the 404; delete a set, upload a new unrelated set
+reusing that same id, then attempt restoring the original deletion,
+confirming the 409 names the conflict rather than failing generically.
 
 ## Reference — key design decisions from the PWA work
 

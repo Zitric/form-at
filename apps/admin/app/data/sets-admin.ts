@@ -33,6 +33,10 @@ export async function fetchSetsWithPlayCounts(db: D1Database): Promise<SetWithPl
 }
 
 export type RecentDeletedSet = {
+  // `admin_deleted_sets`' own PK — the restore feature's target id, distinct
+  // from `setId` because the same set id can be deleted-then-restored more
+  // than once over time, each cycle producing its own log row.
+  logId: number;
   deletedAt: number;
   deletedByEmail: string;
   setId: string;
@@ -45,19 +49,27 @@ export type RecentDeletedSet = {
 // survive a delete, see routes/api/sets.ts's deleteSetWithAudit) into
 // "recoverable in practice" (PR6 review item 2a) — mirrors
 // `fetchRecentPushSends`'s exact shape.
+//
+// `WHERE restored_at IS NULL` (one-click restore feature, 2026-08): once
+// restored, a log entry stops appearing here — otherwise a second restore
+// click on the same entry would just 409 against the row it already
+// recreated. The row itself is never deleted (the audit trail survives),
+// just excluded from this "still needs attention" view.
 export async function fetchRecentDeletedSets(
   db: D1Database,
   limit = 10,
 ): Promise<RecentDeletedSet[]> {
   const result = await db
     .prepare(
-      `SELECT deleted_at, deleted_by_email, set_id, title, artist, play_count_at_deletion
+      `SELECT id, deleted_at, deleted_by_email, set_id, title, artist, play_count_at_deletion
        FROM admin_deleted_sets
+       WHERE restored_at IS NULL
        ORDER BY deleted_at DESC
        LIMIT ?`,
     )
     .bind(limit)
     .all<{
+      id: number;
       deleted_at: number;
       deleted_by_email: string;
       set_id: string;
@@ -67,6 +79,7 @@ export async function fetchRecentDeletedSets(
     }>();
 
   return result.results.map((row) => ({
+    logId: row.id,
     deletedAt: row.deleted_at,
     deletedByEmail: row.deleted_by_email,
     setId: row.set_id,

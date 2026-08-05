@@ -24,6 +24,7 @@ const heavilyPlayedSet: SetWithPlayCount = {
 
 const recentDeletions: RecentDeletedSet[] = [
   {
+    logId: 7,
     deletedAt: 1_722_000_000_000,
     deletedByEmail: "julian@formatglasgow.com",
     setId: "set-999-old",
@@ -161,6 +162,114 @@ describe("SetsList", () => {
 
       expect(await screen.findByText(/delete failed/i)).toBeInTheDocument();
       expect(onChanged).not.toHaveBeenCalled();
+    });
+  });
+
+  // One-click restore feature (2026-08) — restore-from-log, single-click
+  // confirm (not typed-confirmation-gated like delete; see SetsList.tsx's
+  // RestoreConfirmModal comment for why). These lock: the modal states the
+  // immediate-republish consequence plainly, confirming fires the right
+  // request, and each distinct failure mode (404/422/409/401/network) shows
+  // its own message rather than a generic one.
+  describe("restore confirmation", () => {
+    it("clicking restore opens a confirm modal stating the immediate-republish consequence, the offline-download caveat, and the missing-optimized-artwork caveat", async () => {
+      const user = userEvent.setup();
+      render(<SetsList sets={[]} recentDeletions={recentDeletions} onChanged={vi.fn()} />);
+
+      await user.click(screen.getByRole("button", { name: /restore/i }));
+
+      expect(screen.getByText(/live on the public site again, immediately/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/does not bring those back — they'd need to save it again/i),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(/it'll show the original image until the next deploy/i),
+      ).toBeInTheDocument();
+    });
+
+    it("confirming fires POST with the log entry's id, disables while in flight, and calls onChanged on success", async () => {
+      let resolveFetch!: (value: unknown) => void;
+      const fetchMock = vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveFetch = resolve;
+          }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      const onChanged = vi.fn();
+      const user = userEvent.setup();
+      render(<SetsList sets={[]} recentDeletions={recentDeletions} onChanged={onChanged} />);
+
+      await user.click(screen.getByRole("button", { name: /restore/i }));
+      await user.click(screen.getByRole("button", { name: /confirm restore/i }));
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/sets/restore",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ id: 7 }),
+        }),
+      );
+      expect(screen.getByText(/restoring/i)).toBeInTheDocument();
+
+      resolveFetch({ ok: true, status: 200 });
+      await vi.waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+    });
+
+    it("cancel closes the modal without firing a request", async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      const user = userEvent.setup();
+      render(<SetsList sets={[]} recentDeletions={recentDeletions} onChanged={vi.fn()} />);
+
+      await user.click(screen.getByRole("button", { name: /restore/i }));
+      await user.click(screen.getByRole("button", { name: /cancel/i }));
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(screen.queryByRole("button", { name: /confirm restore/i })).not.toBeInTheDocument();
+    });
+
+    it("shows the response body's specific message on 404/422/409, not a generic failure", async () => {
+      const cases: Array<{ status: number; message: string }> = [
+        { status: 404, message: "This deletion record no longer exists or was already restored." },
+        {
+          status: 422,
+          message: "The original audio/artwork/peaks files are no longer in storage.",
+        },
+        { status: 409, message: "A set with this id already exists." },
+      ];
+
+      for (const { status, message } of cases) {
+        vi.stubGlobal(
+          "fetch",
+          vi.fn().mockResolvedValue({
+            ok: false,
+            status,
+            json: async () => ({ message }),
+          }),
+        );
+        const user = userEvent.setup();
+        const { unmount } = render(
+          <SetsList sets={[]} recentDeletions={recentDeletions} onChanged={vi.fn()} />,
+        );
+
+        await user.click(screen.getByRole("button", { name: /restore/i }));
+        await user.click(screen.getByRole("button", { name: /confirm restore/i }));
+
+        expect(await screen.findByText(message)).toBeInTheDocument();
+        unmount();
+      }
+    });
+
+    it("shows 'not authorized' on 401 without reading a body", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401 }));
+      const user = userEvent.setup();
+      render(<SetsList sets={[]} recentDeletions={recentDeletions} onChanged={vi.fn()} />);
+
+      await user.click(screen.getByRole("button", { name: /restore/i }));
+      await user.click(screen.getByRole("button", { name: /confirm restore/i }));
+
+      expect(await screen.findByText(/not authorized/i)).toBeInTheDocument();
     });
   });
 });

@@ -4,8 +4,10 @@ import { fetchRecentDeletedSets, fetchSetsWithPlayCounts } from "~/data/sets-adm
 type FakeRoute = { match: RegExp; all?: unknown[] };
 
 function createFakeD1(routes: FakeRoute[]) {
-  return {
+  const calls: string[] = [];
+  const db = {
     prepare: (sql: string) => {
+      calls.push(sql);
       const route = routes.find((r) => r.match.test(sql));
       if (!route) throw new Error(`No fake D1 route matched SQL:\n${sql}`);
       const statement = {
@@ -15,6 +17,7 @@ function createFakeD1(routes: FakeRoute[]) {
       return statement;
     },
   } as unknown as D1Database;
+  return { db, calls };
 }
 
 const sampleSetRow = {
@@ -38,7 +41,7 @@ const sampleSetRow = {
 // admin sets list never does N+1 queries.
 describe("fetchSetsWithPlayCounts", () => {
   it("joins each set with its play count", async () => {
-    const db = createFakeD1([
+    const { db } = createFakeD1([
       { match: /FROM sets ORDER BY/, all: [sampleSetRow] },
       { match: /FROM plays GROUP BY/, all: [{ set_id: "set-002-til", n: 342 }] },
     ]);
@@ -49,7 +52,7 @@ describe("fetchSetsWithPlayCounts", () => {
   });
 
   it("defaults playCount to 0 for a set with no recorded plays, not undefined", async () => {
-    const db = createFakeD1([
+    const { db } = createFakeD1([
       { match: /FROM sets ORDER BY/, all: [sampleSetRow] },
       { match: /FROM plays GROUP BY/, all: [] },
     ]);
@@ -60,7 +63,7 @@ describe("fetchSetsWithPlayCounts", () => {
   });
 
   it("returns an empty array when there are no sets", async () => {
-    const db = createFakeD1([
+    const { db } = createFakeD1([
       { match: /FROM sets ORDER BY/, all: [] },
       { match: /FROM plays GROUP BY/, all: [] },
     ]);
@@ -70,12 +73,13 @@ describe("fetchSetsWithPlayCounts", () => {
 });
 
 describe("fetchRecentDeletedSets", () => {
-  it("maps snake_case D1 rows to camelCase", async () => {
-    const db = createFakeD1([
+  it("maps snake_case D1 rows to camelCase, including the log row's own id as logId", async () => {
+    const { db } = createFakeD1([
       {
         match: /FROM admin_deleted_sets/,
         all: [
           {
+            id: 7,
             deleted_at: 1_722_000_000_000,
             deleted_by_email: "julian@formatglasgow.com",
             set_id: "set-999-old",
@@ -89,6 +93,7 @@ describe("fetchRecentDeletedSets", () => {
 
     expect(await fetchRecentDeletedSets(db)).toEqual([
       {
+        logId: 7,
         deletedAt: 1_722_000_000_000,
         deletedByEmail: "julian@formatglasgow.com",
         setId: "set-999-old",
@@ -100,7 +105,21 @@ describe("fetchRecentDeletedSets", () => {
   });
 
   it("returns an empty array when nothing has been deleted", async () => {
-    const db = createFakeD1([{ match: /FROM admin_deleted_sets/, all: [] }]);
+    const { db } = createFakeD1([{ match: /FROM admin_deleted_sets/, all: [] }]);
     expect(await fetchRecentDeletedSets(db)).toEqual([]);
+  });
+
+  // One-click restore feature (2026-08): a restored entry must stop showing
+  // up as "recently deleted", or a second restore click would just 409
+  // against the row it already recreated. Locks the actual SQL shape (not
+  // just the behavior) since a fake D1 route can't itself apply a WHERE
+  // clause — the only way to prove the filter is real is to assert the
+  // query text contains it.
+  it("queries with WHERE restored_at IS NULL — locks that restored entries are excluded, not just observed to be", async () => {
+    const { db, calls } = createFakeD1([{ match: /FROM admin_deleted_sets/, all: [] }]);
+
+    await fetchRecentDeletedSets(db);
+
+    expect(calls.some((sql) => /WHERE\s+restored_at IS NULL/.test(sql))).toBe(true);
   });
 });
