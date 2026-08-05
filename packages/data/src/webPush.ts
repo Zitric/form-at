@@ -1,10 +1,9 @@
-// Reusable Web Push sending module (Phase 2, 2026-07-15; moved here from
-// apps/web/app/utils/webPush.ts in Phase D1, 2026-08-01, so apps/admin could
-// import it directly — apps never import each other's code in this
-// monorepo, only packages/* are shared). THE single place that knows how to
-// sign + send a push notification — used by `apps/web/scripts/send-push.ts`
-// (a local Node script, still the fallback for sending outside the admin
-// UI) and by apps/admin's `/api/send-push` endpoint.
+// Reusable Web Push sending module. Lives in `packages/*` because both apps
+// need it and apps never import each other's code in this monorepo — only
+// `packages/*` are shared. THE single place that knows how to sign + send a
+// push notification — used by `apps/web/scripts/send-push.ts` (a local Node
+// script, the fallback for sending outside the admin UI) and by apps/admin's
+// `/api/send-push` endpoint.
 // Nothing in this file is Node-specific: it's built entirely on
 // `globalThis.crypto.subtle` and `fetch`, both available in Node 20+,
 // browsers, and the Cloudflare Workers runtime — verified directly against
@@ -27,13 +26,12 @@ export type PushSubscriptionRecord = {
 // generic announcement doesn't need one, but a "new set" or "new event"
 // push should always include the deep-link path.
 //
-// `image`, `requireInteraction`, and `timestamp` are the per-send options
-// (2026-07-21) — see `~/utils/pushNotification.ts` for how they (plus the
-// fixed vibrate pattern + action buttons, which are NOT per-send) become
+// `image`, `requireInteraction`, and `timestamp` are the per-send options —
+// see `~/utils/pushNotification.ts` for how they (plus the fixed vibrate
+// pattern + action buttons, which are NOT per-send) become
 // `NotificationOptions`. `image` is just a URL, same shape/resolution rules
-// as `url` — verified against MDN, no absolute-URL requirement (relative
-// site paths resolve against the SW's own origin, same as `icon`/`badge`
-// already do).
+// as `url`: no absolute-URL requirement, since relative site paths resolve
+// against the SW's own origin exactly as `icon`/`badge` do.
 export type PushPayload = {
   title: string;
   body: string;

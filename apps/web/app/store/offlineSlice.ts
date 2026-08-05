@@ -58,7 +58,7 @@ const QUOTA_SAFETY_MULTIPLIER = 1.5;
 // Maps a download failure to the user-facing reason. The distinction
 // matters because the reasons carry different fixes: "network" invites a
 // retry, "quota" needs freed storage — conflating them tells the user to
-// retry something a retry can't fix (M2, 2026-07-02 review).
+// retry something a retry can't fix.
 //
 //   QuotaExceededError — the IDB write ran out of disk. The 1.5× pre-flight
 //     usually catches this first, but `estimate()` is approximate, other
@@ -165,11 +165,11 @@ async function streamWithProgress(
 // sharing one `artwork` path OR one DJ collapse to a single fetch on the
 // second save (SWR cache hit → no re-download).
 //
-// The DJ page was the gap that motivated widening this from set-only to
-// set-plus-DJ: online-first visits SWR-cache the photo automatically, but
-// direct-to-offline first visits found no cache entry and rendered a
-// broken image. Warm-on-save closes that gap — saving a set now caches
-// everything the app needs to render that set's world offline.
+// DJ photos are warmed too, not just set artwork: online-first visits
+// SWR-cache the photo automatically, but a direct-to-offline first visit
+// finds no cache entry and renders a broken image. Warming on save means
+// saving a set caches everything the app needs to render that set's world
+// offline.
 //
 // Set-to-DJ resolution via `dj.setIds`. If a set isn't wired into any DJ's
 // setIds, no DJ resolves and we skip the photo warm — graceful, but flag
@@ -246,7 +246,7 @@ export const createOfflineSlice: StateCreator<
       // correct regardless of hint drift.
       // `estimate` is missing on older WebKit / some Android WebViews —
       // skip the pre-flight there rather than throwing (a TypeError here
-      // used to surface as a bogus "network" failure — M4). The IDB write
+      // would otherwise surface as a bogus "network" failure). The IDB write
       // itself is the backstop: a real quota hit lands in the catch below
       // and `classifyDownloadFailure` labels it correctly.
       const totalBytes = musicSet.sizeBytes;
@@ -407,10 +407,10 @@ export const createOfflineSlice: StateCreator<
   },
 
   reconcileFromIdb: async () => {
-    // Structural guard (admin set-upload feature, PR3 review) — not just a
-    // courtesy for OfflineReconciler's own gate, since that's the only
-    // current caller but shouldn't be the only thing standing between a
-    // future caller and this function's destructive branch. `catalogueReady`
+    // Structural guard, not just a courtesy for OfflineReconciler's own
+    // gate: that's the only current caller, but it shouldn't be the only
+    // thing standing between a future caller and this function's destructive
+    // branch. `catalogueReady`
     // only means the boot fetch has SETTLED (success, failure, OR timeout —
     // see catalogueSlice.ts) — before that, there's no point running
     // reconciliation at all. Strict `!== true` (not just falsy) so a store
@@ -480,7 +480,7 @@ export const createOfflineSlice: StateCreator<
     // cleared would see the bare snapshot, find a genuinely-saved
     // recently-uploaded set missing from it, and permanently delete real
     // user data over a network blip — see catalogueSlice.ts's comment on
-    // why `catalogueReady` alone was the wrong gate for this.
+    // why `catalogueReady` alone is the wrong gate for this.
     for (const [setId, entries] of bySetId) {
       const catalogueSet = getCatalogueSet(get().catalogueSets, setId);
       if (!catalogueSet) {

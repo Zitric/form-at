@@ -1,13 +1,12 @@
 import { type MusicSet, sets } from "@form-at/data/sets";
 import type { StateCreator } from "zustand";
 
-// Admin set-upload feature, PR3 (2026-08): replaces the plain `import {
-// sets }` most of the app used to read the catalogue synchronously. The
-// catalogue is now a merged live-D1 + build-time-snapshot source (see
-// packages/data/src/sets.ts's `mergeSets` and apps/web's
-// `getAllSetsWithFallback`/`fetchAllSets`) — fetched over the network at
-// boot, which can fail or simply not have resolved yet when other code
-// wants an answer.
+// The app's read path for the sets catalogue, in place of a plain
+// `import { sets }` synchronous read. The catalogue is a merged live-D1 +
+// build-time-snapshot source (see packages/data/src/sets.ts's `mergeSets` and
+// apps/web's `getAllSetsWithFallback`/`fetchAllSets`) — fetched over the
+// network at boot, which can fail or simply not have resolved yet when other
+// code wants an answer.
 //
 // `catalogueSets` starts as the bare snapshot (imported below — a plain,
 // synchronous, zero-network array, always current as of the last deploy)
@@ -16,8 +15,8 @@ import type { StateCreator } from "zustand";
 // it was (see CatalogueSync's comment for why) — it never regresses to a
 // worse state than whatever was already known.
 //
-// `catalogueReady` and `catalogueConfirmed` answer two DIFFERENT questions —
-// conflating them was a real bug found in PR3 review (see below). Both are
+// `catalogueReady` and `catalogueConfirmed` answer two DIFFERENT questions,
+// and conflating them is a real bug (see below). Both are
 // deliberately NOT persisted (see store/index.ts's partialize) — they must
 // start false every session, regardless of what a previous session managed
 // to learn.
@@ -37,32 +36,31 @@ import type { StateCreator } from "zustand";
 // catalogue" as "removed, safe to purge the user's saved bytes" for an id
 // that isn't in `catalogueSets` at all.
 //
-// The bug this split fixes: `reconcileFromIdb` used to gate its destructive
-// purge on `catalogueReady` alone. But `catalogueReady` goes true on a
-// FAILED fetch too (e.g. booting offline) — at that point `catalogueSets`
-// is whatever was already known (persisted, or the bare snapshot), which is
-// NOT confirmed complete. A set uploaded since the last deploy, genuinely
-// saved by this user, on a device whose persisted `catalogueSets` was
-// cleared, is missing from that catalogue for a reason that has nothing to
-// do with removal — and the old gate would have permanently deleted its
-// real IDB bytes. `catalogueConfirmed` is the guarantee the destructive
-// branch actually needs; `catalogueReady` remains correct for anything that
-// only needs "the boot fetch is done, one way or another" (e.g. gating when
-// reconciliation's non-destructive work runs at all).
+// Why the split is load-bearing, and why the two must never be collapsed:
+// gating a destructive purge on `catalogueReady` alone is wrong, because
+// `catalogueReady` goes true on a FAILED fetch too (e.g. booting offline) —
+// at that point `catalogueSets` is whatever was already known (persisted, or
+// the bare snapshot), which is NOT confirmed complete. A set uploaded since
+// the last deploy, genuinely saved by this user, on a device whose persisted
+// `catalogueSets` was cleared, is missing from that catalogue for a reason
+// that has nothing to do with removal — and purging on that basis
+// permanently deletes its real IDB bytes. `catalogueConfirmed` is the
+// guarantee the destructive branch actually needs; `catalogueReady` remains
+// correct for anything that only needs "the boot fetch is done, one way or
+// another" (e.g. gating when reconciliation's non-destructive work runs at
+// all).
 //
-// A second bug surfaced one review pass later, in the WIRING rather than
-// this slice: `markCatalogueConfirmed()` is only ever safe to call from a
-// caller that can actually tell "a live D1 read succeeded" apart from "some
-// fallback got substituted." `CatalogueSync.tsx` originally called the
-// swallowing `fetchAllSets`, which resolves successfully with the bare
-// snapshot both when there's no D1 binding at all (plain local `pnpm dev`)
-// and when the live D1 query throws server-side — neither of those is a
-// network failure the client can see, so a plain `.then()` couldn't tell
-// them apart from a genuine merged result. Fixed by adding
-// `fetchAllSetsLive`/`getAllSetsLive` (apps/web/app/data/sets.ts) — a
-// non-swallowing sibling that rejects instead of substituting — and
-// switching CatalogueSync onto it. See that file's comment for the full
-// trace.
+// The wiring carries a matching constraint: `markCatalogueConfirmed()` is
+// only ever safe to call from a caller that can actually tell "a live D1 read
+// succeeded" apart from "some fallback got substituted." The swallowing
+// `fetchAllSets` cannot — it resolves successfully with the bare snapshot
+// both when there's no D1 binding at all (plain local `pnpm dev`) and when
+// the live D1 query throws server-side, and neither of those is a network
+// failure the client can see, so a plain `.then()` can't tell them apart from
+// a genuine merged result. So `CatalogueSync.tsx` uses
+// `fetchAllSetsLive`/`getAllSetsLive` (apps/web/app/data/sets.ts), the
+// non-swallowing sibling that rejects instead of substituting. See that
+// file's comment.
 export type CatalogueSlice = {
   catalogueSets: MusicSet[];
   catalogueReady: boolean;
@@ -90,9 +88,8 @@ export function getCatalogueSet(catalogueSets: MusicSet[], id: string): MusicSet
 }
 
 // Shared by Player.tsx (render-time prev/next) and useAudioPlayer.ts (Media
-// Session prev/next handlers + auto-advance on track end) — same
-// findIndex-then-neighbor logic, previously duplicated across both files
-// against the plain static `sets` array.
+// Session prev/next handlers + auto-advance on track end) — one copy of the
+// findIndex-then-neighbor logic rather than one per caller.
 export function getAdjacentSets(
   catalogueSets: MusicSet[],
   currentId: string | undefined,

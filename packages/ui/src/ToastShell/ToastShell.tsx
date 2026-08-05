@@ -2,10 +2,9 @@ import type { CSSProperties, ReactNode } from "react";
 import { cn } from "../cn";
 
 // Shared surface for every toast-style pill — `UpdateToast`, the generic
-// ephemeral `Toast`, and `PlaybackErrorToast` (extracted 2026-07-22: all
-// three had copy-identical positioning and were converging on the same
-// padding/entrance treatment, first shipped by `UpdateToast`'s 2026-07-18
-// polish). `variant` mirrors `Button.tsx`'s established pattern — a plain
+// ephemeral `Toast`, and `PlaybackErrorToast`, which would otherwise carry
+// copy-identical positioning and the same padding/entrance treatment three
+// times over. `variant` mirrors `Button.tsx`'s established pattern — a plain
 // `Record<Variant, string>` lookup — rather than reaching for a new
 // mechanism (e.g. `cva`) for a two-value color switch.
 //

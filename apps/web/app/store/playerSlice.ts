@@ -26,8 +26,8 @@ export function getAudioCurrentTime() {
 // worker's activation — even after skipWaiting() — is deferred until the
 // active worker's functional events settle. With audio playing, that's the
 // rest of the track: SKIP_WAITING lands, nothing activates, controllerchange
-// never fires, and the update tap does nothing (2026-07-03 field bug,
-// CDP-reproduced: identical tap works with no track, dies mid-playback).
+// never fires, and the update tap does nothing (the symptom: an identical tap
+// works with no track, and dies mid-playback).
 // Pausing alone doesn't close the connection; removing src + load() does.
 export function releaseAudioStream() {
   if (!audioEl) return;
@@ -81,8 +81,8 @@ export function canFetchPlaybackBytes(
 // `withAppContext` only sets the `?ctx=app` marker (ctxIsApp) when
 // `isStandalone()` is true, so that's the client-side mirror of ctxIsApp.
 //
-// Used to populate the `plays.is_offline` analytics column (Analytics 1,
-// 2026-07-08) — best-effort: relies on `offlineSets` staying in sync with
+// Populates the `plays.is_offline` analytics column — best-effort: relies on
+// `offlineSets` staying in sync with
 // real IDB contents via `reconcileFromIdb`, the same tolerance the rest of
 // the app already accepts for this state.
 export function wasServedFromIdb(
@@ -243,8 +243,8 @@ export const createPlayerSlice: StateCreator<PlayerSlice & OfflineSlice, [], [],
     if (!audio.paused) return;
     if (!canFetchPlaybackBytes(track.id, get().offlineSets)) {
       // Same feedback contract as the tap-time gate: reason set →
-      // PlaybackErrorToast renders (works trackless since 2026-07-02, and
-      // here a track is always attached anyway). isPlaying: false keeps
+      // PlaybackErrorToast renders (it works trackless, and here a track is
+      // always attached anyway). isPlaying: false keeps
       // store and element agreeing, so the bridge effect has nothing to
       // re-trigger on.
       set({ hasError: true, playbackBlockedReason: blockedPlaybackReason(), isPlaying: false });
