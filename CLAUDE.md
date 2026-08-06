@@ -111,6 +111,7 @@ Generic, presentational primitives live in `@form-at/ui` (`packages/ui/src/`), n
 - **This is a portfolio project as well as a live product.** It's meant to demonstrate professional developer experience and production standards to anyone who reads the repo, not just to ship features. That raises the bar specifically on: documented, tested component APIs (Storybook stories + interaction/a11y coverage for anything in `packages/ui`, not just "it renders"), clean package boundaries (no app-specific imports leaking into a shared package), and CI that actually gates on all of it. When choosing between a quick inline fix and a properly abstracted/documented one in a shared package, default to the latter.
 - **Keep it simple.** Within the quality bar above, prefer the simplest implementation that does the job well. Don't add abstractions until there's a clear need. Three similar lines beats a premature helper — but two coexisting half-built abstractions is *not* simple, it's debt. Simple ≠ shortcut.
 - **No comments that explain what the code does** — names do that. Only comment the non-obvious *why*.
+- **Comments are present-tense facts about the code, never a changelog.** A comment describes how the code *is*, not what happened to it. See "Comment register" below for the full rule — it's the one convention most likely to be reintroduced by accident.
 - **Biome only** — no Prettier, no ESLint. Run `pnpm check` to lint and format everything.
 - **Shared config in `packages/`** — each app extends `@form-at/tsconfig` via `workspace:*`.
 
@@ -131,6 +132,30 @@ The user owns commits — you do not create them. The user is the repo owner and
 - App-specific components live in `apps/web/app/components/`. Name them after what they *are*, not where they're used (`TrackRow`, not `SetsPageTrackRow`).
 - Keep props minimal and typed. Prefer explicit prop interfaces over spreading unknown objects.
 - **Bracket buttons live in `@form-at/ui`'s `Button` (variants: `primary` / `secondary` / `fail`); bracket rendering itself lives in `BracketLabel` for non-button surfaces (`Link`, `<a>`, Toast, NavLinks).** Never hand-roll a `[ label ]` button with inline classes — use `<Button variant="secondary">label</Button>` and let the design system own the bracket colouring. `BracketLabel` owns its own `whitespace-nowrap` (a single wrapping `<span>`) — callers don't need to add it themselves.
+
+### Comment register
+
+A comment states a **present-tense fact about the code**, not an event that happened to it. History lives in git and `PWA_PROGRESS.md`, which carry it better and don't rot.
+
+**Never write into a comment:**
+- PR or review references — `(PR4)`, `PR6 review item 5`, `Post-review fix:`, `caught one review pass later`, `this was explicitly asked for in review`.
+- Dates and dated verification — `(2026-08-02)`, `verified against MDN, 2026-07-21`, `field bug 2026-07-03`, `CDP-reproduced`.
+- Internal shorthand indices — `M1`, `M3`, `H2`, `N1`, `chunk 3b`, `Phase 1/2/3/4`, `Step 5`. These are pure pointers with no content: a reader can't even guess what `(M1)` meant.
+- Feature-provenance tags — `Set-upload feature (PR4) — …`. These age badly in one direction: code gets reused, the tag doesn't get updated, so a util serving three features still claims to belong to one. Eventually it isn't noise, it's **wrong**. Reasoning comments have no equivalent failure mode. Apply this uniformly — per-file judgement leaves a repo where nobody can infer the convention.
+- Arguing with a past reviewer or a deleted comment — "the removed call's comment claimed X", "no fallback-writing path was removed by this change".
+- Speculative future phases — "Phase 2 will shrink the player", "safe to change now, before this PR".
+
+**The rewrite rule.** "PR4 review found X was wrong, so we now do Y" becomes "Y, because X would otherwise happen." Same information, no dependency on knowing what PR4 was. Prefer imperatives for traps: *never gitignore this*, *don't tighten this match*, *keep these two in step*.
+
+**Always keep:**
+- Anything that stops a plausible wrong edit — every "don't remove this", "deliberately NOT", and named failure-mode-if-you-change-this. `apps/admin/app/utils/hostGuard.ts` and `apps/admin/app/routes/dashboard.tsx`'s no-in-app-auth block are the reference examples; both exist solely to stop someone "fixing" a security control.
+- Concrete specifics — `2 ÷ 2`, `~300 rows`, `220MB`, `iPhone SE 375px`. Specificity is the point; don't homogenise into blandness.
+- Value-by-value references for a discriminated union, and file headers that orient a reader to a module's purpose. Those are API documentation, not volume.
+- Pointers **into** `PWA_PROGRESS.md` / `TECH_DEBT.md` by section — `see PWA_PROGRESS.md's PR3 entry`, `TECH_DEBT.md item 15`. Those are the correct home for long-form rationale. Verify the section exists before pointing at it; a pointer to nothing is worse than no pointer.
+
+**Proportionality.** Comment length scales with how easy it is to break the thing by editing that line. A subtle guard with a silent failure mode earns its paragraph; a bytes formatter does not. Long-form design rationale belongs in `PWA_PROGRESS.md` — the code needs only what prevents a wrong edit *at that exact line*, plus a pointer. Never restate what the code plainly says (enumerating an SVG's own stroke attributes, quoting another file's source inline — that copy will rot).
+
+**When deleting a label,** grep for it first: other files may cross-reference it by name, and removing it silently breaks those references.
 
 ### Modern patterns
 - **TypeScript strict mode** — no `any` unless there is a documented reason (e.g. CF env casting). Use `unknown` + narrowing instead.
