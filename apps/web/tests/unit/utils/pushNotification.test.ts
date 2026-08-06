@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { buildNotificationOptions, resolveNotificationClickUrl } from "~/utils/pushNotification";
 
-// Locks the notification-polish pass (feat/push-image, 2026-07-21): every
+// Locks the notification-polish pass: every
 // new optional PushPayload field (image, requireInteraction, timestamp)
 // must be conditionally applied — present only when the payload actually
 // asked for it — while the fixed, non-payload-driven parts (vibrate
 // pattern, action buttons) apply unconditionally to every push. This is the
-// pure half of sw.ts's push handling; sw.ts itself has no jsdom harness
-// (verified 2026-07-20, still true).
+// pure half of sw.ts's push handling; sw.ts itself has no jsdom harness.
 
 describe("buildNotificationOptions — always-present shape", () => {
   it("sets body/icon/badge/vibrate/actions/data from a minimal payload", () => {

@@ -2,27 +2,24 @@
 /**
  * Send a push notification to every subscribed device.
  *
- * THIS IS THE REAL PRODUCTION MECHANISM — not a test script. Every run
- * reaches real subscribers' devices. Use it to announce new sets and new
- * events until an admin panel exists (and afterward too, as a manual
- * override — see PWA_PROGRESS.md's Phase 2 section, "How to send an
- * announcement today").
+ * THIS IS THE REAL PRODUCTION MECHANISM — not a test script. Every run reaches
+ * real subscribers' devices. The admin dashboard's `/api/send-push` is the
+ * usual route now; this stays as the manual override for sending outside the
+ * admin UI.
  *
  * Usage (from apps/web/) — a plain send needs only title/body/url:
  *   pnpm send-push -- --title "New set: DJ Name" --body "Fresh from the booth" --url /sets/003
  *   pnpm send-push -- --title "Event: Warehouse Session" --body "This Saturday" --url /events/012
  *
- * Every other option is opt-in (2026-07-21):
- *   --image <url>              large artwork in the expanded notification.
- *                              A site-relative path (e.g. /images/sets/003-1080.webp)
- *                              works fine — it resolves against the SW's own
- *                              origin, same as icon/badge already do; an
- *                              absolute URL works too if that's more
- *                              convenient. Set/event artwork lives on
- *                              formatglasgow.com's own /images/ path, NOT on
- *                              cdn.formatglasgow.com — that CDN is audio-only
- *                              (TECH_DEBT 19), verified against
- *                              app/utils/jsonld.ts's imageUrl() helper.
+ * Every other option is opt-in:
+ *   --image <url>              large artwork in the expanded notification. A
+ *                              site-relative path (e.g.
+ *                              /images/sets/003-1080.webp) works — it resolves
+ *                              against the SW's own origin, same as icon/badge —
+ *                              and so does an absolute URL. Set/event artwork
+ *                              lives on formatglasgow.com's own /images/ path,
+ *                              NOT on cdn.formatglasgow.com, which is audio-only
+ *                              (TECH_DEBT 19).
  *   --require-interaction true  keeps the notification visible until the
  *                              user dismisses it, instead of auto-hiding.
  *                              Defaults off — reserve `true` for something

@@ -37,8 +37,8 @@ test.describe("events page", () => {
     // Asserts against the LIVE description text from events.ts rather than
     // hardcoded wording — that field is Julian's copy to edit freely; this
     // test verifies the WIRING (whatever he writes there actually renders),
-    // not a specific choice of words. Failed once already (CI, 2026-07-22)
-    // when the draft copy this test was written against got rewritten.
+    // not a specific choice of words — this has broken CI before, when draft
+    // copy a test was written against got rewritten.
     const event = getEvent("seafield-sound");
     if (!event?.description) throw new Error("seafield-sound event or its description is missing");
 

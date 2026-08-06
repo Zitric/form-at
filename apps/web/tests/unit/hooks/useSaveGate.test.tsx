@@ -4,7 +4,7 @@ import { useTriggerInstallPrompt } from "~/hooks/useSaveGate";
 import { useStore } from "~/store";
 import type { BeforeInstallPromptEvent } from "~/store/uiSlice";
 
-// install_dismissed (2026-07-08), native-dialog path: shared by InstallCta's
+// install_dismissed, native-dialog path: shared by InstallCta's
 // tap-to-install AND SaveGateModal's "install" button, since both call this
 // same hook. The OTHER install_dismissed path (SaveGateModal's own passive
 // modal close) is covered in SaveGateModal.test.tsx.

@@ -58,8 +58,8 @@ jobs:
       # routeTree.gen.ts is gitignored — knip traces `router.tsx`'s import of
       # it just like tsc does (same reason the `static` job builds first);
       # without this, knip reports an "Unresolved imports" false failure on
-      # every fresh checkout (verified locally, 2026-07-22). Both apps' route
-      # trees are needed since knip scans the whole workspace in one pass.
+      # every fresh checkout. Both apps' route trees are needed, since knip
+      # scans the whole workspace in one pass.
       - run: pnpm -C apps/web exec vite build
       - run: pnpm -C apps/admin exec vite build
       - run: pnpm knip
@@ -128,11 +128,11 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           # Key includes the browser set AND the lockfile hash. Browser set:
-          # deploy.yml caches chromium-only under this same path — sharing a
-          # key let its cache poison this job's (webkit missing, install
-          # skipped on cache-hit; bit us on PR #2, 2026-07-02). Lockfile:
-          # the ^-versioned @playwright/test can bump its required browser
-          # build via pnpm-lock without package.json changing.
+          # deploy.yml caches chromium-only under this same path, so sharing a
+          # key lets its cache poison this job — webkit missing, and the install
+          # skipped on cache-hit. Lockfile: the ^-versioned @playwright/test can
+          # bump its required browser build via pnpm-lock without package.json
+          # changing.
           key: pw-${{ runner.os }}-chromium-webkit-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install Playwright browsers

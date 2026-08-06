@@ -3,12 +3,10 @@
 // no side effects — UA in, brand name (or null) out.
 //
 // Used by <InAppBrowserBanner> to surface a "tap ⋯ and open in safari"
-// instruction. We deliberately don't try to escape the WebView automatically:
-// iOS in-app browsers trap users by design and the URL-scheme tricks that
-// "work" (e.g. `x-safari-https://`) are version-dependent and silently fail
-// on most current host-app builds. Better to teach the manual escape than to
-// ship a button that fails opaquely. See platform-asymmetry-honesty in
-// CLAUDE memory.
+// instruction. Don't add automatic WebView escape: iOS in-app browsers trap
+// users by design, and the URL-scheme tricks that appear to work (e.g.
+// `x-safari-https://`) are version-dependent and fail silently on most current
+// host-app builds. Teaching the manual escape beats a button that fails opaquely.
 //
 // UA matchers chosen for narrow specificity:
 //   - Instagram: literal "Instagram"

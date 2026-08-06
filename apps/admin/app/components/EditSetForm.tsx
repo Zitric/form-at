@@ -11,19 +11,17 @@ interface EditSetFormProps {
 const inputClass =
   "w-full bg-black border border-grey/30 px-2 py-1 text-white font-mono text-sm focus:border-gold outline-none";
 
-// Metadata-only (PR6 review — scope decision): title/artist/date/venue/
-// description/duration. No file replacement — see PWA_PROGRESS.md's PR6
-// entry for why that's deferred (a same-id file swap is invisible to
-// reconcileFromIdb's catalogue-membership check, a real cache-invalidation
-// problem, not just more UI work).
+// Metadata-only by design: title/artist/date/venue/description/duration. File
+// replacement is deliberately absent, not unbuilt UI — a same-id file swap is
+// invisible to reconcileFromIdb's catalogue-membership check, which is a real
+// cache-invalidation problem. See PWA_PROGRESS.md's PR6 entry.
 //
-// The id field is shown but disabled, not omitted — the admin should see
-// which set they're editing without any way to touch the one field that's
-// the R2 key path, the public URL, and the analytics join key across
-// plays/events (PR6 review item 5). The real enforcement is server-side
-// (routes/api/sets.ts's updateSet never includes `id` in its `SET` clause,
-// regardless of what a request body contains) — this disabled field is
-// just honest UI, not the actual guarantee.
+// The id field is shown but disabled rather than omitted: the admin should see
+// which set they're editing without any way to touch the one field that is the
+// R2 key path, the public URL, AND the analytics join key across plays/events.
+// This disabled input is honest UI, not the guarantee — the real enforcement is
+// server-side, where updateSet never includes `id` in its `SET` clause whatever
+// the request body contains.
 export function EditSetForm({ set, onSaved, onCancel }: EditSetFormProps) {
   const [title, setTitle] = useState(set.title);
   const [artist, setArtist] = useState(set.artist);

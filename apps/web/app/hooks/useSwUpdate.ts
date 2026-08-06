@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { releaseAudioStream } from "~/store/playerSlice";
 
 // Detects a new service-worker build waiting to activate and exposes the
-// user-consented swap (H2: no unconditional skipWaiting in the SW — see the
-// message listener in sw.ts).
+// user-consented swap — the SW deliberately has no unconditional skipWaiting,
+// see the message listener in sw.ts.
 //
 // Detection covers both orders of arrival:
 //   1. `registration.waiting` already set when this hook mounts (the page
@@ -81,18 +81,17 @@ export function useSwUpdate(): { updateReady: boolean; applyUpdate: () => void }
   const applyUpdate = () => {
     if (!waiting) return;
     requestedRef.current = true;
-    // Playing audio streams through the OLD worker's fetch handler and
-    // blocks the waiting worker's activation for the rest of the track —
-    // the 2026-07-03 "tap does nothing" field bug. We're reloading anyway,
-    // so tear the stream down first; activation then proceeds immediately.
+    // Playing audio streams through the OLD worker's fetch handler and blocks
+    // the waiting worker's activation for the rest of the track, so the update
+    // tap appears to do nothing. We're reloading anyway, so tear the stream
+    // down first; activation then proceeds immediately.
     releaseAudioStream();
     // Re-resolve the waiting worker AT TAP TIME instead of posting to the
     // captured state object: with multiple deploys while a tab stays open
     // (mobile tabs live for hours), the captured worker can have gone
     // REDUNDANT — replaced by a newer waiting worker — and postMessage to a
-    // redundant worker is silently dropped: the tap does nothing (2026-07-03
-    // field bug's only silent-drop path; the tap→click→handler chain itself
-    // is CDP-verified working on mobile emulation).
+    // redundant worker is silently dropped, so the tap does nothing. This is
+    // the only silent-drop path in the chain.
     navigator.serviceWorker.getRegistration().then((reg) => {
       (reg?.waiting ?? waiting).postMessage({ type: "SKIP_WAITING" });
     });

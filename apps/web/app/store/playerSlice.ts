@@ -26,8 +26,8 @@ export function getAudioCurrentTime() {
 // worker's activation — even after skipWaiting() — is deferred until the
 // active worker's functional events settle. With audio playing, that's the
 // rest of the track: SKIP_WAITING lands, nothing activates, controllerchange
-// never fires, and the update tap does nothing (2026-07-03 field bug,
-// CDP-reproduced: identical tap works with no track, dies mid-playback).
+// never fires, and the update tap does nothing (the symptom: an identical tap
+// works with no track, and dies mid-playback).
 // Pausing alone doesn't close the connection; removing src + load() does.
 export function releaseAudioStream() {
   if (!audioEl) return;
@@ -54,10 +54,10 @@ export function releaseAudioStream() {
 // imports this type name directly.
 type PlaybackBlockedReason = "not-saved-offline" | "tab-offline-needs-network" | null;
 
-// THE offline playback gate predicate (M1: one predicate, every play path).
+// THE offline playback gate predicate — one predicate, every play path.
 // True when starting/resuming this track can actually get bytes: either
 // we're online, or we're a standalone PWA with the track saved in IDB (the
-// only context the SW serves IDB to — see the chunk-5 lock in sw.ts).
+// only context the SW serves IDB to — see sw.ts's tab-vs-app gate).
 // Environment reads only (navigator.onLine, display-mode) — no React, no
 // store; exported for unit tests and for any future play-path writer.
 export function canFetchPlaybackBytes(
@@ -69,20 +69,18 @@ export function canFetchPlaybackBytes(
   return isStandalone() && offlineSets?.[trackId]?.status === "saved";
 }
 
-// Mirrors the EXACT condition the SW audio route uses to decide IDB-vs-
-// network (sw.ts's registerRoute handler: `if (!ctxIsApp) return
-// fetch(request); const entry = await getOfflineAudio(bareUrl); if
-// (!entry) return fetch(request);` — i.e. IDB is read whenever ctxIsApp is
-// true AND an entry exists, REGARDLESS of navigator.onLine). A saved set in
-// the standalone app is served from IDB even while online — this is NOT
-// the same predicate as `canFetchPlaybackBytes` above, which short-circuits
-// true whenever online regardless of saved status.
+// Mirrors the EXACT condition the SW audio route uses to decide IDB-vs-network
+// (sw.ts's registerRoute handler) — change one and you must change the other.
+// IDB is read whenever `ctx=app` is set AND an entry exists, REGARDLESS of
+// navigator.onLine, so a saved set in the standalone app is served from IDB
+// even while online. Deliberately NOT the same predicate as
+// `canFetchPlaybackBytes` above, which short-circuits true whenever online.
 //
-// `withAppContext` only sets the `?ctx=app` marker (ctxIsApp) when
-// `isStandalone()` is true, so that's the client-side mirror of ctxIsApp.
+// `withAppContext` sets `?ctx=app` only when `isStandalone()` is true, so
+// that's the client-side mirror of the SW's own check.
 //
-// Used to populate the `plays.is_offline` analytics column (Analytics 1,
-// 2026-07-08) — best-effort: relies on `offlineSets` staying in sync with
+// Populates the `plays.is_offline` analytics column — best-effort: relies on
+// `offlineSets` staying in sync with
 // real IDB contents via `reconcileFromIdb`, the same tolerance the rest of
 // the app already accepts for this state.
 export function wasServedFromIdb(
@@ -155,12 +153,9 @@ export const createPlayerSlice: StateCreator<PlayerSlice & OfflineSlice, [], [],
     // Reactivity to online/offline isn't needed here: a synchronous check
     // at click time is the right semantics.
     //
-    // A previous revision put this gate ONLY in the new-track branch. The
-    // same-track branch had no gate, so re-tapping a paused non-saved set
-    // offline (played online, paused, went offline, tapped again) still
-    // spawned the retry storm. The single unified gate below closes that
-    // gap by construction — impossible for one branch to be protected while
-    // the other isn't.
+    // Keep this ONE gate ahead of the same-track/new-track split rather than
+    // duplicating it into each branch — a per-branch gate is how the
+    // same-track resume path went unprotected before (PWA_PROGRESS.md row 5.2).
     const isSameTrack = state.nowPlaying?.id === track.id;
     const isCurrentlyPlaying = isSameTrack && !audio.paused;
     const isPauseAction = isCurrentlyPlaying && override === undefined;
@@ -229,7 +224,7 @@ export const createPlayerSlice: StateCreator<PlayerSlice & OfflineSlice, [], [],
     set({ nowPlaying: track, hasError: false, playbackBlockedReason: null });
   },
 
-  // THE single gated resume writer (M1). Every "make paused audio play
+  // THE single gated resume writer. Every "make paused audio play
   // again" path — player-bar button, Space, lock-screen Media Session,
   // scrub-release, the isPlaying bridge — funnels here, so the offline gate
   // is impossible to bypass by construction. Only `playTrack`'s NEW-track
@@ -243,8 +238,8 @@ export const createPlayerSlice: StateCreator<PlayerSlice & OfflineSlice, [], [],
     if (!audio.paused) return;
     if (!canFetchPlaybackBytes(track.id, get().offlineSets)) {
       // Same feedback contract as the tap-time gate: reason set →
-      // PlaybackErrorToast renders (works trackless since 2026-07-02, and
-      // here a track is always attached anyway). isPlaying: false keeps
+      // PlaybackErrorToast renders (it works trackless, and here a track is
+      // always attached anyway). isPlaying: false keeps
       // store and element agreeing, so the bridge effect has nothing to
       // re-trigger on.
       set({ hasError: true, playbackBlockedReason: blockedPlaybackReason(), isPlaying: false });

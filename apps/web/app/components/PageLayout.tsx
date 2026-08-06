@@ -12,26 +12,19 @@ export function PageLayout({ children }: PageLayoutProps) {
   return (
     <main
       className={cn(
-        // px-6 only kicks in below md: (768px). Above that, the viewport is
-        // wide enough that max-w-2xl (672px) + mx-auto already provides the
-        // visual breathing room, and any inner padding is invisible against
-        // the existing outer centring gap. Cleaner semantic: pad only when
-        // the container hasn't reached its max-width.
+        // px-6 only below md: above that, max-w-2xl + mx-auto already provides
+        // the breathing room and inner padding is invisible against the
+        // centring gap. Pad only when the container hasn't hit its max-width.
         //
-        // pb-40 (160px) clears the fixed bottom chrome on both surfaces:
-        //   - mobile: BottomNav (55) + MobileMiniPlayer (56) + iOS safe-area
-        //     (~34 worst case) ≈ 145px → ~15px breathing
-        //   - desktop: two-row DesktopPlayer (~120px) → ~40px breathing
-        // Unified value because the two are now close in height; tracking
-        // each surface's exact chrome would add responsive complexity for a
-        // ~16px difference no one will notice.
-        // `flex-1` participates in the app-wide sticky-footer layout: body
-        // is `min-h-dvh flex flex-col` (see __root.tsx), SwipeNavigator's
-        // outer + translated wrappers are `flex-1 flex flex-col`, and this
-        // <main> claims the viewport-minus-header slice they hand down.
-        // Any inner `flex-1` (NotFoundPage's centered wrapper; DJ / sets /
-        // events content columns that already used `flex-1`) resolves to
-        // real space instead of a no-op.
+        // pb-40 (160px) clears the fixed bottom chrome: mobile BottomNav (55) +
+        // MobileMiniPlayer (56) + iOS safe-area (~34) ≈ 145px; desktop's
+        // two-row player ≈ 120px. One unified value — tracking each surface
+        // exactly would add responsive complexity for ~16px nobody notices.
+        //
+        // `flex-1` participates in the app-wide sticky-footer layout (body is
+        // `min-h-dvh flex flex-col`, see __root.tsx): this <main> claims the
+        // viewport-minus-header slice handed down, so inner `flex-1`s resolve
+        // to real space instead of a no-op.
         "flex-1 flex flex-col px-6 md:px-0 pb-40 font-mono max-w-2xl mx-auto w-full transition-opacity-smooth animate-fade-in",
         !isVisible && "opacity-0",
       )}

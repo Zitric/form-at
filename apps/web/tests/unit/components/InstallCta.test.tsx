@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InstallCta } from "~/components/InstallCta";
 import { useStore } from "~/store";
 
-// install_prompt_shown (2026-07-08) must fire when the CTA actually becomes
+// install_prompt_shown must fire when the CTA actually becomes
 // VISIBLE to the user — i.e. when InstallCtaButton mounts (all of
 // useStoreHydrated + deferredPrompt + !pwaInstallDismissed hold) — not when
 // Chromium's beforeinstallprompt event merely fires (those can differ by

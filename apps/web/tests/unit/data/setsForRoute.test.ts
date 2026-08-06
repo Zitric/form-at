@@ -2,7 +2,7 @@ import { sets as staticSnapshot } from "@form-at/data/sets";
 import { describe, expect, it, vi } from "vitest";
 import { fetchAllSetsForRoute, fetchSetForRoute } from "~/data/setsForRoute";
 
-// PR2 blocking fix (2026-08): fetchAllSets/fetchSetForDetailPage are
+// fetchAllSets/fetchSetForDetailPage are
 // createServerFn calls — offline, the network request they make to the
 // server rejects BEFORE the server ever runs, so getAllSetsWithFallback/
 // getSetByIdWithFallback's D1-error → snapshot catch (tested in

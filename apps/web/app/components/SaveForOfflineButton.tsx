@@ -15,18 +15,16 @@ import { fmtBytes } from "~/utils/fmt";
 //
 // Two-axis state machine: save-gate × per-set offline state.
 //
-// Gate (locked 2026-06-30 — strict standalone rule): download fires ONLY when
-// running in standalone display-mode. Any browser tab — including a tab on a
-// device where the PWA IS installed — gets the <SaveGateModal> instead. This
-// keeps the web/app divide coherent with the SW read-path: tabs always stream
-// from network and never read IDB, the app does both. See `withAppContext`
-// for the matching playback-side signal.
+// Download fires ONLY in standalone display-mode. Any browser tab — including
+// one on a device where the PWA IS installed — gets <SaveGateModal> instead.
+// This matches the SW read path: tabs always stream from network and never read
+// IDB, the app does both (see `withAppContext`). Full rule: PWA_PROGRESS.md's
+// "Save gate — strict standalone rule".
 //
-// Dismiss semantic (unchanged from chunk 3c):
-//   - This button stays VISIBLE and TAPPABLE in every gate branch.
-//   - A user tap ALWAYS opens the relevant modal / triggers the relevant action.
-//   - `pwaInstallDismissed` only suppresses passive prompting (the home
-//     <InstallCta>), not user-initiated taps here.
+// Dismiss semantic: this button stays VISIBLE and TAPPABLE in every gate
+// branch, and a tap ALWAYS opens the relevant modal or triggers the relevant
+// action. `pwaInstallDismissed` suppresses only passive prompting (the home
+// <InstallCta>), never user-initiated taps here.
 type Props = { set: MusicSet };
 
 export function SaveForOfflineButton({ set }: Props) {

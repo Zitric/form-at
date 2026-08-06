@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { UpdateToast } from "~/components/UpdateToast";
 import { useStore } from "~/store";
 
-// Affordance shape lock (2026-07-03 field feedback: the plain text pill
-// didn't read as tappable). The action must be a REAL button whose
+// Affordance shape lock — a plain text pill doesn't read as tappable.
+// The action must be a REAL button whose
 // accessible name carries the bracketed CTA.
 
 const applyUpdate = vi.fn();

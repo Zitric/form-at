@@ -3,7 +3,7 @@ import { createStartHandler, defaultStreamHandler } from "@tanstack/react-start/
 
 const handler = createStartHandler({ handler: defaultStreamHandler });
 
-// Document CSP (M3, 2026-07-02 review). Cloudflare Pages' `_headers` file
+// Document CSP. Cloudflare Pages' `_headers` file
 // applies to STATIC ASSETS only — responses generated here (all SSR
 // documents) don't get it, so the document policy is set on the response
 // below. Keep in sync with the `/*` rule in `public/_headers` (which covers

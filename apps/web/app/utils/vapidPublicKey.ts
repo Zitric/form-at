@@ -1,20 +1,11 @@
-// The VAPID public key — safe to expose to the client (that's the whole
-// point of VAPID's asymmetric design: the public key identifies the
-// application server to the push service, the PRIVATE key is what proves
-// authorization to send, and only the private key needs to stay secret).
-// Consumed by `pushManager.subscribe({ applicationServerKey: ... })`.
+// The VAPID public key — safe to commit and expose to the client; only the
+// PRIVATE key proves authorization to send. Deliberately a plain constant rather
+// than an env var, because there's nothing here to protect. Consumed by
+// `pushManager.subscribe({ applicationServerKey: ... })`.
 //
-// Generated once via `npx @pushforge/builder vapid` (2026-07-15) — see
-// PWA_PROGRESS.md's Phase 2 section for the full key-generation record and
-// the matching private-key storage instructions. This file is the ONLY
-// place the public key needs to live; it's a plain committed constant, not
-// an env var, because there's no sensitivity to protect here.
-//
-// If these keys are ever rotated, this constant AND the
-// `VAPID_PRIVATE_KEY_JWK` values (apps/web/.env + the Cloudflare Pages
-// secret) must change together — a mismatched pair fails silently
-// at `pushManager.subscribe()` (browser rejects with a DOMException) or at
-// send time (push service returns 401/403). See the Phase 2 doc section for
-// the rotation checklist.
+// If the keys are ever rotated, this constant AND the `VAPID_PRIVATE_KEY_JWK`
+// values (apps/web/.env + the Cloudflare Pages secret) must change together — a
+// mismatched pair fails silently at `pushManager.subscribe()`, or with a 401/403
+// at send time. See PWA_PROGRESS.md's Phase 2 section for the rotation checklist.
 export const VAPID_PUBLIC_KEY =
   "BGoZDkz9X9AZ264iXoFngijx7RN1_SaPYzSrewCDNJHOHptYJ4n0hqjPy0B5Tjz2FHWRQzM0FN_o8Sn7N0f0dUE";

@@ -32,7 +32,7 @@ describe("EditSetForm", () => {
     expect(screen.getByLabelText(/^duration$/i)).toHaveValue("45:18");
   });
 
-  // PR6 review item 5: the id is the R2 key path, the public URL, and the
+  // The id is the R2 key path, the public URL, and the
   // analytics join key — this field must never be an editable input.
   it("shows the id but disables it — the field cannot be edited", () => {
     render(<EditSetForm set={sampleSet} onSaved={vi.fn()} onCancel={vi.fn()} />);

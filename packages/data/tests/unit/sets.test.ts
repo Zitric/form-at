@@ -9,8 +9,7 @@ import {
   sets,
 } from "~/sets";
 
-// Admin set-upload feature, PR2 (2026-08): the catalogue moved from a
-// hardcoded array to a D1 `sets` table, with the build-time snapshot
+// The catalogue's source is a D1 `sets` table, with the build-time snapshot
 // (sets.generated.ts, re-exported as `sets` here) as the offline-survival
 // fallback. Same fake-D1 pattern as apps/admin's admin-stats.test.ts.
 
@@ -76,8 +75,8 @@ describe("mapD1RowToMusicSet", () => {
     } satisfies MusicSet);
   });
 
-  // PR4 (Image.tsx fallback): unlike `peaks_status`, this column IS surfaced
-  // on the public MusicSet type now — it's the fallback source `Image.tsx`
+  // Unlike `peaks_status`, this column IS surfaced on the public MusicSet
+  // type — it's the fallback source `Image.tsx`
   // renders when a set has no optimized artwork variants yet. Locking the
   // null path explicitly since it's the common case for the 4 legacy sets.
   it("maps a null artwork_original_url to undefined (the legacy-sets case)", () => {

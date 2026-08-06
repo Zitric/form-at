@@ -2,29 +2,24 @@ import type { CSSProperties, ReactNode } from "react";
 import { cn } from "../cn";
 
 // Shared surface for every toast-style pill — `UpdateToast`, the generic
-// ephemeral `Toast`, and `PlaybackErrorToast` (extracted 2026-07-22: all
-// three had copy-identical positioning and were converging on the same
-// padding/entrance treatment, first shipped by `UpdateToast`'s 2026-07-18
-// polish). `variant` mirrors `Button.tsx`'s established pattern — a plain
-// `Record<Variant, string>` lookup — rather than reaching for a new
-// mechanism (e.g. `cva`) for a two-value color switch.
+// ephemeral `Toast`, and `PlaybackErrorToast`, which would otherwise each carry
+// the same positioning and padding/entrance treatment. `variant` mirrors
+// `Button.tsx`'s pattern (a plain `Record<Variant, string>` lookup) rather than
+// reaching for a new mechanism like `cva` for a two-value colour switch.
 //
 //   "default" — the brand gold offer/status treatment (UpdateToast, Toast).
 //   "error"   — red equivalent, same mechanics, preserves the urgency read
 //               (PlaybackErrorToast). NEVER swap red → gold — colour carries
 //               semantics here, same rule as `BracketLabel`'s tones.
 //
-// Owns: the fixed-position wrapper (bottom math shared byte-for-byte across
-// all three before this extraction — verified fresh, not assumed), and the
-// button's structural classes (bg-black, border, padding sized to the H2
-// 44px touch-target floor, gap, max-w, transition, cursor). Does NOT own:
-// message content, per-child text color/flex (each consumer's children
-// still decide their own layout — e.g. PlaybackErrorToast's message keeps
-// `flex-1` to push its `[ x ]` to the far edge, UpdateToast's doesn't), or
-// entrance timing — `animate-fade-in-up` is the default, but an inline
-// `style` prop (Toast's own timed enter/exit) wins via ordinary CSS
-// specificity (inline style always beats a class), so passing one doesn't
-// require conditionally dropping the class.
+// Owns: the fixed-position wrapper, and the button's structural classes
+// (bg-black, border, padding sized to the 44px touch-target floor, gap, max-w,
+// transition, cursor). Does NOT own: message content, per-child text
+// colour/flex (consumers decide their own layout — PlaybackErrorToast's message
+// keeps `flex-1` to push its `[ x ]` to the edge, UpdateToast's doesn't), or
+// entrance timing. `animate-fade-in-up` is the default, and an inline `style`
+// prop (Toast's timed enter/exit) overrides it via ordinary CSS specificity, so
+// passing one doesn't require conditionally dropping the class.
 // Not exported — every consumer passes the variant as a string literal
 // ("default" | "error"); nothing imports this type name directly.
 type ToastVariant = "default" | "error";

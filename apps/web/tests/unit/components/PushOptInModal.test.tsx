@@ -5,7 +5,7 @@ import { PushOptInModal } from "~/components/PushOptInModal";
 import type { SaveGate } from "~/hooks/useSaveGate";
 import { useStore } from "~/store";
 
-// Locks the soft-prompt contract (feat/push-optin-modal, 2026-07-16): the
+// Locks the soft-prompt contract: the
 // NATIVE permission dialog must never fire except from the standalone
 // variant's explicit accept. A native "Block" is nearly unrecoverable, so
 // every other path — declining, closing, and the entire browser-tab install
@@ -301,9 +301,9 @@ describe("PushOptInModal — granted-but-unsubscribed resume", () => {
   });
 });
 
-// Field bug 2026-07-20: the visible "setting up notifications…" busy page
-// made the modal look like it was "turning pages by itself" for the few
-// hundred ms subscribe() takes. Fixed by making the in-flight window either
+// A visible "setting up notifications…" busy page makes the modal look like
+// it's turning pages by itself for the few hundred ms subscribe() takes, so
+// the in-flight window is either
 // blank (direct/resume path — nothing honest to say yet) or a dimmed
 // continuation of the ask (native-dialog path) — never its own page.
 describe("PushOptInModal — busy phase visibility (2026-07-20 simplification)", () => {

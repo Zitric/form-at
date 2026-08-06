@@ -33,9 +33,9 @@ type Props = {
 // `Notification.requestPermission()` resolves instantly once granted).
 //
 // "busy" and "resuming" are both in-flight states but read differently ON
-// PURPOSE (field bug 2026-07-20 — a visible "setting up notifications…"
-// page made the modal look like it was "turning pages by itself" for the
-// few hundred ms subscribe() takes):
+// PURPOSE — a visible "setting up notifications…" page makes the modal look
+// like it's turning pages by itself for the few hundred ms subscribe() takes
+// (see PWA_PROGRESS.md's "busy phase read as the modal turning pages" entry):
 //   "busy" — the native-dialog path (user tapped enable_notifications; the
 //     OS permission sheet may be up). The ASK CONTENT STAYS ON SCREEN,
 //     dimmed and disabled, so the modal's visible content changes exactly

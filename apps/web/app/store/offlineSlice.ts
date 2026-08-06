@@ -9,21 +9,15 @@ import {
 } from "~/data/offline-audio";
 import { type CatalogueSlice, getCatalogueSet } from "~/store/catalogueSlice";
 
-// Phase 4 chunk 3b — offline audio download + IDB-backed state.
+// Offline audio download + IDB-backed state: `startDownload` (quota
+// pre-flight, streaming fetch with progress, atomic IDB write of MP3 + peaks),
+// `cancelDownload`, `removeOfflineSet`, and `reconcileFromIdb` (boot-time sync
+// between IDB truth and persisted state, auto-purging catalogue orphans).
 //
-// Responsibilities:
-//   1. `startDownload` — HEAD, quota pre-flight, streaming fetch with
-//      progress, atomic IDB write of MP3 + peaks.
-//   2. `cancelDownload` — abort in-flight, transition to `failed/aborted`.
-//   3. `removeOfflineSet` — drop IDB entries, transition to `not-saved`.
-//   4. `reconcileFromIdb` — boot-time sync between IDB truth and persisted
-//      state, with auto-purge of catalogue-orphaned entries.
-//
-// Persistence boundary (see store/index.ts partializer):
-//   - Persist ONLY entries where `status === "saved"` + `hasRequestedPersist`.
-//   - Mid-download state, failures, evictions are ephemeral — recomputed at
-//     boot from IDB. A reload during a download = aborted; the entry doesn't
-//     show as half-saved on next visit.
+// Persistence boundary (see store/index.ts partializer): persist ONLY entries
+// where `status === "saved"`, plus `hasRequestedPersist`. Mid-download state,
+// failures and evictions are ephemeral, recomputed at boot from IDB — so a
+// reload during a download reads as aborted rather than half-saved.
 
 export type OfflineSetState =
   | { status: "not-saved" }
@@ -58,7 +52,7 @@ const QUOTA_SAFETY_MULTIPLIER = 1.5;
 // Maps a download failure to the user-facing reason. The distinction
 // matters because the reasons carry different fixes: "network" invites a
 // retry, "quota" needs freed storage — conflating them tells the user to
-// retry something a retry can't fix (M2, 2026-07-02 review).
+// retry something a retry can't fix.
 //
 //   QuotaExceededError — the IDB write ran out of disk. The 1.5× pre-flight
 //     usually catches this first, but `estimate()` is approximate, other
@@ -91,15 +85,10 @@ function percentBucket(downloaded: number, total: number): number {
 // an extra value so the caller can update the UI's `bytesTotal` once we
 // actually know it.
 //
-// Why we don't HEAD first: a browser-side `fetch(url, { method: "HEAD" })`
-// against the R2 bucket fails with `net::ERR_FAILED` at the network layer in
-// real-world Chrome at 4173, even though curl HEAD returns proper CORS
-// headers (`Access-Control-Allow-Origin: *` + `Vary: Origin`) and the
-// OPTIONS preflight advertises `Access-Control-Allow-Methods: GET, HEAD`.
-// The cause is unidentified; chasing it would burn time without product
-// payoff. GET is empirically known to work (chunks 3a + 3b's offline 206
-// playback proves it). So we skip HEAD entirely and let the GET response
-// tell us the size as a byproduct.
+// Don't add a HEAD pre-flight for the size: a browser-side
+// `fetch(url, { method: "HEAD" })` against the R2 bucket fails with
+// `net::ERR_FAILED` despite correct CORS config, for reasons never identified
+// (TECH_DEBT.md item 15). GET works, and its response carries the size anyway.
 async function streamWithProgress(
   url: string,
   signal: AbortSignal,
@@ -115,7 +104,7 @@ async function streamWithProgress(
     throw new Error(`fetch ${url}: no usable Content-Length in response`);
   }
 
-  // Single preallocated buffer (chunk 3b option A): avoids the double-retention
+  // Single preallocated buffer: avoids the double-retention
   // of `chunks: Uint8Array[]` + `new Blob(chunks)` aliasing/copying. Peak is
   // ~1× total bytes; worst case ~2× briefly during `new Blob([buffer])` if the
   // engine copies rather than aliases (Chrome aliases; WebKit unverified — see
@@ -157,32 +146,23 @@ async function streamWithProgress(
 //   - set artwork (list cards, /sets/$setId, FullPlayer)
 //   - the DJ photo for the set's artist (/djs/$djId)
 //
-// Fires plain GETs through the SW, which the artwork-v1 SWR route handles —
-// single writer for that cache (route shape + future expiration plugin stay
-// canonical there). Four variants per image (640/1080 × avif/webp) mirror
-// `components/Image.tsx`: avif is what modern browsers actually pick, webp
-// is the fallback for older WebKit. Sub-2MB total per set; multiple sets
-// sharing one `artwork` path OR one DJ collapse to a single fetch on the
-// second save (SWR cache hit → no re-download).
+// Fires plain GETs through the SW's artwork-v1 SWR route, which stays the
+// single writer for that cache. Four variants per image (640/1080 × avif/webp)
+// mirror `components/Image.tsx` — keep the two in step.
 //
-// The DJ page was the gap that motivated widening this from set-only to
-// set-plus-DJ: online-first visits SWR-cache the photo automatically, but
-// direct-to-offline first visits found no cache entry and rendered a
-// broken image. Warm-on-save closes that gap — saving a set now caches
-// everything the app needs to render that set's world offline.
+// DJ photos must be warmed too, not just set artwork: an online-first visit
+// SWR-caches the photo anyway, but a direct-to-offline first visit finds no
+// entry and renders a broken image.
 //
-// Set-to-DJ resolution via `dj.setIds`. If a set isn't wired into any DJ's
-// setIds, no DJ resolves and we skip the photo warm — graceful, but flag
-// it in dev so a future data authoring gap is visible (the DJ page still
-// works SWR-online-first; only the direct-to-offline path is degraded).
+// Set-to-DJ resolution via `dj.setIds`. A set wired into no DJ resolves none
+// and skips the photo warm — graceful, but flagged in dev so a data-authoring
+// gap stays visible.
 //
-// Best-effort: all errors swallowed per-URL so a single 404 / offline blip
-// can't fail the warm batch; the outer call site also `.catch(() => {})`s.
-// See TECH_DEBT 16 for the orphan-on-removal behaviour (intentional).
+// Best-effort: errors swallowed per-URL so one 404 can't fail the batch (the
+// call site also catches). TECH_DEBT 16 covers orphan-on-removal.
 //
-// Exported for unit tests — the invariant this locks (DJ photo warmed when
-// a set is saved) is exactly the class of regression that goes invisible
-// without a test that keeps the two warmings coupled.
+// Exported for unit tests — the DJ-photo-warmed-with-set invariant regresses
+// invisibly without a test keeping the two coupled.
 export async function warmSetVisuals(musicSet: MusicSet): Promise<void> {
   const dj = djs.find((d) => d.setIds?.includes(musicSet.id));
   if (!dj && process.env.NODE_ENV === "development") {
@@ -246,7 +226,7 @@ export const createOfflineSlice: StateCreator<
       // correct regardless of hint drift.
       // `estimate` is missing on older WebKit / some Android WebViews —
       // skip the pre-flight there rather than throwing (a TypeError here
-      // used to surface as a bogus "network" failure — M4). The IDB write
+      // would otherwise surface as a bogus "network" failure). The IDB write
       // itself is the backstop: a real quota hit lands in the catch below
       // and `classifyDownloadFailure` labels it correctly.
       const totalBytes = musicSet.sizeBytes;
@@ -407,20 +387,15 @@ export const createOfflineSlice: StateCreator<
   },
 
   reconcileFromIdb: async () => {
-    // Structural guard (admin set-upload feature, PR3 review) — not just a
-    // courtesy for OfflineReconciler's own gate, since that's the only
-    // current caller but shouldn't be the only thing standing between a
-    // future caller and this function's destructive branch. `catalogueReady`
-    // only means the boot fetch has SETTLED (success, failure, OR timeout —
-    // see catalogueSlice.ts) — before that, there's no point running
-    // reconciliation at all. Strict `!== true` (not just falsy) so a store
-    // that never composed CatalogueSlice at all (some isolated tests) fails
-    // the same safe way as one that composed it but hasn't settled yet.
+    // Structural guard, kept here rather than left to OfflineReconciler's own
+    // gate — that's the only caller today, but it shouldn't be the only thing
+    // between a future caller and the destructive branch below. Strict
+    // `!== true`, not just falsy, so a store that never composed
+    // CatalogueSlice (isolated tests) fails the same safe way as one that
+    // hasn't settled yet.
     //
-    // NOTE: this does NOT by itself make pass 2's catalogue-membership
-    // purge safe — see the separate `catalogueConfirmed` check inside pass
-    // 2 below, and catalogueSlice.ts's comment on why the two flags are
-    // different questions.
+    // This does NOT make pass 2's catalogue-membership purge safe on its own —
+    // that needs `catalogueConfirmed`, checked separately in pass 2 below.
     if (get().catalogueReady !== true) {
       if (process.env.NODE_ENV === "development") {
         console.warn(
@@ -480,7 +455,7 @@ export const createOfflineSlice: StateCreator<
     // cleared would see the bare snapshot, find a genuinely-saved
     // recently-uploaded set missing from it, and permanently delete real
     // user data over a network blip — see catalogueSlice.ts's comment on
-    // why `catalogueReady` alone was the wrong gate for this.
+    // why `catalogueReady` alone is the wrong gate for this.
     for (const [setId, entries] of bySetId) {
       const catalogueSet = getCatalogueSet(get().catalogueSets, setId);
       if (!catalogueSet) {

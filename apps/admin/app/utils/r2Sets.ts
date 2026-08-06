@@ -1,7 +1,7 @@
 import { AUDIO_ORIGIN } from "@form-at/data/sets";
 import { AwsClient } from "aws4fetch";
 
-// Set-upload feature (PR4). The id becomes both an R2 object key path
+// The id becomes both an R2 object key path
 // segment AND a public URL path segment (`/sets/{id}` on the site,
 // `sets/{id}/...` in the bucket) — and it's client-editable (see
 // slugifySetId.ts), making it the one place in this whole flow where the

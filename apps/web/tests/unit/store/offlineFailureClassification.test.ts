@@ -8,7 +8,7 @@ import {
   createOfflineSlice,
 } from "~/store/offlineSlice";
 
-// M2 + M4 (2026-07-02 review): quota-shaped failures must surface as
+// Quota-shaped failures must surface as
 // "quota" (retrying can't fix them), and a missing
 // `navigator.storage.estimate` must skip the pre-flight instead of blowing
 // up into a bogus "network" failure.
@@ -37,7 +37,7 @@ describe("startDownload quota pre-flight", () => {
   const testSet = sets.find((s) => s.sizeBytes !== undefined);
   if (!testSet) throw new Error("test needs a catalogue set with sizeBytes");
 
-  // Composes CatalogueSlice alongside OfflineSlice (PR3) — `startDownload`
+  // Composes CatalogueSlice alongside OfflineSlice — `startDownload`
   // resolves the target set via `getCatalogueSet(get().catalogueSets, ...)`
   // now, so an isolated OfflineSlice-only store would find no set at all.
   // The default `catalogueSets` (the bare snapshot) already contains `sets`,

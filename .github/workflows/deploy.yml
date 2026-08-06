@@ -69,8 +69,8 @@ jobs:
           path: ~/.cache/ms-playwright
           # Chromium-only key — MUST stay distinct from ci.yml's
           # chromium-webkit key: the caches share a path, keys are
-          # first-writer-wins, and this job installing fewer browsers under
-          # a shared key poisoned ci.yml's webkit run (PR #2, 2026-07-02).
+          # first-writer-wins, and this job installing fewer browsers under a
+          # shared key poisons ci.yml's webkit run.
           key: pw-${{ runner.os }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
       - name: Install Playwright browsers
         if: steps.pw-cache.outputs.cache-hit != 'true'

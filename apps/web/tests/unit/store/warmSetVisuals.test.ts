@@ -4,10 +4,10 @@ import { warmSetVisuals } from "~/store/offlineSlice";
 
 // warmSetVisuals warms the artwork-v1 cache for every page describing a
 // saved set's world — set artwork + the DJ photo for the set's artist.
-// The DJ photo coverage was added on 2026-07-02 to close an offline gap
-// where a direct-to-offline first visit to /djs/$djId rendered a broken
-// image (SWR miss, nothing warmed on save). These tests lock the two
-// warmings so a future refactor can't silently drop one leg.
+// The DJ photo coverage closes an offline gap where a direct-to-offline first
+// visit to /djs/$djId renders a broken image (SWR miss, nothing warmed on
+// save). These tests lock the two warmings together so a future refactor can't
+// silently drop one leg.
 
 // Fixture DJ wired to a fixture set — mirrors the real data/djs.ts shape
 // (id + setIds relationship) without depending on the shipping catalogue.

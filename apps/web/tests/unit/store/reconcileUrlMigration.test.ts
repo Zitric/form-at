@@ -36,7 +36,7 @@ const entry = (url: string, kind: "mp3" | "peaks", setId = testSet.id) => ({
   savedAt: 111,
 });
 
-// Composes CatalogueSlice alongside OfflineSlice (PR3) — `reconcileFromIdb`
+// Composes CatalogueSlice alongside OfflineSlice — `reconcileFromIdb`
 // now gates on `catalogueReady`, so an isolated OfflineSlice-only store would
 // silently no-op every call here. `catalogueReady: true, catalogueConfirmed:
 // true` matches most of these tests' intent: they're exercising the purge

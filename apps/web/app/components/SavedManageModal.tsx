@@ -13,7 +13,7 @@ type Props = {
 // Per-set manage modal opened from `[ saved · NNMB ]` taps. Minimal: confirms
 // the set is saved, shows the real on-device size, offers `remove from
 // library` as the inverse action. The "see all my saved sets" library view
-// is Phase 4 polish; this modal is just the per-set affordance.
+// is a separate surface; this modal is just the per-set affordance.
 export function SavedManageModal({ open, onClose, onRemove, setTitle, bytesTotal }: Props) {
   const handleRemove = () => {
     onRemove();

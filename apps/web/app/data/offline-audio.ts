@@ -1,11 +1,11 @@
-// IDB wrapper for offline audio storage (Phase 4 chunk 3b).
+// IDB wrapper for offline audio storage.
 //
-// Why IDB over Cache Storage: WebKit / iOS Safari has historically been quirky
-// with large blob entries in Cache Storage; IDB has the same origin-level
-// quota but no documented per-entry cap and is the workaround referenced by
-// the Workbox community (GoogleChrome/workbox#3004). Same quota, same API in
-// both Window and ServiceWorkerGlobalScope contexts — used from both the
-// store (write path: page) and the SW audio route handler (read path: SW).
+// IDB rather than Cache Storage: WebKit / iOS Safari is unreliable with large
+// blob entries in Cache Storage. IDB has the same origin-level quota, no
+// documented per-entry cap, and is the workaround the Workbox community
+// recommends (GoogleChrome/workbox#3004). Same API in both Window and
+// ServiceWorkerGlobalScope, which this needs — the page writes, the SW audio
+// route reads.
 //
 // Database: `audio-v1` with a single `entries` object store keyed by the R2
 // URL string. Secondary index on `setId` so reconciliation can list every
@@ -81,9 +81,9 @@ export async function putOfflineAudioPair(
   // entry lands. Failure → caller marks state `failed`. Restart is a clean
   // retry from zero (no partial-saved state to reconcile).
   //
-  // Caveat to validate during chunk 3b verification: IDB transactions auto-close
+  // Standing caveat, not yet observed in practice: IDB transactions auto-close
   // if a 100MB+ structured-clone serialization tick exceeds the activity window.
-  // If that surfaces, fall back to per-put with explicit cleanup of the MP3
+  // If that ever surfaces, fall back to per-put with explicit cleanup of the MP3
   // entry on peaks failure.
   const db = await openOfflineAudioDb();
   const tx = db.transaction(STORE, "readwrite");

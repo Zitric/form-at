@@ -2,9 +2,9 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useRouteTransition } from "~/hooks/useRouteTransition";
 
-// Regression lock for the 2026-07-03 black-screen field bug: a second
-// navigation inside the 500ms fade window cleared the pending timer, and —
-// because previousPathRef was only updated INSIDE that timer — the effect's
+// Regression lock for the black-screen failure: a second navigation inside
+// the 500ms fade window clears the pending timer, and — if previousPathRef is
+// only updated INSIDE that timer — the effect's
 // re-run saw "same path", scheduled nothing, and isVisible stayed false
 // forever (content at opacity-0 under visible chrome).
 

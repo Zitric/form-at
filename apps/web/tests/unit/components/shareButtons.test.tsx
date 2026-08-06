@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ShareIconButton } from "~/components/ShareIconButton";
 import { ShareSetButton } from "~/components/ShareSetButton";
 
-// share_click (2026-07-08): both share surfaces (list-card icon + detail
+// share_click: both share surfaces (list-card icon + detail
 // page text button) must fire the event before opening the share modal.
 
 const track = sets[0];

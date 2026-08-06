@@ -16,13 +16,11 @@ const EXIT_MS = 250;
 // PlaybackErrorToast keeps its `[ x ]` because that one persists until the
 // user acts.
 //
-// Surface/positioning come from `ToastShell` (extracted 2026-07-22, adopting
-// the gold-border/grey-text/padding treatment `UpdateToast` shipped) — but
-// this component's own timed enter/exit (`fadeInUp`/`fadeOutDown`, driven by
-// `exiting` state) is a LIFECYCLE concern, kept separate from that visual
-// unification: passed as `style`, which wins over `ToastShell`'s default
-// `animate-fade-in-up` class via ordinary CSS specificity (inline style
-// beats any class). Nothing about the auto-fade timing changed.
+// Surface/positioning come from `ToastShell`, but this component's own timed
+// enter/exit (`fadeInUp`/`fadeOutDown`, driven by `exiting` state) is a
+// LIFECYCLE concern kept deliberately separate from that visual unification.
+// It's passed as `style` because inline style beats any class — that's what
+// lets it override `ToastShell`'s default `animate-fade-in-up`.
 export function Toast() {
   const toast = useStore((s) => s.toast);
   const setToast = useStore((s) => s.setToast);

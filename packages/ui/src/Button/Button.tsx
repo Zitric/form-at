@@ -16,11 +16,10 @@ import { cn } from "../cn";
 //               icon-and-label content. No brackets — the border IS the
 //               container. Caller composes icon + label inside.
 //
-// Children API: callers pass label TEXT for secondary/fail (the component
-// wraps it in <BracketLabel>); callers pass arbitrary children for primary
-// (icon + label live inside, since the play button needs PlayIcon/PauseIcon).
-// Nobody hand-rolls `[ label ]` strings or bracket spans — that lives in
-// BracketLabel.tsx now.
+// Children API: callers pass label TEXT for secondary/fail (the component wraps
+// it in <BracketLabel>) and arbitrary children for primary (icon + label live
+// inside, since the play button needs PlayIcon/PauseIcon). Never hand-roll
+// `[ label ]` strings or bracket spans — BracketLabel.tsx owns those.
 //
 // className is the escape hatch for positional overrides (modal text-left,
 // page-level w-full / mb-6!, etc). It's merged via twMerge so callers can

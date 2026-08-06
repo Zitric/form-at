@@ -1,8 +1,7 @@
 // Layout dimensions for the fixed mobile chrome (bottom nav + audio bar).
 // Centralised so any surface that needs to clear them — toasts, swipe dots,
 // floating buttons — can derive its position from a single source. When one
-// of these heights changes (e.g. Phase 2 shrinks the player into a
-// mini-player), only this file moves.
+// of these heights changes, only this file moves.
 //
 // Pair with `env(safe-area-inset-bottom)` whenever positioning relative to
 // the screen edge so devices with an iOS home indicator don't obscure the

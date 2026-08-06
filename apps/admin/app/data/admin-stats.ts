@@ -40,18 +40,16 @@ export type AppLaunchStats = {
 
 export type PlayStats = {
   total: number;
-  /** Rows with `is_offline IS NULL` (pre-2026-07-08 rows, or a stale
-   *  client mid-rollout) count toward `total` but not toward either of
-   *  these two — same exclusion schema.sql's own "useful queries" comment
-   *  documents for this exact ratio. */
+  /** Rows with `is_offline IS NULL` (recorded before `is_offline` tracking
+   *  existed, or by a stale client mid-rollout) count toward `total` but not
+   *  toward either of these two — the same exclusion schema.sql's own "useful
+   *  queries" comment documents for this ratio. */
   offlineCount: number;
   onlineCount: number;
-  /** `total - offlineCount - onlineCount` — how many plays predate
-   *  `is_offline` tracking (added 2026-07-08) and are silently excluded
-   *  from the offline/online ratio above. Surfaced so the dashboard can
-   *  disclose this instead of presenting the ratio as if it covered every
-   *  play ever recorded — flagged by the 2026-07-27 investigation session
-   *  as a stat that read more confident than the data supports. */
+  /** `total - offlineCount - onlineCount` — how many plays predate `is_offline`
+   *  tracking and are silently excluded from the offline/online ratio above.
+   *  Surfaced so the dashboard can disclose it rather than presenting that
+   *  ratio as if it covered every play ever recorded. */
   excludedCount: number;
   topSets: { setId: string; setTitle: string; setArtist: string; playCount: number }[];
 };
@@ -81,14 +79,12 @@ export type ClickStats = {
 };
 
 // Below this many `promptShown` impressions, `NotifyFunnel.acceptedRate`
-// suppresses to `null` instead of rendering a computed percentage.
-// Motivating case (2026-08-02, real remote data): notify_accepted ÷
-// notify_prompt_shown was 2 ÷ 2 — a bare ratio would show "100%", which reads
-// as high-confidence off two people. The existing null-when-zero pattern
-// (see InstallFunnel.conversionRate) doesn't catch this, since 2/2 isn't
-// zero. 10 is a plain "at least a double-digit sample" floor, not tuned to
-// make today's number disappear — don't remove this as fussiness without
-// addressing the underlying small-n problem it guards against.
+// suppresses to `null` instead of rendering a computed percentage. At 2 accepted
+// ÷ 2 shown a bare ratio reads "100%" — high-confidence off two people — and
+// the null-when-zero pattern (see InstallFunnel.conversionRate) doesn't catch
+// that, since 2/2 isn't zero. 10 is a plain "at least a double-digit sample"
+// floor, not tuned to make any particular number disappear — don't remove this
+// as fussiness without addressing the small-n problem it guards against.
 export const MIN_SAMPLE_FOR_RATE = 10;
 
 export type NotifyFunnel = {
@@ -131,30 +127,21 @@ export type InstallToPushConversion = {
   ratio: number | null;
 };
 
-// The 60-day/7-day trend sparklines (install funnel, app launches, push
-// growth) render a fixed-width window regardless of how much real history
-// exists — flagged by the 2026-07-27 investigation session: `events` has
-// only been tracked since 2026-07-15 and `push_subscriptions` since
-// 2026-07-19, both far short of 60 days, so most of each sparkline is
-// structural zero-padding, not "nothing happened". `plays` genuinely spans
-// ~84 days (since 2026-05-05) so its trend needs no such caveat — this
-// logic is deliberately NOT applied there.
+// The 60-day/7-day trend sparklines render a fixed-width window regardless of
+// how much real history exists, so when a table has been tracked for less than
+// the window, most of its sparkline is structural zero-padding rather than
+// "nothing happened". This caption tells the reader which. Deliberately NOT
+// applied to `plays`, whose history already exceeds the window.
 //
-// Takes the table's true `MIN(created_at)` (see `fetchEventsTrackingStart`/
-// `fetchPushSubscriptionsTrackingStart` below) rather than approximating
-// from the already-window-limited trend rows: a window-derived guess can't
-// distinguish "tracking genuinely started at the window boundary" from
-// "tracking started earlier but the window truncated it away", and an
-// extra `MIN(created_at)` query is trivially cheap (indexed on `events`,
-// negligible on push_subscriptions' handful of rows) — not worth trading
-// that ambiguity away to save one more query.
+// Uses the table's true `MIN(created_at)` (see `fetchEventsTrackingStart` /
+// `fetchPushSubscriptionsTrackingStart` below), never an approximation from the
+// already-window-limited trend rows: a window-derived guess can't tell
+// "tracking started at the window boundary" from "tracking started earlier and
+// the window truncated it", and the extra query is trivially cheap.
 //
-// Returns the earliest tracked day (`YYYY-MM-DD`) ONLY when it's more
-// recent than the 60-day window's own start — i.e. only when the window is
-// genuinely partial. Once real history reaches 60 days, this naturally
-// returns `null` and the caption disappears on its own, converging with
-// how `plays`'s trend already behaves — no separate "is this still needed"
-// check required later.
+// Returns a day (`YYYY-MM-DD`) ONLY when it's more recent than the window's own
+// start. Once real history reaches 60 days this returns `null` and the caption
+// disappears on its own — no "is this still needed" check to remember later.
 export function computeTrackingStartDay(
   earliestCreatedAtMs: number | null,
   now: Date = new Date(),

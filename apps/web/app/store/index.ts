@@ -46,11 +46,11 @@ export const useStore = create<AppStore>()(
           Object.entries(state.offlineSets).filter(([, s]) => s.status === "saved"),
         ),
         hasRequestedPersist: state.hasRequestedPersist,
-        // Admin set-upload feature (PR3): the live-merged catalogue from the
-        // last successful boot fetch — persisted so a later fully-offline
-        // boot has more than just the bare snapshot to work with (narrows
-        // the "uploaded and saved in the same deploy window" gap PR2's docs
-        // already name). Deliberately NOT `catalogueReady`/`catalogueConfirmed`
+        // The live-merged catalogue from the last successful boot fetch —
+        // persisted so a later fully-offline boot has more than just the bare
+        // snapshot to work with, which narrows the "uploaded and saved in the
+        // same deploy window" gap.
+        // Deliberately NOT `catalogueReady`/`catalogueConfirmed`
         // — both must start false every session; see catalogueSlice.ts.
         catalogueSets: state.catalogueSets,
       }),
@@ -60,8 +60,7 @@ export const useStore = create<AppStore>()(
         // the destructure below throws, persist swallows the TypeError in its
         // internal .catch, `hasHydrated` never flips, and every surface gated
         // on useStoreHydrated() (InstallCta, save-for-offline buttons,
-        // OfflineReconciler) stays hidden for the whole session. Found via
-        // Android field testing 2026-07-02.
+        // OfflineReconciler) stays hidden for the whole session.
         if (!persisted) return current;
         const {
           nowPlayingId,

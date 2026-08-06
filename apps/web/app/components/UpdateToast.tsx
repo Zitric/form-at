@@ -3,12 +3,11 @@ import { useSwUpdate } from "~/hooks/useSwUpdate";
 import { useStore } from "~/store";
 import { Z } from "~/styles/z";
 
-// "new version ready [ update ]" — the user-consented SW update flow (H2).
+// "new version ready [ update ]" — the user-consented SW update flow.
 // Shown when a new service-worker build is installed and waiting; tapping
 // posts SKIP_WAITING to the waiting worker, and the page reloads itself on
-// controllerchange (see useSwUpdate). Surface/positioning now come from
-// `ToastShell` (extracted 2026-07-22 — this component's own 2026-07-18
-// polish was the treatment the other toasts converged on). Whole surface is
+// controllerchange (see useSwUpdate). Surface/positioning come from
+// `ToastShell`, which owns the treatment all three toasts share. Whole surface is
 // the action; no dismiss affordance (ignoring it is free: the update simply
 // applies on the next natural page load).
 //

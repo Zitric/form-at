@@ -15,11 +15,10 @@ test.describe("djs page", () => {
     await expect(page.getByRole("link", { name: /djs_collective/i })).toBeVisible();
   });
 
-  // Regression lock for the "Set card abstraction" fix (PWA_PROGRESS.md,
-  // field-confirmed 2026-07-06): the DJ page's "played by this DJ" list used
-  // to render a DIFFERENT card component than /sets, missing the
-  // save-for-offline icon entirely — there was no way to save a set for
-  // offline from a DJ's page. Both surfaces now render the same `SetCard`,
+  // Regression lock for the "Set card abstraction" (PWA_PROGRESS.md): if the
+  // DJ page's "played by this DJ" list renders a DIFFERENT card component than
+  // /sets, it loses the save-for-offline icon entirely and there's no way to
+  // save a set for offline from a DJ's page. Both render the same `SetCard`,
   // so this asserts the exact button role/name `sets.spec.ts` already locks
   // for the /sets listing, here on the DJ page instead.
   test("DJ page's audio_logs section now shows the save-for-offline icon (was missing)", async ({

@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { PlaybackErrorToast } from "~/components/player/PlaybackErrorToast";
 import { useStore } from "~/store";
 
-// Locks the blocked-tap visibility rule (TECH_DEBT 17 follow-up,
-// 2026-07-02): the playTrack offline gate fires BEFORE a track is attached,
+// Locks the blocked-tap visibility rule (TECH_DEBT 17 follow-up): the
+// playTrack offline gate fires BEFORE a track is attached,
 // so on a fresh session's first blocked tap `nowPlaying` is still null. The
 // toast must render for blocked reasons regardless — requiring nowPlaying
 // made the tap fail silently. Generic errors (no blocked reason) still need

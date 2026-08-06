@@ -20,14 +20,12 @@ function fmtWhen(ms: number): string {
 
 // Shown below the list so a duplicate/accidental repeat delete is visible
 // BEFORE it happens, mirroring RecentPushSends' exact reasoning for the
-// notifications page. Also the thing that makes the admin_deleted_sets
-// audit log (PR6 review item 2a) actually visible day-to-day, rather than
-// a write-only table Julian would need `wrangler` to inspect.
+// notifications page. Also what makes the admin_deleted_sets audit log visible
+// day-to-day, rather than a write-only table needing `wrangler` to inspect.
 //
-// One-click restore feature (2026-08): each entry gets a `[ restore ]`
-// action. Entries drop off this list once restored (fetchRecentDeletedSets
-// filters `restored_at IS NULL`), so there's no stale "restore" button left
-// pointing at a set that's already back.
+// Each entry gets a `[ restore ]` action. Entries drop off this list once
+// restored (fetchRecentDeletedSets filters `restored_at IS NULL`), so no stale
+// restore button is left pointing at a set that's already back.
 function RecentlyDeletedSets({
   deletions,
   onRestoreClick,
@@ -60,20 +58,18 @@ function RecentlyDeletedSets({
   );
 }
 
-// One-click restore (2026-08) — restore-from-log, not soft delete. Single
-// click, deliberately NOT typed-confirmation-gated like delete's
-// play-count-scaled gate: that gate scales friction with a measurable
-// signal (how much play history is at stake); restoring has no analogous
-// per-entry metric — whether a deleted set SHOULD come back is a binary
-// human judgement (wrong file, a rights issue, an artist's takedown
-// request) that no count could express, so an arbitrary typed field would
-// just be friction with no signal behind it. The real mitigation is the
-// entry point itself (this button only exists after deliberately opening
-// "recently deleted" and picking a specific named entry, not a bulk action
-// or something reachable by a stray click) plus copy that leads with the
-// actual consequence — restoring republishes to the public site
-// IMMEDIATELY (the live-D1 read on every /sets request, unlike delete's
-// deploy-lagged disappearance), not "safe because non-destructive."
+// Single click, deliberately NOT typed-confirmation-gated the way delete is.
+// Delete's gate scales friction with a measurable signal (how much play history
+// is at stake); whether a deleted set SHOULD come back is a binary human
+// judgement no count can express, so a typed field here would be friction with
+// no signal behind it. The mitigation is the entry point instead: this button
+// only exists after deliberately opening "recently deleted" and picking a named
+// entry — never a bulk action or a stray click.
+//
+// The copy must lead with the consequence: restoring republishes to the public
+// site IMMEDIATELY, via the live-D1 read on every /sets request, unlike
+// delete's deploy-lagged disappearance. Don't soften it to "safe because
+// non-destructive".
 function RestoreConfirmModal({
   deletion,
   onClose,
@@ -160,15 +156,13 @@ function RestoreConfirmModal({
   );
 }
 
-// Delete confirmation, play-count-gated (PR6 review item 1a): the admin
-// list has no structural way to tell "uploaded five minutes ago" apart
-// from "live since May" other than actual play count — a hardcoded
-// "these 4 ids are legacy" list would be a brittle proxy that stops
-// meaning anything once more sets accumulate real history. A set with zero
-// plays gets a single confirm click; any recorded plays requires typing
-// the exact id before the confirm button enables — proportionate friction
-// for a delete that isn't soft (admin_deleted_sets, item 2a, is the
-// closest thing to an undo, but re-creating a row by hand is real work).
+// Delete confirmation, gated on play count: the admin list has no structural
+// way to tell "uploaded five minutes ago" apart from "live for months" other
+// than actual play count, and a hardcoded "these 4 ids are legacy" list would
+// be a brittle proxy that stops meaning anything as more sets accumulate
+// history. Zero plays gets a single confirm click; any recorded plays requires
+// typing the exact id before confirm enables — proportionate friction for a
+// delete that isn't soft.
 function DeleteConfirmModal({
   set,
   onClose,

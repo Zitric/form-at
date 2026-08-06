@@ -28,9 +28,9 @@ export function BracketLabel({
   const bracketClass = tone === "gold" ? "text-gold" : "text-red-400";
   return (
     // whitespace-nowrap so `[` and `]` never split from their content across a
-    // line wrap — previously left to each caller to add, and one (the
-    // AddToCalendar bracket row) forgot to. Owning it here removes the
-    // opportunity to forget.
+    // line wrap. Owned here rather than left to each caller to remember —
+    // callers do forget, and an orphaned `]` on the next line reads as a
+    // layout bug.
     <span className="whitespace-nowrap">
       <span className={bracketClass}>[</span> {children} <span className={bracketClass}>]</span>
     </span>

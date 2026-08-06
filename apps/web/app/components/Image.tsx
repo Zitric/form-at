@@ -31,9 +31,9 @@ type ImageProps = {
   height?: number;
   /**
    * As-uploaded original to fall back to (a plain `<img>`, no responsive
-   * variants) if the optimized `<picture>` fails to load — real today for a
-   * set uploaded via the admin panel, which has no optimized AVIF/WebP
-   * variants until `optimize-images.mjs` learns to generate them (PR5).
+   * variants) if the optimized `<picture>` fails to load — reachable for a set
+   * uploaded via the admin panel before `optimize-images.ts` has generated its
+   * variants on the next build.
    * Omit when there's nothing to fall back to (DJ photos, event flyers,
    * legacy sets whose variants are already committed) — a failure then
    * renders nothing rather than a broken image.

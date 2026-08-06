@@ -12,23 +12,16 @@ const INSTRUCTION = "for full audio: tap ⋯ and open in safari";
 
 // Persistent informational banner shown when the page is rendered inside a
 // known in-app browser (Instagram, Facebook, TikTok, Line). Teaches the manual
-// escape — "tap ⋯ and open in safari" — rather than trying to auto-launch
-// Safari via URL schemes that fail silently on most current host-app builds.
-// See platform-asymmetry-honesty in CLAUDE memory + Phase 2 plan section 2.2.
+// escape — "tap ⋯ and open in safari" — deliberately rather than auto-launching
+// Safari via URL schemes, which fail silently on most current host-app builds.
 //
-// Mobile-only (`sm:hidden`): in-app browsers ARE mobile, no point on desktop.
+// Mobile-only (`sm:hidden`): in-app browsers ARE mobile.
 //
-// Dismiss is session-scoped via `sessionStorage` — re-entering from a different
-// share later shows the banner again (different WebView session), but within
-// the current session it stays dismissed.
+// Dismiss is session-scoped via `sessionStorage` — a later visit from a
+// different share is a different WebView session and shows the banner again.
 //
-// Static text (no marquee): the instruction fits comfortably at iPhone SE 375
-// — the narrowest viewport we support — and the surface is informational
-// chrome the user reads once and dismisses, not long-form content that needs
-// to keep scrolling. Decorative animation here would also be (correctly)
-// suppressed for `prefers-reduced-motion` users. If a future copy change
-// pushes the text past the fit threshold, revisit; for now plain text is the
-// honest call.
+// Plain static text, no marquee: the copy fits at iPhone SE 375px, the
+// narrowest viewport supported. Revisit only if a copy change breaks that fit.
 export function InAppBrowserBanner() {
   // Defer detection to mount — UA + sessionStorage both need `window`, so SSR
   // renders nothing and the client decides on hydration.

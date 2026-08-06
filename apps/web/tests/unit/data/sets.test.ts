@@ -7,9 +7,8 @@ import {
   isKnownSetId,
 } from "~/data/sets";
 
-// Admin set-upload feature, PR2 (2026-08): the D1-error → snapshot-only
-// fallback is the specific thing this PR's plan review flagged as needing a
-// test ("simulate D1 failure → snapshot-only render"). createServerFn's own
+// Covers the D1-error → snapshot-only fallback: simulate a D1 failure, expect
+// a snapshot-only render. createServerFn's own
 // wrapping can't be invoked directly in a plain unit test, so the fallback
 // logic lives in these two plain functions instead (see ~/data/sets.ts) —
 // tested here with a fake D1, same pattern as packages/data/tests/unit/sets.test.ts.
@@ -72,7 +71,7 @@ describe("getAllSetsWithFallback", () => {
   });
 });
 
-// PR3 review fix: `getAllSetsLive` exists specifically because
+// `getAllSetsLive` exists specifically because
 // `getAllSetsWithFallback` above resolves (never rejects) on both "no D1
 // binding" and "the live query threw" — indistinguishable from a genuine
 // merged result to a caller that just does `.then()`. `CatalogueSync.tsx`
@@ -133,7 +132,7 @@ describe("getSetByIdWithFallback", () => {
   });
 });
 
-// PR3, item 2: `isKnownSetId` is the anti-spam existence check used by
+// `isKnownSetId` is the anti-spam existence check used by
 // `routes/api/event.ts`/`.../signal.ts`. Deliberately the OPPOSITE precedence
 // from `getSetByIdWithFallback` above (snapshot-first, D1 only on a miss) —
 // see the comment on `isKnownSetId` in ~/data/sets.ts for why that's correct

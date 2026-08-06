@@ -54,7 +54,7 @@ const manualChromiumGate: SaveGate = {
 };
 
 describe("SaveGateModal manual-install copy (no captured prompt)", () => {
-  // Opera Android field finding (2026-07-02): it UA-matches "chromium" but
+  // Opera Android field finding: it UA-matches "chromium" but
   // never fired beforeinstallprompt and its menu had no install entry — the
   // old copy promised "tap install app" in a menu where it didn't exist.
   // The manual branch must hedge, never promise a specific menu item.
@@ -97,7 +97,7 @@ describe("SaveGateModal escape-hatch handlers", () => {
   });
 });
 
-// install_dismissed (2026-07-08): fires on passive close (the modal's own
+// install_dismissed: fires on passive close (the modal's own
 // [ x ]) ONLY for the needs-install branch — that's the only branch
 // actually offering to install something. open-app / cannot-install have
 // no install action to dismiss.

@@ -5,20 +5,14 @@ import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { processUploadedSet } from "../../../scripts/optimize-images";
 
-// Admin set-upload feature, PR5. Honest scope note (this was explicitly
-// asked for in review, not an afterthought): with zero uploaded sets in the
-// `sets` table today, the REAL path — a genuine R2 artworkOriginalUrl,
-// fetched over a real network, through a real deploy, with Image.tsx
-// actually picking up the generated variant instead of its fallback — is
-// unexercisable until a real upload happens. What IS meaningfully testable,
-// and covered here: `fetch` is mocked (no real network dependency in CI),
-// but sharp itself is REAL — these tests exercise the actual resize/encode/
-// write pipeline against a synthetic in-memory image, not a re-implemented
-// stand-in for it. Confirmed manually beforehand (serving a real repo image
-// over a local HTTP server, fetching it for real) that the exact mechanism
-// these tests exercise does work end-to-end; that manual check isn't
-// something CI can re-run, which is exactly why it's also on the on-device
-// checklist in PWA_PROGRESS.md's PR5 entry.
+// Scope note, deliberately honest about what this can and can't cover: the
+// REAL path — a genuine R2 artworkOriginalUrl, fetched over a real network,
+// through a real deploy, with Image.tsx picking up the generated variant
+// instead of its fallback — isn't exercisable from CI. What IS covered here:
+// `fetch` is mocked, but sharp itself is REAL, so these tests run the actual
+// resize/encode/write pipeline against a synthetic in-memory image rather than
+// a stand-in. The end-to-end mechanism is on the on-device checklist in
+// PWA_PROGRESS.md's PR5 entry instead, because CI can't re-run it.
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const UPLOADED_OUT = join(ROOT, "public/images/uploads");
@@ -84,7 +78,7 @@ describe("processUploadedSet", () => {
     expect(second.status === "ok" && second.wroteAny).toBe(false);
   });
 
-  // Failure policy (review item 3): a missing/broken variant degrades to
+  // Failure policy: a missing/broken variant degrades to
   // Image.tsx's already-shipped fallback — this must warn and skip, never
   // throw and fail the whole build.
   it("returns a failed outcome with a reason, doesn't throw, when the fetch resolves non-ok (a 404'd artworkOriginalUrl)", async () => {

@@ -11,22 +11,20 @@ import { clearStashedInstallPrompt } from "~/utils/installPromptStash";
 // installed elsewhere on the device) routes through the modal instead of
 // firing a download.
 //
-// Why the strict standalone rule: web (browser tab) streams ANY set over the
-// network and never reads IDB; the app (standalone) is a superset that adds
-// download + offline playback. Drawing the line at `isStandalone()` keeps the
-// SW read-path coherent with the UI gate — see `withAppContext` + the SW
-// audio handler in `sw.ts`.
+// The strict standalone rule keeps the UI gate coherent with the SW read path:
+// a browser tab streams any set over the network and never reads IDB, while the
+// app is a superset that adds download + offline playback. See `withAppContext`
+// and the SW audio handler in `sw.ts`.
 //
-// Misclassification — `pwaInstalled` is a POSITIVE-ONLY signal:
-//   - true  → we trust it: the user already installed somewhere on this
-//             device, so the modal says "open it from your home screen"
-//             (case b).
-//   - false → may mean "never installed" OR "installed but our listener
-//             missed it" (older sessions, cleared site data). Default to
-//             "install the app" (case a) and let the case-a modal include
-//             an "already installed → open it" escape-hatch that flips
-//             `pwaInstalled` to true. The case-b modal includes the inverse
-//             ("not installed?") so users can recover either direction.
+// `pwaInstalled` is a POSITIVE-ONLY signal — don't treat false as "not
+// installed":
+//   - true  → trusted; the modal says "open it from your home screen" (case b).
+//   - false → may mean never installed OR installed but our listener missed it
+//             (older sessions, cleared site data). Defaults to "install the
+//             app" (case a). Both modals carry the inverse escape-hatch —
+//             case a offers "already installed → open it" (which flips the flag
+//             true), case b offers "not installed?" — so a user can recover in
+//             either direction.
 export type SaveGate =
   | { allow: true }
   | { allow: false; reason: "pending" }

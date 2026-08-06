@@ -1,18 +1,16 @@
-// Set-upload feature (PR4) — pre-upload client-side sanity checks. Stated
-// plainly as a convenience, not a guarantee (same trust model as
-// send-push.ts's own validate() comment): this is Access-gated, admin-only,
-// so the threat model is "catch an honest mistake" (a malformed peaks.json,
-// a non-image "artwork" file) before it silently breaks later — the
-// waveform falling back to a plain scrubber, or artwork 404ing forever —
-// not "resist a malicious operator."
+// Pre-upload client-side sanity checks — a convenience, not a guarantee (same
+// trust model as send-push.ts's validate()). Access-gated and admin-only, so
+// the job is catching an honest mistake (a malformed peaks.json, a non-image
+// "artwork") before it breaks silently later — the waveform falling back to a
+// plain scrubber, or artwork 404ing forever — not resisting a malicious
+// operator.
 
-// Real shape verified against an actual peaks file pulled from R2
-// (t.i.l.'s set, PWA_PROGRESS.md's PR4 entry has the full trace):
-// `{ "peaks": number[] }`, exactly 1000 elements (scripts/generate-peaks.mjs's
-// `const PEAKS = 1000`, not duration-dependent), values NOT bounded to
-// [0, 1] — real max observed was 1.137. `[0, 2]` is generous headroom above
-// that, catching garbage/NaN without false-rejecting legitimate encoding
-// variance.
+// Shape verified against a real peaks file from R2 (PWA_PROGRESS.md's PR4 entry
+// has the trace): `{ "peaks": number[] }`, exactly 1000 elements
+// (scripts/generate-peaks.mjs's `const PEAKS = 1000`, not duration-dependent),
+// values NOT bounded to [0, 1] — real max observed was 1.137. `[0, 2]` is
+// deliberate headroom above that: catches garbage/NaN without false-rejecting
+// legitimate encoding variance.
 const EXPECTED_PEAKS_LENGTH = 1000;
 const MAX_PEAK_VALUE = 2;
 

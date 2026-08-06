@@ -1,20 +1,15 @@
 /// <reference lib="webworker" />
 
-// Form:at service worker — Phase 1 (installable).
-//
-// Single responsibility right now: precache the app shell and activate
-// immediately. That's what makes Lighthouse's "registers a service worker"
-// check pass and unlocks Chrome / Android's install prompt — the rest of the
-// PWA capabilities (audio caching, beacon queue, update toast) are built on
-// top of this minimum viable SW in later phases.
+// Form:at service worker: precaches the app shell, serves saved audio from IDB,
+// replays queued analytics beacons, and handles push.
 //
 // Built with vite-plugin-pwa's `injectManifest` strategy: the plugin replaces
 // `self.__WB_MANIFEST` at build time with the precache manifest (every emitted
 // asset that matches `injectManifest.globPatterns` in vite.config.ts).
 //
-// Type context: `ServiceWorkerGlobalScope` from `lib: ["WebWorker"]` in
-// `tsconfig.sw.json` — `Window` types are intentionally absent because the SW
-// can't touch the DOM and we'd rather fail at typecheck than at runtime.
+// Types come from `ServiceWorkerGlobalScope` via `lib: ["WebWorker"]` in
+// `tsconfig.sw.json`. `Window` types are intentionally absent, so DOM access
+// fails at typecheck rather than at runtime.
 
 import { AUDIO_HOST } from "@form-at/data/sets";
 import type { PushPayload } from "@form-at/data/webPush";
@@ -32,22 +27,19 @@ declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ revision: string | null; url: string }>;
 };
 
-// Take control of any open clients as soon as this SW activates. Without
-// this, clients keep talking to the previous SW until they're closed and
-// reopened — which would defeat the "new version ready [ update ]" flow we wire
-// in Phase 4.2.
+// Take control of any open clients as soon as this SW activates. Without this,
+// clients keep talking to the previous SW until they're closed and reopened,
+// which defeats the "new version ready [ update ]" flow.
 clientsClaim();
 
-// NO unconditional `self.skipWaiting()` — deliberately (H2, 2026-07-02
-// review). An immediately-activating SW prunes the previous build's hashed
-// chunks from the precache while old clients are still running them; the old
-// client's next lazy route-load then 404s, because Cloudflare Pages serves
-// only the latest deployment. (The removed call's comment claimed the worst
-// case was "old cache served for 30 more seconds" — the actual worst case
-// was a broken route.) Instead: the new SW sits in `waiting`, the page shows
-// "new version ready [ update ]" (<UpdateToast> → useSwUpdate), and activation
-// happens on explicit user consent via the message below, followed by a
-// reload the page itself triggers on `controllerchange`.
+// NO unconditional `self.skipWaiting()` — never add one. An immediately-
+// activating SW prunes the previous build's hashed chunks from the precache
+// while old clients are still running them, and the old client's next lazy
+// route-load then 404s, because Cloudflare Pages serves only the latest
+// deployment. A broken route, not merely a stale cache. Instead the new SW sits
+// in `waiting`, the page shows "new version ready [ update ]" (<UpdateToast> →
+// useSwUpdate), and activation happens on explicit user consent via the message
+// below, followed by a reload the page triggers on `controllerchange`.
 //
 // `clientsClaim()` above STAYS: on first install there is no old client
 // running hashed chunks, so claiming immediately is safe — it's what makes
@@ -96,17 +88,16 @@ registerRoute(
 // `ERR_INTERNET_DISCONNECTED`) and the route hits the error boundary —
 // even though direct reloads work fine via `pages-v1`.
 //
-// GET only: POSTs (e.g. `/api/signal`) must fail cleanly offline until the
-// Phase 4.5 beacon queue lands (TECH_DEBT 4); caching a POST response would
-// be incorrect (mutation semantics) and Workbox refuses non-GET by default
-// anyway.
+// GET only: caching a POST response would be incorrect (mutation semantics) and
+// Workbox refuses non-GET by default anyway. Offline `/api/signal` POSTs are
+// handled by the beacon queue instead (TECH_DEBT 4, `~/data/beacon-queue.ts`).
 //
-// NOT cleared on activate — opposite of `pages-v1`. Reason: cached HTML can
-// reference purged hashed JS chunks (hydration risk if not cleared);
-// `_serverFn` data is small JSON with no asset coupling. Wiping every deploy
-// would erase offline access to recently-visited pages — the wrong
-// direction. URLs carry build hashes so stale entries go inert naturally.
-// Same reasoning as `audio-v1` and `artwork-v1`: stable URL → don't clear.
+// NOT cleared on activate, opposite of `pages-v1`: cached HTML can reference
+// purged hashed JS chunks, which is a hydration risk, but `_serverFn` data is
+// small JSON with no asset coupling. Wiping it every deploy would erase offline
+// access to recently-visited pages, and URLs carry build hashes so stale
+// entries go inert on their own. Same reasoning as `audio-v1`/`artwork-v1`:
+// stable URL → don't clear.
 registerRoute(
   ({ url, request }) => request.method === "GET" && url.pathname.startsWith("/_serverFn/"),
   new StaleWhileRevalidate({ cacheName: "route-data-v1" }),
@@ -118,52 +109,43 @@ registerRoute(
 // deliberately absent — `save_for_offline` must be an explicit user action,
 // not a playback side effect.
 //
-// Why IDB and not Cache Storage: WebKit / iOS Safari is reliably quirky with
-// large blob entries in Cache Storage. IDB has the same origin-level quota,
-// no documented per-entry cap, and is the workaround the Workbox community
-// recommends (GoogleChrome/workbox#3004). The synthetic Response built below
-// satisfies the same Range-slicing contract regardless of storage location.
+// IDB rather than Cache Storage — see `~/data/offline-audio.ts` for why. The
+// synthetic Response built below satisfies the same Range-slicing contract
+// regardless of storage location.
 //
 // Range handling: `<audio>` issues `Range: bytes=N-` for seek and for
-// incremental playback. `createPartialResponse` calls `response.blob()` then
-// `Blob.slice()` — slicing operates on the Blob, indifferent to how the
-// Response was constructed. Only call it when a Range header is present;
-// without one it throws → catches → returns a misleading 416.
+// incremental playback. Only call `createPartialResponse` when a Range header is
+// actually present — without one it throws, and the catch returns a misleading
+// 416.
 //
-// === Tab vs app display-mode gate (the chunk-5 lock) ===
-// The page tags playback URLs with `?ctx=app` via `withAppContext` ONLY when
-// running in standalone display-mode. The marker is the SW's single source
-// of truth for "is the requester a standalone PWA?":
-//   - missing marker (browser tab) → pure pass-through to network. Never
-//     reads IDB. A downloaded set in a tab still streams from R2.
-//   - `ctx=app` (standalone) → read IDB; fall through to network on miss.
-// The marker is stripped ONLY for the IDB key (via `stripAppContext`) so the
-// lookup matches the bare URL the download flow stored.
+// === Tab vs app display-mode gate ===
+// The page tags playback URLs with `?ctx=app` via `withAppContext` ONLY in
+// standalone display-mode, and that marker is the SW's single source of truth
+// for "is the requester a standalone PWA?":
+//   - missing marker (browser tab) → pure pass-through, never reads IDB. A
+//     downloaded set in a tab still streams from R2.
+//   - `ctx=app` (standalone) → read IDB, fall through to network on miss.
+// The marker is stripped ONLY for the IDB key (`stripAppContext`) so the lookup
+// matches the bare URL the download flow stored.
 //
 // === Network pass-through: ALWAYS `fetch(request)`, never a rebuilt Request ===
-// Both pass-through paths (tab, and standalone IDB-miss) forward the
-// ORIGINAL request object. Two incidents locked this in:
-//   1. Chunk 5.3: a rebuilt `new Request(url, { method, headers })` defaults
-//      `mode` to "cors", silently flipping `<audio>`'s native no-cors and
-//      making the browser block R2 MP3 responses. Passing `request` through
-//      preserves mode / credentials / redirect by construction.
-//   2. H1 (2026-07-02 review): even a rebuild that copies mode explicitly
-//      loses the `Range` header — per the Fetch spec, a Headers object with
-//      the "request-no-cors" guard silently drops any header that isn't
-//      no-CORS-safelisted (accept / accept-language / content-language /
-//      content-type), and Range isn't. Result: mid-set seeks got 200
-//      full-body instead of 206, re-downloading 100MB+ sets from byte 0.
-//      (Spec-derived: Node's undici doesn't implement the guard, so this is
-//      only observable in a real browser — verify with the 206-on-seek check
-//      in PWA_PROGRESS.)
-// Consequence: on the standalone IDB-miss path the `?ctx=app` marker reaches
-// R2. Verified harmless with curl against the live bucket (2026-07-02): R2
-// resolves objects by path — same 200 body, and Range GETs return 206 with
-// the marker present. Cost: the marked URL keys the browser HTTP cache
-// separately from the bare tab URL — an acceptable duplicate-fetch, not a
-// correctness issue.
+// Both pass-through paths (tab, and standalone IDB-miss) must forward the
+// ORIGINAL request object. Rebuilding it breaks playback two separate ways:
+//   1. `new Request(url, { method, headers })` defaults `mode` to "cors",
+//      flipping `<audio>`'s native no-cors so the browser blocks R2 MP3
+//      responses. Forwarding `request` preserves mode/credentials/redirect by
+//      construction.
+//   2. Even a rebuild that copies mode explicitly LOSES the `Range` header: per
+//      the Fetch spec a Headers object under the "request-no-cors" guard
+//      silently drops anything not no-CORS-safelisted, and Range isn't. Seeks
+//      then get a 200 full-body instead of 206, re-downloading 100MB+ sets from
+//      byte 0. Node's undici doesn't implement the guard, so this is only
+//      observable in a real browser — see PWA_PROGRESS.md's 206-on-seek check.
+// The `?ctx=app` marker does reach R2 on the standalone IDB-miss path. That's
+// harmless (R2 resolves by path; Range GETs still return 206) and costs only a
+// duplicate browser-cache entry keyed separately from the bare tab URL.
 //
-// === Cached-Response contract (the chunk-3 §3 lock — preserved) ===
+// === Cached-Response contract ===
 // The synthetic Response built here MUST have these five properties or Range
 // slicing breaks silently:
 //   status:         200  (NOT 206 — slicing a partial response would fail)
@@ -205,28 +187,27 @@ registerRoute(
 // fail to hydrate. The precache itself is versioned by Workbox so only
 // `pages-v1` needs explicit clearing.
 //
-// Legacy cleanup: chunk 3a briefly used `caches.open("audio-v1")` for the
-// audio read-path before chunk 3b moved storage to IDB. That left an empty
-// Cache Storage cache on users running 3a — harmless but confusing in
-// DevTools. Delete it on activate so post-3b installs see only the actual
-// runtime caches.
+// Also deletes a stray Cache Storage cache named `audio-v1` — unrelated to the
+// IDB database of the same name. An earlier build used it for the audio
+// read-path before storage moved to IDB, so it lingers empty on those devices:
+// harmless, but confusing in DevTools. Don't drop this delete as pointless.
 self.addEventListener("activate", (event) => {
   event.waitUntil(Promise.all([caches.delete("pages-v1"), caches.delete("audio-v1")]));
 });
 
-// Phase 4.5 (2026-07-23, TECH_DEBT 4) — Background Sync replay for
-// `/api/signal` beacons that failed to send offline (queued from
-// `useAudioPlayer.ts`'s `sendPlay`). `replaySignalQueue` (pure, unit-tested
-// — see `~/data/beacon-queue.ts`) owns the actual replay logic; this is
-// just the event wiring, same split as `push`/`notificationclick` above.
+// Background Sync replay for `/api/signal` beacons that failed to send offline
+// (queued from `useAudioPlayer.ts`'s `sendPlay`) — TECH_DEBT 4.
+// `replaySignalQueue` in `~/data/beacon-queue.ts` owns the replay logic and is
+// pure and unit-tested; this is only the event wiring, same split as
+// `push`/`notificationclick` above.
 //
 // TypeScript's bundled WebWorker lib doesn't define `SyncEvent` or a `"sync"`
-// entry in `ServiceWorkerGlobalScopeEventMap` at all (checked directly,
-// 2026-07-23) — `addEventListener` falls through to its generic
-// `(type: string, listener: EventListenerOrEventListenerObject)` overload,
-// so `event` below is typed as plain `Event` without the cast. Shape
-// verified against MDN's `SyncEvent` reference: `tag` (which registration
-// this is) and `lastChance` (true if the UA won't retry after this attempt),
+// entry in `ServiceWorkerGlobalScopeEventMap` at all, so `addEventListener`
+// falls through to its generic
+// `(type: string, listener: EventListenerOrEventListenerObject)` overload and
+// `event` below is typed as plain `Event` without the cast. The shape is what
+// MDN documents: `tag` (which registration this is) and `lastChance` (true if
+// the UA won't retry after this attempt),
 // extending `ExtendableEvent` for `waitUntil()`.
 interface SyncEvent extends ExtendableEvent {
   readonly tag: string;
@@ -238,8 +219,7 @@ self.addEventListener("sync", (event) => {
   if (syncEvent.tag === SYNC_TAG) syncEvent.waitUntil(replaySignalQueue());
 });
 
-// Phase 2 (2026-07-15; extended 2026-07-21 — image/vibrate/actions/
-// requireInteraction/timestamp) — push notifications: receive + click-to-open.
+// Push notifications: receive + click-to-open.
 //
 // Payload shape is whatever `webPush.ts`'s `PushPayload` sends. MUST NOT
 // throw: `event.data` is legitimately `null` for an empty push per spec, and
@@ -267,20 +247,18 @@ self.addEventListener("push", (event) => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
-// Focus-or-open, standard PWA notificationclick pattern (verified against
-// MDN's `notificationclick` + `WindowClient.navigate()` references,
-// 2026-07-15) — `navigate()` is what lets a tap deep-link an ALREADY-OPEN
-// app to the pushed URL, not just bring an unrelated open tab to the front.
-// `includeUncontrolled: true` matters here specifically: a client open from
-// BEFORE this SW activated (or before `clientsClaim()` took it over) is
-// still a real open window we should reuse instead of spawning a duplicate.
+// Focus-or-open, the standard PWA notificationclick pattern. `navigate()` is
+// what lets a tap deep-link an ALREADY-OPEN app to the pushed URL rather than
+// just bringing an unrelated tab to the front. `includeUncontrolled: true`
+// matters specifically because a client open from BEFORE this SW activated (or
+// before `clientsClaim()` took it over) is still a real window worth reusing
+// instead of spawning a duplicate.
 //
-// `event.action` (2026-07-21) distinguishes a body tap from one of the two
-// action buttons — verified against MDN's `NotificationEvent.action`:
-// empty string for a body tap or a notification with no buttons, otherwise
-// the tapped action's id. `resolveNotificationClickUrl` (pure, unit-tested)
-// owns that decision; `null` means "later" was tapped — close only, the
-// notification already closed above, so there's nothing left to do.
+// `event.action` distinguishes a body tap from one of the two action buttons:
+// empty string for a body tap or a notification with no buttons, otherwise the
+// tapped action's id. `resolveNotificationClickUrl` (pure, unit-tested) owns
+// that decision; `null` means "later" was tapped, and the notification already
+// closed above, so there's nothing left to do.
 self.addEventListener("notificationclick", (event) => {
   const dataUrl = (event.notification.data as { url?: string } | undefined)?.url;
   const targetUrl = resolveNotificationClickUrl(event.action, dataUrl);

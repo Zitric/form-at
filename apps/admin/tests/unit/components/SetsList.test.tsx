@@ -62,7 +62,7 @@ describe("SetsList", () => {
     expect(screen.getByLabelText(/^title$/i)).toHaveValue("Form:at 003");
   });
 
-  // PR6 review item 1a — the core safeguard: a zero-play set is a single
+  // The core safeguard: a zero-play set is a single
   // confirm click; a played set requires typing the id first.
   describe("delete confirmation, play-count-gated", () => {
     it("a zero-play set's confirm button is enabled immediately, no type-to-confirm field", async () => {
@@ -165,7 +165,7 @@ describe("SetsList", () => {
     });
   });
 
-  // One-click restore feature (2026-08) — restore-from-log, single-click
+  // Restore-from-log, single-click
   // confirm (not typed-confirmation-gated like delete; see SetsList.tsx's
   // RestoreConfirmModal comment for why). These lock: the modal states the
   // immediate-republish consequence plainly, confirming fires the right

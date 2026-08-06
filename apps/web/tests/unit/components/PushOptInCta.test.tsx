@@ -5,8 +5,8 @@ import { PushOptInCta } from "~/components/PushOptInCta";
 import type { SaveGate } from "~/hooks/useSaveGate";
 import { useStore } from "~/store";
 
-// CTA gating for the two-variant soft prompt (feat/push-optin-modal,
-// 2026-07-16). The gate is deliberately different per display mode:
+// CTA gating for the two-variant soft prompt. The gate is deliberately
+// different per display mode:
 // standalone offers the real subscribe (needs the Push API + an unspent
 // ask), a browser tab offers the install nudge (shown even where the Push
 // API is absent — that's the iOS-Safari-tab audience the nudge exists for).
@@ -193,8 +193,8 @@ describe("PushOptInCta gating — suppression flags", () => {
   });
 });
 
-// Live permission outranks the persisted denial flag (field bug
-// 2026-07-18): permission can change outside the app (Android settings,
+// Live permission outranks the persisted denial flag: permission can change
+// outside the app (Android settings,
 // Chrome site settings, permission resets), so the flag may only suppress
 // the CTA while live permission is still "denied" — anything else means
 // the flag is stale and must be cleared, or a Block later undone in device
@@ -249,7 +249,7 @@ describe("PushOptInCta — persisted denial flag vs live permission", () => {
   });
 });
 
-// Reconcile path (field bug 2026-07-17): a device subscribed BEFORE the
+// Reconcile path: a device subscribed BEFORE the
 // push_subscriptions migration was applied holds a live local subscription
 // with no server row. The CTA correctly hides on it — so the mount effect
 // must re-POST the existing subscription (idempotent INSERT OR REPLACE) or

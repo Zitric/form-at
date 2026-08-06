@@ -15,9 +15,9 @@ import { safeLocal } from "~/utils/safeStorage";
 // first listener consumed-and-stored it locally. Capturing once into the
 // store and reading from both consumers keeps them in sync.
 //
-// Also performs a one-time migration of Phase 1's localStorage dismiss key
-// into the new persisted `pwaInstallDismissed` flag so a returning user who
-// said "not now" before isn't re-prompted after this refactor lands.
+// Also performs a one-time migration of an older localStorage dismiss key into
+// the persisted `pwaInstallDismissed` flag, so a returning user who said "not
+// now" isn't re-prompted.
 export function InstallEventsListener() {
   const setDeferredPrompt = useStore((s) => s.setDeferredPrompt);
   const setPwaInstalled = useStore((s) => s.setPwaInstalled);

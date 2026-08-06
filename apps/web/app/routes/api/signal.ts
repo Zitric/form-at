@@ -9,8 +9,8 @@ type TrackBody = {
   // Whether the SW served these bytes from IDB (standalone + saved) vs the
   // network — see `wasServedFromIdb` in `store/playerSlice.ts` for the exact
   // signal this mirrors. `null` covers rows from before this field existed
-  // AND any pre-2026-07-08 cached client still posting the old payload
-  // shape during a deploy rollout window (H2's update flow means old JS can
+  // AND any cached client still posting the old payload shape during a deploy
+  // rollout window (the user-consented update flow means old JS can
   // legitimately keep running for a while) — optional by design, not a
   // reason to drop an otherwise-valid play record.
   isOffline: boolean | null;
@@ -23,8 +23,8 @@ const MIN_LISTENED = 3;
 const MAX_LISTENED = 4 * 60 * 60; // 4h — longer than any set
 const MAX_STR = 200;
 
-// Exported (PR3, matching `api/event.ts`'s already-exported convention) —
-// `async` because the setId existence check is now `isKnownSetId`, which
+// Exported, matching `api/event.ts`'s convention. `async` because the setId
+// existence check is `isKnownSetId`, which
 // only touches D1 on a snapshot miss (see the precedence comment on
 // `isKnownSetId` in ~/data/sets.ts). `db` is threaded in from the handler
 // rather than read here, so this stays a plain, directly-testable function.

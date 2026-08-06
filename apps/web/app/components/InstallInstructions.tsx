@@ -10,7 +10,7 @@ import { type FormFactor, detectFormFactor } from "~/utils/deviceFormFactor";
 // Manual-install guidance for the no-captured-prompt path. Reached by
 // Chromium-family browsers that never fire `beforeinstallprompt` at all
 // (Opera Android carries `Chrome/` in its UA but its menu had no install
-// entry — field-tested 2026-07-02) AND by Chrome before its install
+// entry) AND by Chrome before its install
 // heuristics pass. So we never promise a specific menu item: name the labels
 // it might carry, and say honestly that this browser may not offer one.
 // Form-factor split: mobile → browser menu, desktop → address-bar icon

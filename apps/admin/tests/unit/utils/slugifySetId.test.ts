@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { slugifySetId } from "~/utils/slugifySetId";
 
-// Set-upload feature (PR4, item 5). Real convention confirmed against the 4
+// Real convention confirmed against the 4
 // legacy rows (schema.sql / sets.generated.ts): `set-{eventSequence}-
 // {artistSlug}`, where the sequence is the EVENT number extracted from a
 // "Form:at NNN" title, not a slug of the title itself.

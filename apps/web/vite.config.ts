@@ -19,7 +19,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // resulting bundle so Workbox knows which app-shell assets to cache. Custom
 // because vite-plugin-pwa@1.x doesn't cope with TanStack Start's dual-environment
 // Vite build — it emits the registration snippet into the SSR output and never
-// produces the actual `/sw.js` file (see the Phase 1 audit notes for the dig).
+// produces the actual `/sw.js` file.
 //
 // Output: `dist/client/sw.js` — a single bundled file with all Workbox imports
 // inlined. Classic worker (iife), not a module worker, for broadest browser
@@ -31,7 +31,7 @@ function buildServiceWorker(): Plugin {
   // Explicit allowlist for what goes into the precache. Everything not matched
   // is skipped — safer than "everything minus media" because new files dropped
   // into `public/` later won't quietly bloat the precache budget. Runtime
-  // caches in Phase 3 handle artwork and audio with dedicated strategies.
+  // caches handle artwork and audio with their own dedicated strategies.
   function shouldPrecache(rel: string): boolean {
     if (rel === "manifest.json") return true;
     if (rel === "icon-192.png" || rel === "icon-512.png") return true;

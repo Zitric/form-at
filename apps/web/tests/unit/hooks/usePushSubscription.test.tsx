@@ -7,7 +7,7 @@ import { useStore } from "~/store";
 // same gap useSwUpdate.test.tsx documents for serviceWorker alone. Mocked
 // here, spec-shaped, per-test rather than in tests/setup.ts since only this
 // suite touches the Push API. Covers the pure opt-in/dismissal-tracking
-// decision logic (Phase 2, 2026-07-15); the real subscribe() call and its
+// decision logic; the real subscribe() call and its
 // browser-native crypto can only be verified on-device — see
 // PWA_PROGRESS.md's checklist.
 
@@ -91,8 +91,8 @@ describe("useSubscribeToPush", () => {
     expect(useStore.getState().pushOptInDismissed).toBe(true);
   });
 
-  // Locks the resume-path guarantee (granted-but-unsubscribed recovery,
-  // 2026-07-17): when the grant already exists, the hook must not call
+  // Locks the resume-path guarantee (granted-but-unsubscribed recovery):
+  // when the grant already exists, the hook must not call
   // requestPermission at all — the "native dialog only ever fires from a
   // modal accept" contract stays literal instead of relying on the browser
   // treating a granted-state prompt call as a no-op.

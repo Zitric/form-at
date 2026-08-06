@@ -6,12 +6,9 @@ import { SetCard } from "~/components/SetCard";
 import { useStore } from "~/store";
 import { registerAudioElement } from "~/store/playerSlice";
 
-// Locks the unification fix (PWA_PROGRESS "Set card abstraction",
-// field-confirmed 2026-07-06): `/sets/index.tsx` and `/djs/$djId.tsx` used to
-// render two different card implementations that had drifted — the DJ page
-// was missing the save-for-offline icon entirely. Both routes now render
-// THIS component, so parity is structural: there is only one action-slot
-// implementation to get wrong.
+// Locks the unification (PWA_PROGRESS "Set card abstraction"): both
+// `/sets/index.tsx` and `/djs/$djId.tsx` must render THIS component, so parity
+// is structural — there is only one action-slot implementation to get wrong.
 
 vi.mock("~/hooks/useSaveGate", () => ({
   useSaveGate: () => ({ allow: true }),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { eventDateTimes } from "~/utils/jsonld";
 
-// Locks the WebKit crash fix (2026-07-22): `startDate` must ALWAYS be a
+// Locks the WebKit crash fix: `startDate` must ALWAYS be a
 // full `T`-qualified local datetime, never a bare date. `ics.ts`'s calendar
 // builders feed it straight into `new Date(\`${startDate}Z\`)` — a bare
 // date there ("2026-07-24Z") is malformed ISO 8601. Chromium tolerates it;

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AddToCalendarButton } from "~/components/AddToCalendarButton";
 import { events } from "~/data/events";
 
-// calendar_add_click (feat/calendar-tracking-and-dashboard, 2026-08-02): all
+// calendar_add_click: all
 // three destinations must fire the same event, carrying no set_id — same
 // beacon-assertion convention as shareButtons.test.tsx.
 

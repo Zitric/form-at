@@ -140,9 +140,8 @@ export function MobileMiniPlayer({
       if (last) {
         const progress = Math.max(0, -my / window.innerHeight);
         // A browser-canceled gesture (notification shade, edge gesture,
-        // pointer stolen mid-drag) must NEVER commit — before this guard, a
-        // canceled fling left the overlay committed fully open (field bug
-        // 2026-07-03, CDP-reproduced with touchCancel).
+        // pointer stolen mid-drag) must NEVER commit — without this guard a
+        // canceled fling leaves the overlay committed fully open.
         const commit = !canceled && shouldSnapOpen(progress);
         // Imperatively set the snap target *with* the transition restored so
         // the browser animates from current inline transform to the target.
