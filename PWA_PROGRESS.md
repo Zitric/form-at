@@ -2038,6 +2038,10 @@ Both items from the post-merge review's next-PR plan, shipped as two commits.
   [ reload ]" — bracketed CTA per the design system, ~44px touch target,
   active-state feedback. (It was already a real `<button>`; it just read
   as a passive status pill.)
+  **Superseded — the toast is gone (see "SW update flow" below).** The
+  no-`skipWaiting` constraint this entry established still holds and is now
+  structural rather than policy; only the consent UI was removed. Kept here
+  because it records WHY a forced reload is not an acceptable alternative.
   **Polished 2026-07-18** (copy + style only — the tap-handler chain,
   deferral, and button/touch-target guarantees above are untouched):
   copy is now "new version ready [ update ]" — jargon-free message, the
@@ -3308,27 +3312,69 @@ Marker protocol lives in `utils/appContext.ts` (worker-safe: `sw.ts` imports
 it and type-checks under WebWorker libs; `withAppContext` stays in
 `utils/audioUrl.ts` because it needs `window`).
 
-### SW update flow — user-consented skipWaiting (2026-07-02, H2)
+### SW update flow — silent, on next cold start
 
-The SW has NO unconditional `skipWaiting()`. Pattern:
+The SW has NO `skipWaiting()` at all, and no update prompt. A new build
+installs, sits in `waiting`, and activates via the lifecycle's own default:
+once every client controlled by the old worker is gone, the waiting worker
+takes over, so the next cold start runs the new version. Nothing is pushed
+at a live session.
 
-1. New build installs → sits in `waiting` (old clients keep their precache,
-   so their lazy route chunks stay servable).
-2. `useSwUpdate` detects it (both `registration.waiting` at mount and
-   `updatefound` → `statechange` while open; "installed + has controller"
-   distinguishes an update from a first install).
-3. `UpdateToast` shows "new version ready [ update ]" — deferred while a
-   set download is in flight.
-4. Tap → `postMessage({ type: "SKIP_WAITING" })` → SW calls
-   `self.skipWaiting()` → `controllerchange` → ONLY the tab that requested
-   the swap reloads (guarded ref; first-install `clientsClaim` also fires
-   controllerchange and must not reload).
+`clientsClaim()` stays in the SW. Its reason is first install only — there
+is no previous worker and no old client running hashed chunks, so claiming
+immediately is what makes offline capability live without a reload on the
+very first visit. It is not an activation trigger: it runs *at* activate, so
+for an update there is nothing stale left to claim by the time it fires.
 
-`clientsClaim()` stays in the SW: first install has no old clients, and it
-makes offline capability live without a reload. Detection uses
-`navigator.serviceWorker.ready` (not `getRegistration()`) because the
-inline registration script runs on window `load`, potentially after the
-hook mounts.
+**Why there is no prompt and no auto-reload.** The H2 entry above is the
+history: an unconditional `skipWaiting()` activated a new worker mid-session,
+pruned the running build's hashed chunks, and 404'd the old client's next
+lazy route-load. It also cut off playback — a forced reload mid-set kills a
+90-minute listen. The consent toast that replaced it was itself the wrong
+shape: it interrupted the same session it was trying to protect, and its tap
+handler had to tear down the audio stream (`releaseAudioStream`), re-resolve
+a possibly-redundant worker, and carry a 2s fallback reload just to converge.
+Removing the `SKIP_WAITING` message handler deletes the only path by which a
+worker can activate over a live client, so H2's hazard is now impossible by
+construction rather than avoided by policy.
+
+**If you revisit this, do not "fix" it with an auto-reload.** A forced reload
+is precisely what this design exists to prevent. Deferring the reload until
+playback stops is the same trap wearing a hat — it still reloads a session
+the user didn't ask to reload.
+
+**Accepted trade-off, and what actually clears it.** A client that stays open
+keeps running the old version, and there is now NO mechanism to push an
+urgent fix to an open session. Mobile PWAs are the realistic worst case: a
+backgrounded app can hold its client alive for days.
+
+A plain reload does NOT pick up the new version. This is the counter-intuitive
+part and the reason DevTools has an "Update on reload" checkbox at all: the
+outgoing and incoming documents overlap, so the registration never drops to
+zero clients and the waiting worker has no reason to activate. Measured
+against two real production builds (v1 controlling, v2 deployed, same origin,
+Chromium):
+
+| action | outcome |
+| --- | --- |
+| plain reload, once | v2 installed but stuck in `waiting`; v1 still active |
+| plain reload, twice | unchanged — v2 still `waiting` |
+| hard reload (bypasses the SW for the navigation) | v2 activates |
+| close every client, then reopen | v2 activates |
+
+So, to force the new version:
+
+- **Installed app / mobile — fully close it and reopen** (swipe it out of
+  recents on Android). There is no hard-reload gesture in a standalone PWA;
+  pull-to-refresh is a plain reload, which does nothing here. This is the
+  instruction to give a user, because it's the one that holds everywhere.
+- **Desktop browser — a hard reload (Cmd/Ctrl+Shift+R) is enough**, because
+  it loads the document bypassing the SW, which releases the old worker.
+
+Verified in Chromium only; iOS/Safari wasn't measured, which is a further
+reason to lead with close-and-reopen. If an urgent client-side fix ever
+genuinely needs to reach already-open sessions, that's a deliberate new
+decision to make with these constraints in view — not a default to restore.
 
 ### `beforeinstallprompt` capture — pre-hydration stash (2026-07-02)
 
