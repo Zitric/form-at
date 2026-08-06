@@ -4,16 +4,13 @@
 // push notification — used by `apps/web/scripts/send-push.ts` (a local Node
 // script, the fallback for sending outside the admin UI) and by apps/admin's
 // `/api/send-push` endpoint.
-// Nothing in this file is Node-specific: it's built entirely on
-// `globalThis.crypto.subtle` and `fetch`, both available in Node 20+,
-// browsers, and the Cloudflare Workers runtime — verified directly against
-// `@pushforge/builder`'s compiled source (`dist/lib/crypto.js` binds to
-// `globalThis.crypto`, no `node:crypto` import anywhere in the package).
-// See PWA_PROGRESS.md's Phase 2 section for the full research trail on why
-// this library instead of the far more common `web-push` npm package (short
-// version: `web-push` depends on Node's `crypto`/`https` modules and does
-// not work in the Workers runtime — see web-push-libs/web-push#718, open
-// since 2022, unresolved).
+// Nothing here may become Node-specific: it's built entirely on
+// `globalThis.crypto.subtle` and `fetch`, which exist in Node 20+, browsers AND
+// the Cloudflare Workers runtime. That's also why it uses `@pushforge/builder`
+// rather than the far more common `web-push` — `web-push` depends on Node's
+// `crypto`/`https` modules and does not work in Workers at all
+// (web-push-libs/web-push#718). See PWA_PROGRESS.md's Phase 2 section for the
+// research trail.
 import { buildPushHTTPRequest } from "@pushforge/builder";
 
 export type PushSubscriptionRecord = {

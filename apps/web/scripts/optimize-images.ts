@@ -3,9 +3,8 @@
 // in public/images/. Skips outputs that are already up-to-date (mtime newer than source).
 // Run with: pnpm optimize-images   (or: --force to regenerate everything)
 //
-// Admin set-upload feature, PR5: also generates variants for uploaded-set
-// artwork, fetched from each set's `artworkOriginalUrl` (R2) rather than a
-// local file. Converted from a plain .mjs to .ts run via tsx (matching
+// Also generates variants for uploaded-set artwork, fetched from each set's
+// `artworkOriginalUrl` (R2) rather than a local file. A .ts run via tsx (matching
 // generate-og.ts/generate-sitemap.ts's own convention) specifically because
 // this now needs to import the committed snapshot from ../app/data/sets —
 // plain `node` can't import a .ts file without a build step; every other
@@ -32,8 +31,7 @@ const OUT = join(ROOT, "public/images");
 // `MusicSet.artwork` gives it (`/images/${artwork}-${w}.${ext}`), so an
 // uploaded set's `artwork` field simply points here
 // (`apps/admin/app/routes/api/sets.ts` sets it to `uploads/{id}`, not
-// `sets/{id}`). Safe to change now, before this PR: zero uploaded sets
-// exist yet, so there's no existing row using the old convention to migrate.
+// `sets/{id}`).
 const UPLOADED_OUT = join(OUT, "uploads");
 
 // Output one variant per (width × format). Sized for typical web layouts:
@@ -81,7 +79,7 @@ type Variant = { width: number; ext: "avif" | "webp"; bytes: number };
 // output against; R2-fetched bytes don't have a meaningful local "source
 // changed" signal, so uploaded-set variants skip on existence alone (see
 // `processUploadedSet`) — once generated, an upload's artwork doesn't change
-// without a re-upload, which this feature doesn't support yet (PR6 territory).
+// without a re-upload, which the admin edit flow deliberately doesn't support.
 async function generateVariants(
   input: string | Buffer,
   outPathBase: string,
@@ -167,7 +165,7 @@ type UploadedSetResult =
 // Failure policy (deliberately different from generate-sets-snapshot.ts's
 // fail-loudly-on-any-error design): a bad snapshot ships a broken catalogue
 // to every visitor, so that script exits non-zero. A missing/failed variant
-// here degrades to `Image.tsx`'s fallback (PR4) — the plain, un-optimized
+// here degrades to `Image.tsx`'s fallback — the plain, un-optimized
 // original renders correctly, just without responsive variants — so one
 // set's failure (R2 unreachable, a 404'd artworkOriginalUrl, a file sharp
 // can't decode) must not fail the whole build and block every other set's

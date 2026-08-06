@@ -1,25 +1,19 @@
 type IconProps = { className?: string };
 
-// Hand-drawn stroked floppy disk — call-to-action glyph for "save this set
-// for offline listening". Used on the set-list card save buttons and on the
-// detail page's save button for not-saved / failed-retry / evicted states,
-// plus the not-installed install-gate tap. The floppy = action; saved-state
-// uses a stroked check (SavedIcon) for the clearest action-vs-state
-// distinction at 40px.
+// Hand-drawn stroked floppy disk — the "save this set for offline listening"
+// action glyph, on set-list card save buttons and the detail page's save button
+// (not-saved / failed-retry / evicted states, plus the install-gate tap).
+// Floppy = action, check = state: SavedIcon is the paired state glyph, and the
+// two must stay visually distinct at 40px.
 //
-// Stroked, NOT filled — matches ShareIcon's family exactly so the card
-// action row (floppy / share / play) reads as one consistent thin-line
-// family. fill="none", stroke="currentColor", strokeWidth="1.75",
-// strokeLinecap="square", strokeLinejoin="miter", 24x24 viewBox — all
-// identical to ShareIcon. Three paths: outer body with cut top-right
-// corner (the floppy silhouette), upper slider rectangle (the metal
-// write-protect element), lower label rectangle (the sticker area).
-// `currentColor` strokes track text colour so hover / state transitions
-// (text-grey → text-gold, text-red-400 on failure) just work.
+// Stroked, NOT filled, with stroke attributes identical to ShareIcon's — the
+// card action row (floppy / share / play) has to read as one thin-line family,
+// so keep them in step. `currentColor` strokes let hover and state transitions
+// (text-grey → text-gold, text-red-400 on failure) work without per-state SVG.
 //
-// InstallIcon stays filled (Material Symbols) — it lives in the install
-// modal, not in the card action row, so it isn't competing visually with
-// the stroked family there.
+// InstallIcon stays filled (Material Symbols) because it lives in the install
+// modal rather than the card action row, where it isn't competing with this
+// family.
 export function DownloadIcon({ className }: IconProps) {
   return (
     <svg

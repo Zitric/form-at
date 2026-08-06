@@ -7,15 +7,12 @@
 // on Android. Without them the prompt falls back to a generic preview — the
 // difference is what the user sees the moment they tap "install".
 //
-// Reproducible by design: re-run after a design change to refresh both
-// images in one go, instead of manually screenshotting two viewports in a
-// browser. Aligned with the dev-vs-prod-debugging memory by capturing from
-// `vite preview` (the production build) rather than `vite dev`, so we get
-// the same artifacts users actually see.
+// Captures from `vite preview` (the production build) rather than `vite dev`,
+// so the images show the same artifacts users actually get.
 //
-// Pre-seeds the Zustand store via `localStorage` so the mobile mini-player
-// is visible — the screenshot reads as "an audio app with content loaded"
-// instead of a blank landing page.
+// Pre-seeds the Zustand store via `localStorage` so the mobile mini-player is
+// visible — the screenshot reads as "an audio app with content loaded" rather
+// than a blank landing page.
 //
 // Usage: `pnpm screenshots` from `apps/web/`. The script builds, spawns
 // `vite preview`, captures, and tears the server down.
