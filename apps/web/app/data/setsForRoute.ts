@@ -1,29 +1,20 @@
 import { type MusicSet, getSet, sets } from "@form-at/data/sets";
 import { fetchAllSets, fetchSetForDetailPage } from "~/data/sets";
 
-// `fetchAllSets`/`fetchSetForDetailPage` are createServerFn calls — from the
-// CLIENT, that's a network request to the server. Offline, that request
-// itself rejects BEFORE the server (and `getAllSetsWithFallback`/
-// `getSetByIdWithFallback`'s D1-error fallback in ~/data/sets) ever runs —
-// a client-side-network failure, a completely different failure point than
-// the server-side D1 fallback, which only ever runs if the server was
-// reachable in the first place. Without a `.catch()` at THIS layer too, an
-// offline click-nav rejects the route loader outright → "Something went
-// wrong" error boundary, the exact offline-survival guarantee this whole
-// feature exists for — the same class of bug `~/data/set-stats.ts`'s
-// `fetchOverallStats().catch(() => null)` already exists to prevent, just
-// missed here on the first pass.
+// `fetchAllSets`/`fetchSetForDetailPage` are createServerFn calls, so from the
+// CLIENT they're network requests. Offline, the request rejects BEFORE the
+// server's own D1-error fallback in ~/data/sets can run — a different failure
+// point entirely, since that fallback only runs if the server was reachable.
+// So this layer needs its own `.catch()`: without it an offline click-nav
+// rejects the route loader and throws up the "Something went wrong" boundary,
+// destroying exactly the offline survival this feature exists for.
 //
-// Kept in their own module (importing fetchAllSets/fetchSetForDetailPage
-// rather than living alongside them in ~/data/sets) specifically so a test
-// can mock those two calls and verify this catch actually fires — a same-
-// file internal call wouldn't be interceptable by `vi.mock`, since ESM live
-// bindings only affect how OTHER modules see an export, not how the
-// defining module calls its own top-level declarations.
+// Route loaders must call THESE, not the underlying two directly — that's what
+// makes the catch shared code a future route edit can't quietly drop.
 //
-// Route loaders call these two, not `fetchAllSets`/`fetchSetForDetailPage`
-// directly, so this specific catch is real, shared code — not something a
-// future edit to either route file could accidentally drop again.
+// Kept in their own module so a test can mock the two calls and verify the
+// catch fires: a same-file internal call isn't interceptable by `vi.mock`,
+// because ESM live bindings only affect how OTHER modules see an export.
 export async function fetchAllSetsForRoute(): Promise<MusicSet[]> {
   return fetchAllSets().catch(() => sets);
 }

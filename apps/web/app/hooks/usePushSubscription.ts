@@ -6,11 +6,10 @@ import { VAPID_PUBLIC_KEY } from "~/utils/vapidPublicKey";
 export type PushSubscribeOutcome = "subscribed" | "denied" | "unsupported" | "failed";
 
 // Standard MDN conversion — `PushManager.subscribe()`'s `applicationServerKey`
-// accepts a base64-ENCODED STRING OR an ArrayBuffer per spec, but browsers
-// do NOT accept a raw base64url string directly in practice (verified
-// against MDN's PushManager.subscribe() reference, 2026-07-15) — it must be
-// decoded into a Uint8Array first. This is the standard, widely-documented
-// conversion function, not a local invention.
+// accepts a base64-ENCODED STRING OR an ArrayBuffer per spec, but browsers do
+// NOT accept a raw base64url string directly in practice — it must be decoded
+// into a Uint8Array first. This is the standard, widely-documented conversion
+// function, not a local invention.
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -36,12 +35,11 @@ export function isPushSupported(): boolean {
 
 // POSTs a subscription's wire shape to the server. Fire-and-forget,
 // matching the analytics endpoints' own convention (`useTrackEvent`) — a
-// failed POST means the subscription exists in the browser but not in our
-// D1 table. That exact orphaned state happened in the field (a device
-// subscribed on 2026-07-16 before the push_subscriptions migration was
-// applied), which is why this is exported: the CTA re-beacons an existing
-// subscription on mount to heal a missing row. `/api/push-subscribe` is
-// INSERT OR REPLACE on `endpoint`, so re-sends are idempotent.
+// failed POST means the subscription exists in the browser but not in our D1
+// table. That orphaned state is reachable in the field, which is why this is
+// exported: the CTA re-beacons an existing subscription on mount to heal a
+// missing row. `/api/push-subscribe` is INSERT OR REPLACE on `endpoint`, so
+// re-sends are idempotent.
 export function postSubscription(subscription: PushSubscription): void {
   const json = subscription.toJSON();
   navigator.sendBeacon(

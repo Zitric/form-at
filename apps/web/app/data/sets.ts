@@ -1,8 +1,8 @@
 // This app's own D1-fallback wrapping around @form-at/data/sets's plain
-// fetchUploadedSets/mergeSets/fetchSetById — TECH_DEBT.md item 21's import
-// sweep moved every consumer of the catalogue's canonical exports
-// (MusicSet, sets, getSet, AUDIO_HOST, etc.) to `@form-at/data/sets`
-// directly; only this app-specific wrapping stays here.
+// fetchUploadedSets/mergeSets/fetchSetById. Only the app-specific wrapping lives
+// here — the catalogue's canonical exports (MusicSet, sets, getSet, AUDIO_HOST)
+// are imported from `@form-at/data/sets` directly, never re-exported through
+// this file.
 import {
   type MusicSet,
   fetchSetById,
@@ -13,24 +13,19 @@ import {
 } from "@form-at/data/sets";
 import { createServerFn } from "@tanstack/react-start";
 
-// Wraps the shared fetchUploadedSets/mergeSets/fetchSetById (plain functions
-// taking a D1Database, live in packages/data so apps/admin's upload endpoints
-// can reuse them too) with this app's createServerFn + context.cloudflare
-// plumbing — same "has exactly one real consumer (this app's /sets pages),
-// stays local" precedent fetchOverallStats already sets in ~/data/set-stats.ts.
+// Wraps the shared fetchUploadedSets/mergeSets/fetchSetById from packages/data
+// with this app's createServerFn + context.cloudflare plumbing — kept local
+// because this app's /sets pages are the only consumer, the same precedent
+// fetchOverallStats sets in ~/data/set-stats.ts.
 //
-// Both fall back to the committed build-time snapshot (`sets`, imported
-// above) whenever there's no D1 binding at all (local `vite dev`) OR the live
-// query throws (a real D1 outage) — never a blank page, never a 500. See the
-// comment above `sets` in packages/data/src/sets.ts for the full
-// offline-survival reasoning this exists for.
+// Both fall back to the committed build-time snapshot whenever there's no D1
+// binding (local `vite dev`) OR the live query throws (a real D1 outage) —
+// never a blank page, never a 500.
 //
-// The fallback logic itself is split into plain, directly-testable functions
-// (below) rather than living inline in the `createServerFn` handlers —
-// `createServerFn`'s wrapping isn't something a plain unit test can invoke
-// the way the fake-D1 tests elsewhere in this repo do, so the actual
-// D1-error → snapshot-only behavior needs a callable outside that wrapper to
-// be testable at all.
+// Keep the fallback logic in plain functions below rather than inlining it into
+// the `createServerFn` handlers: a unit test can't invoke `createServerFn`'s
+// wrapping the way the fake-D1 tests here do, so the D1-error → snapshot
+// behaviour needs a callable outside that wrapper to be testable at all.
 
 function getDb(context: unknown): D1Database | undefined {
   const cf = (context as Record<string, unknown>).cloudflare as
@@ -65,8 +60,8 @@ export const fetchAllSets = createServerFn({ method: "GET" }).handler(({ context
   getAllSetsWithFallback(getDb(context)),
 );
 
-// Boot-confirmation path for CatalogueSync.tsx (admin set-upload feature,
-// PR3 review fix) — deliberately NOT `getAllSetsWithFallback`. That function
+// Boot-confirmation path for CatalogueSync.tsx — deliberately NOT
+// `getAllSetsWithFallback`. That function
 // resolves successfully with the bare snapshot both when there's no D1
 // binding and when the live query throws, which makes a genuine merged
 // result indistinguishable from a substituted fallback to anything awaiting
@@ -94,8 +89,8 @@ export const fetchSetForDetailPage = createServerFn({ method: "GET" })
 // Existence check for `routes/api/event.ts`/`routes/api/signal.ts`'s
 // anti-spam validation — deliberately the OPPOSITE precedence from
 // `getSetByIdWithFallback`/`mergeSets` above. Those are the READ path, where
-// D1 wins because a direct-SQL edit should show up immediately (PR3
-// review). Validation only cares whether an id EXISTS at all, never which
+// D1 wins because a direct-SQL edit should show up immediately.
+// Validation only cares whether an id EXISTS at all, never which
 // copy is "fresher" — so checking the free, always-available static
 // snapshot FIRST and only touching D1 on a miss is strictly better here: it
 // resolves every set that existed at the last deploy with zero D1 reads

@@ -6,8 +6,8 @@ import { useStore } from "~/store";
 const DRAG_THRESHOLD_PX = 4;
 
 /** Shared state machine for any surface that lets the user drag-to-scrub the
- *  audio playhead. Owns three concerns that <Waveform> and <MobileProgressBar>
- *  used to duplicate:
+ *  audio playhead — one copy of three concerns <Waveform> and
+ *  <MobileProgressBar> would otherwise each need:
  *
  *  1. **Pause-during-scrub.** Once the drag moves past 4px (so it's not a
  *     plain tap), pause playback so the audio doesn't stutter as the playhead

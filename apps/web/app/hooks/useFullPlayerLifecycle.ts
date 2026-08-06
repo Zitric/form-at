@@ -84,9 +84,9 @@ export function useFullPlayerLifecycle({
       // `window.history.state` can STILL read as our marker even though the
       // router has already navigated. The unguarded check below then fired
       // history.back(), undoing the navigation — which, combined with the
-      // useRouteTransition stranding, produced the "open_set_details →
-      // black screen at /sets" field bug (2026-07-03, CDP-reproduced). The
-      // ref decides explicitly instead of racing the deferred pushState.
+      // useRouteTransition stranding, produces the "open_set_details → black
+      // screen at /sets" failure. The ref decides explicitly instead of racing
+      // the deferred pushState.
       // The marker stays buried in history, so the NEXT back from the new
       // page lands on it and popstate-navigates to its URL — the page the
       // overlay was opened from, which is where back should go anyway.

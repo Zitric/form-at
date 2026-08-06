@@ -1,28 +1,22 @@
-// IDB-backed queue for `/api/signal` play-tracking beacons that failed to
-// send (offline at call time, or the browser rejected `sendBeacon` outright)
-// — Phase 4.5, TECH_DEBT 4. Today, a failed beacon is just lost; offline
-// playback of a saved set (Phase 4's whole point) should still count once
-// connectivity returns.
+// IDB-backed queue for `/api/signal` play-tracking beacons that failed to send
+// (offline at call time, or the browser rejected `sendBeacon` outright), so
+// offline playback of a saved set still counts once connectivity returns
+// (TECH_DEBT 4).
 //
 // Same Window/ServiceWorkerGlobalScope-shared IDB wrapper pattern as
-// `offline-audio.ts` (module-level singleton `dbPromise`, private
-// `openXxxDb()`, plain async CRUD functions) — this module is imported
-// directly by both the page (`useAudioPlayer.ts`'s enqueue path,
-// `BeaconQueueFlusher.tsx`'s fallback replay) and `sw.ts` (Background
-// Sync's replay).
+// `offline-audio.ts` — imported directly by both the page
+// (`useAudioPlayer.ts`'s enqueue path, `BeaconQueueFlusher.tsx`'s replay) and
+// `sw.ts` (Background Sync's replay).
 //
-// Two replay paths, because Background Sync coverage is partial (verified
-// against caniuse, 2026-07-23: Safari — desktop AND iOS — and Firefox do
-// not support it at all; ~77% global support, Chromium-only in practice):
-//   1. Primary — a Background Sync registration (see `queueSignalForReplay`
-//      below) lets `sw.ts`'s `sync` handler replay the queue even if the
-//      page has since closed, on any supporting browser.
-//   2. Fallback — `BeaconQueueFlusher.tsx` replays on mount (covers
-//      reopening the app after being offline) and on the `online` window
-//      event (covers connectivity returning while the app stays open), for
-//      browsers with no Background Sync at all.
-// Both read this same queue; whichever fires first for a given entry wins,
-// the other finds an empty queue.
+// BOTH replay paths are required, because Background Sync is Chromium-only —
+// neither Safari (desktop or iOS) nor Firefox supports it:
+//   1. Primary — a Background Sync registration lets `sw.ts`'s `sync` handler
+//      replay even after the page has closed.
+//   2. Fallback — `BeaconQueueFlusher.tsx` replays on mount (reopening after
+//      being offline) and on the `online` event (connectivity returning while
+//      the app stays open), for browsers with no Background Sync at all.
+// Both read this same queue; whichever fires first wins and the other finds it
+// empty.
 
 import { type DBSchema, type IDBPDatabase, openDB } from "idb";
 
@@ -57,9 +51,8 @@ const VERSION = 1;
 export const SYNC_TAG = "replay-signal-queue";
 
 // TypeScript's bundled DOM lib doesn't define Background Sync at all — no
-// `SyncManager`, no `ServiceWorkerRegistration.sync` (checked directly
-// against the installed typescript package, 2026-07-23; same class of gap
-// as the Notification options fields found this week). `SyncManager`'s
+// `SyncManager`, no `ServiceWorkerRegistration.sync` — the same class of gap as
+// the Notification options fields in `pushNotification.ts`. `SyncManager`'s
 // shape here is exactly what MDN documents (`register`/`getTags`), and the
 // declaration-merge augments the real global `ServiceWorkerRegistration`
 // interface rather than reaching for `any`.
@@ -138,10 +131,9 @@ export async function queueSignalForReplay(payload: QueuedSignalPayload): Promis
   }
 }
 
-// Replays every queued signal via `fetch` — NOT `navigator.sendBeacon`,
-// which is Window-only (verified against MDN, 2026-07-23: it's defined on
-// `Navigator`, not `WorkerNavigator`, and is specifically built around
-// page-unload semantics a service worker doesn't have). Called from
+// Replays every queued signal via `fetch`, NOT `navigator.sendBeacon`, which is
+// Window-only: it's defined on `Navigator` rather than `WorkerNavigator`, and is
+// built around page-unload semantics a service worker doesn't have. Called from
 // `sw.ts`'s `sync` handler inside `event.waitUntil()`, which already keeps
 // the worker alive for the duration — the same guarantee sendBeacon exists
 // to give a page that might close, the SW gets for free. Exported (rather

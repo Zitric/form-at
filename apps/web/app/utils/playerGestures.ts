@@ -13,7 +13,7 @@ export const SNAP_VELOCITY = 0.4;
 /** Decide whether a drag-up from the mini-player should snap open: distance
  *  only — the user must have pulled past the threshold.
  *
- *  Deliberately NO velocity commit here (removed 2026-07-03, field bug): the
+ *  Deliberately NO velocity commit here — don't add one: the
  *  mini-player strip sits exactly where upward scroll flicks start, and a
  *  normal list-scroll flick beginning on the strip is a high-velocity
  *  ~100–200px gesture — indistinguishable from a "flick open". With the

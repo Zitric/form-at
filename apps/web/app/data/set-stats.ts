@@ -1,10 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 
-// fetchOverallStats has exactly one consumer (this app's /sets listing
-// page), so it stays local rather than moving to @form-at/data/set-stats —
-// TECH_DEBT.md item 21's import sweep moved fetchSetStats/SetStats
-// consumers to import from @form-at/data/set-stats directly instead of
-// through a re-export here.
+// fetchOverallStats has exactly one consumer (this app's /sets listing page), so
+// it stays local rather than moving to @form-at/data/set-stats. Nothing is
+// re-exported from here — consumers of `fetchSetStats`/`SetStats` import
+// `@form-at/data/set-stats` directly.
 export type OverallStats = {
   totalPlays: number;
   totalSeconds: number;

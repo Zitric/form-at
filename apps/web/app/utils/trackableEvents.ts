@@ -1,5 +1,5 @@
-// Explicit allowlist of `event_type` values the tracking endpoint accepts
-// (Phase "Analytics 1", 2026-07-08). Shared between the client hook
+// Explicit allowlist of `event_type` values the tracking endpoint accepts.
+// Shared between the client hook
 // (`useTrackEvent`) and the server validation (`routes/api/event.ts`) so the
 // two can never drift — add a new event type here FIRST, then wire up its
 // call site.
@@ -16,8 +16,8 @@ export const TRACKABLE_EVENT_TYPES = [
   "app_launch",
   "save_click",
   "share_click",
-  // Push opt-in soft prompt (feat/push-optin-modal, 2026-07-16) — mirrors
-  // the install_* naming. `notify_prompt_shown` / `notify_install_nudge_shown`
+  // Push opt-in soft prompt — mirrors the install_* naming.
+  // `notify_prompt_shown` / `notify_install_nudge_shown`
   // are the two modal variants becoming visible (standalone subscribe prompt
   // vs browser-tab install nudge); `notify_accepted` is accepting OUR soft
   // prompt (fires before the native permission ask — grant rate is inferable
@@ -27,8 +27,8 @@ export const TRACKABLE_EVENT_TYPES = [
   "notify_accepted",
   "notify_declined",
   "notify_install_nudge_shown",
-  // AddToCalendarButton (feat/calendar-tracking-and-dashboard, 2026-08-02) —
-  // one type for all three destinations (google/outlook/.ics), same
+  // AddToCalendarButton — one type for all three destinations
+  // (google/outlook/.ics), same
   // minimal-cardinality precedent as save_click/share_click not
   // differentiating method. Deliberately carries no set_id/event_id: `events`
   // has no generic entity-id column (set_id is validated against getSet() in

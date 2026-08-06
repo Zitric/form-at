@@ -42,15 +42,14 @@ function durationToISO8601(s: string | undefined): string | undefined {
  * into ISO 8601 local datetimes for Schema.org. End time wrapping past
  * midnight rolls the date forward by a day.
  *
- * `startDate` is ALWAYS a full `T`-qualified local datetime — never a bare
- * date. This matters beyond Schema.org: `ics.ts`'s calendar-link builders
- * feed this straight into `new Date(\`${startDate}Z\`)`, and a bare date
- * there (`"2026-07-24Z"`, no time component) is malformed ISO 8601 — Chromium
- * parses it leniently, but WebKit/Safari throws ("date value is not finite")
- * inside `Intl.DateTimeFormat().formatToParts()`, crashing the whole event
- * page (found via a real Safari e2e run against the Seafield Sound entry,
- * 2026-07-22, whose runtime — "20:30 — very late" — has an unparseable end
- * time). Three cases, most to least specific:
+ * `startDate` must ALWAYS be a full `T`-qualified local datetime, never a bare
+ * date. This matters beyond Schema.org: `ics.ts`'s calendar-link builders feed
+ * it straight into `new Date(\`${startDate}Z\`)`, and a bare date there
+ * (`"2026-07-24Z"`, no time component) is malformed ISO 8601 — Chromium parses
+ * it leniently, but WebKit/Safari throws "date value is not finite" inside
+ * `Intl.DateTimeFormat().formatToParts()` and crashes the whole event page.
+ * A runtime like "20:30 — very late", with an unparseable end time, is what
+ * reaches case 2 below. Three cases, most to least specific:
  *   1. Both start and end are `HH:MM` — full range, as before.
  *   2. Only the start is `HH:MM` (e.g. "20:30 — very late") — keep the REAL
  *      start time; omit `endDate` rather than invent one (every consumer

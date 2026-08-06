@@ -2,16 +2,16 @@ import type { PushPayload } from "@form-at/data/webPush";
 
 // Shapes a received push payload into `showNotification()`'s options, and
 // resolves a `notificationclick` tap into a navigation target (or none).
-// Pure, SW-global-free (no `self`, no `clients`) — unlike the rest of
-// `sw.ts`, which has no jsdom test harness (verified 2026-07-20, still true:
-// it imports `workbox-precaching` and reads `self.__WB_MANIFEST`), this file
-// is plain TypeScript and is unit-tested directly.
+// Pure and SW-global-free (no `self`, no `clients`) deliberately: the rest of
+// `sw.ts` has no jsdom test harness, since it imports `workbox-precaching` and
+// reads `self.__WB_MANIFEST`. Keeping this file plain TypeScript is what makes
+// it unit-testable directly.
 
 // TypeScript's bundled DOM/WebWorker lib.d.ts predates several shipped,
 // spec'd `NotificationOptions` fields — `image`, `vibrate`, `actions`, and
 // `timestamp` are all absent from BOTH lib.dom.d.ts and lib.webworker.d.ts
-// (checked directly against the installed typescript package, 2026-07-21;
-// MDN documents all four as real, shipped options). Extended locally rather
+// (absent from the installed typescript package, though MDN documents all four
+// as real, shipped options). Extended locally rather
 // than reaching for `any`, per CLAUDE.md's "unknown + narrowing, no any"
 // rule — structural typing means this widened object still satisfies
 // `showNotification`'s narrower `NotificationOptions` parameter with no cast.
@@ -46,9 +46,9 @@ export function buildNotificationOptions(payload: Partial<PushPayload>): PushNot
   const options: PushNotificationOptions = {
     body: payload.body || "",
     icon: "/icon-192.png",
-    // `badge` is a DIFFERENT asset from `icon`, not a smaller copy of it —
-    // MDN (verified 2026-07-21): ~96x96, "the image will be automatically
-    // masked." See PWA_PROGRESS's Phase 2 badge entry for the derivation.
+    // `badge` is a DIFFERENT asset from `icon`, not a smaller copy: ~96x96, and
+    // "the image will be automatically masked" per MDN. See PWA_PROGRESS's
+    // Phase 2 badge entry for the derivation.
     badge: "/badge-96.png",
     vibrate: VIBRATE_PATTERN,
     actions: NOTIFICATION_ACTIONS,

@@ -6,20 +6,16 @@ import type { TrackableEventType } from "~/utils/trackableEvents";
 // fire-and-forget convention as `useAudioPlayer`'s play-tracking (`sendPlay`):
 // survives page unload, never blocks the action it's attached to.
 //
-// Why a hook, not a wrapper component: the tracked actions (save-for-offline,
-// share) live inside components that render EITHER the design-system
-// <Button> or a raw <button> depending on surface (detail page vs list-card
-// icon — chunk 4's two component paths), and the actual "this is a save"
-// moment is often one branch of a multi-branch state machine (see
-// `useOfflineDownload.ts` — only some `offlineState.status` branches are a
-// real save attempt). A wrapper component would have to be either
-// Button-specific (misses the icon-button surface) or generic enough that
-// it stops being more than "call this function inline" — so this hook
-// exposes exactly that, called directly at the handful of real call sites.
+// A hook rather than a wrapper component because the tracked actions render
+// either the design-system <Button> or a raw <button> depending on surface, and
+// the real "this is a save" moment is often one branch of a state machine (see
+// `useOfflineDownload.ts`). A wrapper would be either Button-specific and miss
+// the icon-button surface, or so generic it adds nothing over calling a
+// function inline.
 //
-// `is_standalone` is read fresh at call time, not cached — same pattern as
+// `is_standalone` is read fresh at call time, never cached — same as
 // `withAppContext` re-reading `isStandalone()` per call, so a display-mode
-// change between renders is always reflected correctly.
+// change between renders is always reflected.
 export function useTrackEvent(): (eventType: TrackableEventType, setId?: string) => void {
   return useCallback((eventType: TrackableEventType, setId?: string) => {
     navigator.sendBeacon(
