@@ -55,9 +55,9 @@ export function PushOptInCta({ className }: { className?: string }) {
   // the flag may only suppress the CTA while permission is still "denied";
   // any other live value means it's stale, so clear it and let the normal
   // gating re-offer (granted → the direct-subscribe resume path, default →
-  // the full soft prompt). Field bug 2026-07-18: a user who tapped Block,
-  // then re-enabled notifications in Android settings, was locked out
-  // forever because the flag outranked reality.
+  // the full soft prompt). Without this, a user who taps Block and then
+  // re-enables notifications in Android settings is locked out forever, because
+  // the flag outranks reality.
   // Read via getState(), not the subscribed value: a flag set mid-session
   // (dismissing the native prompt leaves permission "default") should keep
   // this session's suppression and be reconciled on the NEXT mount.

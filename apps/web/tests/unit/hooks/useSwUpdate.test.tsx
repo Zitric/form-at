@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isUpdateReady, useSwUpdate } from "~/hooks/useSwUpdate";
 
-// H2 update-flow tests. jsdom has no navigator.serviceWorker, so the hook's
+// User-consented update-flow tests. jsdom has no navigator.serviceWorker, so the hook's
 // integration is exercised against a spec-shaped mock; the real SW lifecycle
 // (waiting → SKIP_WAITING → activate → controllerchange) can only be
 // verified against a production build in a browser — see the manual script

@@ -54,10 +54,10 @@ export function releaseAudioStream() {
 // imports this type name directly.
 type PlaybackBlockedReason = "not-saved-offline" | "tab-offline-needs-network" | null;
 
-// THE offline playback gate predicate (M1: one predicate, every play path).
+// THE offline playback gate predicate — one predicate, every play path.
 // True when starting/resuming this track can actually get bytes: either
 // we're online, or we're a standalone PWA with the track saved in IDB (the
-// only context the SW serves IDB to — see the chunk-5 lock in sw.ts).
+// only context the SW serves IDB to — see sw.ts's tab-vs-app gate).
 // Environment reads only (navigator.onLine, display-mode) — no React, no
 // store; exported for unit tests and for any future play-path writer.
 export function canFetchPlaybackBytes(
@@ -224,7 +224,7 @@ export const createPlayerSlice: StateCreator<PlayerSlice & OfflineSlice, [], [],
     set({ nowPlaying: track, hasError: false, playbackBlockedReason: null });
   },
 
-  // THE single gated resume writer (M1). Every "make paused audio play
+  // THE single gated resume writer. Every "make paused audio play
   // again" path — player-bar button, Space, lock-screen Media Session,
   // scrub-release, the isPlaying bridge — funnels here, so the offline gate
   // is impossible to bypass by construction. Only `playTrack`'s NEW-track

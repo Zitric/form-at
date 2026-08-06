@@ -92,7 +92,7 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
       e.preventDefault();
       const audio = audioRef.current;
       if (!audio) return;
-      // Resume goes through the store's single gated writer (M1); pause is
+      // Resume goes through the store's single gated writer; pause is
       // deliberately raw — it fetches nothing and must never be gated.
       if (useStore.getState().isPlaying) audio.pause();
       else useStore.getState().resumePlayback();
@@ -224,7 +224,7 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
 
     navigator.mediaSession.setActionHandler("play", () => {
       // Lock-screen resume — the most likely real-world offline resume on
-      // mobile. Gated like every other resume path (M1).
+      // mobile. Gated like every other resume path.
       useStore.getState().resumePlayback();
       // Blocked: pin the lock-screen UI to "paused" explicitly rather than
       // trusting the UA to infer it from the untouched element. The blocked

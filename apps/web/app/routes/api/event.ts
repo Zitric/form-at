@@ -19,7 +19,7 @@ const MAX_STR = 200;
 // `api/signal.ts`'s own `validate` predates that convention and isn't
 // exported; not fixing that pre-existing gap here, out of scope.
 //
-// `async` (PR3) — the set_id existence check is now `isKnownSetId`, which
+// `async` because the set_id existence check is `isKnownSetId`, which
 // only touches D1 on a snapshot miss (see the precedence comment on
 // `isKnownSetId` itself in ~/data/sets.ts). `db` is threaded in from the
 // handler rather than read here, so this stays a plain, directly-testable

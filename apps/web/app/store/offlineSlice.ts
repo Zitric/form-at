@@ -104,7 +104,7 @@ async function streamWithProgress(
     throw new Error(`fetch ${url}: no usable Content-Length in response`);
   }
 
-  // Single preallocated buffer (chunk 3b option A): avoids the double-retention
+  // Single preallocated buffer: avoids the double-retention
   // of `chunks: Uint8Array[]` + `new Blob(chunks)` aliasing/copying. Peak is
   // ~1× total bytes; worst case ~2× briefly during `new Blob([buffer])` if the
   // engine copies rather than aliases (Chrome aliases; WebKit unverified — see

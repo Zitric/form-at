@@ -32,8 +32,8 @@ export type UiSlice = {
    *  even when launched from a regular browser tab (where `isStandalone()`
    *  reads false). */
   pwaInstalled: boolean;
-  /** True if the user closed the install modal without installing. Persisted
-   *  — Phase 3 design decision was "soft dismiss".
+  /** True if the user closed the install modal without installing. Persisted:
+   *  the dismissal is a soft one, by design.
    *
    *  IMPORTANT — two consumers, two different semantics:
    *   - <InstallCta> on the home page: a passive CTA. When this flag is true,

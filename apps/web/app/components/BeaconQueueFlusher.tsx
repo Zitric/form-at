@@ -2,8 +2,8 @@ import { useEffect } from "react";
 import { dequeueSignal, getQueuedSignals } from "~/data/beacon-queue";
 
 // Fallback replay path for browsers with no Background Sync support at all
-// (Safari — desktop and iOS — and Firefox; verified against caniuse,
-// 2026-07-23: ~77% global support, Chromium-only in practice). `sw.ts`'s
+// (Safari — desktop and iOS — and Firefox; Background Sync is Chromium-only).
+// `sw.ts`'s
 // `sync` handler is the primary replay mechanism where supported, working
 // even after the page closes; this component is the pragmatic degradation
 // everywhere else — it can only replay while a tab is actually open, but

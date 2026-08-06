@@ -83,8 +83,7 @@ describe("playTrack", () => {
     expect(audio.src).toContain("a.mp3");
     // Identity stamp — useAudioPlayer's main effect keys on this to
     // skip re-loading a track the click path already attached. Without
-    // it, the effect races playerSlice and can spawn a request loop
-    // (see the chunk-5 marker-URL comparison bug this replaced).
+    // it, the effect races playerSlice and can spawn a request loop.
     expect(audio.dataset.trackId).toBe(trackA.id);
   });
 
