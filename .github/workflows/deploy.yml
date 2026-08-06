@@ -3,6 +3,12 @@ name: Deploy
 on:
   push:
     branches: [main]
+  # Manual trigger for redeploying a commit that's already on main — a merge
+  # whose push event never produced a run (GitHub Actions outages drop them),
+  # or a re-deploy after a Cloudflare-side failure. Without this, the only way
+  # to ship an already-merged commit is to invent another commit. Runs the same
+  # gated jobs as the push path; it skips no checks.
+  workflow_dispatch:
 
 concurrency:
   group: deploy-main
