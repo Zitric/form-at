@@ -64,6 +64,18 @@ export const djs: DJ[] = [
 
   // Guests
   {
+    id: "unreal",
+    name: "Unreal",
+    type: "guest",
+    bio: "Unreal is a Barcelona-based electronic music DJ, known for immersive sets and a carefully crafted atmospheric build. His approach rests on repetition, detail and layering: sessions that evolve progressively and coherently, where narrative and continuity take precedence over immediate impact. A sober, cerebral take on the club, geared towards sustaining prolonged states of attention and towards the collective experience on the floor. A regular of the Barcelona electronic scene, he has taken his sound to venues across Spain. He is one of the co-founders of Node, a collective in which he took an active part in its development and artistic programming, presenting projects within the underground scene.",
+    photo: "djs/unreal",
+    socials: {
+      instagram: "kike_unreal",
+      soundcloud: "unrealmusik",
+      residentadvisor: "unreal",
+    },
+  },
+  {
     id: "brandon-lee-vear",
     name: "Brandon Lee Vear",
     type: "guest",
