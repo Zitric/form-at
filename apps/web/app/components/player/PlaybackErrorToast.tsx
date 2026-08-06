@@ -19,13 +19,11 @@ import { Z } from "~/styles/z";
 //     the web the downloaded/not-downloaded distinction is invisible — one
 //     message, "open the app to listen offline."
 //
-// Shape: the whole toast surface is click-to-dismiss. The `[ x ]` on the
-// right is a visual affordance signalling dismissability, not a separate
-// button. No vertical separator between message and glyph — the message
-// text runs plain, brackets live only on the `x` per the design-system
-// bracket rules. Shortening the tab-offline copy also unwraps the toast on
-// iPhone SE, which the previous "playback needs connection — open the app
-// to listen offline" copy overflowed onto a second line.
+// Shape: the whole toast surface is click-to-dismiss. The `[ x ]` on the right
+// is a visual affordance signalling that, not a separate button. No vertical
+// separator between message and glyph — brackets live only on the `x`, per the
+// design-system bracket rules. Keep the tab-offline copy short enough not to
+// wrap at iPhone SE 375px.
 export function PlaybackErrorToast() {
   const hasError = useStore((s) => s.hasError);
   const nowPlaying = useStore((s) => s.nowPlaying);

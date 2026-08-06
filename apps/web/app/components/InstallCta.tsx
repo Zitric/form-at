@@ -13,20 +13,15 @@ import { useStore, useStoreHydrated } from "~/store";
 // flow lives in `useTriggerInstallPrompt`, shared with <SaveGateModal> so
 // both surfaces have identical accept/dismiss handling.
 //
-// Platform reality (unchanged from Phase 1):
-//   - Chromium (Android/desktop Chrome, Edge, Samsung, Opera, Brave):
-//     `beforeinstallprompt` fires → captured → button appears → tap → native dialog.
-//   - iOS Safari: no `beforeinstallprompt` event exists. CTA stays hidden;
-//     iOS install lives in <SaveGateModal> (reachable via the save button) as manual instructions.
-//   - Firefox / iOS non-Safari browsers: no event API → CTA stays hidden.
+// Hidden entirely wherever `beforeinstallprompt` doesn't exist — iOS Safari,
+// Firefox, iOS non-Safari. iOS install instructions live in <SaveGateModal>
+// instead, reachable via the save button.
 //
-// DISMISS SEMANTIC — different from <SaveForOfflineButton>:
-// This is a PASSIVE CTA. When the user dismisses the install dialog, we hide
-// the button entirely (`pwaInstallDismissed` gates the render). The user said
-// "not now"; respecting that means removing the nudge, not leaving a tappable
-// reminder of it. <SaveForOfflineButton> uses the opposite semantic — that
-// button stays visible and tappable after dismiss because it's a user-
-// initiated action, not a passive prompt. See uiSlice.ts for the full note.
+// DISMISS SEMANTIC — deliberately the opposite of <SaveForOfflineButton>, so
+// don't "fix" the inconsistency: this is a PASSIVE nudge, so a dismiss hides
+// it entirely (`pwaInstallDismissed` gates the render). That button is
+// user-INITIATED, so it stays visible and tappable after a dismiss. See
+// uiSlice.ts.
 export function InstallCta({ className }: { className?: string }) {
   const hydrated = useStoreHydrated();
   const deferredPrompt = useStore((s) => s.deferredPrompt);

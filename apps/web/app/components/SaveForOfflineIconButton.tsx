@@ -11,16 +11,15 @@ import { useStore } from "~/store";
 // Compact save-for-offline indicator + action for set-list cards. Sibling
 // of <ShareIconButton> + <CirclePlayButton> in the card's action slot.
 //
-// Gate semantics (locked 2026-06-30): identical to <SaveForOfflineButton> —
-// per-state UI (saved tick, progress ring, quota red) renders ONLY when
-// `allow: true` (running standalone). In a browser tab the icon always shows
-// the plain grey download glyph; tap opens <SaveGateModal>, never starts a
-// download. A tab user has no concept of "downloaded" or "evicted", so we
-// don't show those states.
+// Gate semantics: identical to <SaveForOfflineButton> — per-state UI (saved
+// tick, progress ring, quota red) renders ONLY when `allow: true` (standalone).
+// In a browser tab the icon always shows the plain grey download glyph and a
+// tap opens <SaveGateModal>, never starts a download: a tab user has no concept
+// of "downloaded" or "evicted".
 //
-// Behaviour rule (chunk-4 lock, unchanged): actionable states act on the
-// card, needs-context states navigate to detail (where the full state-
-// machine surface — cancel modal, quota modal, manage modal — already lives).
+// Behaviour rule: actionable states act on the card, needs-context states
+// navigate to detail, where the full state-machine surface (cancel modal, quota
+// modal, manage modal) already lives.
 //
 // `e.stopPropagation()` on every tap handler — the parent <Card> has its
 // own onClick that navigates to detail; the icon's actions must not also

@@ -8,20 +8,13 @@ import { PageLayout } from "~/components/PageLayout";
 //   - the splat route `routes/$.tsx` (wildcard-matched URLs resolving to
 //     no known page)
 //
-// A previous revision had two hand-rolled versions that drifted (the
-// RootNotFound path had a `hover:border-purple` link — the only purple
-// hover in the app — and a `<Body>` component wrapping the message; the
-// splat path used a plain `<p>` and `hover:border-gold`). Both also
-// rendered SIGNAL_LOST at display size (text-5xl / text-7xl) which
-// dwarfed the rest of the layout. This component unifies both routes so
-// the drift can't happen again.
+// Both routes render this one component so their markup can't drift apart.
 //
-// Design: same "centered status page" family as `offline.html` — single
-// column, everything centered, terminal-style `›` prompt via
-// `TerminalRow`, gold-bracket `[ 404 ]` status pill, `SIGNAL_LOST` at the
-// app's normal heading scale (t-heading / t-heading-md — 22px / 26px, NOT
-// display-sized), and a secondary-bracket return link matching Button's
-// visual contract (grey → white on hover, gold brackets stay gold).
+// Design: same "centered status page" family as `offline.html` — single column,
+// centered, terminal-style `›` prompt via `TerminalRow`, gold-bracket
+// `[ 404 ]` pill, and `SIGNAL_LOST` at the app's normal heading scale
+// (t-heading / t-heading-md, deliberately NOT display-sized — at text-5xl it
+// dwarfs the rest of the layout).
 export function NotFoundPage() {
   return (
     <PageLayout>

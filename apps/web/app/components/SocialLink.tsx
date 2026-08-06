@@ -13,27 +13,20 @@ interface SocialLinkProps {
 }
 
 /**
- * External link that adapts to the device, **not the viewport size**:
+ * External link that adapts to the device, **not the viewport size**.
  *
- *  - **Touch-first device** (phone, tablet, `pointer: coarse`): standard
- *    same-tab navigation. iOS Universal Links and Android App Links intercept
- *    and open the native app (Instagram, SoundCloud, etc.) if installed.
- *    `target="_blank"` would break that handoff, so we don't set it.
- *  - **Mouse-first device** (desktop, laptop, `pointer: fine`): a click handler
- *    calls `window.open(href, "_blank")` so the user keeps formatglasgow.com
- *    in their previous tab.
+ *  - **Touch-first** (`pointer: coarse`): plain same-tab navigation. Do NOT
+ *    add `target="_blank"` — it breaks the iOS Universal Link / Android App
+ *    Link handoff that opens the native app if installed.
+ *  - **Mouse-first** (`pointer: fine`): `window.open(href, "_blank")`, so the
+ *    user keeps formatglasgow.com in their previous tab.
  *
- *  When `androidPackage` is supplied, Android taps route through a Chrome
- *  `intent://` URL instead of the plain web URL — that's the most reliable
- *  way to launch a specific Android app, since App Links require per-app
- *  configuration the user often hasn't enabled.
+ * `androidPackage` routes Android taps through a Chrome `intent://` URL —
+ * more reliable than App Links, which need per-app config users often lack.
  *
- * Uses `(pointer: coarse)` instead of viewport width so a desktop user with a
- * narrow window still gets the new-tab behaviour, and a tablet still gets the
- * app handoff regardless of orientation.
- *
- * Modifier-clicks (cmd / ctrl / shift / middle-click) are left alone so power
- * users keep their preferred behaviour.
+ * `(pointer: coarse)` rather than viewport width, so a narrow desktop window
+ * still gets new-tab and a tablet still gets the handoff in any orientation.
+ * Modifier-clicks (cmd/ctrl/shift/middle) are deliberately left alone.
  */
 export function SocialLink({ href, className, androidPackage, children }: SocialLinkProps) {
   const onClick = (e: React.MouseEvent<HTMLAnchorElement>) => {

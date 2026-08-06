@@ -2,37 +2,18 @@ import { useEffect } from "react";
 import { fetchAllSetsLive } from "~/data/sets";
 import { useStore, useStoreHydrated } from "~/store";
 
-// Boot-time refresh of the live-D1 half of the catalogue (admin set-upload
-// feature, PR3). Runs once after persist hydration, same trigger
-// OfflineReconciler uses and for the same reason — earlier than that and
-// we'd be racing our own rehydration of the persisted `catalogueSets`.
+// Boot-time refresh of the live-D1 half of the catalogue. Runs once after
+// persist hydration — earlier races our own rehydration of `catalogueSets`.
 //
-// Deliberately calls `fetchAllSetsLive`, NOT `fetchAllSets` (nor
-// `fetchAllSetsForRoute`) — both of those swallow a missing D1 binding or a
-// D1 query failure into a *resolved* bare-snapshot value, which is
-// indistinguishable from a genuine live result to a plain `.then()`. This
-// component specifically needs that distinction: `catalogueConfirmed` (see
-// catalogueSlice.ts) must only go true when a live D1 read actually
-// succeeded, never when ANY fallback was substituted — including
-// server-side ones (no binding, or a D1 outage) that never reach the client
-// as a network failure. `fetchAllSetsLive` rejects in exactly those cases
-// instead of swallowing them, so `.then()` vs `.catch()` below is a
-// trustworthy success/failure signal. This was a real bug found in review:
-// an earlier version called the swallowing `fetchAllSets` here, so a
-// server-side D1 outage (or plain local `pnpm dev`, which has no D1 binding
-// at all) would resolve with the bare snapshot, mark the catalogue
-// confirmed, and arm reconcileFromIdb's destructive purge against a
-// snapshot-only catalogue.
+// Must call `fetchAllSetsLive`, never `fetchAllSets`/`fetchAllSetsForRoute`:
+// those swallow a missing D1 binding or a failed query into a *resolved*
+// bare-snapshot value, so `.then()` can't tell a genuine live read from a
+// substituted fallback — and marking `catalogueConfirmed` on a fallback arms
+// reconcileFromIdb's destructive purge against an incomplete catalogue.
+// See PWA_PROGRESS.md's PR3 entry.
 //
-// This does mean `catalogueSets` itself is only ever updated on a genuine
-// live success now (never written from this component on failure/timeout,
-// same as before) — that's still correct: `catalogueSets` was already left
-// untouched on failure/timeout, so no new fallback-writing path was removed
-// by this change, only the swallowing read that fed markCatalogueConfirmed.
-//
-// Race against a timeout so a hung connection can't block `catalogueReady`
-// (and therefore `reconcileFromIdb`) indefinitely — 8s is generous for a D1
-// round trip and short enough to bound the worst case.
+// The 8s timeout stops a hung connection blocking `catalogueReady` — and
+// therefore `reconcileFromIdb` — indefinitely.
 const FETCH_TIMEOUT_MS = 8000;
 
 export function CatalogueSync() {
