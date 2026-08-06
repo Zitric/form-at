@@ -3,14 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 import { validate } from "~/routes/api/event";
 import { TRACKABLE_EVENT_TYPES } from "~/utils/trackableEvents";
 
-// Locks the allowlist guard (Step 2, 2026-07-08): `events` must never become
+// Locks the allowlist guard: `events` must never become
 // a dumping ground for arbitrary strings. Every accepted event_type is
 // enumerated in `utils/trackableEvents.ts`; anything else is rejected.
 
 const realSetId = sets[0]?.id;
 if (!realSetId) throw new Error("test needs at least one set in the catalogue");
 
-// `validate` is `async` (PR3) — set_id existence now goes through
+// `validate` is `async` — set_id existence now goes through
 // `isKnownSetId`, snapshot-first then D1-fallback-on-miss. `undefined` here
 // means "no D1 binding at all" (matches local `vite dev`), which
 // `isKnownSetId` already treats as "snapshot-only, reject on miss".
@@ -30,7 +30,7 @@ describe("validate (api/event)", () => {
 
   // The accept-everything loop above would pass even if these were dropped
   // from the allowlist — this locks their PRESENCE, since the soft-prompt
-  // modal fires all four (feat/push-optin-modal, 2026-07-16).
+  // modal fires all four.
   it("keeps the push opt-in quartet on the allowlist", () => {
     for (const eventType of [
       "notify_prompt_shown",
@@ -43,7 +43,7 @@ describe("validate (api/event)", () => {
   });
 
   // Same reasoning as the quartet above — locks the PRESENCE of
-  // calendar_add_click (feat/calendar-tracking-and-dashboard, 2026-08-02),
+  // calendar_add_click,
   // fired by AddToCalendarButton for all three calendar destinations.
   it("keeps calendar_add_click on the allowlist", () => {
     expect(TRACKABLE_EVENT_TYPES).toContain("calendar_add_click");
@@ -91,7 +91,7 @@ describe("validate (api/event)", () => {
     expect(await validate(42, undefined)).toBeNull();
   });
 
-  // Validation precedence (PR3, item 2): snapshot first — free, covers every
+  // Validation precedence: snapshot first — free, covers every
   // set that existed at last deploy — D1 only on a miss. Proven here via a
   // fake D1 whose `.first()` is a spy: a snapshot-hit id must never reach it.
   it("snapshot-hit set_id never touches D1", async () => {

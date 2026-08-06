@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type PushPayload, isDeadSubscriptionStatus, sendWebPush } from "~/webPush";
 
-// Locks the Web Push spec's permanent-invalidation contract (Phase 2,
-// 2026-07-15): 404 and 410 from the push service mean the subscription is
+// Locks the Web Push spec's permanent-invalidation contract: 404 and 410 from
+// the push service mean the subscription is
 // gone for good and must stop being sent to — while transient failures
 // (429 rate limit, 5xx) must NOT be treated as dead, or a caller would
 // delete live subscriptions on a bad day at the push service.
@@ -10,9 +10,7 @@ import { type PushPayload, isDeadSubscriptionStatus, sendWebPush } from "~/webPu
 // `sendWebPush`'s status→outcome mapping is tested below with the builder
 // mocked and fetch stubbed — the crypto/signing itself and real
 // push-service responses can only be verified on-device (see
-// PWA_PROGRESS.md's checklist). Moved here unchanged from
-// apps/web/tests/unit/utils/webPush.test.ts in Phase D1 (2026-08-01) when
-// the module itself moved to packages/data so apps/admin could import it.
+// PWA_PROGRESS.md's checklist).
 
 describe("isDeadSubscriptionStatus", () => {
   it("treats 404 as dead", () => {
@@ -110,8 +108,8 @@ describe("sendWebPush status→outcome mapping", () => {
 // `buildPushHTTPRequest` for encryption, never destructured. A regression
 // here (e.g. someone later rebuilding the message object field-by-field)
 // would silently drop new PushPayload fields with no type error, since
-// they're all optional. Locks that the full 2026-07-21 shape (image,
-// requireInteraction, timestamp) survives unchanged.
+// they're all optional. Locks that the full shape (image, requireInteraction,
+// timestamp) survives unchanged.
 describe("sendWebPush — payload passthrough", () => {
   it("forwards every PushPayload field, including the new optional ones, unchanged", async () => {
     const { buildPushHTTPRequest } = await import("@pushforge/builder");

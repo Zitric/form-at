@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UploadSetForm } from "~/components/UploadSetForm";
 
-// Set-upload feature (PR4). File validity (peaks/artwork/audio decode) is
+// Set-upload feature. File validity (peaks/artwork/audio decode) is
 // covered directly in validateUpload.test.ts — mocked here so this test
 // stays focused on the submit SEQUENCE: presign → 3 PUTs (in order) →
 // create. `fetch()` has no upload-progress API, so the 3 PUTs go through
@@ -130,7 +130,7 @@ describe("UploadSetForm — submit sequence", () => {
     expect(FakeXHR.instances).toHaveLength(0);
   });
 
-  // The server-side R2-existence check (review item) surfaces as a 422 from
+  // The server-side R2-existence check surfaces as a 422 from
   // /api/sets — locks that the form shows a message distinct from the
   // generic "saving the set failed" one, so an admin isn't left guessing
   // whether to re-upload or just retry the save.

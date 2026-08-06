@@ -47,10 +47,10 @@ describe("useTriggerDownload", () => {
     expect(setToastSpy).not.toHaveBeenCalled();
   });
 
-  // save_click (2026-07-08): this hook is THE single shared source for
+  // save_click: this hook is THE single shared source for
   // "start a save-for-offline attempt" — both SaveForOfflineButton (detail
   // page) and SaveForOfflineIconButton (list card) call it, so tracking
-  // here covers chunk 4's two component paths with one assertion.
+  // here covers both component paths with one assertion.
   it("fires save_click before calling startDownload", async () => {
     startDownloadSpy.mockResolvedValue(undefined);
     const beaconSpy = vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);

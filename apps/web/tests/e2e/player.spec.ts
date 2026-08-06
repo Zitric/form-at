@@ -27,8 +27,8 @@ test.describe("player", () => {
     await expect(controls.first()).toBeVisible({ timeout: 10_000 });
   });
 
-  // Regression lock for the 2026-07-03 field bug: tapping open_set_details
-  // from the FullPlayer overlay got its navigation UNDONE (the overlay's
+  // Regression lock: tapping open_set_details from the FullPlayer overlay can
+  // have its navigation UNDONE (the overlay's
   // history-marker cleanup raced TanStack's microtask-deferred pushState and
   // fired history.back()) and the resulting <500ms double navigation
   // stranded useRouteTransition at opacity-0 — black content at /sets under

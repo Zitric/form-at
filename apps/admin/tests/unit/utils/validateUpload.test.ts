@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readAudioDuration, validateArtworkFile, validatePeaksFile } from "~/utils/validateUpload";
 
-// Set-upload feature (PR4, review item 2): shape verified against a REAL
+// Shape verified against a REAL
 // peaks file pulled from R2 (t.i.l.'s set) — `{ peaks: number[] }`, exactly
 // 1000 elements (scripts/generate-peaks.mjs's fixed `PEAKS = 1000`), values
 // NOT bounded to [0, 1] (real observed max: 1.137). These tests lock that

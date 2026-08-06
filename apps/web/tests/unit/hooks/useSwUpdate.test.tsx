@@ -114,8 +114,8 @@ describe("useSwUpdate", () => {
   });
 
   it("re-targets the CURRENT reg.waiting at tap time when the captured worker went redundant", async () => {
-    // 2026-07-03 field bug's silent-drop path: multiple deploys while the
-    // tab stays open replace the waiting worker; posting SKIP_WAITING to
+    // The silent-drop path: multiple deploys while the tab stays open replace
+    // the waiting worker, and posting SKIP_WAITING to
     // the old (now redundant) captured object is silently dropped and the
     // tap does nothing.
     const staleWorker = new MockServiceWorker();

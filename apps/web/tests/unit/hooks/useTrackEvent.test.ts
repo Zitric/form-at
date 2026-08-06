@@ -2,10 +2,10 @@ import { renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTrackEvent } from "~/hooks/useTrackEvent";
 
-// Locks the beacon-firing convention (Step 3, 2026-07-08): must use
+// Locks the beacon-firing convention: must use
 // navigator.sendBeacon (fire-and-forget, survives page unload — same
 // contract as useAudioPlayer's sendPlay), posting to /api/event with the
-// snake_case payload shape Step 2 specifies.
+// snake_case payload shape the endpoint expects.
 
 function setStandalone(value: boolean) {
   Object.defineProperty(window.navigator, "standalone", {

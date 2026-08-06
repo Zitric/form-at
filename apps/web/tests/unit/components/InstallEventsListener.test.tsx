@@ -4,8 +4,8 @@ import { InstallEventsListener } from "~/components/InstallEventsListener";
 import { useStore } from "~/store";
 import type { BeforeInstallPromptEvent } from "~/store/uiSlice";
 
-// Locks the pre-hydration capture invariant (2026-07-02 Android field
-// testing): Chromium fires `beforeinstallprompt` once per page load, often
+// Locks the pre-hydration capture invariant: Chromium fires
+// `beforeinstallprompt` once per page load, often
 // before React hydrates. The inline head script in __root stashes it on
 // `window.__deferredInstallPrompt`; this component MUST adopt that stash on
 // mount, not only listen for future events.

@@ -4,10 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CatalogueSync } from "~/components/CatalogueSync";
 import { useStore } from "~/store";
 
-// PR3 review fix: the actual bug lived in the WIRING between CatalogueSync
-// and the data layer, not in catalogueSlice.ts's flags themselves — a
-// previous test seeded `catalogueConfirmed` directly and never exercised how
-// the flag actually gets set. `getAllSetsWithFallback`/`fetchAllSets`
+// Covers the WIRING between CatalogueSync and the data layer, not
+// catalogueSlice.ts's flags themselves: seeding `catalogueConfirmed` directly
+// would never exercise how the flag actually gets set.
+// `getAllSetsWithFallback`/`fetchAllSets`
 // resolve successfully with the bare snapshot on both "no D1 binding" and
 // "the live query threw," which is indistinguishable from a genuine live
 // result to a plain `.then()`. These tests mock `fetchAllSetsLive` (the

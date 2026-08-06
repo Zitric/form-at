@@ -36,7 +36,7 @@ const sampleSetRow = {
   created_at: 1785707552000,
 };
 
-// PR6 review item 1a: play count is the real signal for "how consequential
+// Play count is the real signal for "how consequential
 // is deleting this set" — joined here rather than fetched per-row, so the
 // admin sets list never does N+1 queries.
 describe("fetchSetsWithPlayCounts", () => {
@@ -109,7 +109,7 @@ describe("fetchRecentDeletedSets", () => {
     expect(await fetchRecentDeletedSets(db)).toEqual([]);
   });
 
-  // One-click restore feature (2026-08): a restored entry must stop showing
+  // A restored entry must stop showing
   // up as "recently deleted", or a second restore click would just 409
   // against the row it already recreated. Locks the actual SQL shape (not
   // just the behavior) since a fake D1 route can't itself apply a WHERE

@@ -2,8 +2,8 @@ import { sets } from "@form-at/data/sets";
 import { beforeEach, describe, expect, it } from "vitest";
 import { useStore } from "~/store";
 
-// Regression tests for the first-visit hydration failure (2026-07-02 Android
-// field testing). zustand v5's persist calls `merge(undefined, current)` when
+// Regression tests for the first-visit hydration failure. zustand v5's persist
+// calls `merge(undefined, current)` when
 // the storage key doesn't exist yet — a true first visit. A merge that
 // destructures its first argument unconditionally throws, persist swallows
 // the error in its own .catch, `hasHydrated` never flips, and every surface
@@ -54,7 +54,7 @@ describe("persist rehydration", () => {
     expect(useStore.getState().pwaInstalled).toBe(true);
   });
 
-  // Push opt-in dismissal (Phase 2, 2026-07-15) — same "soft dismiss, hide
+  // Push opt-in dismissal — same "soft dismiss, hide
   // forever" persistence as pwaInstallDismissed above, mirrored not reused
   // (see uiSlice.ts). Locks both directions: an absent key defaults to
   // false (pre-Phase-2 storage / a cached client mid-rollout), and a seeded
@@ -102,7 +102,7 @@ describe("persist rehydration", () => {
     expect(useStore.getState().pushOptInDismissed).toBe(true);
   });
 
-  // Admin set-upload feature (PR3) — catalogueSlice persist/hydrate.
+  // Admin set-upload feature — catalogueSlice persist/hydrate.
   describe("catalogueSlice", () => {
     it("restores catalogueSets from a seeded payload", async () => {
       const uploadedSet = {

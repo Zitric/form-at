@@ -2,9 +2,8 @@ import { sets } from "@form-at/data/sets";
 import { describe, expect, it, vi } from "vitest";
 import { validate } from "~/routes/api/signal";
 
-// No test file existed for this endpoint's `validate` before PR3 review
-// flagged the gap — `api/event.ts` had precedence coverage, this didn't.
-// `validate` is `async` (PR3) — set_id existence now goes through
+// Precedence coverage for this endpoint's `validate`, matching
+// api-event.test.ts's. `validate` is `async` — set_id existence goes through
 // `isKnownSetId`, snapshot-first then D1-fallback-on-miss. `undefined` here
 // means "no D1 binding at all" (matches local `vite dev`), same convention
 // as api-event.test.ts.
@@ -96,7 +95,7 @@ describe("validate (api/signal)", () => {
     expect(result?.isOffline).toBe(true);
   });
 
-  // Validation precedence (PR3, item 2): snapshot first — free, covers every
+  // Validation precedence: snapshot first — free, covers every
   // set that existed at last deploy — D1 only on a miss. Same coverage as
   // api-event.test.ts, since both endpoints share `isKnownSetId`.
   it("snapshot-hit setId never touches D1", async () => {

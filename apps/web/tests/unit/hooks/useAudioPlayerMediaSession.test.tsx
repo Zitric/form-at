@@ -6,7 +6,7 @@ import { useAudioPlayer } from "~/hooks/useAudioPlayer";
 import { useStore } from "~/store";
 import { registerAudioElement } from "~/store/playerSlice";
 
-// M1 flagship path: lock-screen resume while offline on an unsaved set —
+// The flagship path: lock-screen resume while offline on an unsaved set —
 // the Media Session "play" handler must route through the gated
 // resumePlayback AND pin mediaSession.playbackState to "paused" so the
 // lock-screen UI can't show a lying "playing" state. The other rewired

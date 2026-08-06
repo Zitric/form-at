@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { deriveSetR2Keys, isValidSetId } from "~/utils/r2Sets";
 
-// Set-upload feature (PR4, review item): the id becomes both an R2 object
+// The id becomes both an R2 object
 // key path segment AND a public URL path segment — the one place in this
 // flow the client controls something structural (it's auto-generated but
 // user-editable). Strict allowlist, no denylist — these lock the exact
@@ -80,7 +80,7 @@ describe("deriveSetR2Keys", () => {
     });
   });
 
-  // The fail-closed defense-in-depth check (PR4 review) — this must throw
+  // The fail-closed defense-in-depth check — this must throw
   // regardless of whether some call site validated the id first, since this
   // is the function that actually turns it into a key/URL segment.
   it("throws on an invalid id rather than silently building a key from it", () => {

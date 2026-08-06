@@ -167,9 +167,9 @@ const sampleKeys = {
   publicPeaksUrl: "https://cdn.formatglasgow.com/sets/set-003-new-artist/peaks.json",
 };
 
-// Review item: nothing checked that the 3 R2 uploads the client reported as
-// successful actually landed — a row pointing at a 404 would otherwise
-// reach the public site. These lock the "some object missing" and
+// Nothing else checks that the 3 R2 uploads the client reported as successful
+// actually landed, and a row pointing at a 404 would reach the public site.
+// These lock the "some object missing" and
 // "R2 request itself throws" paths, both of which must refuse to verify
 // rather than assume success.
 describe("verifyR2ObjectsExist", () => {
@@ -215,8 +215,8 @@ describe("verifyR2ObjectsExist", () => {
   });
 });
 
-// One-click restore feature (2026-08): verifyR2ObjectsExist's 3-URL HEAD
-// loop was extracted into this lower-level primitive so restore can check
+// verifyR2ObjectsExist's 3-URL HEAD loop is extracted into this lower-level
+// primitive so restore can check
 // however many URLs a deleted-set log row actually recorded (a legacy set
 // never had an artwork_original_url) — see routes/api/sets/restore.ts.
 describe("verifyUrlsExist", () => {
@@ -318,7 +318,7 @@ describe("validateEdit (api/sets)", () => {
   });
 });
 
-// PR6 review item 5: the id is never something updateSet CAN change, by
+// The id is never something updateSet CAN change, by
 // construction — not merely validated-and-rejected. These assert the
 // actual SQL text, not just the observable outcome, since that's the only
 // way to prove `id` never appears in the `SET` clause regardless of what a
@@ -438,16 +438,14 @@ function createRoutedFakeD1(routes: FakeRoute[], opts: { batchThrows?: boolean }
   return { db: { prepare, batch } as unknown as D1Database, prepare, batch, calls, statements };
 }
 
-// PR6 review items 2a/3/4: the delete path must log a full audit row
-// (making a delete recoverable in practice, not just in principle), must
-// never touch R2, and must never touch plays/events rows themselves (only
-// read a count from plays for the audit log).
+// The delete path must log a full audit row (making a delete recoverable in
+// practice, not just in principle), must never touch R2, and must never touch
+// plays/events rows themselves — only read a count from plays for the log.
 //
-// Post-review fix: the original version issued DELETE then INSERT as two
-// separate .run() calls, and the original tests only asserted "both
-// statements were issued somewhere" (`calls.some(...)`) — order-blind, so
-// they passed against the wrong order. The tests below assert the actual
-// array passed to db.batch() (order + atomicity), not just presence.
+// These assert the actual array passed to db.batch(), covering order AND
+// atomicity. Asserting mere presence (`calls.some(...)`) is order-blind and
+// would pass against a DELETE-then-INSERT sequence, which loses the audit row
+// against an un-migrated table.
 describe("deleteSetWithAudit", () => {
   it("deletes the row and logs it to admin_deleted_sets with the identity, timestamp, and play count, atomically via a single db.batch() call", async () => {
     const { db, calls, batch } = createRoutedFakeD1([

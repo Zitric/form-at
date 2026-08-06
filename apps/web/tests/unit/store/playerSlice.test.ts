@@ -281,7 +281,7 @@ describe("canFetchPlaybackBytes (M1 gate predicate)", () => {
   });
 });
 
-// wasServedFromIdb (is_offline analytics signal, 2026-07-08): mirrors the
+// wasServedFromIdb (the is_offline analytics signal): mirrors the
 // SW's exact IDB-vs-network decision — unlike canFetchPlaybackBytes, this
 // is NOT gated on navigator.onLine. A saved set in the standalone app is
 // served from IDB even while fully online, because sw.ts's audio route
@@ -308,9 +308,9 @@ describe("wasServedFromIdb (is_offline analytics signal)", () => {
   });
 });
 
-// M1 regression block: these are the paths the 2026-07-02 review found
-// bypassing the tap-time gate — player bar button, Space, lock-screen
-// resume, scrub-release. They all funnel into `resumePlayback` now; these
+// Regression block for the paths that can bypass the tap-time gate — player
+// bar button, Space, lock-screen resume, scrub-release. All funnel into
+// `resumePlayback`; these
 // tests lock the funnel's behavior at the store level (the hook-side
 // delegations are one-line calls into it).
 describe("resumePlayback (M1 single gated resume writer)", () => {

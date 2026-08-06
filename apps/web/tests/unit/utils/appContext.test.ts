@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { stripAppContext } from "~/utils/appContext";
 
-// Locks the pure half of the H1 fix (2026-07-02): the SW audio handler
+// Locks the pure half of the no-rebuilt-Request rule: the SW audio handler
 // branches on `stripAppContext` and uses `bareUrl` as the IDB key. The
 // network path always forwards the ORIGINAL request object (never a rebuilt
 // one — rebuilding drops the Range header under the request-no-cors guard),

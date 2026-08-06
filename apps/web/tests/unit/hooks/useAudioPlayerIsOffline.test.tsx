@@ -6,7 +6,7 @@ import { useAudioPlayer } from "~/hooks/useAudioPlayer";
 import { useStore } from "~/store";
 import { registerAudioElement } from "~/store/playerSlice";
 
-// Locks the `is_offline` plumbing (Analytics 1, 2026-07-08): `sendPlay`
+// Locks the `is_offline` plumbing: `sendPlay`
 // must compute `wasServedFromIdb` from the CURRENT `offlineSets` at the
 // moment the beacon fires and include it in the `/api/signal` payload.
 // Reuses the harness shape from useAudioPlayerMediaSession.test.tsx.

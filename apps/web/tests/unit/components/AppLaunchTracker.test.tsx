@@ -2,7 +2,7 @@ import { render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppLaunchTracker } from "~/components/AppLaunchTracker";
 
-// app_launch (2026-07-08) must fire once per real mount when running
+// app_launch must fire once per real mount when running
 // standalone, and never in a browser tab. This component lives once in
 // __root's <body> (same slot as HydrateStore / InstallEventsListener /
 // OfflineReconciler) and mounts exactly once per document load — TanStack

@@ -2,9 +2,8 @@ import { fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Image } from "~/components/Image";
 
-// Admin set-upload feature (PR4): a set with no optimized AVIF/WebP variants
-// (true for every uploaded set until PR5 teaches optimize-images.mjs to
-// generate them) must fall back to the plain original — as a real state-tree
+// A set with no optimized AVIF/WebP variants yet must fall back to the plain
+// original — as a real state-tree
 // swap, not a `src` mutation (a sibling <source> would keep winning). Also
 // covers the pre-hydration race: jsdom never actually decodes image bytes
 // here (no `canvas` package installed), so `.complete`/`.naturalWidth`

@@ -9,9 +9,9 @@ test.describe("sets page", () => {
     await expect(setCards.first()).toBeVisible();
   });
 
-  // Regression lock for the 2026-07-02 first-visit hydration bug: persist's
-  // merge crashed on an empty localStorage (fresh profile), `hasHydrated`
-  // never flipped, and every useStoreHydrated()-gated surface — including
+  // Regression lock for the first-visit hydration bug: persist's merge crashes
+  // on an empty localStorage (fresh profile), `hasHydrated` never flips, and
+  // every useStoreHydrated()-gated surface — including
   // these save-for-offline buttons — stayed hidden until a manual reload
   // created the storage key. Playwright gives each test a fresh context (no
   // localStorage) and the dev server doesn't serve the SW, so a plain goto
@@ -35,8 +35,8 @@ test.describe("sets page", () => {
   });
 
   // The offline-click-nav fallback (fetchAllSetsForRoute/fetchSetForRoute in
-  // ~/data/sets, PR2 2026-08) is deliberately NOT e2e-tested here. Tried it
-  // first: reproducing real offline conditions in dev mode also hits an
+  // ~/data/sets) is deliberately NOT e2e-tested here: reproducing real offline
+  // conditions in dev mode also hits an
   // unrelated, pre-existing gap — SaveForOfflineIconButton's own import
   // chain (SaveGateModal/useOfflineDownload) fails to load offline in dev
   // (Vite serves unbundled native ESM per-file; a failed import anywhere in

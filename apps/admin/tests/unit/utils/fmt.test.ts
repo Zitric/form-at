@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fmtBytes, fmtSetDuration } from "~/utils/fmt";
 
-// Set-upload feature (PR4). `fmtSetDuration` matches the `sets.duration`
+// Set-upload feature. `fmtSetDuration` matches the `sets.duration`
 // column's real stored format exactly — verified against the actual
 // migrated rows (schema.sql): "45:18", "1:31:55", "2:01:55". Neither
 // `fmtDuration` (a stats-label shape: "45s"/"12m"/"1h 5m") nor apps/web's
