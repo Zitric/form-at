@@ -69,17 +69,15 @@ export function canFetchPlaybackBytes(
   return isStandalone() && offlineSets?.[trackId]?.status === "saved";
 }
 
-// Mirrors the EXACT condition the SW audio route uses to decide IDB-vs-
-// network (sw.ts's registerRoute handler: `if (!ctxIsApp) return
-// fetch(request); const entry = await getOfflineAudio(bareUrl); if
-// (!entry) return fetch(request);` — i.e. IDB is read whenever ctxIsApp is
-// true AND an entry exists, REGARDLESS of navigator.onLine). A saved set in
-// the standalone app is served from IDB even while online — this is NOT
-// the same predicate as `canFetchPlaybackBytes` above, which short-circuits
-// true whenever online regardless of saved status.
+// Mirrors the EXACT condition the SW audio route uses to decide IDB-vs-network
+// (sw.ts's registerRoute handler) — change one and you must change the other.
+// IDB is read whenever `ctx=app` is set AND an entry exists, REGARDLESS of
+// navigator.onLine, so a saved set in the standalone app is served from IDB
+// even while online. Deliberately NOT the same predicate as
+// `canFetchPlaybackBytes` above, which short-circuits true whenever online.
 //
-// `withAppContext` only sets the `?ctx=app` marker (ctxIsApp) when
-// `isStandalone()` is true, so that's the client-side mirror of ctxIsApp.
+// `withAppContext` sets `?ctx=app` only when `isStandalone()` is true, so
+// that's the client-side mirror of the SW's own check.
 //
 // Populates the `plays.is_offline` analytics column — best-effort: relies on
 // `offlineSets` staying in sync with
@@ -155,12 +153,9 @@ export const createPlayerSlice: StateCreator<PlayerSlice & OfflineSlice, [], [],
     // Reactivity to online/offline isn't needed here: a synchronous check
     // at click time is the right semantics.
     //
-    // A previous revision put this gate ONLY in the new-track branch. The
-    // same-track branch had no gate, so re-tapping a paused non-saved set
-    // offline (played online, paused, went offline, tapped again) still
-    // spawned the retry storm. The single unified gate below closes that
-    // gap by construction — impossible for one branch to be protected while
-    // the other isn't.
+    // Keep this ONE gate ahead of the same-track/new-track split rather than
+    // duplicating it into each branch — a per-branch gate is how the
+    // same-track resume path went unprotected before (PWA_PROGRESS.md row 5.2).
     const isSameTrack = state.nowPlaying?.id === track.id;
     const isCurrentlyPlaying = isSameTrack && !audio.paused;
     const isPauseAction = isCurrentlyPlaying && override === undefined;
