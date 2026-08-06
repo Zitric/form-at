@@ -41,20 +41,15 @@ function AdminDashboard() {
   const stats = Route.useLoaderData();
   const [activeTab, setActiveTab] = useState<DashboardTabId>("growth");
 
-  // Reuses fetchSetStats from @form-at/data — the exact createServerFn
-  // /sets/$setId already calls in apps/web — rather than duplicating its
-  // query/weekly-trend shape. Called directly from a client effect (not a
-  // route loader) so switching the set picker only re-fetches THAT set's
-  // stats, not all five dashboard-wide aggregate queries the main loader
-  // already ran once.
+  // Reuses fetchSetStats from @form-at/data (the same createServerFn
+  // /sets/$setId calls in apps/web) rather than duplicating its query shape.
+  // Called from a client effect, not a route loader, so changing the set picker
+  // re-fetches only THAT set's stats instead of all five dashboard-wide
+  // aggregates the loader already ran.
   //
-  // Deliberately owned HERE, not inside SetsTab: SetsTab only renders while
-  // activeTab === "sets", so if this state lived there instead, switching to
-  // growth/usage and back would unmount it, losing the selection and
-  // re-firing fetchSetStats for no reason. Lifting it above the tab switch
-  // means the selection and its fetched stats survive a round trip through
-  // the other tabs — verified by clicking through manually, not just
-  // reasoned about (see PWA_PROGRESS.md's Phase C entry).
+  // This state must stay HERE, not inside SetsTab: SetsTab only renders while
+  // activeTab === "sets", so owning it there would unmount it on a tab switch,
+  // losing the selection and re-firing fetchSetStats on return.
   const topSetId = stats?.plays.topSets[0]?.setId;
   const [selectedSetId, setSelectedSetId] = useState<string | undefined>(topSetId ?? sets[0]?.id);
   const [selectedSetStats, setSelectedSetStats] = useState<SetStats | null>(null);

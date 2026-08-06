@@ -20,7 +20,7 @@ const DOCUMENT_CSP = [
 ].join("; ");
 
 // VAPID_PRIVATE_KEY_JWK/VAPID_CONTACT_EMAIL: Cloudflare Pages secrets on the
-// form-at-admin project (Phase D1, 2026-08-01) — see PWA_PROGRESS.md for the
+// form-at-admin project — see PWA_PROGRESS.md for the
 // `wrangler pages secret put` commands. CF_ACCESS_TEAM_DOMAIN/CF_ACCESS_AUD:
 // plain (non-secret) vars from apps/admin/wrangler.toml's [vars] block.
 // All four are absent in local dev (no Cloudflare env at all there) —

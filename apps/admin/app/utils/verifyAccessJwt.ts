@@ -1,19 +1,12 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
-// Verifies the Cloudflare Access identity on a request server-side — the
-// standing requirement from PWA_PROGRESS.md's admin-migration note ("any
-// future admin endpoint that writes must verify the Access identity
-// server-side... rather than assuming the page being gated is enough").
-// This is the first mutating admin endpoint, so this is that code.
+// Verifies the Cloudflare Access identity on a request server-side. Every
+// mutating admin endpoint must call this — Access gates the page load, not the
+// individual server-function call, so a gated page is not sufficient on its own.
 //
-// No first-party Cloudflare helper exists for this (verified against
-// Cloudflare's own current docs, not memory:
-// developers.cloudflare.com/cloudflare-one/access-controls/applications/
-// http-apps/authorization-cookie/validating-json/ and
-// developers.cloudflare.com/access/setting-up-access/validate-jwt-tokens/).
-// Both pages recommend the same approach used here: the `jose` package
-// (zero dependencies, lists Cloudflare Workers as a supported runtime in
-// its own package description) with `createRemoteJWKSet` + `jwtVerify`
+// There's no first-party Cloudflare helper for this. Cloudflare's own docs
+// recommend the approach used here: the `jose` package (zero dependencies,
+// supports the Workers runtime) with `createRemoteJWKSet` + `jwtVerify`
 // against the team's JWKS endpoint.
 export interface AccessIdentity {
   email: string;

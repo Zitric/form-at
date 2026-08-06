@@ -2,21 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { type SetR2Keys, deriveSetR2Keys } from "~/utils/r2Sets";
 import { extractAccessToken, verifyAccessJwt } from "~/utils/verifyAccessJwt";
 
-// Set-upload feature (PR4). Access-gated (same pattern as send-push.ts).
-// Creates the `sets` row after all 3 R2 uploads have already succeeded
-// client-side (see UploadSetForm.tsx) — this endpoint never sees file
-// bytes, only re-derives the same public URLs the presign step already
-// handed out via `deriveSetR2Keys` (never trusts a client-supplied URL
-// string for anything structural). Re-VERIFIES that claim server-side too
-// (see `verifyR2ObjectsExist` below) rather than taking the client's word
-// for it — a row pointing at a 404 lands on the public site, not just the
-// admin's own screen.
+// Access-gated. Creates the `sets` row after all 3 R2 uploads have already
+// succeeded client-side (see UploadSetForm.tsx): this endpoint never sees file
+// bytes, and re-derives the public URLs via `deriveSetR2Keys` rather than
+// trusting a client-supplied URL string for anything structural.
 //
 // The `sets.id` PRIMARY KEY constraint at the INSERT below is the actual
-// race-proof guarantee — not the presign step's earlier uniqueness check.
-// Two admins racing the same id: the second one's presign check might pass
-// if it runs before the first's create, but the second INSERT here fails on
-// the constraint and that admin gets a 409 instead — no duplicate row, ever.
+// race-proof guarantee, NOT the presign step's earlier uniqueness check: two
+// admins racing the same id can both pass presign, but the second INSERT fails
+// on the constraint and that admin gets a 409 — no duplicate row, ever.
 
 const AUDIO_EXTS = ["mp3"] as const;
 const ARTWORK_EXTS = ["jpg", "jpeg", "png"] as const;
@@ -107,22 +101,12 @@ export function validate(raw: unknown): CreateSetBody | null {
 // exact string check is the load-bearing part, not worth a second copy that
 // could silently drift out of sync with what D1 actually throws.
 //
-// Verified empirically (not assumed) that db.batch() surfaces this
-// identically to a direct .run() — restoreSetFromLog's INSERT runs inside
-// a batch(), not a standalone .run() like insertSetWithRetry's, so this
-// mattered: batch() could plausibly have wrapped/reshaped the error into
-// something this check misses, silently turning the id-reuse 409 into a
-// 500. Checked against a real local D1 database (`wrangler dev --local`,
-// a genuine miniflare-backed SQLite engine, not a guess from docs) with
-// the conflicting INSERT in the SAME position restoreSetFromLog uses it
-// (first statement in the batch array, a harmless second statement
-// after it) — the thrown error's `.message` was byte-for-byte identical
-// to a direct `.run()`'s: `D1_ERROR: UNIQUE constraint failed: <table>.id:
-// SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_PRIMARYKEY)`, position in
-// the batch array made no difference. Confirms `.includes("UNIQUE
-// constraint failed")` — a substring check, deliberately not tied to the
-// `D1_ERROR:` prefix or `SQLITE_CONSTRAINT` suffix — matches the real
-// production string from both call sites.
+// A substring match, deliberately not anchored to the `D1_ERROR:` prefix or
+// the `SQLITE_CONSTRAINT` suffix — don't tighten it. It has to hold for an
+// INSERT inside a db.batch() (restoreSetFromLog) as well as a standalone
+// .run() (insertSetWithRetry): batch() surfaces the constraint error with an
+// identical `.message` and position in the batch array makes no difference, so
+// both call sites classify id-reuse as a 409 rather than a 500.
 export function isUniqueConstraintError(e: unknown): boolean {
   return e instanceof Error && e.message.includes("UNIQUE constraint failed");
 }
@@ -131,34 +115,23 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Nothing before this point actually checks that the 3 R2 uploads
-// succeeded — this endpoint takes the client's word for it. Access-gated,
-// so the threat model is an honest mistake (a bug in the form's error
-// handling, a retry racing a failure, a direct call skipping the uploads
-// entirely), not an attacker — but the consequence lands on the PUBLIC
-// site: a row whose src/artwork/peaks point at 404s. A HEAD against each
-// public URL closes that for the cost of 3 cheap requests on an operation
-// that already took minutes. Plain `fetch` against the public CDN URLs
-// (not a signed R2 API call) — this runs server-side in the Worker, so the
-// browser-side HEAD-against-R2 CORS quirk (TECH_DEBT.md item 15) doesn't
-// apply, and R2 has strong read-after-write consistency (confirmed against
-// Cloudflare's own docs) so there's no eventual-consistency flakiness to
-// retry around here. Deliberately no retry on a genuine 404/error — by the
-// time this runs, the client has already reported all 3 PUTs succeeded, so
-// a HEAD failure here means something real; the admin's own resubmit (which
-// restarts the whole presign→PUTs→create sequence) is the retry path.
-// Exported for unit tests — mocked-fetch coverage of the "some object is
-// missing" and "R2 request throws" paths, independent of any caller's own
-// wrapping (create's Access/validate/insert, restore's log lookup).
+// Nothing before this point checks that the 3 R2 uploads actually succeeded —
+// the client's word for it isn't enough, because the consequence lands on the
+// PUBLIC site: a row whose src/artwork/peaks point at 404s. Three cheap HEADs
+// close that on an operation that already took minutes.
 //
-// Takes a plain URL list rather than a `SetR2Keys` object — extracted from
-// `verifyR2ObjectsExist` below (which now just calls this with its 3 known
-// URLs) so the restore feature (routes/api/sets/restore.ts) can check
-// however many URLs a given deleted-set log row actually recorded, since
-// legacy sets never had an `artwork_original_url` (see that file's own
-// comment on how "never had one" vs "had one, now gone" is decided BEFORE
-// calling this — this function only ever sees URLs its caller already
-// decided are real).
+// Plain `fetch` against the public CDN URLs, not a signed R2 API call: this
+// runs server-side in the Worker, so the browser-side HEAD-against-R2 quirk
+// (TECH_DEBT.md item 15) doesn't apply, and R2's strong read-after-write
+// consistency means there's no eventual-consistency flakiness to retry around.
+// Deliberately no retry on a genuine 404 — the client has already reported all
+// 3 PUTs as succeeded, so a failure here is real; the admin's own resubmit
+// (which restarts presign→PUTs→create) is the retry path.
+//
+// Takes a plain URL list rather than a `SetR2Keys` object so restore.ts can
+// check however many URLs a given log row actually recorded — legacy sets have
+// no `artwork_original_url`. Callers decide which URLs are real BEFORE calling;
+// this only ever sees URLs that should exist. Exported for unit tests.
 export async function verifyUrlsExist(urls: string[]): Promise<boolean> {
   const checks = await Promise.all(
     urls.map(async (url) => {
@@ -177,11 +150,10 @@ export async function verifyR2ObjectsExist(keys: SetR2Keys): Promise<boolean> {
   return verifyUrlsExist([keys.publicAudioUrl, keys.publicArtworkUrl, keys.publicPeaksUrl]);
 }
 
-// Exported for unit tests — the retry-then-fail path (transient D1 error
-// retried with backoff; a UNIQUE-constraint error is the real thing, not a
-// blip, and is never retried) is exactly the behavior PR4's review asked to
-// be tested directly, independent of the route handler's Access/validate
-// wrapping.
+// Exported for unit tests — covers the retry-then-fail path directly,
+// independent of the route handler's Access/validate wrapping: a transient D1
+// error is retried with backoff, while a UNIQUE-constraint error is the real
+// thing rather than a blip and is never retried.
 export async function insertSetWithRetry(
   db: D1Database,
   row: {
@@ -233,7 +205,7 @@ export async function insertSetWithRetry(
   return "failed";
 }
 
-// Set-edit/delete feature (PR6).
+// Edit and delete.
 
 type EditSetBody = {
   id: string;
@@ -289,18 +261,15 @@ export function validateEdit(raw: unknown): EditSetBody | null {
   };
 }
 
-// The id is never something this function CAN change, by construction —
-// not merely validated-and-rejected. `id` appears exactly once, in the
-// final `WHERE`; the `SET` clause's bind params are strictly
-// title/artist/date/venue/description/duration. Even a malicious or
-// mismatched `body.id` has no code path here that could act on it as
-// anything other than "which row to update" — the id is the R2 key path,
-// the public URL, and the analytics join key across `plays`/`events`
-// (PR6 review item 5), so changing it would orphan all three.
+// The id is never something this function CAN change, by construction rather
+// than by validation: `id` appears exactly once, in the final `WHERE`, and the
+// `SET` clause's bind params are strictly
+// title/artist/date/venue/description/duration. Keep it that way — the id is
+// the R2 key path, the public URL, AND the analytics join key across
+// `plays`/`events`, so changing it would orphan all three.
 //
-// Exported for unit tests — asserts `result.meta.changes` (D1's affected-
-// row count) distinguishes a genuine update from "no row had this id"
-// (e.g. deleted by someone else moments before this request landed).
+// Exported for unit tests — asserts `result.meta.changes` (D1's affected-row
+// count) distinguishes a genuine update from "no row had this id".
 export async function updateSet(
   db: D1Database,
   body: EditSetBody,
@@ -338,27 +307,22 @@ type DeletedSetRow = {
   created_at: number;
 };
 
-// Delete is NOT soft-delete — the row is genuinely gone, R2 objects are
-// deliberately left in place (PR6 review item 3, documented, manual
-// cleanup — same class of decision as PR4's create-failure orphan policy),
-// and `plays`/`events` rows are untouched (item 4 — already-shipped
-// fallback logic in admin-stats.ts's fetchClickStats handles an
-// unresolvable set_id gracefully; fetchPlayStats denormalizes title/artist
-// and never looks at the catalogue at all).
+// Delete is NOT soft-delete — the row is genuinely gone. R2 objects are
+// deliberately left in place (manual cleanup), and `plays`/`events` rows are
+// untouched: admin-stats.ts's fetchClickStats already handles an unresolvable
+// set_id gracefully, and fetchPlayStats denormalizes title/artist so it never
+// looks at the catalogue at all.
 //
-// The audit INSERT and the sets DELETE are issued as a single db.batch()
-// call, not two separate .run()s. Cloudflare confirms batch() is a real
-// transaction — every statement succeeds or the whole batch rolls back on
-// any exception — so an un-migrated admin_deleted_sets table (or any other
-// INSERT failure) fails the DELETE too, by construction, rather than by
-// luck of ordering. The array order (INSERT, then DELETE) is kept anyway as
-// belt-and-suspenders: if D1's atomicity guarantee were ever weaker than
-// documented, "log, then delete" still fails in the safe direction (row
-// intact, error surfaced) rather than the reverse.
+// The audit INSERT and the sets DELETE go out as a single db.batch(), never two
+// separate .run()s — batch() is a real transaction, so an un-migrated
+// admin_deleted_sets table fails the DELETE too by construction rather than by
+// luck of ordering. Keep the array order (INSERT, then DELETE) anyway: if D1's
+// atomicity guarantee were ever weaker than documented, "log, then delete"
+// still fails in the safe direction.
 //
-// The play-count read is metadata about the deletion, not a precondition
-// for it — a failure there must not block the delete itself, so it's
-// wrapped separately and defaults to 0 rather than propagating.
+// The play-count read is metadata about the deletion, not a precondition for
+// it, so it's wrapped separately and defaults to 0 rather than propagating —
+// a failure there must not block the delete.
 //
 // Exported for unit tests.
 export async function deleteSetWithAudit(
@@ -467,7 +431,7 @@ export const Route = createFileRoute("/api/sets")({
           src: keys.publicAudioUrl,
           // `uploads/{id}`, NOT `sets/{id}` — deliberately a different local
           // /images/ directory than the 4 legacy sets' committed variants.
-          // apps/web/scripts/optimize-images.ts (PR5) generates this set's
+          // apps/web/scripts/optimize-images.ts generates this set's
           // responsive variants there, and only there, specifically so a
           // path-based .gitignore can tell an uploaded set's generated
           // files apart from a legacy set's committed ones in the same

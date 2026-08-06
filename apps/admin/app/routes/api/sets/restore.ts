@@ -2,23 +2,19 @@ import { createFileRoute } from "@tanstack/react-router";
 import { isUniqueConstraintError, verifyUrlsExist } from "~/routes/api/sets";
 import { extractAccessToken, verifyAccessJwt } from "~/utils/verifyAccessJwt";
 
-// One-click restore feature (2026-08). Restore-from-log, NOT soft delete:
-// `admin_deleted_sets` already stores every column needed to reconstruct a
-// `sets` row (PR6), and R2 objects are deliberately never deleted — so a
-// restore is just "read the log row, INSERT it back into `sets`, mark the
-// log entry restored." Nothing about `mergeSets`/`fetchUploadedSets`/
-// `fetchSetById`/the snapshot generator changes; the public site already
-// reads `sets` live on every request (see getAllSetsWithFallback in
-// apps/web), so a restored row is visible immediately — the SAME
-// immediacy that makes this consequential enough to confirm plainly in the
-// UI (see SetsList.tsx's RestoreConfirmModal), not just access-gate it.
+// Restore-from-log, NOT soft delete: `admin_deleted_sets` stores every column
+// needed to reconstruct a `sets` row, and R2 objects are never deleted — so a
+// restore is just "read the log row, INSERT it back into `sets`, mark the log
+// entry restored." Nothing in `mergeSets`/`fetchUploadedSets`/`fetchSetById`
+// or the snapshot generator needs to know about it.
 //
-// Nested under `routes/api/sets/` (not a 4th handler on the flat
-// `routes/api/sets.ts`) because it's a genuinely different path,
-// `/api/sets/restore` — verified live (temporary stub + curl) that this
-// coexists with the flat `/api/sets` route with no collision before any
-// real logic was written here, same rigor PR6 item 6a used for multi-method
-// dispatch on a single route file.
+// The public site reads `sets` live on every request, so a restored row is
+// visible IMMEDIATELY — which is why the UI confirms plainly rather than
+// relying on the Access gate alone (see SetsList.tsx's RestoreConfirmModal).
+//
+// Nested under `routes/api/sets/` rather than added as a 4th handler on the
+// flat `routes/api/sets.ts` because `/api/sets/restore` is a genuinely
+// different path; the two coexist with no collision.
 
 type DeletedSetLogRow = {
   id: number;
@@ -48,13 +44,12 @@ export async function restoreSetFromLog(db: D1Database, logId: number): Promise<
     .first<DeletedSetLogRow>();
   if (!row) return "not_found";
 
-  // Only check URLs this row is actually recorded as having had — a NULL
-  // column here is a structural fact copied verbatim from the live `sets`
-  // row at delete time (deleteSetWithAudit, PR6), not a runtime guess, so it
-  // faithfully distinguishes "this row never had one" (legacy sets' null
-  // artwork_original_url — skip, nothing to check) from "had one, now
-  // gone" (a checked URL that 404s/throws below — a genuine r2_missing).
-  // `src` is NOT NULL in the schema and always checked.
+  // Only check URLs this row is actually recorded as having had. A NULL column
+  // here was copied verbatim from the live `sets` row at delete time
+  // (deleteSetWithAudit), not guessed at runtime, so it faithfully separates
+  // "never had one" (legacy sets' null artwork_original_url — skip it) from
+  // "had one, now gone" (a checked URL that 404s below — a genuine
+  // r2_missing). `src` is NOT NULL in the schema and always checked.
   const urlsToCheck = [row.src];
   if (row.artwork_original_url !== null) urlsToCheck.push(row.artwork_original_url);
   if (row.peaks !== null) urlsToCheck.push(row.peaks);

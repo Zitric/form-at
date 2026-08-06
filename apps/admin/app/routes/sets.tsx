@@ -4,8 +4,8 @@ import { SetsList } from "~/components/SetsList";
 import { UploadSetForm } from "~/components/UploadSetForm";
 import { fetchSetsPageData } from "~/data/sets-admin";
 
-// Set-upload feature (PR4), edit/delete (PR6). Same "Access gates the page
-// load" pattern as dashboard.tsx/notifications.tsx — this component has no
+// Same "Access gates the page load" pattern as
+// dashboard.tsx/notifications.tsx — this component has no
 // auth logic of its own; the mutating work happens in
 // routes/api/sets-presign.ts and routes/api/sets.ts, which verify the
 // Access identity themselves.

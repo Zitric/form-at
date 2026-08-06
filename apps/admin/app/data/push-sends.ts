@@ -1,5 +1,4 @@
-// Read + write for the admin_push_sends table (Phase D1, 2026-08-01 — the
-// first mutating admin feature). Kept in its own file rather than added to
+// Read + write for the admin_push_sends table. Kept in its own file rather than added to
 // admin-stats.ts, which is strictly the read-only dashboard's data layer —
 // this file owns both a read (for the notifications page's recent-sends
 // list) and a write (recording each send) for the notifications feature

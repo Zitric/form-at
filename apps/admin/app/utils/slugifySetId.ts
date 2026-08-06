@@ -1,4 +1,4 @@
-// Set-upload feature (PR4). The 4 legacy sets (schema.sql, sets.generated.ts)
+// The 4 legacy sets (schema.sql, sets.generated.ts)
 // are `set-002-til`, `set-002-hubey`, `set-002-brandon-lee-vear`,
 // `set-002-julz-lever` — the real convention is `set-{eventSequence}-
 // {artistSlug}`, where `002` is the EVENT number (shared across all 4 sets,

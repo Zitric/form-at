@@ -8,8 +8,8 @@ import {
 } from "~/utils/r2Sets";
 import { extractAccessToken, verifyAccessJwt } from "~/utils/verifyAccessJwt";
 
-// Set-upload feature (PR4). Access-gated (same 3-line pattern as
-// send-push.ts, reused directly — no new gating mechanism). Presigns 3
+// Access-gated, reusing send-push.ts's exact 3-line pattern rather than a new
+// gating mechanism. Presigns 3
 // direct-to-R2 PUT URLs after checking id uniqueness — the actual
 // race-proof guarantee is the `sets.id` PRIMARY KEY constraint at the
 // create step's INSERT, not this check; this is a UX-friendly early signal

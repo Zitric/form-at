@@ -22,8 +22,8 @@ function getExt(filename: string): string {
 
 const ZERO_PROGRESS: Progress = { audio: 0, artwork: 0, peaks: 0 };
 
-// Set-upload feature (PR4). Mirrors SendPushForm.tsx's double-submit
-// protection exactly, not a different interaction invented for this form: a
+// Mirrors SendPushForm.tsx's double-submit protection exactly, deliberately
+// rather than inventing a different interaction for this form: a
 // hard confirm-modal second step, a `uploading` boolean that disables (and
 // once true, entirely replaces) the confirm/cancel buttons, and error/result
 // state that persists rather than being silently discarded. The one
@@ -59,18 +59,18 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
   const [result, setResult] = useState<{ id: string; artist: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Auto-slugged default (item 5), matching the real `set-{eventSeq}-
-  // {artistSlug}` convention — stops recomputing the instant the admin
-  // types into the id field directly, since it stays editable regardless.
+  // Auto-slugged default matching the real `set-{eventSeq}-{artistSlug}`
+  // convention — stops recomputing the instant the admin types into the id
+  // field directly, since it stays editable regardless.
   useEffect(() => {
     if (!idTouched && title.trim() && artist.trim()) {
       setId(slugifySetId(title, artist));
     }
   }, [title, artist, idTouched]);
 
-  // Orphan-R2-object mitigation (item 1): most orphans come from an admin
-  // thinking the tab hung and closing it mid-upload, not a genuine create
-  // failure — warn before that can happen.
+  // Orphan-R2-object mitigation: most orphans come from an admin thinking the
+  // tab hung and closing it mid-upload, not from a genuine create failure — so
+  // warn before that can happen.
   useEffect(() => {
     if (!uploading) return;
     const handler = (e: BeforeUnloadEvent) => {
@@ -252,8 +252,8 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
         <p className="t-body text-white">
           '<span className="text-gold">{result.id}</span>' created.
         </p>
-        {/* Each stated plainly here, not just in docs — the admin has no
-            other way to know these three things (PR4 review, item 4). */}
+        {/* Stated plainly here, not just in docs — the admin has no other way
+            to know these three things. */}
         <ul className="space-y-2 text-sm text-grey list-disc list-inside">
           <li>
             live now — visible on the next full load of <code>/sets</code> (a tab already open on

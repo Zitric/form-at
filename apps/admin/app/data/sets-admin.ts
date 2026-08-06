@@ -1,13 +1,12 @@
 import type { MusicSet } from "@form-at/data/sets";
 import { fetchUploadedSets } from "@form-at/data/sets";
 // Read data for the admin sets page's list + delete-confirmation +
-// recently-deleted display (PR6, minimal edit/delete). Kept in its own
-// file rather than added to admin-stats.ts, which is strictly the
-// read-only dashboard's data layer — same "owns a read for one specific
-// mutating feature" precedent `push-sends.ts` already set for
-// notifications. The actual mutations (create/edit/delete) live in
-// routes/api/sets.ts, which verifies the Access identity itself; this file
-// is read-only.
+// recently-deleted display. Kept in its own file rather than added to
+// admin-stats.ts, which is strictly the read-only dashboard's data layer —
+// same "owns a read for one specific mutating feature" precedent
+// `push-sends.ts` set for notifications. The actual mutations
+// (create/edit/delete) live in routes/api/sets.ts, which verifies the Access
+// identity itself; this file is read-only.
 import { createServerFn } from "@tanstack/react-start";
 
 export type SetWithPlayCount = MusicSet & { playCount: number };
@@ -16,9 +15,9 @@ export type SetWithPlayCount = MusicSet & { playCount: number };
 // packages/data/src/sets.ts for exactly this "always-current" need) rather
 // than the build-time snapshot the public site falls back to — the admin
 // sees a just-uploaded or just-edited set immediately, without waiting for
-// a deploy. Joins in a play count per set (PR6 review item 1a — the real
-// signal for "how consequential would deleting this be," not a hardcoded
-// "these 4 ids are legacy" list) via one extra query, not one query per set.
+// a deploy. Joins in a play count per set — the real signal for "how
+// consequential would deleting this be," rather than a hardcoded "these 4 ids
+// are legacy" list — via one extra query, not one query per set.
 export async function fetchSetsWithPlayCounts(db: D1Database): Promise<SetWithPlayCount[]> {
   const [sets, playCounts] = await Promise.all([
     fetchUploadedSets(db),
@@ -45,16 +44,14 @@ export type RecentDeletedSet = {
   playCountAtDeletion: number;
 };
 
-// The audit log that turns "recoverable in principle" (the R2 objects
-// survive a delete, see routes/api/sets.ts's deleteSetWithAudit) into
-// "recoverable in practice" (PR6 review item 2a) — mirrors
-// `fetchRecentPushSends`'s exact shape.
+// The audit log that turns "recoverable in principle" (the R2 objects survive a
+// delete, see routes/api/sets.ts's deleteSetWithAudit) into "recoverable in
+// practice" — mirrors `fetchRecentPushSends`'s exact shape.
 //
-// `WHERE restored_at IS NULL` (one-click restore feature, 2026-08): once
-// restored, a log entry stops appearing here — otherwise a second restore
-// click on the same entry would just 409 against the row it already
-// recreated. The row itself is never deleted (the audit trail survives),
-// just excluded from this "still needs attention" view.
+// `WHERE restored_at IS NULL`: once restored, a log entry stops appearing here,
+// otherwise a second restore click on the same entry would just 409 against the
+// row it already recreated. The row itself is never deleted — the audit trail
+// survives, it's only excluded from this "still needs attention" view.
 export async function fetchRecentDeletedSets(
   db: D1Database,
   limit = 10,
