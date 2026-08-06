@@ -1,5 +1,11 @@
 # Tests
 
+Covers `apps/web`. The other workspaces test themselves the same way and have
+no separate README: `apps/admin` has its own `tests/unit` + `tests/e2e`, and
+`packages/ui` co-locates a `.test.tsx` beside each component (its interaction
+tests run Storybook stories through Vitest via `composeStories`). Run
+everything at once from the repo root with `pnpm test` / `pnpm test:e2e`.
+
 Two layers, both wired into the workspace:
 
 | Layer | Tool      | Lives in     | What it tests                                      |
@@ -26,18 +32,22 @@ First run also needs `pnpm exec playwright install` to pull browser binaries.
 ```
 tests/
 ├── unit/
-│   ├── store/         # Zustand slices (loadTrack, playTrack, togglePlay…)
-│   ├── hooks/         # useFirstLoad and friends
-│   ├── components/    # BookingsButton, PlayerIcons, etc. (shared design-system
+│   ├── store/         # Zustand slices (playerSlice, catalogueSlice, rehydration)
+│   ├── hooks/         # useAudioPlayer*, useFirstLoad, useOfflineDownload…
+│   ├── components/    # BookingsButton, CatalogueSync, etc. (shared design-system
 │   │                  #   components live in packages/ui and are tested there)
-│   └── utils/         # fmtDuration, fmtDate
+│   ├── utils/         # fmt, appContext, deeplink, installCapability…
+│   ├── data/          # beacon-queue, sets, setsForRoute (the D1-fallback logic)
+│   ├── routes/        # API handlers — api-signal, api-event, api-push-subscribe
+│   └── scripts/       # build scripts (optimize-images)
 ├── e2e/
 │   ├── home.spec.ts        # Manifesto, CTA, social links
 │   ├── sets.spec.ts        # List + info → detail flow
 │   ├── events.spec.ts      # List + lineup links
 │   ├── djs.spec.ts         # Residents/guests sections
 │   ├── player.spec.ts      # Audio + controls (mocks R2 with silent MP3)
-│   └── navigation.spec.ts  # Top/bottom nav routing
+│   ├── navigation.spec.ts  # Top/bottom nav routing
+│   └── _helpers.ts         # shared gotoAndHydrate helper, not a spec
 └── setup.ts          # jest-dom matchers, jsdom HTMLMediaElement stubs
 ```
 

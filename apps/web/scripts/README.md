@@ -24,9 +24,10 @@ they reuse whatever account you're already logged into.
 
 ## Notifications — sending & configuring
 
-`send-push.ts` is how Form:at announces new sets and events to subscribed
-devices, until an admin panel exists (and as a manual override afterwards,
-too).
+The admin dashboard's `/api/send-push` is the usual way to announce a new set
+or event now. `send-push.ts` stays as the manual override for sending from a
+terminal without going through the admin UI — same `packages/data`
+(`webPush.ts`) signing path, so both routes behave identically.
 
 ### Setup (one-time)
 

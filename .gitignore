@@ -25,8 +25,12 @@ apps/*/app.config.timestamp_*.js
 
 CLAUDE.local.md
 
-# Heavy image originals — optimized variants in apps/web/public/images/ are committed
-apps/*/images-source/
+# Heavy image originals — optimized variants in apps/web/public/images/ are committed.
+# Ignore the CONTENTS, not the directory itself: git can't re-include a file whose
+# parent directory is excluded, and the README below has to stay tracked so the
+# workflow is discoverable in a fresh clone.
+apps/*/images-source/*
+!apps/*/images-source/README.md
 
 # Uploaded-set artwork variants — regenerated on every build by
 # scripts/optimize-images.ts from each set's R2 artworkOriginalUrl. A

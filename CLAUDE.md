@@ -19,7 +19,7 @@ Future apps go in `apps/`. Each app picks its own framework; the default is TanS
 ### Audio player — the core feature
 Sets must play on locked mobile screens. This is solved with the **Media Session API**. The player is a persistent fixed bottom bar rendered in `__root.tsx`, surviving all route changes.
 
-Audio files live on **Cloudflare R2** (free egress). Update the `src` URLs in `apps/web/app/data/sets.ts` to point to your R2 bucket.
+Audio files live on **Cloudflare R2** (free egress), served via the `cdn.formatglasgow.com` custom domain — `AUDIO_HOST`/`AUDIO_ORIGIN` in `packages/data/src/sets.ts` are the single place that changes if the host moves. Each set's `src` comes from the D1 `sets` row (or the committed snapshot), not from a hand-edited array.
 
 All audio logic lives in `apps/web/app/hooks/useAudioPlayer.ts` — track loading, spacebar/media key support, `sendBeacon` analytics, `beforeunload` position save, Media Session API. `Player.tsx` is layout only.
 
@@ -27,7 +27,7 @@ All audio logic lives in `apps/web/app/hooks/useAudioPlayer.ts` — track loadin
 Global state is managed by **Zustand** (`apps/web/app/store/`). The store is split into slices:
 
 - `playerSlice.ts` — `nowPlaying`, `isPlaying`, `positions` (per-track resume map), and their setters
-- `store/index.ts` — composes slices, persists `nowPlayingId` + `positions` to localStorage via `zustand/middleware/persist`
+- `store/index.ts` — composes slices and persists a `partialize`d subset to localStorage via `zustand/middleware/persist`: `nowPlayingId`, `positions`, `peaksCache`, `durations`, and the PWA install booleans. `deferredPrompt` is deliberately omitted — it's a non-serializable event object
 
 `MusicSet` objects are never stored in localStorage — only IDs are persisted and hydrated back via `getSet()` on load. This avoids migration risk if the shape changes.
 
@@ -39,7 +39,7 @@ The `isPlaying` flag in the store is the control surface for external components
 A gold dot indicator sits above `BottomNav` on mobile, showing the current page position. It animates in real-time during drag via direct DOM style updates (no React re-renders).
 
 ### Analytics — play tracking
-Listen events are tracked via `navigator.sendBeacon` (fire-and-forget, survives page close). `useAudioPlayer` calls `/api/track` on pause, track change, and tab close — ignoring plays under 3 seconds. Data lands in a **Cloudflare D1** SQLite database (`form-at-analytics`, table: `plays`).
+Listen events are tracked via `navigator.sendBeacon` (fire-and-forget, survives page close). `useAudioPlayer` calls `/api/signal` (`apps/web/app/routes/api/signal.ts`) on pause, track change, and tab close — ignoring plays under 3 seconds. Data lands in a **Cloudflare D1** SQLite database (`form-at-analytics`, table: `plays`).
 
 Play counts are shown on the `/sets` page via a `createServerFn` loader that queries D1 at SSR time.
 
@@ -208,14 +208,14 @@ pnpm test:e2e:ui      # playwright UI mode
 ```
 
 Test layout:
-- `apps/web/tests/unit/` — Vitest + jsdom. Store, hooks, components, utils.
+- `apps/web/tests/unit/` — Vitest + jsdom. One folder per concern: `store/`, `hooks/`, `components/`, `utils/`, `data/`, `routes/`, `scripts/`.
 - `apps/web/tests/e2e/` — Playwright. Real browser flows; mocks `*.mp3` requests with a silent fixture.
 - `apps/web/tests/setup.ts` — jest-dom matchers + `HTMLMediaElement` stubs (jsdom doesn't decode audio).
 - `apps/web/tests/README.md` — conventions for adding tests.
 
 Notes:
 - Vitest config (`apps/web/vitest.config.ts`) is **standalone** — it does NOT extend `vite.config.ts`, because the `tanstackStart` plugin sets up SSR routing that conflicts with isolated test rendering.
-- Playwright config (`apps/web/playwright.config.ts`) uses `workers: 1` because Vite's dev server races on parallel route loads. The suite is still <15s.
+- Playwright config (`apps/web/playwright.config.ts`) uses `workers: 1` because Vite's dev server races on parallel route loads.
 - Click handlers that call `playTrack` rely on the module-level `audioEl` ref in `playerSlice.ts`. Tests register a fake audio element via `registerAudioElement()` in `beforeEach`.
 
 ### Design system (in `packages/ui/`)
@@ -260,7 +260,7 @@ After `pnpm install`, running `pnpm dev` will auto-generate `apps/web/app/routeT
 - `apps/admin/wrangler.toml` — own Pages project (`form-at-admin`), same `form-at-analytics` D1 binding as the root config
 - `packages/ui/src/` — design system components, one folder per component (`icons/` stays flat), `tokens.css`/`tokens.ts`
 - `packages/ui/.storybook/` — Storybook config; `packages/ui/vitest.setup.ts` — jsdom `<dialog>` polyfill + jest-dom matchers
-- `packages/data/src/` — `sets.ts` (catalogue + `AUDIO_HOST`/`AUDIO_ORIGIN`), `set-stats.ts` (`fetchSetStats` + trend-bucketing helpers)
+- `packages/data/src/` — `sets.ts` (catalogue types, D1 queries, `mergeSets`, `AUDIO_HOST`/`AUDIO_ORIGIN`), `sets.generated.ts` (committed build-time D1 snapshot — the offline fallback), `set-stats.ts` (`fetchSetStats` + trend-bucketing helpers), `webPush.ts` (push signing/sending, shared by both apps)
 - `.github/workflows/ci.yml` / `deploy.yml` — CI pipeline + gated deploy (both apps, `deploy.yml` has a separate `deploy-admin` job)
 - `wrangler.toml` — at repo root, configures `form-at-web`'s Cloudflare Pages + D1 binding (`apps/admin/wrangler.toml` is the second app's own config)
 
