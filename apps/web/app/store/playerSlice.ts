@@ -20,22 +20,6 @@ export function getAudioCurrentTime() {
   return audioEl?.currentTime ?? 0;
 }
 
-// Tears down the audio element's network stream. Needed by the SW update
-// flow (useSwUpdate.applyUpdate): a playing track streams through the OLD
-// service worker's fetch handler as a long-lived response, and the waiting
-// worker's activation — even after skipWaiting() — is deferred until the
-// active worker's functional events settle. With audio playing, that's the
-// rest of the track: SKIP_WAITING lands, nothing activates, controllerchange
-// never fires, and the update tap does nothing (the symptom: an identical tap
-// works with no track, and dies mid-playback).
-// Pausing alone doesn't close the connection; removing src + load() does.
-export function releaseAudioStream() {
-  if (!audioEl) return;
-  audioEl.pause();
-  audioEl.removeAttribute("src");
-  audioEl.load();
-}
-
 // Distinguishes "audio element rejected play()" (the existing `hasError` flag)
 // from "we deliberately refused to start playback because the bytes aren't
 // available offline" (these reasons). The retry-storm gate in `playTrack`

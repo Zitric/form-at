@@ -102,9 +102,14 @@ doesn't implement that guard, so **no unit test can catch this**; it only appear
 in a real browser.
 
 ### Every mutating admin endpoint must call `verifyAccessJwt`
-Cloudflare Access gates page loads at the edge, not individual endpoint calls. All
-four current writers verify server-side via `apps/admin/app/utils/verifyAccessJwt.ts`
-— add nothing that skips it. Only the read-only aggregate queries may.
+Cloudflare Access gates page loads at the edge, not individual endpoint calls, so
+each writer verifies the Access identity server-side via
+`apps/admin/app/utils/verifyAccessJwt.ts`. All four current ones do —
+`routes/api/sets.ts` (upload), `routes/api/sets-presign.ts` (R2 presigned URLs),
+`routes/api/sets/restore.ts`, `routes/api/send-push.ts`. Add nothing that skips
+it; only the read-only aggregate queries may. There is deliberately no dev-mode
+bypass. Paired with the host-guard rule above — Access covers neither the
+`*.pages.dev` hostname nor individual endpoint calls.
 
 ### Never remove the `@source` directive from `apps/web/app/styles/global.css`
 Tailwind v4's automatic source scanning excludes `node_modules`, and
