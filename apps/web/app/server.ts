@@ -19,14 +19,20 @@ const handler = createStartHandler({ handler: defaultStreamHandler });
 //   media-src / connect-src — the <audio> stream and the peaks-JSON /
 //     download fetches from the audio host (see @form-at/data/sets, the
 //     canonical home of the hostname).
+//   static.cloudflareinsights.com (script-src) + cloudflareinsights.com
+//     (connect-src) — Cloudflare Web Analytics. Cloudflare auto-injects the
+//     beacon at the edge for this zone, so there is no script tag to find in
+//     this repo; without these two allowances the injected script is blocked
+//     and Web Analytics silently records NOTHING. Both are needed: one to
+//     load the beacon, one for it to report.
 const DOCUMENT_CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self'",
   `media-src 'self' ${AUDIO_ORIGIN}`,
-  `connect-src 'self' ${AUDIO_ORIGIN}`,
+  `connect-src 'self' ${AUDIO_ORIGIN} https://cloudflareinsights.com`,
   "worker-src 'self'",
   "manifest-src 'self'",
   "base-uri 'self'",
