@@ -3,9 +3,12 @@
 // Form:at service worker: precaches the app shell, serves saved audio from IDB,
 // replays queued analytics beacons, and handles push.
 //
-// Built with vite-plugin-pwa's `injectManifest` strategy: the plugin replaces
-// `self.__WB_MANIFEST` at build time with the precache manifest (every emitted
-// asset that matches `injectManifest.globPatterns` in vite.config.ts).
+// No PWA framework builds this — `vite-plugin-pwa` is not a dependency, only
+// the `workbox-*` runtime libraries are. The `buildServiceWorker` plugin in
+// `apps/web/vite.config.ts` esbuilds this file to `dist/client/sw.js` as an
+// iife and substitutes `self.__WB_MANIFEST` via esbuild `define`. That plugin
+// owns which files are precached (an explicit allowlist) and how each entry's
+// revision is derived — read it there rather than assuming glob semantics.
 //
 // Types come from `ServiceWorkerGlobalScope` via `lib: ["WebWorker"]` in
 // `tsconfig.sw.json`. `Window` types are intentionally absent, so DOM access

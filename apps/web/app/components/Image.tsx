@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-// Keep WIDTHS in sync with apps/web/scripts/optimize-images.mjs. We deliberately
+// Keep WIDTHS in sync with apps/web/scripts/optimize-images.ts. We deliberately
 // cap at 1080 because some source images (DJ portraits) don't reach 1920px wide
 // — the optimizer doesn't upscale, so requesting a 1920 variant would 404 on
 // those and Firefox doesn't fall back to the <img src> default reliably. 1080
