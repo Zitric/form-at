@@ -32,6 +32,36 @@ hadn't checked — including the `schema.sql` line directly beneath this one, wh
 would have failed against production. If you didn't run the command, read the
 file, or see the test pass, say which one you didn't do.
 
+### Never gate the offline-set purge on `catalogueReady` — it must be `catalogueConfirmed`
+**The only thing in this repo that can silently destroy user data.**
+`reconcileFromIdb` (`apps/web/app/store/offlineSlice.ts`) purges a downloaded set
+— 100–220MB the user chose to save — when its id isn't in the catalogue. The two
+flags are not interchangeable (`apps/web/app/store/catalogueSlice.ts`):
+
+- `catalogueReady` — the boot fetch **settled**: succeeded, failed, *or* timed out.
+- `catalogueConfirmed` — the boot fetch **succeeded**.
+
+Gate the membership purge on `catalogueReady` and a single failed fetch reads as
+"the catalogue no longer lists any of your sets", and every saved set is deleted.
+`catalogueReady` gates only `reconcileFromIdb`'s cheap first pass; the
+membership purge in its second pass checks `catalogueConfirmed`
+separately. **Never collapse the two flags into
+one**, and never let a "simplification" route the purge through the wrong one. It
+took two review rounds to get right and there is no test that fails loudly if you
+merge them — the damage happens on a user's device, offline.
+
+### Never remove or weaken `apps/admin`'s host guard
+Cloudflare Access can only gate hostnames in a zone we own — it **cannot** gate
+Cloudflare's own `*.pages.dev`. So the same admin deployment is reachable at
+`form-at-admin.pages.dev` and at every per-deployment preview URL
+(`cd9a05fe.form-at-admin.pages.dev`). `apps/admin/app/utils/hostGuard.ts`'s `isAllowedHost`, plus
+its enforcement in `apps/admin/app/server.ts` — a plain 404 for any host that
+isn't `admin.formatglasgow.com` (localhost exempted for dev and e2e) — **is the
+only thing keeping the dashboard off the public internet on those hosts.** It
+runs before routing and before any D1 access, and returns 404 rather than a
+redirect so it doesn't advertise the real hostname. It is not redundant with
+Access; deleting it makes the dashboard public.
+
 ### Never apply `schema.sql` with `--file` against a database that already exists
 It holds **5 `ALTER TABLE`s that are not idempotent** — re-running them fails
 with a duplicate-column error. `ADD COLUMN IF NOT EXISTS` is not an option: D1
@@ -131,16 +161,26 @@ applications — are provisioned manually by the repo owner.** Don't create or
 modify them from a session, and don't assume a resource exists because the config
 references it.
 
-**Before handing off**, run what CI will run:
+**Before handing off, run these two by default** — they're fast and they catch
+most of what CI would:
 
 ```bash
 pnpm check      # Biome lint + format, then turbo tsc across all workspaces
 pnpm test       # unit tests, all workspaces
-pnpm test:e2e   # Playwright, both apps
-pnpm knip       # unused exports and dependencies
 ```
 
-Report failures with their output. If you skipped one, say which.
+Add `pnpm knip` when you changed exports or dependencies.
+
+**`pnpm test:e2e` and production builds (`pnpm build`) are slow — minutes, not
+seconds.** Run them when the change actually touches what they cover: routes,
+navigation, the player, service-worker behaviour, or CI config. A docs-only or
+comment-only change doesn't need either. **Ask before running them** if local
+instructions impose a time or cost constraint (see `CLAUDE.local.md`, which loads
+on top of this file) — offer the cheaper check instead of running the expensive
+one silently.
+
+Report failures with their output, and say plainly which checks you didn't run.
+Never describe a change as verified on the strength of a check you skipped.
 
 ---
 
@@ -216,66 +256,49 @@ needs a mental parser:
 
 ## 4. Architecture context
 
-Background for when you're working in the area. Not required reading first.
+**The narrative lives in `README.md` — it isn't repeated here.** This section is
+a map: where to edit, and where the reasoning is written down. Below it, only the
+things you need *at the moment of editing* that no section heading can give you.
 
-### Audio player
-Sets must play on locked mobile screens — solved with the **Media Session API**.
-The player is a persistent fixed bottom bar rendered in `__root.tsx`, surviving
-all route changes. All playback logic lives in
-`apps/web/app/hooks/useAudioPlayer.ts` (track loading, spacebar/media keys,
-`sendBeacon` analytics, `beforeunload` position save, Media Session).
-`Player.tsx` is layout only.
+| Area | Edit here | Why it's built this way |
+|---|---|---|
+| Audio player | `apps/web/app/hooks/useAudioPlayer.ts` (all playback logic; `Player.tsx` is layout only) | Sets must play on locked screens — Media Session API. Persistent bar in `__root.tsx` survives route changes. |
+| Offline audio | `apps/web/app/data/offline-audio.ts`, `store/offlineSlice.ts`, the audio route in `app/sw.ts` | README → *"220MB of audio has to survive with no signal"* (IDB over Cache Storage, quota pre-flight, Range) |
+| Web/app divide | `apps/web/app/utils/appContext.ts` — the `?ctx=app` marker | README → *"Browser tabs never read the offline library"*. A product invariant, not an accident: don't make tabs read IDB. |
+| Catalogue | `packages/data/src/sets.ts` (+ `sets.generated.ts`, `apps/web/app/data/sets.ts` for the app's fallback wrapping) | README → *"The catalogue is in a database, but the app is offline-first"* (live-wins `mergeSets`, committed snapshot) |
+| Set upload | `apps/admin/app/routes/api/sets-presign.ts`, `utils/uploadWithProgress.ts` | README → *"A 220MB upload can't go through a Worker"* |
+| Waveform peaks | `scripts/generate-peaks.mjs` (root, needs `ffmpeg` on PATH) | README → *"Waveform peaks are computed with ffmpeg, not in the browser"* |
+| Push sending | `packages/data/src/webPush.ts` | README → *"The standard Web Push library doesn't run on Workers"* |
+| Admin + auth | `apps/admin/app/routes/`, `utils/verifyAccessJwt.ts` | README → *"Admin auth: no auth code, then auth code anyway"*. The enforcement rule is §1. |
+| Service worker build | `buildServiceWorker` in `apps/web/vite.config.ts` (owns the precache allowlist and revision derivation) | README → *"Technology choices"*, Workbox entry. `vite-plugin-pwa` is **not** a dependency. |
+| Design system | `packages/ui/src/` — one folder per component, `icons/` flat | README → *"Monorepo structure"* (late extraction, no build step) |
+| Navigation | `apps/web/app/components/SwipeNavigator.tsx` — wraps `<Outlet />`, swipes across `ROUTES = ["/", "/sets", "/events", "/djs"]` | Outgoing page animates via a `cloneNode` snapshot + direct DOM writes; the gold dot indicator likewise. Deliberately not React re-renders. |
+| Analytics | `apps/web/app/routes/api/signal.ts`, `hooks/useTrackEvent.ts` | `navigator.sendBeacon` on pause, track change and tab close; plays under 3s ignored. Lands in D1 `plays`. Cloudflare Web Analytics is auto-injected — no script tag. |
+| Server entry | `apps/web/app/server.ts`, `apps/admin/app/server.ts` | Forwards `env.DB` as `context.cloudflare.env`. See §1 — deleting either breaks all D1 access. |
 
-### Store — `apps/web/app/store/`
-Zustand, split into slices: `playerSlice` (playback state, per-track resume
-positions, peaks/duration caches, error + blocked-playback reasons, and the
-offline playback gate `canFetchPlaybackBytes`/`wasServedFromIdb`),
-`offlineSlice` (downloads, IDB-backed saved-set state), `catalogueSlice` (live
-catalogue), `uiSlice`, composed in `index.ts`.
+### Store slice map — `apps/web/app/store/`
+
+Zustand, composed in `index.ts`:
+
+| Slice | Owns |
+|---|---|
+| `playerSlice` | playback state, per-track resume `positions`, `peaksCache`, `durations`, `hasError`/`playbackBlockedReason`, and the offline playback gate (`canFetchPlaybackBytes`, `wasServedFromIdb`) |
+| `offlineSlice` | downloads, `activeDownloadId`, IDB-backed saved-set state, failure classification |
+| `catalogueSlice` | live catalogue fetched over the static snapshot |
+| `uiSlice` | transient UI state |
 
 `index.ts` persists a `partialize`d subset to localStorage: `nowPlayingId`,
-`positions`, `peaksCache`, `durations` and the PWA install booleans.
-**`MusicSet` objects are never persisted** — only IDs, rehydrated via
-`getCatalogueSet(catalogueSets, id) ?? getSet(id)` (live catalogue first, then
-the static snapshot). Persisted objects are a migration hazard the moment the
-shape changes; persisted IDs aren't. `deferredPrompt` is deliberately excluded —
-a non-serializable event object.
+`positions`, `peaksCache`, `durations`, PWA install booleans. **Never persist
+`MusicSet` objects** — only IDs, rehydrated via
+`getCatalogueSet(catalogueSets, id) ?? getSet(id)`. A persisted object is a
+migration hazard the moment the shape changes; an ID isn't. `deferredPrompt` is
+excluded deliberately — non-serializable event object.
 
 `isPlaying` is the control surface for external components; `useAudioPlayer`
 bridges it to `audio.play()`/`audio.pause()`.
 
-### Catalogue — D1 with a committed snapshot
-The D1 `sets` table is authoritative; the admin dashboard writes to it and new
-sets appear publicly with no deploy. But the app is offline-first, so
-`packages/data/src/sets.generated.ts` is a **committed** build-time snapshot,
-regenerated by `apps/web/scripts/generate-sets-snapshot.ts` immediately before
-the production build in `deploy.yml`. Because it's committed, `pnpm dev`, `tsc`
-and all of CI need **no Cloudflare credentials**.
+### API route shape
 
-At runtime it's an overlay, not a plain fallback: the listing merges live D1 rows
-over the snapshot with **live winning** (`mergeSets`), degrading to snapshot-only
-when D1 is unreachable. `fetchSetById` uses the same precedence. Snapshot-first
-would be the bug — a direct `UPDATE` against production is a viable typo fix, and
-snapshot-first would leave the detail page stale while the listing showed the
-correction.
-
-Audio lives on **R2** behind `cdn.formatglasgow.com`; `AUDIO_HOST`/`AUDIO_ORIGIN`
-in `packages/data/src/sets.ts` are the only place that changes if it moves.
-
-### Offline audio
-Downloads stream into **IndexedDB** (`audio-v1`), not Cache Storage — WebKit/iOS
-is unreliable with large blob entries there. `navigator.storage.estimate()` gives
-a pre-flight, and `classifyDownloadFailure` separates `quota` from `network` so
-the user isn't told to retry when they need to free 200MB. The SW serves blobs
-back with `createPartialResponse` when a `Range` header is present, which is what
-makes seeking work offline.
-
-**Only the installed app reads IDB.** A browser tab always streams from network,
-even for a saved set — a product decision, enforced by the `?ctx=app` marker
-(`apps/web/app/utils/appContext.ts`) that the page adds only in standalone
-display-mode.
-
-### API routes
 TanStack Start v1.167 has no `createAPIFileRoute`. Use `createFileRoute` with a
 `server: { handlers }` option:
 
@@ -292,74 +315,13 @@ export const Route = createFileRoute("/api/example")({
 });
 ```
 
-A route with only `server.handlers` and no `component` is a pure endpoint —
-the router never tries to render it.
+A route with only `server.handlers` and no `component` is a pure endpoint — the
+router never tries to render it.
 
-### Analytics
-Listen events go out via `navigator.sendBeacon` (survives page close) to
-`/api/signal` (`apps/web/app/routes/api/signal.ts`) on pause, track change and
-tab close, ignoring plays under 3 seconds. Lands in D1 (`form-at-analytics`,
-table `plays`). Play counts render on `/sets` from a `createServerFn` loader that
-queries D1 at SSR time. **Cloudflare Web Analytics** is auto-injected for the
-production domain — no script tag.
+### Two editing traps in `packages/ui`
 
-### Admin — `apps/admin`
-A separate app and a separate Cloudflare Pages project, not a route inside
-`apps/web`. That's what makes the security model possible: Access gates
-`admin.formatglasgow.com` at the edge, so the app has **zero login/session
-code**. Edge gating covers page loads only, so all four mutating endpoints verify
-the Access JWT server-side via `verifyAccessJwt.ts` (`jose` +
-`createRemoteJWKSet` against the team domain's `/cdn-cgi/access/certs`, checking
-`iss`/`aud`/`exp`, reading `Cf-Access-Jwt-Assertion` then falling back to the
-`CF_Authorization` cookie):
-
-- `routes/api/sets.ts` — set upload
-- `routes/api/sets-presign.ts` — R2 presigned upload URLs
-- `routes/api/sets/restore.ts` — restore a soft-deleted set
-- `routes/api/send-push.ts` — push notification to all subscribers
-
-There is deliberately no dev-mode bypass. See PWA_PROGRESS.md's "Phase D1" entry
-for the JWT-validation rationale.
-
-It **shares `packages/data`** rather than duplicating: the catalogue and
-`fetchSetStats` have two real consumers. `apps/web` imports `@form-at/data/*`
-directly — no re-export shims remain. `admin-stats.ts` (install funnel, app
-launches, plays, push subscribers, clicks) has only ever had one consumer, so it
-stays in `apps/admin`. Trend rows render real `visx` charts, code-split out of
-`_worker.js`.
-
-### Design system — `packages/ui`
-One folder per component (`src/Button/Button.tsx` + `.stories.tsx` +
-`.test.tsx`), except `icons/` which stays flat. **No build step** — ships raw
-`.tsx`/`.css`, consumed through the workspace symlink. Holds the `Text` family,
-`BracketLabel`, `Button`, `TextButton`, `TerminalRow`, `Card`, `Modal`,
-`ToastShell`, icons and tokens.
-
-Interaction tests use Storybook's **Portable Stories API** (`composeStories`)
-through plain Vitest + jsdom — deliberately *not* the test-runner or
-`addon-vitest`, both of which need a real browser, and a second browser-install
-surface is an avoidable failure mode here. **Don't mix `vi.fn()` with Storybook's
-`fn()`**: `storybook/test`'s `fn()` bundles its own `@vitest/spy`, a
-structurally different `Mock` type, so passing a local `vi.fn()` as a prop
-override fails `tsc` confusingly. Assert against the mock the story already made:
-`composeStories(stories).Secondary.args.onClick`.
-
-### Navigation
-`SwipeNavigator` wraps the `<Outlet />` and gives horizontal swipe navigation
-across the four main routes (`ROUTES = ["/", "/sets", "/events", "/djs"]`), using
-`@use-gesture/react`. On confirm, a `cloneNode` snapshot of the outgoing page
-animates out via direct DOM manipulation while the new page slides in via React
-state + double `requestAnimationFrame`. The gold dot indicator above `BottomNav`
-animates during drag through direct style writes, no React re-renders.
-
-### Service worker build
-`vite-plugin-pwa` is **not** a dependency — only the `workbox-*` runtime
-libraries. The `buildServiceWorker` plugin in `apps/web/vite.config.ts` esbuilds
-`app/sw.ts` to `dist/client/sw.js` as an iife and substitutes
-`self.__WB_MANIFEST` via `define`. It owns the precache allowlist and how each
-entry's revision is derived.
-
----
+- **Don't mix `vi.fn()` with Storybook's `fn()`.** `storybook/test`'s `fn()` bundles its own `@vitest/spy` — a structurally different `Mock` type from the workspace's `vitest` — so passing a local `vi.fn()` as a prop override on a composed story fails `tsc` confusingly. Assert against the mock the story already made: `composeStories(stories).Secondary.args.onClick`.
+- Interaction tests run stories through plain Vitest + jsdom via `composeStories`, **not** the Storybook test-runner or `addon-vitest` — both need a real browser, and a second browser-install surface is an avoidable failure mode in this repo (see the Playwright cache rule in §1).
 
 ## 5. Commands
 
