@@ -1,55 +1,311 @@
-# Form:at
+# CLAUDE.md — working agreement for agents in this repo
 
-Monorepo for Form:at — a techno collective based in Glasgow.
-Live at [formatglasgow.com](https://formatglasgow.com)
+Form:at is a PWA for a Glasgow techno collective. Live at
+[formatglasgow.com](https://formatglasgow.com). The defining constraint: sets
+are 90-minute mixes (100–220MB) that must be saveable and playable with no
+signal, which is what most of the architecture exists to serve. Read `README.md`
+for the engineering narrative; this file is the operating rules.
 
-## Apps & packages
+| Workspace | Path | Purpose |
+|---|---|---|
+| web | `apps/web` | Public site + audio player → `formatglasgow.com` |
+| admin | `apps/admin` | Internal dashboard → `admin.formatglasgow.com`, Cloudflare Access-gated |
+| ui | `packages/ui` | Design system — tokens, primitives, Storybook, Chromatic |
+| data | `packages/data` | Shared catalogue, D1 queries, push sending |
+| tsconfig | `packages/tsconfig` | Shared TS config, consumed via `workspace:*` |
 
-| App/Package | Path | Purpose |
-|-----|------|---------|
-| web | `apps/web` | Public website + embedded audio player |
-| admin | `apps/admin` | Internal analytics dashboard, deployed separately, Cloudflare Access-gated |
-| ui | `packages/ui` | Shared design system — tokens, primitives, Storybook, Chromatic |
-| data | `packages/data` | Shared sets catalogue + analytics query logic (consumed by web and admin) |
+**Apps never import each other** — only `packages/*` are shared. New apps go in
+`apps/`; each picks its own framework, default TanStack Start.
 
-Future apps go in `apps/`. Each app picks its own framework; the default is TanStack Start.
+---
 
-## Architecture
+## 1. Hard constraints
 
-### Audio player — the core feature
-Sets must play on locked mobile screens. This is solved with the **Media Session API**. The player is a persistent fixed bottom bar rendered in `__root.tsx`, surviving all route changes.
+Ordered by blast radius. The first five are the ones to absorb if you read
+nothing else.
 
-Audio files live on **Cloudflare R2** (free egress), served via the `cdn.formatglasgow.com` custom domain — `AUDIO_HOST`/`AUDIO_ORIGIN` in `packages/data/src/sets.ts` are the single place that changes if the host moves. Each set's `src` comes from the D1 `sets` row (or the committed snapshot), not from a hand-edited array.
+### Never claim something is verified without having run it
+This repo's recurring failure mode, and the reason the rest of this list exists.
+Docs here get trusted by sessions that can't re-check them, so a confident wrong
+claim propagates. Every item below was originally documented wrong by someone who
+hadn't checked — including the `schema.sql` line directly beneath this one, which
+would have failed against production. If you didn't run the command, read the
+file, or see the test pass, say which one you didn't do.
 
-All audio logic lives in `apps/web/app/hooks/useAudioPlayer.ts` — track loading, spacebar/media key support, `sendBeacon` analytics, `beforeunload` position save, Media Session API. `Player.tsx` is layout only.
+### Never gate the offline-set purge on `catalogueReady` — it must be `catalogueConfirmed`
+**The only thing in this repo that can silently destroy user data.**
+`reconcileFromIdb` (`apps/web/app/store/offlineSlice.ts`) purges a downloaded set
+— 100–220MB the user chose to save — when its id isn't in the catalogue. The two
+flags are not interchangeable (`apps/web/app/store/catalogueSlice.ts`):
 
-### Player state
-Global state is managed by **Zustand** (`apps/web/app/store/`). The store is split into slices:
+- `catalogueReady` — the boot fetch **settled**: succeeded, failed, *or* timed out.
+- `catalogueConfirmed` — the boot fetch **succeeded**.
 
-- `playerSlice.ts` — `nowPlaying`, `isPlaying`, `positions` (per-track resume map), and their setters
-- `store/index.ts` — composes slices and persists a `partialize`d subset to localStorage via `zustand/middleware/persist`: `nowPlayingId`, `positions`, `peaksCache`, `durations`, and the PWA install booleans. `deferredPrompt` is deliberately omitted — it's a non-serializable event object
+Gate the membership purge on `catalogueReady` and a single failed fetch reads as
+"the catalogue no longer lists any of your sets", and every saved set is deleted.
+`catalogueReady` gates only `reconcileFromIdb`'s cheap first pass; the
+membership purge in its second pass checks `catalogueConfirmed`
+separately. **Never collapse the two flags into
+one**, and never let a "simplification" route the purge through the wrong one. It
+took two review rounds to get right and there is no test that fails loudly if you
+merge them — the damage happens on a user's device, offline.
 
-`MusicSet` objects are never stored in localStorage — only IDs are persisted and hydrated back via `getSet()` on load. This avoids migration risk if the shape changes.
+### Never remove or weaken `apps/admin`'s host guard
+Cloudflare Access can only gate hostnames in a zone we own — it **cannot** gate
+Cloudflare's own `*.pages.dev`. So the same admin deployment is reachable at
+`form-at-admin.pages.dev` and at every per-deployment preview URL
+(`cd9a05fe.form-at-admin.pages.dev`). `apps/admin/app/utils/hostGuard.ts`'s `isAllowedHost`, plus
+its enforcement in `apps/admin/app/server.ts` — a plain 404 for any host that
+isn't `admin.formatglasgow.com` (localhost exempted for dev and e2e) — **is the
+only thing keeping the dashboard off the public internet on those hosts.** It
+runs before routing and before any D1 access, and returns 404 rather than a
+redirect so it doesn't advertise the real hostname. It is not redundant with
+Access; deleting it makes the dashboard public.
 
-The `isPlaying` flag in the store is the control surface for external components. `useAudioPlayer` has a bridge effect that watches it and calls `audio.pause()` / `audio.play()` accordingly.
+### Never apply `schema.sql` with `--file` against a database that already exists
+It holds **5 `ALTER TABLE`s that are not idempotent** — re-running them fails
+with a duplicate-column error. `ADD COLUMN IF NOT EXISTS` is not an option: D1
+rejects it (`near "EXISTS": syntax error … SQLITE_ERROR`), unlike vanilla SQLite
+≥3.35. `schema.sql` is the reference definition and what a *fresh* database needs
+once. Migrate an existing database one statement at a time and verify:
 
-### Navigation
-`SwipeNavigator` (`apps/web/app/components/SwipeNavigator.tsx`) wraps the `<Outlet />` and provides horizontal swipe navigation between the four main routes (`/`, `/sets`, `/events`, `/djs`). Uses `@use-gesture/react` for real-time drag tracking. On swipe confirm, a `cloneNode` snapshot of the outgoing page animates out via direct DOM manipulation while the new page slides in via React state + double `requestAnimationFrame`.
+```bash
+npx wrangler d1 execute form-at-analytics --remote --command "ALTER TABLE plays ADD COLUMN <col> <type>"
+npx wrangler d1 execute form-at-analytics --remote --command "PRAGMA table_info(plays)"
+```
 
-A gold dot indicator sits above `BottomNav` on mobile, showing the current page position. It animates in real-time during drag via direct DOM style updates (no React re-renders).
+`schema.sql`'s own comments record which statements are already applied to
+production. Read them before running anything.
 
-### Analytics — play tracking
-Listen events are tracked via `navigator.sendBeacon` (fire-and-forget, survives page close). `useAudioPlayer` calls `/api/signal` (`apps/web/app/routes/api/signal.ts`) on pause, track change, and tab close — ignoring plays under 3 seconds. Data lands in a **Cloudflare D1** SQLite database (`form-at-analytics`, table: `plays`).
+### Never delete `apps/web/app/server.ts` or `apps/admin/app/server.ts`
+These custom entries handle Cloudflare's `fetch(request, env, ctx)` convention
+and forward `env.DB` as `context.cloudflare.env`. **Without them D1 is
+unreachable from every piece of server-side code** — both `server.handlers`
+routes and `createServerFn` handlers. They look like boilerplate a framework
+should own. It doesn't.
 
-Play counts are shown on the `/sets` page via a `createServerFn` loader that queries D1 at SSR time.
+### Never add `self.skipWaiting()` to `apps/web/app/sw.ts`
+An immediately-activating service worker prunes the previous build's hashed
+chunks from the precache **while old clients are still running them**, so the
+next lazy route-load in an open session 404s — Cloudflare Pages only serves the
+latest deployment. A broken route, not a stale cache. New builds are meant to sit
+in `waiting` and take over on the next cold start.
 
-### Server entry and Cloudflare env
-TanStack Start v1.167 uses pure Vite (no Nitro/Vinxi). The custom server entry at `apps/web/app/server.ts` handles Cloudflare's `fetch(request, env, ctx)` calling convention and forwards `env.DB` as `context.cloudflare.env`. This makes D1 accessible in both `server.handlers` route handlers and `createServerFn` handlers via `(context as unknown as Record<string, unknown>).cloudflare`.
+### Never rebuild the `Request` in `sw.ts`'s audio route — always forward the original
+Two independent breakages. `new Request(url, {...})` defaults `mode` to `cors`,
+which makes the browser block R2's response to `<audio>`'s natively no-cors
+request. And even a rebuild that copies `mode` explicitly **silently drops the
+`Range` header**, because a `Headers` object under the Fetch spec's
+request-no-cors guard discards anything not no-CORS-safelisted — so seeks return
+200 full-body instead of 206 and re-download 100MB+ from byte 0. Node's undici
+doesn't implement that guard, so **no unit test can catch this**; it only appears
+in a real browser.
 
-**Without this entry, D1 is unreachable from any server-side code.**
+### Every mutating admin endpoint must call `verifyAccessJwt`
+Cloudflare Access gates page loads at the edge, not individual endpoint calls, so
+each writer verifies the Access identity server-side via
+`apps/admin/app/utils/verifyAccessJwt.ts`. All four current ones do —
+`routes/api/sets.ts` (upload), `routes/api/sets-presign.ts` (R2 presigned URLs),
+`routes/api/sets/restore.ts`, `routes/api/send-push.ts`. Add nothing that skips
+it; only the read-only aggregate queries may. There is deliberately no dev-mode
+bypass. Paired with the host-guard rule above — Access covers neither the
+`*.pages.dev` hostname nor individual endpoint calls.
 
-### API routes
-TanStack Start v1.167 does not have `createAPIFileRoute`. Use `createFileRoute` with a `server: { handlers }` option instead:
+### Never remove the `@source` directive from `apps/web/app/styles/global.css`
+Tailwind v4's automatic source scanning excludes `node_modules`, and
+`packages/ui` reaches `apps/web` only through a pnpm workspace symlink. Without
+`@source "../../../../packages/ui/src";` Tailwind never sees class names used
+inside the design system and **silently strips them from the bundle** — the
+components render unstyled, with no build error.
+
+### Never flatten `TrendChart`'s `lazy(() => import(...))` into a static import
+`ClientOnly` is a render guard, not a code-splitting mechanism. A static
+top-level import still renders correctly while pulling all of `visx` into
+`_worker.js`. Silent bundle regression, no test failure.
+
+### Keep these pairs in step
+- `WIDTHS` in `apps/web/scripts/optimize-images.ts` ↔ `apps/web/app/components/Image.tsx`.
+  They're `[640, 1080]`. Add a width to one only and the srcset requests variants
+  that were never generated.
+- `packages/ui/src/tokens.css` ↔ `packages/ui/src/tokens.ts` (the JS colour
+  mirror for canvas use). `tokens.test.ts` parses both and asserts they match, so
+  this one fails loudly — but fix both, don't weaken the test.
+
+### Never make `apps/web/vitest.config.ts` extend `vite.config.ts`
+It is standalone deliberately: the `tanstackStart` plugin sets up SSR routing
+that conflicts with isolated test rendering.
+
+### Never let `ci.yml` and `deploy.yml` share a Playwright browser cache key
+Caches live at `~/.cache/ms-playwright`, keyed on **browser set + `pnpm-lock.yaml`
+hash**. The workflows install different sets (ci: chromium+webkit, deploy:
+chromium only). Sharing a key means first-writer-wins poisoning — the second
+workflow finds a cache hit for browsers it doesn't have.
+
+### Never hand-roll a `[ label ]` bracket button
+Use `<Button variant="secondary">label</Button>`, or `BracketLabel` on non-button
+surfaces (`Link`, `<a>`, Toast, NavLinks). The design system owns the bracket
+colouring, and `BracketLabel` owns its own `whitespace-nowrap`.
+
+---
+
+## 2. Workflow
+
+**Commits belong to the repo owner.** They review the staged diff before each
+commit; an auto-commit removes that checkpoint.
+
+- **Read-only git, freely** — `git status`, `git diff`, `git log`, `git show`.
+- **Staging:** `git add <named paths>` when explicitly asked. Otherwise say which
+  files to stage. **Never `git add -A` or `git add .`** — it sweeps up unrelated
+  work in progress.
+- **Never** `git commit` (any variant, including `--amend`) or `git push`.
+- **When a unit of work is done:** stop, say what changed and in which files,
+  hand off.
+
+**Cloudflare resources — Pages projects, D1 databases, R2 buckets, Access
+applications — are provisioned manually by the repo owner.** Don't create or
+modify them from a session, and don't assume a resource exists because the config
+references it.
+
+**Before handing off, run these two by default** — they're fast and they catch
+most of what CI would:
+
+```bash
+pnpm check      # Biome lint + format, then turbo tsc across all workspaces
+pnpm test       # unit tests, all workspaces
+```
+
+Add `pnpm knip` when you changed exports or dependencies.
+
+**`pnpm test:e2e` and production builds (`pnpm build`) are slow — minutes, not
+seconds.** Run them when the change actually touches what they cover: routes,
+navigation, the player, service-worker behaviour, or CI config. A docs-only or
+comment-only change doesn't need either. **Ask before running them** if local
+instructions impose a time or cost constraint (see `CLAUDE.local.md`, which loads
+on top of this file) — offer the cheaper check instead of running the expensive
+one silently.
+
+Report failures with their output, and say plainly which checks you didn't run.
+Never describe a change as verified on the strength of a check you skipped.
+
+---
+
+## 3. Code standards
+
+### Comment register
+
+A comment states a **present-tense fact about the code**, not an event that
+happened to it. History lives in git and `PWA_PROGRESS.md`, which carry it better
+and don't rot. This is the convention most likely to be reintroduced by accident.
+
+**Never write into a comment:**
+- PR or review references — `(PR4)`, `PR6 review item 5`, `Post-review fix:`, `caught one review pass later`.
+- Dates and dated verification — `(2026-08-02)`, `verified against MDN, 2026-07-21`, `CDP-reproduced`.
+- Internal shorthand indices — `M1`, `H2`, `chunk 3b`, `Phase 1/2/3/4`, `Step 5`. Pure pointers with no content: a reader can't even guess what `(M1)` meant.
+- Feature-provenance tags — `Set-upload feature (PR4) — …`. These age in one direction: code gets reused, the tag doesn't, so a util serving three features still claims to belong to one. Eventually not noise but **wrong**. Apply uniformly — per-file judgement leaves a repo where nobody can infer the convention.
+- Arguing with a past reviewer or a deleted comment.
+- Speculative future phases — "Phase 2 will shrink the player".
+
+**The rewrite rule.** "PR4 review found X was wrong, so we now do Y" becomes "Y,
+because X would otherwise happen." Same information, no dependency on knowing
+what PR4 was. Prefer imperatives for traps: *never gitignore this*, *don't
+tighten this match*, *keep these two in step*.
+
+**Always keep:**
+- Anything that stops a plausible wrong edit — every "don't remove this", "deliberately NOT", and named failure-mode-if-you-change-this. `apps/admin/app/utils/hostGuard.ts` and `dashboard.tsx`'s no-in-app-auth block are the reference examples; both exist solely to stop someone "fixing" a security control.
+- Concrete specifics — `2 ÷ 2`, `~300 rows`, `220MB`, `iPhone SE 375px`. Specificity is the point; don't homogenise into blandness.
+- Value-by-value references for a discriminated union, and file headers orienting a reader to a module's purpose. That's API documentation, not volume.
+- Pointers **into** `PWA_PROGRESS.md` / `TECH_DEBT.md` by section. Verify the section exists first — a pointer to nothing is worse than no pointer.
+
+**Proportionality.** Comment length scales with how easy it is to break the thing
+by editing that line. A subtle guard with a silent failure mode earns its
+paragraph; a bytes formatter does not. Never restate what the code plainly says,
+and never quote another file's source inline — that copy will rot.
+
+**When deleting a label,** grep for it first: other files may cross-reference it
+by name.
+
+### Where code lives
+- Extract a component when the same UI or behaviour appears twice, or when a file gets hard to scan.
+- **Generic, presentational, framework-agnostic → `packages/ui/src/`.** Anything Zustand-coupled, TanStack-Router-coupled, or tied to an app convention (e.g. the R2 image URL scheme) stays in `apps/web/app/components/`.
+- Name components for what they *are*, not where they're used (`TrackRow`, not `SetsPageTrackRow`).
+- Keep props minimal and typed. Explicit prop interfaces over spreading unknown objects.
+- Route files own their loader, server functions and component. Extract past ~150 lines or on second use.
+- Custom hooks in `apps/web/app/hooks/`.
+- File names: `kebab-case` for routes and utilities, `PascalCase` for components.
+
+### Patterns
+- **TypeScript strict.** No `any` without a documented reason (CF env casting is the standing one). Use `unknown` + narrowing.
+- **`const` over `let`**, arrow callbacks, destructuring over repeated property access.
+- **`createServerFn` for data fetching** — no raw `fetch` to internal API routes from client code.
+- **`useCallback`/`useMemo` only** for a measurable win or a required stable reference. Not pre-emptively.
+- Prefer native Web APIs (`fetch`, `URL`, `Request`, `Response`) over wrappers for simple cases.
+- **Biome only** — no Prettier, no ESLint.
+- **Simplest implementation that does the job well.** Don't abstract before there's a second caller. Three similar lines beat a premature helper — but two coexisting half-built abstractions is debt, not simplicity. When the choice is a quick inline fix versus a properly placed one in a shared package, take the latter and expect it to be tested and documented (Storybook story + interaction coverage for anything in `packages/ui`, not just "it renders").
+
+### Readable JSX
+JSX describes **what** the UI is, not **how** it's computed. Hoist anything that
+needs a mental parser:
+- **Nested ternaries → named consts** above the `return`. Name for the value produced (`playButtonLabel`), not the condition (`isPlayingAndLoaded`).
+- **Inline math / string-building → named const or util.** A one-off `Math.floor(t/60)` is fine; a repeated `M:SS` formatter belongs in `~/utils/fmt.ts`. Reach for the util the second time.
+- **Conditional fragments and conditional callback args → named consts**, so the handler reads as the verb it is.
+- **Threshold:** no value in the markup should take more than ~5 seconds to understand.
+
+### Styling
+- Tailwind utilities only — no inline `style` except genuinely dynamic values (animation offsets).
+- Tokens: `packages/ui/src/tokens.css` (Tailwind `@theme`, keyframes, `t-*` typography) and `packages/ui/src/tokens.ts` (JS mirror for canvas, e.g. `Waveform.tsx`).
+- Brand colours: `bg-black` `#161615`, `text-gold` `#c58538`, `text-purple` `#43437a`, `text-grey` `#cbcbcb`, `font-mono` Space Mono.
+- **Edges — sharp by default.** Terminal rows, player bar, headers, status pills, CTA buttons and structural borders stay square. `rounded-card` (the single `--radius-card: 4px` token in `packages/ui/src/tokens.css`) is only for content surfaces the user taps into: list cards, artwork, flyers. `rounded-full` only for genuinely circular elements. **Never** the freeform scale (`rounded-md`/`lg`/`xl`).
+- **Bracket labels never wrap mid-bracket.** An orphaned `]` on the next line reads as a layout bug. `BracketLabel` owns `whitespace-nowrap` so this is structural rather than a per-caller convention — that's deliberate, because it bit three times before the fix moved into the component (a banner `[ × ]`, a `[ share_set ]` / `[ save_for_offline ]` row, and a missed case in `AddToCalendarButton`). If nowrap forces overflow at 375px (iPhone SE is the test case), **shorten the label** — never let the bracket split.
+
+---
+
+## 4. Architecture context
+
+**The narrative lives in `README.md` — it isn't repeated here.** This section is
+a map: where to edit, and where the reasoning is written down. Below it, only the
+things you need *at the moment of editing* that no section heading can give you.
+
+| Area | Edit here | Why it's built this way |
+|---|---|---|
+| Audio player | `apps/web/app/hooks/useAudioPlayer.ts` (all playback logic; `Player.tsx` is layout only) | Sets must play on locked screens — Media Session API. Persistent bar in `__root.tsx` survives route changes. |
+| Offline audio | `apps/web/app/data/offline-audio.ts`, `store/offlineSlice.ts`, the audio route in `app/sw.ts` | README → *"220MB of audio has to survive with no signal"* (IDB over Cache Storage, quota pre-flight, Range) |
+| Web/app divide | `apps/web/app/utils/appContext.ts` — the `?ctx=app` marker | README → *"Browser tabs never read the offline library"*. A product invariant, not an accident: don't make tabs read IDB. |
+| Catalogue | `packages/data/src/sets.ts` (+ `sets.generated.ts`, `apps/web/app/data/sets.ts` for the app's fallback wrapping) | README → *"The catalogue is in a database, but the app is offline-first"* (live-wins `mergeSets`, committed snapshot) |
+| Set upload | `apps/admin/app/routes/api/sets-presign.ts`, `utils/uploadWithProgress.ts` | README → *"A 220MB upload can't go through a Worker"* |
+| Waveform peaks | `scripts/generate-peaks.mjs` (root, needs `ffmpeg` on PATH) | README → *"Waveform peaks are computed with ffmpeg, not in the browser"* |
+| Push sending | `packages/data/src/webPush.ts` | README → *"The standard Web Push library doesn't run on Workers"* |
+| Admin + auth | `apps/admin/app/routes/`, `utils/verifyAccessJwt.ts` | README → *"Admin auth: no auth code, then auth code anyway"*. The enforcement rule is §1. |
+| Service worker build | `buildServiceWorker` in `apps/web/vite.config.ts` (owns the precache allowlist and revision derivation) | README → *"Technology choices"*, Workbox entry. `vite-plugin-pwa` is **not** a dependency. |
+| Design system | `packages/ui/src/` — one folder per component, `icons/` flat | README → *"Monorepo structure"* (late extraction, no build step) |
+| Navigation | `apps/web/app/components/SwipeNavigator.tsx` — wraps `<Outlet />`, swipes across `ROUTES = ["/", "/sets", "/events", "/djs"]` | Outgoing page animates via a `cloneNode` snapshot + direct DOM writes; the gold dot indicator likewise. Deliberately not React re-renders. |
+| Analytics | `apps/web/app/routes/api/signal.ts`, `hooks/useTrackEvent.ts` | `navigator.sendBeacon` on pause, track change and tab close; plays under 3s ignored. Lands in D1 `plays`. Cloudflare Web Analytics is auto-injected — no script tag. |
+| Server entry | `apps/web/app/server.ts`, `apps/admin/app/server.ts` | Forwards `env.DB` as `context.cloudflare.env`. See §1 — deleting either breaks all D1 access. |
+
+### Store slice map — `apps/web/app/store/`
+
+Zustand, composed in `index.ts`:
+
+| Slice | Owns |
+|---|---|
+| `playerSlice` | playback state, per-track resume `positions`, `peaksCache`, `durations`, `hasError`/`playbackBlockedReason`, and the offline playback gate (`canFetchPlaybackBytes`, `wasServedFromIdb`) |
+| `offlineSlice` | downloads, `activeDownloadId`, IDB-backed saved-set state, failure classification |
+| `catalogueSlice` | live catalogue fetched over the static snapshot |
+| `uiSlice` | transient UI state |
+
+`index.ts` persists a `partialize`d subset to localStorage: `nowPlayingId`,
+`positions`, `peaksCache`, `durations`, PWA install booleans. **Never persist
+`MusicSet` objects** — only IDs, rehydrated via
+`getCatalogueSet(catalogueSets, id) ?? getSet(id)`. A persisted object is a
+migration hazard the moment the shape changes; an ID isn't. `deferredPrompt` is
+excluded deliberately — non-serializable event object.
+
+`isPlaying` is the control surface for external components; `useAudioPlayer`
+bridges it to `audio.play()`/`audio.pause()`.
+
+### API route shape
+
+TanStack Start v1.167 has no `createAPIFileRoute`. Use `createFileRoute` with a
+`server: { handlers }` option:
 
 ```ts
 export const Route = createFileRoute("/api/example")({
@@ -64,218 +320,72 @@ export const Route = createFileRoute("/api/example")({
 });
 ```
 
-Routes with only `server.handlers` and no `component` are pure API endpoints — TanStack Router will never try to render them.
+A route with only `server.handlers` and no `component` is a pure endpoint — the
+router never tries to render it.
 
-### Deployment
-Deployed to **Cloudflare Pages**. The D1 binding `DB` is configured in `wrangler.toml` and must also be added in the CF Pages dashboard under Settings → Functions → D1 database bindings.
+### Two editing traps in `packages/ui`
 
-Schema lives in `apps/web/schema.sql`. Apply to the remote DB with:
-```bash
-npx wrangler d1 execute form-at-analytics --remote --file=apps/web/schema.sql
-```
+- **Don't mix `vi.fn()` with Storybook's `fn()`.** `storybook/test`'s `fn()` bundles its own `@vitest/spy` — a structurally different `Mock` type from the workspace's `vitest` — so passing a local `vi.fn()` as a prop override on a composed story fails `tsc` confusingly. Assert against the mock the story already made: `composeStories(stories).Secondary.args.onClick`.
+- Interaction tests run stories through plain Vitest + jsdom via `composeStories`, **not** the Storybook test-runner or `addon-vitest` — both need a real browser, and a second browser-install surface is an avoidable failure mode in this repo (see the Playwright cache rule in §1).
 
-**Cloudflare Web Analytics** is auto-injected for `formatglasgow.com` — no script tag needed.
-
-### Auth (not yet built)
-Community features will be gated behind **Better Auth** (self-hosted, open source). The player and sets pages stay fully public — no login required to listen.
-
-### Admin dashboard — `apps/admin`
-A separate TanStack Start app (not a route inside `apps/web`), deployed as its own Cloudflare Pages project at `admin.formatglasgow.com`, protected by **Cloudflare Access at the subdomain level** (Julian configures the Access application and Pages project himself — see "Manual Cloudflare setup" below; never attempt to create/modify Cloudflare resources on his behalf).
-
-**No in-app authentication — deliberate.** Access gates the page load at the edge; the app itself has zero login/session code. **Edge gating covers page loads, not individual endpoint calls**, so every *mutating* admin endpoint verifies the Access identity server-side rather than assuming the gated page is enough. All four do, via `apps/admin/app/utils/verifyAccessJwt.ts` (`jose` + `createRemoteJWKSet` against the team domain's `/cdn-cgi/access/certs`, checking `iss`/`aud`/`exp`, reading the `Cf-Access-Jwt-Assertion` header then falling back to the `CF_Authorization` cookie):
-
-- `routes/api/sets.ts` — set upload
-- `routes/api/sets-presign.ts` — R2 presigned upload URLs
-- `routes/api/sets/restore.ts` — restore a soft-deleted set
-- `routes/api/send-push.ts` — send a push notification to all subscribers
-
-**Any new mutating endpoint must call `verifyAccessJwt` too** — the read-only aggregate queries behind the dashboard are the only admin code that may skip it. There is deliberately no dev-mode bypass; see PWA_PROGRESS.md's "Phase D1: send push notifications from the admin dashboard" section for the full JWT-validation rationale.
-
-**Shares `packages/data` (`@form-at/data`) with `apps/web`**, not a duplicated copy: the static sets catalogue and `fetchSetStats` (the per-set trend query) have two real consumers — the public `/sets/$setId` page and this dashboard's per-set picker. `apps/web` imports `@form-at/data/sets` / `@form-at/data/set-stats` / `@form-at/data/webPush` directly (`TECH_DEBT.md` item 21's sweep). `apps/web/app/data/sets.ts` and `apps/web/app/data/set-stats.ts` still exist, but only for genuinely app-local code (this app's own D1-fallback wrapping, `fetchOverallStats`) — no re-export shims remain. `admin-stats.ts` (the dashboard's own aggregate queries — install funnel, app launches, plays, push subscribers, clicks) has only ever had one consumer, so it lives entirely in `apps/admin`, not the shared package.
-
-**Trend rows render real charts** (install funnel, app launches, per-set plays, push growth) from the arrays `admin-stats.ts` returns, drawn with `visx` (`@visx/axis`/`group`/`responsive`/`scale`/`tooltip`). `chart pending` is only the loading fallback, not the shipped state.
-
-`TrendChart.tsx` wraps `TrendChartInner` in `ClientOnly` + `Suspense` behind a `lazy(() => import(...))`. **Keep the genuine dynamic `import()`** — `ClientOnly` is a render guard, not a code-splitting mechanism, so flattening it to a static top-level import would pull all of `visx` into `_worker.js` while still rendering correctly. See PWA_PROGRESS.md's "Phase C: tabbed layout, centred grid, real charts" entry for the before/after bundle measurement.
-
-**Manual Cloudflare setup** (Julian does this, not Claude): create the `form-at-admin` Pages project (Direct Upload, matching `form-at-web`), add the `DB` D1 binding (Settings → Functions → D1 database bindings → `form-at-analytics`), add the `admin.formatglasgow.com` custom domain, and create a Cloudflare Access application (Zero Trust → Access → Applications → Self-hosted) gating that domain to the team's emails. Verify `CLOUDFLARE_API_TOKEN`'s scope covers the new project — CI deploys will 403 if it was scoped narrowly to `form-at-web` only.
-
-### Design system — `packages/ui`
-Generic, presentational primitives live in `@form-at/ui` (`packages/ui/src/`), not in `apps/web`. Each component gets its own folder (e.g. `src/Button/Button.tsx`, `Button.stories.tsx`, `Button.test.tsx`) — except `icons/`, which stays a flat directory of pure SVG components. The package has **no build step**: it ships raw `.tsx`/`.css` source (same precedent as `packages/tsconfig`), consumed directly by `apps/web`'s Vite build and by Storybook via the pnpm workspace symlink.
-
-**What lives here:** `Text` family (`Text`/`Heading`/`Label`/`Body`/`Muted`/`PageTitle`), `BracketLabel`, `Button`, `TextButton`, `TerminalRow`, `Card`, `Modal`, `ToastShell`, the icon set, and the design tokens. Components that are app-specific (asset URL conventions, Zustand-store-coupled, TanStack Router-coupled nav) stay in `apps/web/app/components/` — `packages/ui` only holds things with zero framework/app coupling.
-
-**Design tokens — single source of truth:** `packages/ui/src/tokens.css` (the `@theme` block, keyframes, and `t-*` typography utilities) and `packages/ui/src/tokens.ts` (the JS colour mirror for canvas use, e.g. `Waveform.tsx`). A Vitest test (`tokens.test.ts`) parses both and asserts the colours match — this is a structural assertion, not a snapshot, so it fits the repo's "no snapshot tests" rule. `apps/web/app/styles/global.css` imports `@form-at/ui/tokens.css` and keeps only genuinely app-local CSS (the two keyframes used by non-migrated components, and the base heading reset).
-
-**Tailwind v4 cross-package class detection:** Tailwind's automatic source scanning excludes `node_modules`, and `packages/ui` only reaches `apps/web` via a pnpm workspace symlink — so an explicit `@source "../../../../packages/ui/src";` directive in `global.css` is required for Tailwind to see class names used inside `packages/ui/src/*.tsx`. Don't remove it.
-
-**Storybook + Chromatic:**
-- `pnpm --filter @form-at/ui storybook` — dev server (port 6006). `pnpm --filter @form-at/ui build-storybook` — static build (what CI/Chromatic runs).
-- Interaction tests use Storybook's **Portable Stories API** (`composeStories`) run through plain Vitest + jsdom — deliberately *not* `@storybook/addon-vitest`/test-runner, both of which need a real Playwright/WebdriverIO browser. Given this repo's Playwright-cache-collision history (see CI/CD below), a second browser-install surface is an avoidable failure mode.
-- **Don't mix `vi.fn()` with Storybook's `fn()`.** `storybook/test`'s `fn()` bundles its own `@vitest/spy`, which is a structurally different `Mock` type from the workspace's own `vitest`. Passing a locally-created `vi.fn()` as a prop override on a composed story will fail `tsc` with a confusing type error. Instead, assert against the mock the story already created: `composeStories(stories).Secondary.args.onClick`.
-- Chromatic renders in its own cloud browsers — it cannot collide with the Playwright browser cache (see CI/CD).
-
-## Principles
-
-- **Top-notch quality is the priority.** This is meant to be a polished, professional app — not a quick prototype or hobby project. When a trade-off comes up between speed and quality, default to quality. Choose the cleaner abstraction over the cheapest one, the correct pattern over the shortcut, the proper UX over "good enough." Don't be cheap with engineering time, refactors, or polish: invest the effort to do things properly the first time. If a suggestion sounds "easier but worse," flag it and propose the better path.
-- **This is a portfolio project as well as a live product.** It's meant to demonstrate professional developer experience and production standards to anyone who reads the repo, not just to ship features. That raises the bar specifically on: documented, tested component APIs (Storybook stories + interaction/a11y coverage for anything in `packages/ui`, not just "it renders"), clean package boundaries (no app-specific imports leaking into a shared package), and CI that actually gates on all of it. When choosing between a quick inline fix and a properly abstracted/documented one in a shared package, default to the latter.
-- **Keep it simple.** Within the quality bar above, prefer the simplest implementation that does the job well. Don't add abstractions until there's a clear need. Three similar lines beats a premature helper — but two coexisting half-built abstractions is *not* simple, it's debt. Simple ≠ shortcut.
-- **No comments that explain what the code does** — names do that. Only comment the non-obvious *why*.
-- **Comments are present-tense facts about the code, never a changelog.** A comment describes how the code *is*, not what happened to it. See "Comment register" below for the full rule — it's the one convention most likely to be reintroduced by accident.
-- **Biome only** — no Prettier, no ESLint. Run `pnpm check` to lint and format everything.
-- **Shared config in `packages/`** — each app extends `@form-at/tsconfig` via `workspace:*`.
-
-## Git workflow
-
-The user owns commits — you do not create them. The user is the repo owner and wants to review the staged diff before each commit; auto-commits remove that checkpoint.
-
-- **Read-only git is fine, freely.** `git status`, `git diff`, `git log`, `git show` for diagnosis or to surface what's staged / changed.
-- **Staging:** you MAY `git add <specific files>` when explicitly asked. Otherwise default to *telling the user which files to stage* rather than staging silently. Never `git add -A` or `git add .` — only named paths.
-- **Never** run `git commit` (or any variant — `-am`, `--amend`, `commit -m`, etc.) or `git push`. No exceptions.
-- **When a unit of work is complete and tests pass:** stop, summarise what changed and which files, and hand off. The user makes the commit themselves.
-
-## Code standards
-
-### Reusable components
-- Extract a component when the same UI or behaviour appears in more than one place, or when a single file is getting hard to scan.
-- **Generic, presentational, framework-agnostic components go in `packages/ui/src/` (`@form-at/ui`)** — see "Design system" above. Anything Zustand-store-coupled, TanStack-Router-coupled, or tied to an app-specific convention (e.g. the R2 image URL scheme) stays in `apps/web/app/components/`.
-- App-specific components live in `apps/web/app/components/`. Name them after what they *are*, not where they're used (`TrackRow`, not `SetsPageTrackRow`).
-- Keep props minimal and typed. Prefer explicit prop interfaces over spreading unknown objects.
-- **Bracket buttons live in `@form-at/ui`'s `Button` (variants: `primary` / `secondary` / `fail`); bracket rendering itself lives in `BracketLabel` for non-button surfaces (`Link`, `<a>`, Toast, NavLinks).** Never hand-roll a `[ label ]` button with inline classes — use `<Button variant="secondary">label</Button>` and let the design system own the bracket colouring. `BracketLabel` owns its own `whitespace-nowrap` (a single wrapping `<span>`) — callers don't need to add it themselves.
-
-### Comment register
-
-A comment states a **present-tense fact about the code**, not an event that happened to it. History lives in git and `PWA_PROGRESS.md`, which carry it better and don't rot.
-
-**Never write into a comment:**
-- PR or review references — `(PR4)`, `PR6 review item 5`, `Post-review fix:`, `caught one review pass later`, `this was explicitly asked for in review`.
-- Dates and dated verification — `(2026-08-02)`, `verified against MDN, 2026-07-21`, `field bug 2026-07-03`, `CDP-reproduced`.
-- Internal shorthand indices — `M1`, `M3`, `H2`, `N1`, `chunk 3b`, `Phase 1/2/3/4`, `Step 5`. These are pure pointers with no content: a reader can't even guess what `(M1)` meant.
-- Feature-provenance tags — `Set-upload feature (PR4) — …`. These age badly in one direction: code gets reused, the tag doesn't get updated, so a util serving three features still claims to belong to one. Eventually it isn't noise, it's **wrong**. Reasoning comments have no equivalent failure mode. Apply this uniformly — per-file judgement leaves a repo where nobody can infer the convention.
-- Arguing with a past reviewer or a deleted comment — "the removed call's comment claimed X", "no fallback-writing path was removed by this change".
-- Speculative future phases — "Phase 2 will shrink the player", "safe to change now, before this PR".
-
-**The rewrite rule.** "PR4 review found X was wrong, so we now do Y" becomes "Y, because X would otherwise happen." Same information, no dependency on knowing what PR4 was. Prefer imperatives for traps: *never gitignore this*, *don't tighten this match*, *keep these two in step*.
-
-**Always keep:**
-- Anything that stops a plausible wrong edit — every "don't remove this", "deliberately NOT", and named failure-mode-if-you-change-this. `apps/admin/app/utils/hostGuard.ts` and `apps/admin/app/routes/dashboard.tsx`'s no-in-app-auth block are the reference examples; both exist solely to stop someone "fixing" a security control.
-- Concrete specifics — `2 ÷ 2`, `~300 rows`, `220MB`, `iPhone SE 375px`. Specificity is the point; don't homogenise into blandness.
-- Value-by-value references for a discriminated union, and file headers that orient a reader to a module's purpose. Those are API documentation, not volume.
-- Pointers **into** `PWA_PROGRESS.md` / `TECH_DEBT.md` by section — `see PWA_PROGRESS.md's PR3 entry`, `TECH_DEBT.md item 15`. Those are the correct home for long-form rationale. Verify the section exists before pointing at it; a pointer to nothing is worse than no pointer.
-
-**Proportionality.** Comment length scales with how easy it is to break the thing by editing that line. A subtle guard with a silent failure mode earns its paragraph; a bytes formatter does not. Long-form design rationale belongs in `PWA_PROGRESS.md` — the code needs only what prevents a wrong edit *at that exact line*, plus a pointer. Never restate what the code plainly says (enumerating an SVG's own stroke attributes, quoting another file's source inline — that copy will rot).
-
-**When deleting a label,** grep for it first: other files may cross-reference it by name, and removing it silently breaks those references.
-
-### Modern patterns
-- **TypeScript strict mode** — no `any` unless there is a documented reason (e.g. CF env casting). Use `unknown` + narrowing instead.
-- **`const` over `let`**, arrow functions for callbacks, destructuring over repeated property access.
-- **Server functions** via `createServerFn` for all data fetching — no raw `fetch` calls to internal API routes from client code.
-- **`useCallback` / `useMemo`** only when there is a measurable performance reason or a dependency array requires a stable reference. Don't add them pre-emptively.
-- Prefer native Web APIs (`fetch`, `URL`, `Request`, `Response`) over wrapper libraries for simple cases.
-
-### Readable JSX
-JSX should describe **what** the UI is, not **how** it's computed. When an inline expression starts demanding a mental parser, hoist it.
-
-- **Nested ternaries in JSX → named consts.** If you'd need to re-indent a ternary chain to read it, extract it above the `return`. Name it for the value it produces (`playButtonLabel`, `statusIndicator`), not the condition (`isPlayingAndLoaded`).
-- **Inline math / string-building → named const or shared util.** A one-off `Math.floor(t/60)` is fine; a repeated `M:SS` formatter belongs in `~/utils/fmt.ts`. Reach for the util the second time you write the same expression.
-- **Conditional JSX fragments → named consts.** `isPlaying ? <span className="text-gold">[ live ]</span> : <span>[ ready ]</span>` reads better as a `statusIndicator` const.
-- **Conditional callback args → named consts.** `onClick={() => playTrack(set, a && b ? { startTime: t } : undefined)}` becomes `onClick={() => playTrack(set, playTrackOptions)}` with the options computed above. The handler then reads as the verb it is.
-- **Threshold: ~one screen of JSX, no value in the markup should require >5 seconds to understand.** If you'd have to stop reading to evaluate a ternary, it doesn't belong there.
-
-### File and naming conventions
-- File names: `kebab-case` for routes and utilities, `PascalCase` for component files (`Player.tsx`, `Header.tsx`).
-- One component or one logical unit per file. Co-locate the types it needs unless they're shared.
-- Route files own their loader, server functions, and page component. Only extract when a file exceeds ~150 lines or a piece is reused elsewhere.
-- Custom hooks live in `apps/web/app/hooks/`.
-
-### Styling
-- Tailwind utility classes only — no inline `style` props except for dynamic values (e.g. animation offsets).
-- Design tokens are in `packages/ui/src/tokens.ts` (JS/canvas use) and `packages/ui/src/tokens.css` (the `@theme` block, Tailwind use) — see "Design system" above. A Vitest test keeps them in sync; don't hand-edit one without the other.
-- Brand colours: `bg-black` (`#161615`), `text-gold` (`#c58538`), `text-purple` (`#43437a`), `text-grey` (`#cbcbcb`), `font-mono` (Space Mono).
-- **Edges.** Sharp by default — terminal rows, the player bar, headers, status pills, CTA buttons, and structural borders (`border-t`, `border-l`) stay square. Use `rounded-card` (single 4px token, defined in `global.css`) only for **content surfaces the user taps into**: list cards, content images (artwork, flyers). Use `rounded-full` only for genuinely circular elements (e.g. the play button). Never use the freeform Tailwind radius scale (`rounded-md`, `rounded-lg`, `rounded-xl`) — only the two tokens above.
-- **Bracket labels never wrap mid-bracket.** Terminal-style `[ label ]` buttons must keep the whole bracket pair on one line — an orphaned `]` on the next line breaks the visual convention and reads as a layout bug. `BracketLabel` (in `@form-at/ui`) owns `whitespace-nowrap` on itself, so this is now structural rather than a per-caller convention to remember. If a label is long enough that nowrap forces overflow at narrow viewports (iPhone SE 375px is the test case), shorten the label — never let the bracket split. This has bitten us repeatedly (Phase 2 banner `[ × ]`, Phase 3 `[ share_set ]` / `[ save_for_offline ]` row, and a missed case in `AddToCalendarButton`); the fix was moved into the component specifically so it can't be forgotten again.
-
-## Commands
+## 5. Commands
 
 ```bash
-pnpm install          # install all workspaces
-pnpm dev              # run all apps in dev mode (also generates routeTree.gen.ts on first run)
-pnpm build            # build all apps via Turbo
-pnpm check            # Biome lint + format across the whole repo
+pnpm install                      # all workspaces
+pnpm dev                          # both apps — web :5173, admin :5174
+pnpm dev:web / dev:admin          # one app
+pnpm build / build:web / build:admin
+pnpm start / start:web / start:admin   # serve production build — web :4173, admin :4174
+pnpm test                         # unit, all workspaces
+pnpm test:web / test:admin / test:design-system
+pnpm test:e2e / test:e2e:web / test:e2e:admin
+pnpm check                        # Biome (whole repo) then turbo tsc
+pnpm lint / pnpm tsc / pnpm knip
+pnpm storybook                    # packages/ui Storybook, :6006
 ```
 
-### Tests (in `apps/web/`)
+Everything except `check`/`format`/`knip` is a thin Turbo wrapper; `:web`/`:admin`
+variants add a `--filter`. For a workspace's own scripts: `pnpm -C apps/web <script>`.
+
+`apps/web` scripts — `send-push`, `optimize-images`, `og`, `sitemap`,
+`screenshots`, `stats`, `deploy` — are documented with every flag in
+`apps/web/scripts/README.md`. `og`, `sitemap` and `optimize-images` run
+automatically inside `pnpm build`.
+
+**Service-worker behaviour is testable only against a production build.** The dev
+server never registers a SW (Vite's dev transform emits no `sw.js`):
 
 ```bash
-pnpm test             # vitest watch
-pnpm test:run         # vitest single run (CI)
-pnpm test:ui          # vitest UI
-pnpm test:e2e         # playwright (boots dev server itself)
-pnpm test:e2e:ui      # playwright UI mode
+pnpm build:web && pnpm start:web   # :4173, real service worker
 ```
 
-Test layout:
-- `apps/web/tests/unit/` — Vitest + jsdom. One folder per concern: `store/`, `hooks/`, `components/`, `utils/`, `data/`, `routes/`, `scripts/`.
-- `apps/web/tests/e2e/` — Playwright. Real browser flows; mocks `*.mp3` requests with a silent fixture.
+### Tests
+- `apps/web/tests/unit/` — Vitest + jsdom, one folder per concern: `store/`, `hooks/`, `components/`, `utils/`, `data/`, `routes/`, `scripts/`.
+- `apps/web/tests/e2e/` — Playwright, four projects (chromium, webkit, mobile-chrome, mobile-safari). Mocks `*.mp3` with a silent fixture.
 - `apps/web/tests/setup.ts` — jest-dom matchers + `HTMLMediaElement` stubs (jsdom doesn't decode audio).
-- `apps/web/tests/README.md` — conventions for adding tests.
+- `playwright.config.ts` uses `workers: 1` — Vite's dev server races on parallel route loads.
+- Click handlers calling `playTrack` rely on the module-level `audioEl` ref in `playerSlice.ts`; register a fake element with `registerAudioElement()` in `beforeEach`.
+- Conventions and how to add one: `apps/web/tests/README.md`.
+- `packages/ui/vitest.setup.ts` wires jest-dom and calls `installDialogPolyfill()` — the polyfill itself is `packages/ui/src/domPolyfills.ts` (jsdom implements no `HTMLDialogElement.showModal()`).
 
-Notes:
-- Vitest config (`apps/web/vitest.config.ts`) is **standalone** — it does NOT extend `vite.config.ts`, because the `tanstackStart` plugin sets up SSR routing that conflicts with isolated test rendering.
-- Playwright config (`apps/web/playwright.config.ts`) uses `workers: 1` because Vite's dev server races on parallel route loads.
-- Click handlers that call `playTrack` rely on the module-level `audioEl` ref in `playerSlice.ts`. Tests register a fake audio element via `registerAudioElement()` in `beforeEach`.
+### CI/CD
+- **`ci.yml`** on push (non-main) + PR. Jobs: `static` (per-workspace Biome lint for `apps/web`, `apps/admin`, `packages/ui`, `packages/data`, plus `turbo tsc` across all four, plus a Vite build of both apps), `knip`, `unit` (all four workspaces), `chromatic` (visual regression for `packages/ui`), `e2e` (Playwright on chromium + webkit for both apps).
+- **`deploy.yml`** on push to `main`, plus manual `workflow_dispatch`. Re-runs `static`/`unit`/`e2e`, then `deploy` and `deploy-admin` only if all pass — a direct push to `main` can't skip the suite. Deliberately **not** `chromatic`, which stays PR-only to avoid roughly doubling snapshot quota.
+- Secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CHROMATIC_PROJECT_TOKEN`.
 
-### Design system (in `packages/ui/`)
+### First run
+`pnpm dev` generates `apps/web/app/routeTree.gen.ts` (TanStack Router code-gen).
+Gitignored; regenerates on every dev start.
 
-```bash
-pnpm --filter @form-at/ui storybook          # Storybook dev server, port 6006
-pnpm --filter @form-at/ui build-storybook    # static build (what CI/Chromatic runs)
-pnpm --filter @form-at/ui test               # vitest — portable-stories interaction tests + tokens sync test
-pnpm --filter @form-at/ui lint               # biome check src
-pnpm --filter @form-at/ui tsc                # tsc --noEmit
-```
+---
 
-Every component gets a co-located `.stories.tsx` (variants + interaction `play` functions + `@storybook/addon-a11y` coverage) and, where there's real behaviour to lock, a `.test.tsx` that runs those stories through Vitest via `composeStories`.
+## 6. Other docs
 
-## CI / CD
-
-Two GitHub Actions workflows in `.github/workflows/`:
-
-- **`ci.yml`** — runs on push (non-main) + pull_request. Jobs: `static` (biome lint + `turbo tsc`, covers both `apps/web` and `packages/ui`), `knip`, `unit` (vitest for both `apps/web` and `packages/ui`), `chromatic` (Storybook visual regression for `packages/ui`), `e2e` (playwright on Chromium + WebKit).
-- **`deploy.yml`** — runs on push to `main`. Re-runs `static`/`unit`/`e2e` as gates (deliberately **not** `chromatic` — see below), then `deploy` runs only after all pass. A direct push to `main` cannot bypass the test suite.
-
-Both workflows use `pnpm/action-setup` pinned to the version in the root `package.json` `packageManager` field, plus `actions/setup-node` with pnpm cache. Playwright browsers are cached at `~/.cache/ms-playwright`, keyed on the **browser set + `pnpm-lock.yaml` hash** — the two workflows install different browser sets (ci: chromium+webkit, deploy: chromium-only) and must never share a cache key (first-writer-wins poisoning, PR #2 2026-07-02). The `chromatic` job never installs a Playwright browser (Chromatic renders in its own cloud browsers), so it cannot collide with this cache — deliberately kept PR-only (not duplicated into `deploy.yml`) to avoid roughly doubling Chromatic's snapshot quota consumption for a repo this size.
-
-Required GitHub secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CHROMATIC_PROJECT_TOKEN`.
-
-## First run
-
-After `pnpm install`, running `pnpm dev` will auto-generate `apps/web/app/routeTree.gen.ts` (TanStack Router code-gen). This file is gitignored — it regenerates on every dev start.
-
-## Structure reference
-
-- Root `package.json` is a thin Turbo wrapper — no app code here
-- Shared configs live in `packages/`, consumed via `workspace:*`
-- Each app's `tsconfig.json` extends the shared base
-- Biome config at the root covers all workspaces
-- `apps/web/app/server.ts` — custom Cloudflare server entry (do not delete)
-- `apps/web/app/store/` — Zustand store (playerSlice + persist middleware)
-- `apps/web/app/hooks/` — custom hooks (useAudioPlayer)
-- `apps/web/vitest.config.ts` / `apps/web/playwright.config.ts` — test configs
-- `apps/web/tests/` — unit + e2e tests, plus README on conventions
-- `apps/admin/app/server.ts` — same Cloudflare entry pattern as `apps/web`'s, minus audio/CSP specifics
-- `apps/admin/wrangler.toml` — own Pages project (`form-at-admin`), same `form-at-analytics` D1 binding as the root config
-- `packages/ui/src/` — design system components, one folder per component (`icons/` stays flat), `tokens.css`/`tokens.ts`
-- `packages/ui/.storybook/` — Storybook config; `packages/ui/vitest.setup.ts` — jsdom `<dialog>` polyfill + jest-dom matchers
-- `packages/data/src/` — `sets.ts` (catalogue types, D1 queries, `mergeSets`, `AUDIO_HOST`/`AUDIO_ORIGIN`), `sets.generated.ts` (committed build-time D1 snapshot — the offline fallback), `set-stats.ts` (`fetchSetStats` + trend-bucketing helpers), `webPush.ts` (push signing/sending, shared by both apps)
-- `.github/workflows/ci.yml` / `deploy.yml` — CI pipeline + gated deploy (both apps, `deploy.yml` has a separate `deploy-admin` job)
-- `wrangler.toml` — at repo root, configures `form-at-web`'s Cloudflare Pages + D1 binding (`apps/admin/wrangler.toml` is the second app's own config)
-
-## Docs to check
-
-Besides this file, a few other docs carry context that isn't derivable from the code — check them when relevant, don't assume they're stale:
-
-- **`PWA_PROGRESS.md`** (root) — engineering session-resumption log for phased work (currently PWA/offline). Check when resuming multi-session feature work to see what's already landed vs. in progress.
-- **`TECH_DEBT.md`** (root) — engineering-only tech-debt tracker with an open/invalid/deferred/resolved status table. Check before starting work in an area that might have a known caveat already logged.
-- **`IMPROVEMENTS.md`** (root) — product/feature backlog (checklist of shipped vs. pending ideas). Check when scoping a new feature, so you don't propose something already considered/rejected/planned.
-- **`README.md`** (root) — project overview, stack table, dev commands. The first thing a new contributor (or portfolio reviewer) reads.
+- **`README.md`** — project overview and the engineering narrative. What an outside reader sees first.
+- **`PWA_PROGRESS.md`** — decision log for phased work. Records what was tried and **rejected**, with on-device verification steps. Check when resuming multi-session work. Dated entries describe the state at that time and are correct as history — don't "fix" them to match the present.
+- **`TECH_DEBT.md`** — debt tracker with open / **❌ invalid** / deferred / resolved status. `❌ invalid` means the premise turned out wrong on investigation. Check before working in an area that may already have a logged caveat.
+- **`IMPROVEMENTS.md`** — product backlog, shipped vs. open, including features deliberately removed and not to be re-proposed.
+- **`apps/web/scripts/README.md`** — every build/ops script and flag.
+- **`apps/web/tests/README.md`** — test conventions.
+- **`apps/web/images-source/README.md`** — the image pipeline; what to drop where and what gets committed.
+- **`AGENTS.md`** — a pointer here for agents that don't read `CLAUDE.md`.
