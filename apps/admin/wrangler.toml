@@ -8,14 +8,20 @@ binding = "DB"
 database_name = "form-at-analytics"
 database_id = "d2e6f2f0-b4cd-40c0-98b3-04c060ecbffa"
 
-# Non-secret — safe to commit. The AUD tag identifies which Access
-# Application a JWT was issued for; it doesn't let anyone forge a
-# signature (that still requires Cloudflare's own private signing key).
+# These are the LIVE values, not a template — `verifyAccessJwt.ts` checks
+# incoming tokens against them, so editing either one to a placeholder locks
+# every mutating admin endpoint out.
+#
+# Non-secret, safe to commit and safe in a public repo. The AUD tag only
+# identifies which Access Application a JWT was issued for; it doesn't let
+# anyone forge a signature (that still requires Cloudflare's own private
+# signing key, which never leaves Cloudflare).
+#
+# Where to re-read them if the Access application is ever recreated:
 # TEAM_DOMAIN: Zero Trust → Settings → Custom Pages (or the URL your team
 # login page uses) — https://<team-name>.cloudflareaccess.com.
 # AUD: Zero Trust → Access → Applications → (the admin.formatglasgow.com
 # app) → Overview tab → "Application Audience (AUD) Tag".
-# PLACEHOLDER — Julian fills in the real values (see PWA_PROGRESS.md).
 [vars]
 CF_ACCESS_TEAM_DOMAIN = "https://holy-pine-0064.cloudflareaccess.com"
 CF_ACCESS_AUD = "6844a056d71815043f047d8132dcc15d4e62aff500338aa60188f89c235ff377"

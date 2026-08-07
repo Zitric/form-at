@@ -82,7 +82,14 @@ Community features will be gated behind **Better Auth** (self-hosted, open sourc
 ### Admin dashboard — `apps/admin`
 A separate TanStack Start app (not a route inside `apps/web`), deployed as its own Cloudflare Pages project at `admin.formatglasgow.com`, protected by **Cloudflare Access at the subdomain level** (Julian configures the Access application and Pages project himself — see "Manual Cloudflare setup" below; never attempt to create/modify Cloudflare resources on his behalf).
 
-**No in-app authentication — deliberate.** Access gates the page load at the edge; the app itself has zero login/session code. **This only protects page loads, not individual server-function calls** — any future *mutating* admin endpoint (there are none today; the dashboard is pure read-only aggregate queries) must verify the Access identity server-side (the `Cf-Access-Jwt-Assertion` header) rather than assuming the page being gated is enough.
+**No in-app authentication — deliberate.** Access gates the page load at the edge; the app itself has zero login/session code. **Edge gating covers page loads, not individual endpoint calls**, so every *mutating* admin endpoint verifies the Access identity server-side rather than assuming the gated page is enough. All four do, via `apps/admin/app/utils/verifyAccessJwt.ts` (`jose` + `createRemoteJWKSet` against the team domain's `/cdn-cgi/access/certs`, checking `iss`/`aud`/`exp`, reading the `Cf-Access-Jwt-Assertion` header then falling back to the `CF_Authorization` cookie):
+
+- `routes/api/sets.ts` — set upload
+- `routes/api/sets-presign.ts` — R2 presigned upload URLs
+- `routes/api/sets/restore.ts` — restore a soft-deleted set
+- `routes/api/send-push.ts` — send a push notification to all subscribers
+
+**Any new mutating endpoint must call `verifyAccessJwt` too** — the read-only aggregate queries behind the dashboard are the only admin code that may skip it. There is deliberately no dev-mode bypass; see PWA_PROGRESS.md's "Phase D1: send push notifications from the admin dashboard" section for the full JWT-validation rationale.
 
 **Shares `packages/data` (`@form-at/data`) with `apps/web`**, not a duplicated copy: the static sets catalogue and `fetchSetStats` (the per-set trend query) have two real consumers — the public `/sets/$setId` page and this dashboard's per-set picker. `apps/web` imports `@form-at/data/sets` / `@form-at/data/set-stats` / `@form-at/data/webPush` directly (`TECH_DEBT.md` item 21's sweep). `apps/web/app/data/sets.ts` and `apps/web/app/data/set-stats.ts` still exist, but only for genuinely app-local code (this app's own D1-fallback wrapping, `fetchOverallStats`) — no re-export shims remain. `admin-stats.ts` (the dashboard's own aggregate queries — install funnel, app launches, plays, push subscribers, clicks) has only ever had one consumer, so it lives entirely in `apps/admin`, not the shared package.
 
