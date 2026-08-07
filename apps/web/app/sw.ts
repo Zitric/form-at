@@ -30,28 +30,29 @@ declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ revision: string | null; url: string }>;
 };
 
-// Take control of any open clients as soon as this SW activates. Without this,
-// clients keep talking to the previous SW until they're closed and reopened,
-// which defeats the "new version ready [ update ]" flow.
+// Take control of open clients when this SW activates. This STAYS: on first
+// install there is no previous worker and no old client running hashed chunks,
+// so claiming immediately is safe — it's what makes offline capability live
+// without a reload on the very first visit. For an update it's inert by
+// construction: a waiting worker only activates once every client of the old
+// worker is gone, so there is nothing stale left to claim by then.
 clientsClaim();
 
-// NO unconditional `self.skipWaiting()` — never add one. An immediately-
-// activating SW prunes the previous build's hashed chunks from the precache
-// while old clients are still running them, and the old client's next lazy
-// route-load then 404s, because Cloudflare Pages serves only the latest
-// deployment. A broken route, not merely a stale cache. Instead the new SW sits
-// in `waiting`, the page shows "new version ready [ update ]" (<UpdateToast> →
-// useSwUpdate), and activation happens on explicit user consent via the message
-// below, followed by a reload the page triggers on `controllerchange`.
+// NO `self.skipWaiting()` anywhere — never add one, and never add a message
+// handler that calls it on the page's behalf. An immediately-activating SW
+// prunes the previous build's hashed chunks from the precache while old
+// clients are still running them, and the old client's next lazy route-load
+// then 404s, because Cloudflare Pages serves only the latest deployment. A
+// broken route, not merely a stale cache.
 //
-// `clientsClaim()` above STAYS: on first install there is no old client
-// running hashed chunks, so claiming immediately is safe — it's what makes
-// offline capability live without a reload on the very first visit.
-self.addEventListener("message", (event) => {
-  if ((event.data as { type?: string } | null)?.type === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
-});
+// A new build sits in `waiting` and takes over on the next cold start — the
+// lifecycle's own default. There is deliberately no update prompt and no
+// forced reload: a reload mid-playback cuts off a 90-minute set, and that is
+// the failure this design exists to prevent. Accepted cost: a client left
+// open indefinitely keeps running the old version, and a plain reload does
+// NOT dislodge it (the document overlap means the registration never drops to
+// zero clients) — fully closing the app, or a desktop hard reload, is what
+// activates the new build. See PWA_PROGRESS.md's "SW update flow" section.
 
 // Precache everything the build tags into the manifest (HTML, JS, CSS,
 // fonts, the icons referenced by the manifest). Workbox handles cache
