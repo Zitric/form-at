@@ -14,9 +14,9 @@ interface UsageTabProps {
 // that would need its own tab.
 export function UsageTab({ stats }: UsageTabProps) {
   return (
-    // Same lg:grid-cols-3 treatment as GrowthTab, for the same reason — see
-    // its comment.
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+    // Two columns above mobile, matching SetsTab. Three columns made each card
+    // too narrow for its TerminalRow label/value pairs.
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
       <DashboardCard>
         <Label className="mb-2 text-grey tracking-widest">{"// app_launches"}</Label>
         <div className="space-y-1">

@@ -39,7 +39,10 @@ export const Route = createFileRoute("/dashboard")({
 // CLAUDE.md's ~150-line extraction threshold once, splitting it out.
 function AdminDashboard() {
   const stats = Route.useLoaderData();
-  const [activeTab, setActiveTab] = useState<DashboardTabId>("growth");
+  // `usage` is the landing tab — the headline totals answer "how is it doing?"
+  // in one glance, which is what the dashboard is opened for. Growth's funnels
+  // and Sets' per-set detail are follow-up questions.
+  const [activeTab, setActiveTab] = useState<DashboardTabId>("usage");
 
   // Reuses fetchSetStats from @form-at/data (the same createServerFn
   // /sets/$setId calls in apps/web) rather than duplicating its query shape.

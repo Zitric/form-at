@@ -29,10 +29,10 @@ export function GrowthTab({ stats }: GrowthTabProps) {
       : `${Math.round(stats.notifyFunnel.acceptedRate * 100)}%`;
 
   return (
-    // lg:grid-cols-3 — checked visually before picking this: at md's 2
-    // columns, the 3rd card wraps to its own row with a large empty gap
-    // beside it (unbalanced). 3 even columns at lg reads cleanly instead.
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+    // Two columns above mobile, matching SetsTab. Three columns made each card
+    // too narrow for its TerminalRow label/value pairs. An odd card count
+    // leaves a gap on the last row — accepted, in exchange for readable rows.
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
       <DashboardCard>
         <Label className="mb-2 text-grey tracking-widest">{"// install_funnel"}</Label>
         <div className="space-y-1">

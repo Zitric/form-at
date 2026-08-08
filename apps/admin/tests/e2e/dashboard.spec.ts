@@ -23,27 +23,29 @@ test.describe("admin dashboard", () => {
     await expect(page.getByText(/sample data/i)).toBeVisible();
   });
 
-  test("growth tab is selected by default and shows its content", async ({ page }) => {
+  test("usage tab is selected by default and shows its content", async ({ page }) => {
     await gotoAndHydrate(page, "/dashboard");
-    await expect(page.getByRole("tab", { name: /growth/i })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    await expect(page.getByText("// install_funnel")).toBeVisible();
-    await expect(page.getByText("// push_subscribers")).toBeVisible();
-  });
-
-  test("switching tabs swaps the visible content", async ({ page }) => {
-    await gotoAndHydrate(page, "/dashboard");
-
-    await page.getByRole("tab", { name: /usage/i }).click();
     await expect(page.getByRole("tab", { name: /usage/i })).toHaveAttribute(
       "aria-selected",
       "true",
     );
     await expect(page.getByText("// app_launches")).toBeVisible();
     await expect(page.getByText("// plays")).toBeVisible();
-    await expect(page.getByText("// install_funnel")).toHaveCount(0);
+  });
+
+  test("switching tabs swaps the visible content", async ({ page }) => {
+    await gotoAndHydrate(page, "/dashboard");
+
+    // Starts from `usage` (the default), so the first click must move AWAY
+    // from it — clicking `usage` here would be a no-op and prove nothing.
+    await page.getByRole("tab", { name: /growth/i }).click();
+    await expect(page.getByRole("tab", { name: /growth/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(page.getByText("// install_funnel")).toBeVisible();
+    await expect(page.getByText("// push_subscribers")).toBeVisible();
+    await expect(page.getByText("// app_launches")).toHaveCount(0);
 
     await page.getByRole("tab", { name: /sets/i }).click();
     await expect(page.getByText("// per_set_plays")).toBeVisible();
@@ -72,6 +74,9 @@ test.describe("admin dashboard", () => {
 
   test("charts render as real SVG bar charts with real dimensions", async ({ page }) => {
     await gotoAndHydrate(page, "/dashboard");
+    // `usage` is the landing tab, so every growth-specific assertion below
+    // needs an explicit switch first.
+    await page.getByRole("tab", { name: /growth/i }).click();
     // Growth tab has 4 TrendChart instances (3 install_funnel + 1
     // push_subscribers) — ClientOnly + the lazy import both need a real
     // hydrated browser to resolve, which is exactly what this is (unlike
@@ -122,6 +127,7 @@ test.describe("admin dashboard", () => {
     page,
   }) => {
     await gotoAndHydrate(page, "/dashboard");
+    await page.getByRole("tab", { name: /growth/i }).click();
     // install_funnel's dismissed_trend is the fixture's deliberate empty
     // array (SAMPLE_ADMIN_DASHBOARD_STATS.installFunnel.dismissedTrend).
     await expect(page.getByText(/no data in this window/i)).toBeVisible();
@@ -149,6 +155,7 @@ test.describe("admin dashboard", () => {
 
   test("y-axis ticks are whole numbers, never fractional", async ({ page }) => {
     await gotoAndHydrate(page, "/dashboard");
+    await page.getByRole("tab", { name: /growth/i }).click();
     // accepted_trend's max is 2 — the exact case that regressed to 5
     // fractional ticks (0, 0.5, 1, 1.5, 2) under d3's default tick step.
     const acceptedTrendChart = page
@@ -171,6 +178,7 @@ test.describe("admin dashboard", () => {
   }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await gotoAndHydrate(page, "/dashboard");
+    await page.getByRole("tab", { name: /growth/i }).click();
     // install_funnel (3 stacked charts) and push_subscribers (1 chart) sit
     // in the same grid row. Before `items-start`, CSS Grid's default
     // `align-items: stretch` forced push_subscribers as tall as

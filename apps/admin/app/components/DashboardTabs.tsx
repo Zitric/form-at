@@ -5,9 +5,11 @@ export type DashboardTabId = "growth" | "usage" | "sets";
 // Short, single-word labels — the iPhone SE (375px) bracket-nowrap
 // constraint (CLAUDE.md) means these must survive 3-across without
 // wrapping, unlike the verbose `// install_funnel`-style in-panel headers.
+// `usage` first because it's the landing tab (see dashboard.tsx) — tab order
+// should match which one opens by default.
 const TABS: { id: DashboardTabId; label: string }[] = [
-  { id: "growth", label: "growth" },
   { id: "usage", label: "usage" },
+  { id: "growth", label: "growth" },
   { id: "sets", label: "sets" },
 ];
 
