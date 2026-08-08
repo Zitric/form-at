@@ -14,7 +14,14 @@ export function AdminNav() {
   const { location } = useRouterState();
 
   return (
-    <nav className="flex items-center gap-6 px-6 py-4 border-b border-grey/10">
+    // flex-wrap plus tighter mobile gap/padding: the wordmark and three
+    // labels don't fit 375px on one line, and without wrapping they pushed
+    // the whole page 10px wider than the viewport (horizontal scroll on every
+    // admin page). Desktop spacing is unchanged from sm: up. Bracket labels
+    // must never split, so wrapping has to happen between links, not inside
+    // them — BracketLabel owns its own whitespace-nowrap, which is what makes
+    // this safe.
+    <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-4 sm:gap-6 sm:px-6 border-b border-grey/10">
       <span className="font-display text-lg lowercase text-gold">form:at admin</span>
       {links.map(({ to, label }) => {
         const isActive = location.pathname.startsWith(to);

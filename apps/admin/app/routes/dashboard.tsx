@@ -15,20 +15,30 @@ import { PageTitle } from "@form-at/ui";
 //
 // Pure display: aggregate COUNT/GROUP BY reads only (see
 // ~/data/admin-stats.ts), no mutations, no forms, nothing that writes.
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, defer } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { type DashboardTabId, DashboardTabs } from "~/components/DashboardTabs";
 import { GrowthTab } from "~/components/GrowthTab";
 import { SetsTab } from "~/components/SetsTab";
 import { UsageTab } from "~/components/UsageTab";
-import { fetchAdminDashboardStats } from "~/data/admin-stats";
+import { fetchAdminDashboardStats, fetchEdgeTrafficStats } from "~/data/admin-stats";
 import { SAMPLE_SET_STATS } from "~/data/sample-stats";
 
 export const Route = createFileRoute("/dashboard")({
-  // Awaited directly, not deferred — the stats ARE the entire page, so
-  // deferring would just show a loading skeleton before the only content
-  // there is, for zero benefit on a low-traffic internal page.
-  loader: () => fetchAdminDashboardStats(),
+  // `stats` is awaited directly, not deferred — it IS the entire page, so
+  // deferring would just show a loading skeleton before the only content there
+  // is, for zero benefit on a low-traffic internal page.
+  //
+  // `edgeTraffic` IS deferred: it's the page's only network call (Cloudflare's
+  // GraphQL API, up to an 8s timeout), and an un-awaited promise lets the whole
+  // dashboard render while just that one card resolves. Same pattern as
+  // apps/web's /sets loader deferring `fetchOverallStats`. The `.catch`
+  // degrades a rejection to the designed `null` — without it a failure here
+  // would reject the loader and take out the page it's meant to stay out of.
+  loader: async () => ({
+    stats: await fetchAdminDashboardStats(),
+    edgeTraffic: defer(fetchEdgeTrafficStats().catch(() => null)),
+  }),
   head: () => ({ meta: [{ title: "Analytics · Form:at Admin" }] }),
   component: AdminDashboard,
 });
@@ -38,7 +48,7 @@ export const Route = createFileRoute("/dashboard")({
 // lives in GrowthTab/UsageTab/SetsTab (~/components/) — this file exceeded
 // CLAUDE.md's ~150-line extraction threshold once, splitting it out.
 function AdminDashboard() {
-  const stats = Route.useLoaderData();
+  const { stats, edgeTraffic } = Route.useLoaderData();
   // `usage` is the landing tab — the headline totals answer "how is it doing?"
   // in one glance, which is what the dashboard is opened for. Growth's funnels
   // and Sets' per-set detail are follow-up questions.
@@ -108,7 +118,7 @@ function AdminDashboard() {
         <>
           <DashboardTabs active={activeTab} onChange={setActiveTab} />
           {activeTab === "growth" && <GrowthTab stats={stats} />}
-          {activeTab === "usage" && <UsageTab stats={stats} />}
+          {activeTab === "usage" && <UsageTab stats={stats} edgeTraffic={edgeTraffic} />}
           {activeTab === "sets" && (
             <SetsTab
               stats={stats}

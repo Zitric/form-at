@@ -111,6 +111,15 @@ it; only the read-only aggregate queries may. There is deliberately no dev-mode
 bypass. Paired with the host-guard rule above — Access covers neither the
 `*.pages.dev` hostname nor individual endpoint calls.
 
+### Never substitute `0` for a metric that failed to load
+`AdminDashboardStats.edgeTraffic` is `null` on every failure path — missing
+credentials, 403, a GraphQL `errors` array inside a 200 body, timeout, empty
+window. `0` states "no traffic"; `null` states "we couldn't read it". Rendering
+the first for the second is a wrong fact, not a missing one, and it's
+indistinguishable to whoever reads the dashboard. Same reasoning as
+`conversionRate`/`acceptedRate` being nullable rather than 0. The
+`// edge_traffic` card's empty state is the reference example.
+
 ### Never remove the `@source` directive from `apps/web/app/styles/global.css`
 Tailwind v4's automatic source scanning excludes `node_modules`, and
 `packages/ui` reaches `apps/web` only through a pnpm workspace symlink. Without
@@ -232,6 +241,16 @@ by name.
 - Route files own their loader, server functions and component. Extract past ~150 lines or on second use.
 - Custom hooks in `apps/web/app/hooks/`.
 - File names: `kebab-case` for routes and utilities, `PascalCase` for components.
+
+### Naming a metric for what it measures
+Where two sources count different things, the label says which. `edge_traffic`
+(`requests`/`page_views`) is Cloudflare edge requests **including bots** — never
+"visitors" or "people", because Cloudflare Web Analytics counts real browsers
+and excludes bots, so the two disagree substantially and a shared label makes
+the smaller number look like a bug. Same reasoning behind `install_to_push`
+being captioned an approximation and `avg_engaged_listening` saying it's
+cumulative. Reasoning per metric lives with the code — `data/cf-analytics.ts`'s
+header for this one.
 
 ### Patterns
 - **TypeScript strict.** No `any` without a documented reason (CF env casting is the standing one). Use `unknown` + narrowing.

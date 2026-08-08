@@ -2841,6 +2841,101 @@ no test suite here can prove):
    set's variants (skip-if-exists working against real files, not just the
    unit-tested synthetic case).
 
+### Added 2026-08-08 — admin dashboard: usage as landing tab, a totals card, and live Cloudflare edge traffic
+
+Three things, on `feat/usage-default-dashboard`.
+
+**`usage` is now the landing tab**, with `usage` first in `DashboardTabs`. The
+dashboard is opened to answer "how is it doing?", which is a totals question,
+not a funnel question. Growth keeps the funnels and ratios; Sets keeps per-set
+detail.
+
+Worth knowing for future changes here: **the default tab is encoded in e2e, not
+in unit tests.** `pnpm test:admin` passed cleanly after the switch while five
+`dashboard.spec.ts` specs were broken — one asserting "growth tab is selected by
+default", and four growth-tab tests (chart dimensions, empty trend, y-axis
+ticks, card sizing) that had relied on Growth being what loads. The
+tab-switching spec also needed rewriting: it opened by clicking `usage`, which
+had become a no-op that proved nothing.
+
+**Two cards per row, not three.** `md:grid-cols-2` in both `UsageTab` and
+`GrowthTab`, matching `SetsTab`. Three columns left each card too narrow for its
+`TerminalRow` label/value pairs. The `totals` card spans both columns
+(`md:col-span-2`) — it's a summary, and splitting it would create two scan
+paths.
+
+**Cloudflare edge traffic — `data/cf-analytics.ts`.**
+
+*Why it exists at all.* The number was already visible in the Cloudflare
+dashboard, which argued against building anything. The deciding reason is
+product, not preference: the other two collective members have no Cloudflare
+account, so "check the Cloudflare dashboard" isn't available to them. Inside the
+Access-gated admin dashboard is the only place the number exists for two of the
+three people who want it.
+
+*Scope: a live read, no persistence.* Queried on each dashboard load; nothing is
+archived into D1. If Cloudflare ages the data out it's gone from the card too —
+accepted, because the first-party D1 metrics are the ones we actually own.
+
+*Edge vs RUM — why the card is labelled the way it is.* `httpRequests1dGroups`
+counts HTTP requests at Cloudflare's **edge**, including bots, crawlers, uptime
+pingers and asset requests. Cloudflare Web Analytics counts **real browsers
+running a beacon** and excludes bots. The two disagree substantially — plausibly
+by an order of magnitude on a site this size. Both are correct; they measure
+different things. So the card is labelled `edge_traffic` with rows
+`requests` / `page_views`, **never "visitors"**, and carries a caption naming
+the difference explicitly. Without that caption, anyone comparing this card to
+Cloudflare's own dashboard sees two wildly different numbers for what looks like
+the same thing and reasonably concludes one is broken.
+
+*Retention is read, not assumed.* Cloudflare does not publish per-plan retention
+— their docs direct you to the settings node per zone, which returns
+`notOlderThan` in seconds. `resolveWindowDays` reads it, converts to whole days
+and clamps to the 60-day chart window. The rendered `windowDays` is then the
+number of rows that actually came back, not the number requested, so a
+short window can't be presented as a full one. Padding a chart to 60 buckets
+would render "not retained" as "no traffic" — the same failure mode the
+`tracking since` captions already guard against for `app_launches`.
+
+*Degradation.* Every failure path returns `null`: missing token or zone id,
+non-2xx (a 403 is the likely token-scope misconfiguration), a GraphQL `errors`
+array inside a **200** body, timeout via `AbortSignal.timeout`, and an empty row
+set. The UI renders an explicit "no data" state for `null` and **never
+substitutes 0** — a zero states "no traffic", which is a wrong fact rather than
+a missing one.
+
+*Deferred, not merely non-throwing.* The first version of this awaited the
+Cloudflare call inside `fetchAdminDashboardStats` and claimed in a comment that
+a slow API "costs one card, not the dashboard". That was false: returning `null`
+instead of throwing means it can't FAIL the loader, but a plain `await` still
+made the whole page wait, up to the 8s timeout. Slowness and failure are
+different properties and the comment promised the one it didn't deliver. Fixed
+by making the claim true rather than narrowing it: `fetchEdgeTrafficStats` is its
+own server fn, and `dashboard.tsx`'s loader returns it through `defer()` — the
+same pattern apps/web's `/sets` loader already uses for `fetchOverallStats`. The
+dashboard renders immediately; the traffic card and the `edge_requests` row in
+`totals` each read the promise through their own `<Await>` inside `<Suspense>`.
+Two boundaries on one promise, so neither blocks the other, and the totals
+fallback is the same em-dash it shows for a null result — no layout shift.
+
+*Credentials.* `CF_ANALYTICS_TOKEN` is a Pages secret. `CF_ZONE_ID` is a plain
+`[vars]` entry in `apps/admin/wrangler.toml`, deliberately NOT a secret: it's a
+public identifier like the Access AUD tag, reading analytics with it still needs
+the token, and storing it as a secret would imply it needs protecting.
+
+*Verification honesty.* Unit tests cover the happy path, retention clamping, the
+requested date range, no-credentials, 403, GraphQL-errors-in-200, throw/timeout
+and empty-window — all against a mocked `fetch`, because the API is unreachable
+from tests and CI. **The integration was not end-to-end verified.** The first
+real proof is loading the dashboard after the Pages secrets exist.
+
+**Found while checking 375px, and fixed:** `AdminNav` was a non-wrapping flex
+row (wordmark + three links) that pushed the document 10px wider than a 375px
+viewport — horizontal scroll on *every* admin page, pre-existing and unrelated
+to this work. Now `flex-wrap` with tighter mobile gap/padding, desktop spacing
+unchanged from `sm:` up. Measured before and after: `scrollWidth` 385 → 375, no
+offending elements. A regression test asserts zero overflow at 375px.
+
 ### Added 2026-08-05 — admin set-upload feature, PR6: minimal edit/delete, and why delete needed six things resolved first
 
 `feat/admin-set-edit-delete`, branched off `main` after PR5 merged. Closes

@@ -7,7 +7,7 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
-- **Open:** 8, 12, 13, 15
+- **Open:** 8, 12, 13, 15, 22
 - **Invalid:** 1 (2026-07-22 — premise was wrong, not stale: both flagged functions are load-bearing behind a live multi-provider calendar picker; do not delete, see item for the full re-verification)
 - **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, real trigger is ~10-15 sets in the catalogue, not a calendar date; see item for why that arrives faster now)
 - **Resolved:** 2 (2026-07-22 — knip.json config + parallel CI job; see item for a correction to its own original plan), 3 (2026-07-23 — `__root.tsx` split into `fontCSS.ts` / `HydrateStore.tsx` / `rootHead.ts`), 4 (2026-07-23 — beacon queue + Background Sync, with a page-side fallback for Safari/Firefox), 6 (2026-06-28, `10811a4`), 7 (2026-07-02, `d2bbc36` — offline.html redesign, stamped during the 2026-07-06 docs cleanup), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01), 17 (2026-07-02 — gate proven intact via SW-preview experiments; observed bytes were HTTP cache / element buffer, not IDB; silent-blocked-tap toast fixed), 18 (2026-07-02 — not reproducible on current build; all three offline nav modes verified against the SW preview), 5 (absorbed into 19's verification — CORS re-checked on the custom domain 2026-07-06: preflight GET/HEAD + range, ACAO *, Content-Length exposed), 19 (2026-07-06 — audio on cdn.formatglasgow.com, host centralized in `@form-at/data/sets` since item 21's sweep, IDB force-re-download migration in reconcileFromIdb), 20 (2026-07-31 — superseded by the admin dashboard shipping and then moving to its own app, apps/admin), 21 (2026-08-04 — import sweep to `@form-at/data`, four shim files reduced to two deleted + two trimmed to their genuinely-local code)
@@ -747,4 +747,61 @@ already done in this repo. No behavior change expected; `pnpm check` +
 
 ---
 
-_Last updated: 2026-08-04_
+## 22. Artwork and DJ-photo URLs aren't content-hashed — a re-export stays stale for hours
+
+**Status: open.**
+
+Re-exporting an image at the same path does not reach anyone who has already
+viewed it, for up to ~4 hours. Observed live on 2026-08-07: the Unreal DJ photo
+was re-cropped, deployed, and the origin served the new bytes
+(`md5 6934c1d6…` matching the local file) while the browser kept showing the
+old crop through repeated ordinary reloads.
+
+**Why reloading doesn't fix it.** Two caches compound:
+
+1. `sw.ts`'s `artwork-v1` route serves `/images/*` with `StaleWhileRevalidate`
+   — respond from cache, refetch in the background, store for next time. The
+   cache deliberately survives deploys (artwork rarely changes, and clearing it
+   would break offline access), so the intended cost is "stale for one visit".
+2. The live asset carries `cache-control: public, max-age=14400`. SWR's
+   background refetch goes through the HTTP cache, so it is handed the OLD
+   bytes and re-stores them. The SW cache therefore never self-heals inside
+   that 4-hour window, no matter how many times the page is reloaded.
+
+A hard reload clears it (bypasses the HTTP cache), as does fully closing the
+installed app — the same lever as the SW-update behaviour documented in
+PWA_PROGRESS.md's "SW update flow" section.
+
+**Same class as a bug already fixed once.** The SW precache had exactly this
+shape: a stable URL whose content changes, needing a revision token to tell
+versions apart. `buildServiceWorker` in `apps/web/vite.config.ts` solves it for
+precached assets by hashing file CONTENT into the manifest revision (its own
+comment records that `mtime` failed because CI's fresh checkouts changed it on
+every deploy). Artwork never got the equivalent treatment because it isn't in
+the precache manifest at all — it's a runtime cache keyed on the raw URL.
+
+**Recommended fix — content-hash the filenames.** `optimize-images.ts` emits
+`unreal-1080.<hash>.webp`, and `Image.tsx` resolves the base path through a
+generated manifest. A re-export produces a new URL, so both caches miss and
+every viewer sees the new image immediately, with no expiry to wait out. Costs
+a committed manifest mapping base path → hashed filenames, and both files must
+change together (they already share the `WIDTHS` keep-in-sync constraint, so
+the coupling is established rather than new).
+
+**Cheaper alternatives, recorded so the trade-off is visible:**
+
+- **Version query** — store `photo: "djs/unreal?v=2"` and bump on re-export.
+  Same cache-busting effect for one character of change, but relies on a human
+  remembering, and a forgotten bump is silently indistinguishable from the
+  current bug.
+- **Shorter `max-age`** for `/images/*` in `public/_headers` — one line, narrows
+  the stale window without removing it. Trades edge-cache efficiency for
+  freshness and leaves the SWR "stale for one visit" behaviour untouched.
+
+**Not urgent:** artwork changes rarely, and when it does the fix is a hard
+refresh. Revisit when images start changing often enough that "tell people to
+hard-refresh" stops being an acceptable answer.
+
+---
+
+_Last updated: 2026-08-08_

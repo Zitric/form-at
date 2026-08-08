@@ -6,7 +6,8 @@ import {
 } from "@form-at/data/set-stats";
 import { getSet } from "@form-at/data/sets";
 import { createServerFn } from "@tanstack/react-start";
-import { SAMPLE_ADMIN_DASHBOARD_STATS } from "./sample-stats";
+import { type EdgeTraffic, fetchEdgeTraffic } from "./cf-analytics";
+import { SAMPLE_ADMIN_DASHBOARD_STATS, SAMPLE_EDGE_TRAFFIC } from "./sample-stats";
 
 // Read-only aggregate queries for the internal admin dashboard
 // (`routes/dashboard.tsx`). Same `createServerFn` + D1 pattern as
@@ -456,7 +457,10 @@ export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handle
   async ({ context }) => {
     try {
       const cf = (context as unknown as Record<string, unknown>).cloudflare as
-        | { env: { DB: D1Database }; hasCloudflareEnv: boolean }
+        | {
+            env: { DB: D1Database; CF_ANALYTICS_TOKEN?: string; CF_ZONE_ID?: string };
+            hasCloudflareEnv: boolean;
+          }
         | undefined;
       const db = cf?.env?.DB;
       if (!db) return pickStatsForMissingDb(cf?.hasCloudflareEnv);
@@ -507,5 +511,28 @@ export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handle
     } catch {
       return null;
     }
+  },
+);
+
+// Separate from `fetchAdminDashboardStats` on purpose: this is the page's only
+// NETWORK call (Cloudflare's GraphQL API), so the route DEFERS it — see
+// dashboard.tsx's loader. Bundling it into the stats object would make the
+// whole dashboard wait on it, up to cf-analytics.ts's 8s timeout, which is
+// exactly what deferring avoids.
+//
+// Returns null on every failure (fetchEdgeTraffic swallows them all), and the
+// sample fixture when there's no Cloudflare env at all — mirroring
+// `pickStatsForMissingDb` so local dev and the e2e suite exercise the
+// populated card instead of only its empty state.
+export const fetchEdgeTrafficStats = createServerFn({ method: "GET" }).handler(
+  async ({ context }): Promise<EdgeTraffic | null> => {
+    const cf = (context as unknown as Record<string, unknown>).cloudflare as
+      | {
+          env: { CF_ANALYTICS_TOKEN?: string; CF_ZONE_ID?: string };
+          hasCloudflareEnv: boolean;
+        }
+      | undefined;
+    if (!cf?.hasCloudflareEnv) return SAMPLE_EDGE_TRAFFIC;
+    return fetchEdgeTraffic(cf.env?.CF_ANALYTICS_TOKEN, cf.env?.CF_ZONE_ID);
   },
 );

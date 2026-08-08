@@ -1,5 +1,25 @@
 import type { SetStats } from "@form-at/data/set-stats";
 import type { AdminDashboardStats } from "./admin-stats";
+import type { EdgeTraffic } from "./cf-analytics";
+
+// Substituted by `fetchEdgeTrafficStats` when there's no Cloudflare env, so
+// local dev and e2e render the populated edge_traffic card rather than only its
+// empty state.
+//
+// A 30-day window rather than 60, on purpose: it exercises the
+// retention-clamped path (the card must report the window it actually got, not
+// the one it asked for) and keeps the fixture honest about Cloudflare
+// retention, not our choice, deciding the width.
+export const SAMPLE_EDGE_TRAFFIC: EdgeTraffic = {
+  requests: 18_432,
+  pageViews: 4109,
+  dailyRequests: [
+    512, 488, 601, 640, 587, 622, 705, 668, 590, 631, 712, 690, 655, 601, 578, 640, 702, 688, 671,
+    645, 613, 590, 622, 660, 701, 688, 640, 612, 598, 621,
+  ],
+  windowDays: 30,
+  startDay: "2026-07-09",
+};
 
 // Hand-written fixture, NOT a dump of real D1 tables — values are invented
 // at this project's actual scale (tens, not thousands) and deliberately
