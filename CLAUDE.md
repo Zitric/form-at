@@ -196,6 +196,32 @@ one silently.
 Report failures with their output, and say plainly which checks you didn't run.
 Never describe a change as verified on the strength of a check you skipped.
 
+### Leave the docs true
+
+Before handing off, re-read the docs the change could have **invalidated**, and
+fix what's now wrong. The test is *"does an existing doc now say something false
+or incomplete?"* — not *"did I add a feature?"*. Padding a doc because something
+shipped is churn; leaving a stale claim standing is the failure this guards
+against, and it has happened repeatedly here.
+
+Per §1, read what each doc currently says rather than assuming — the point is to
+catch the sentence that quietly became untrue, which you can't do from memory.
+
+| Doc | Re-read it when |
+|---|---|
+| `README.md` | the stack, the architecture, or any claim about how something works changed. The doc an outside reader trusts first, so a stale line here misleads furthest. |
+| `CLAUDE.md` | there's a new constraint, convention, or architecture area — §1 for something that breaks silently, §3 for a convention, §4's map for a new area to edit. |
+| `PWA_PROGRESS.md` | a decision was made whose reasoning is worth preserving, **including what was tried and rejected**. |
+| `TECH_DEBT.md` | a known gap was accepted rather than fixed, or an existing item's premise changed. |
+| `IMPROVEMENTS.md` | something shipped, or was deliberately dropped and shouldn't be re-proposed. |
+| `apps/web/scripts/README.md` | a script, flag or setup step changed. |
+| `apps/web/tests/README.md` | test layout or conventions changed. |
+| `apps/web/images-source/README.md` | the image pipeline changed. |
+
+**A change that touches none of these needs no doc edit — say so.** Most
+bug fixes and refactors qualify. "No doc changes needed, nothing above became
+untrue" is a complete and correct answer.
+
 ---
 
 ## 3. Code standards
@@ -294,6 +320,7 @@ things you need *at the moment of editing* that no section heading can give you.
 | Waveform peaks | `scripts/generate-peaks.mjs` (root, needs `ffmpeg` on PATH) | README → *"Waveform peaks are computed with ffmpeg, not in the browser"* |
 | Push sending | `packages/data/src/webPush.ts` | README → *"The standard Web Push library doesn't run on Workers"* |
 | Admin + auth | `apps/admin/app/routes/`, `utils/verifyAccessJwt.ts` | README → *"Admin auth: no auth code, then auth code anyway"*. The enforcement rule is §1. |
+| Edge traffic | `apps/admin/app/data/cf-analytics.ts` — the app's only network call, deferred in `routes/dashboard.tsx`'s loader | That file's header: what it measures, why it's never "visitors", retention handling, and why every failure is `null`. Naming rule in §3. |
 | Service worker build | `buildServiceWorker` in `apps/web/vite.config.ts` (owns the precache allowlist and revision derivation) | README → *"Technology choices"*, Workbox entry. `vite-plugin-pwa` is **not** a dependency. |
 | Design system | `packages/ui/src/` — one folder per component, `icons/` flat | README → *"Monorepo structure"* (late extraction, no build step) |
 | Navigation | `apps/web/app/components/SwipeNavigator.tsx` — wraps `<Outlet />`, swipes across `ROUTES = ["/", "/sets", "/events", "/djs"]` | Outgoing page animates via a `cloneNode` snapshot + direct DOM writes; the gold dot indicator likewise. Deliberately not React re-renders. |
