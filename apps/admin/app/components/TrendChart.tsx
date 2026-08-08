@@ -13,6 +13,12 @@ const TrendChartInner = lazy(() =>
 );
 
 interface TrendChartProps {
+  /** ALREADY BUCKETED, oldest first — one entry per `bucketDays`, not per day.
+   *  The axis is reconstructed as `length × bucketDays` back from now, so a
+   *  raw daily series doesn't error, it draws a confident wrong picture: 60
+   *  daily values render a 413-day span captioned "60 weeks". Producers bucket
+   *  first — `bucketByWeek(fillDailyWindow(rows, days), TREND_BUCKET_DAYS)`,
+   *  the shape every trend in admin-stats.ts and cf-analytics.ts returns. */
   data: number[];
   bucketDays?: number;
 }

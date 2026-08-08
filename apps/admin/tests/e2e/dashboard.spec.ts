@@ -245,6 +245,19 @@ test.describe("admin dashboard", () => {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 
+  test("edge_traffic's chart is weekly-bucketed, not a daily series", async ({ page }) => {
+    await gotoAndHydrate(page, "/dashboard");
+    // The shipped bug rendered 60 daily values as "60 weeks" with a ~413-day
+    // axis. The fixture's 30-day window must read as 5 weekly buckets. The
+    // sr-only caption in TrendChartInner is where the bucket count is stated
+    // in text, so it's the assertable surface for the units.
+    await expect(page.getByText("// edge_traffic")).toBeVisible();
+    await expect(page.getByText(/^5 weeks, latest /)).toBeVisible();
+    // Nothing on the page should claim a bucket count anywhere near a raw
+    // daily series for a 30- or 60-day window.
+    await expect(page.getByText(/\b(30|60) weeks,/)).toHaveCount(0);
+  });
+
   test("edge_traffic is labelled as edge requests, never as visitors", async ({ page }) => {
     await gotoAndHydrate(page, "/dashboard");
     await expect(page.getByText("// edge_traffic")).toBeVisible();

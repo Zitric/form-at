@@ -53,19 +53,32 @@ const trafficBody = (rows: { date: string; requests: number; pageViews: number }
   },
 });
 
+/** `fillDailyWindow` (shared with the D1 trends) reads the real clock, so the
+ *  system time has to match the `now` handed to fetchEdgeTraffic or the filled
+ *  series is anchored to a different day than the assertions expect. */
+function freezeAt(iso: string): Date {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(iso));
+  return new Date(iso);
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe("resolveWindowDays", () => {
   it("converts Cloudflare's notOlderThan seconds into whole days", async () => {
     mockFetchSequence({ body: settingsBody(30 * 86_400) });
-    expect(await resolveWindowDays(TOKEN, ZONE)).toBe(30);
+    expect(await resolveWindowDays(TOKEN, ZONE)).toEqual({ days: 30, fromBoundary: true });
   });
 
   it("clamps a retention longer than our chart window down to the chart window", async () => {
     mockFetchSequence({ body: settingsBody(365 * 86_400) });
-    expect(await resolveWindowDays(TOKEN, ZONE)).toBe(EDGE_TRAFFIC_MAX_WINDOW_DAYS);
+    expect(await resolveWindowDays(TOKEN, ZONE)).toEqual({
+      days: EDGE_TRAFFIC_MAX_WINDOW_DAYS,
+      fromBoundary: true,
+    });
   });
 
   it("falls back to the full window when the boundary can't be read", async () => {
@@ -73,7 +86,12 @@ describe("resolveWindowDays", () => {
     // every plan/dataset — an unreadable boundary must not break the card,
     // it just means the traffic query itself decides what comes back.
     mockFetchSequence({ body: settingsBody(null) });
-    expect(await resolveWindowDays(TOKEN, ZONE)).toBe(EDGE_TRAFFIC_MAX_WINDOW_DAYS);
+    // fromBoundary:false is what lets the card disclose that the cap was never
+    // confirmed — the two cases are otherwise indistinguishable from outside.
+    expect(await resolveWindowDays(TOKEN, ZONE)).toEqual({
+      days: EDGE_TRAFFIC_MAX_WINDOW_DAYS,
+      fromBoundary: false,
+    });
   });
 });
 
@@ -90,17 +108,41 @@ describe("fetchEdgeTraffic", () => {
       },
     );
 
-    const result = await fetchEdgeTraffic(TOKEN, ZONE, new Date("2026-08-03T12:00:00Z"));
+    const result = await fetchEdgeTraffic(TOKEN, ZONE, freezeAt("2026-08-03T12:00:00Z"));
 
     expect(result).toEqual({
       requests: 340,
       pageViews: 67,
-      dailyRequests: [100, 150, 90],
+      // Three days collapse into ONE weekly bucket — the shape TrendChart
+      // expects. Passing the raw 3-day series would have drawn a 3-week axis.
+      weeklyRequests: [340],
       // 3, not the 30 requested — the caption must state what came back, so a
       // short window can't be presented as a full one.
       windowDays: 3,
       startDay: "2026-08-01",
+      boundaryKnown: true,
     });
+  });
+
+  it("returns WEEKLY buckets, not a daily series — the chart-axis bug", async () => {
+    // The shipped bug: 60 daily values reached TrendChart, which derives its
+    // axis as length x bucketDays, drawing a 413-day span captioned
+    // "60 weeks" with the last label past today. 60 days must collapse to 9
+    // buckets (8 full weeks + a 4-day tail), matching app_launches' "9 weeks".
+    const days = Array.from({ length: 60 }, (_, i) => {
+      const d = new Date(Date.UTC(2026, 5, 10));
+      d.setUTCDate(d.getUTCDate() + i);
+      return { date: d.toISOString().slice(0, 10), requests: 10, pageViews: 2 };
+    });
+    mockFetchSequence({ body: settingsBody(60 * 86_400) }, { body: trafficBody(days) });
+
+    const result = await fetchEdgeTraffic(TOKEN, ZONE, freezeAt("2026-08-08T12:00:00Z"));
+
+    expect(result?.weeklyRequests).toHaveLength(9);
+    expect(result?.weeklyRequests.slice(0, 8)).toEqual(Array(8).fill(70));
+    // 60 days of 10 requests, regardless of how they bucket.
+    expect(result?.requests).toBe(600);
+    expect(result?.windowDays).toBe(60);
   });
 
   it("asks for the retention-clamped range, not a fixed 60 days", async () => {
@@ -109,7 +151,7 @@ describe("fetchEdgeTraffic", () => {
       { body: trafficBody([{ date: "2026-08-03", requests: 5, pageViews: 1 }]) },
     );
 
-    await fetchEdgeTraffic(TOKEN, ZONE, new Date("2026-08-07T12:00:00Z"));
+    await fetchEdgeTraffic(TOKEN, ZONE, freezeAt("2026-08-07T12:00:00Z"));
 
     const trafficCall = JSON.parse(fetchMock.mock.calls[1][1].body);
     // 7-day window ending today → since is 6 days back, inclusive of both ends.
@@ -158,7 +200,7 @@ describe("fetchEdgeTraffic", () => {
       { body: trafficBody([{ date: "2026-08-03", requests: 5, pageViews: 1 }]) },
     );
 
-    await fetchEdgeTraffic(TOKEN, ZONE, new Date("2026-08-03T12:00:00Z"));
+    await fetchEdgeTraffic(TOKEN, ZONE, freezeAt("2026-08-03T12:00:00Z"));
 
     const [, init] = fetchMock.mock.calls[0];
     expect(init.headers.Authorization).toBe(`Bearer ${TOKEN}`);

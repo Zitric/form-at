@@ -2918,6 +2918,46 @@ dashboard renders immediately; the traffic card and the `edge_requests` row in
 Two boundaries on one promise, so neither blocks the other, and the totals
 fallback is the same em-dash it shows for a null result — no layout shift.
 
+*Chart-units bug, found live.* The first version passed `dailyRequests`
+straight to `TrendChart`, which takes ALREADY-BUCKETED weekly data — every
+other card feeds it `bucketByWeek(fillDailyWindow(...), TREND_BUCKET_DAYS)`
+first. `TrendChart` doesn't validate the shape, and its axis is reconstructed
+as `length x bucketDays` back from now (`utils/trendDates.ts`'s
+`bucketStartDates`), so 60 daily values drew a **413-day** span, captioned
+"60 weeks" by `TrendChartInner`'s sr-only line, with tick labels running past
+today. The row values (`requests`, `page_views`, `window: 60d`) were all
+correct — only the chart was wrong, and wrong in the way that's hardest to
+catch: it still looked like a plausible chart.
+
+Fixed at the source: `fetchEdgeTraffic` now returns `weeklyRequests`, built
+with the SAME shared two-step as every D1 trend rather than a second
+implementation. `fillDailyWindow` also anchors the series to today and inserts
+0 for any day Cloudflare omitted, so the reconstructed axis lines up with the
+data. A unit test asserts 60 days collapse to 9 buckets (8 full weeks + a
+4-day tail, matching `app_launches`' "9 weeks"), and an e2e test asserts the
+rendered caption reads "5 weeks" for the 30-day fixture and that no chart
+claims 30 or 60 weeks.
+
+*Should the component defend against this?* Judged no — the convention is
+fine and this was a call-site mistake. What was missing was that nothing at the
+boundary stated the unit: the prop is called `data` and `bucketDays` silently
+defaults to 7. Both a branded `WeeklyBuckets` type and making `bucketDays`
+required would catch it at compile time, but each means touching ~10 healthy
+call sites to fix one bad one. Instead the unit is now documented on the prop
+itself and on `EdgeTraffic.weeklyRequests`, and the fixture uses a realistic
+5-bucket array so a daily series can't sneak back in through the sample path.
+
+*Retention boundary is now observable.* `window: 60d` coming back as exactly
+the maximum has two possible causes — genuine retention >= 60 days, or the
+settings read failing and the full-window fallback firing — and they looked
+identical from outside. `resolveWindowDays` now returns
+`{ days, fromBoundary }`, and the card discloses when the cap was never
+confirmed. Note the window claim itself was never unsubstantiated:
+`windowDays` counts rows Cloudflare actually returned, so 60 rows for a 60-day
+request proves retention >= 60 days either way. What was hidden was whether the
+settings query works at all — if it never does, it's a wasted round-trip and
+the clamping logic is dead code.
+
 *Credentials.* `CF_ANALYTICS_TOKEN` is a Pages secret. `CF_ZONE_ID` is a plain
 `[vars]` entry in `apps/admin/wrangler.toml`, deliberately NOT a secret: it's a
 public identifier like the Access AUD tag, reading analytics with it still needs

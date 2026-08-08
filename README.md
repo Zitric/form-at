@@ -32,6 +32,8 @@ It ships **raw `.tsx`/`.css` with no build step**, consumed straight through the
 
 **`packages/data`** holds what both apps genuinely share: the sets catalogue and its types (`sets.ts`), the per-set analytics query (`set-stats.ts`), and Web Push sending (`webPush.ts`). Queries used by only one app deliberately stay in that app — the admin dashboard's aggregate queries live in `apps/admin/app/data/admin-stats.ts` and have never had a second consumer, so they were never promoted.
 
+**What the dashboard shows:** first-party product metrics from D1 — installs, plays, offline saves, push subscribers, per-set breakdowns — plus one live read of Cloudflare's own zone traffic through the GraphQL Analytics API (`apps/admin/app/data/cf-analytics.ts`). That last one is deliberately labelled `edge_traffic`, never "visitors": it counts HTTP requests at Cloudflare's edge, bots included, so it disagrees substantially with Cloudflare Web Analytics, which counts real browsers and excludes them. Both are correct; they measure different things, and the card says so. It exists at all for a plain reason — two of the three collective members have no Cloudflare account, so a number only visible in Cloudflare's dashboard doesn't exist for them.
+
 ---
 
 ## Technology choices
@@ -49,6 +51,7 @@ The Workers target isn't free. `apps/web/app/server.ts` is a custom server entry
 | **D1** (SQLite) | play analytics + the sets catalogue |
 | **R2** | audio files — free egress, which matters when a single play is 100–220MB |
 | **Access** | edge auth for the admin subdomain, so there's no auth code to write |
+| **GraphQL Analytics API** | zone traffic, read live into the admin dashboard |
 
 R2 is fronted by a custom domain, `cdn.formatglasgow.com`, rather than an R2 public bucket URL — no rate limit and Cloudflare edge caching. Every reference to that host goes through `AUDIO_HOST`/`AUDIO_ORIGIN` in `packages/data/src/sets.ts` so it's one edit if it ever moves.
 
@@ -163,7 +166,7 @@ Everything except `check`, `format` and `knip` is a thin Turbo wrapper; the `:we
 pnpm build:web && pnpm start:web    # :4173, real service worker
 ```
 
-**What does need credentials:** `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` for `pnpm build` at the repo root (it regenerates the catalogue snapshot from live D1) and for any `wrangler` deploy. Push-sending scripts need a VAPID key pair — copy `apps/web/.env.example` to `.env`. Peaks generation needs `ffmpeg` on `PATH`.
+**What does need credentials:** `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` for `pnpm build` at the repo root (it regenerates the catalogue snapshot from live D1) and for any `wrangler` deploy. Push-sending scripts need a VAPID key pair — copy `apps/web/.env.example` to `.env`. Peaks generation needs `ffmpeg` on `PATH`. The dashboard's `edge_traffic` card needs a `CF_ANALYTICS_TOKEN` Pages secret on `form-at-admin` — not locally, where it falls back to sample data.
 
 ### CI/CD
 
