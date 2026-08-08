@@ -1,10 +1,54 @@
 import { Label, Muted, TerminalRow } from "@form-at/ui";
+import { Await } from "@tanstack/react-router";
+import { Suspense } from "react";
 import type { AdminDashboardStats } from "~/data/admin-stats";
+import type { EdgeTraffic } from "~/data/cf-analytics";
 import { DashboardCard } from "./DashboardCard";
 import { TrendChart } from "./TrendChart";
 
 interface UsageTabProps {
   stats: AdminDashboardStats;
+  /** Deferred — see dashboard.tsx's loader. Read through <Await> so a slow
+   *  Cloudflare API delays only the two places that show it. */
+  edgeTraffic: Promise<EdgeTraffic | null>;
+}
+
+// The edge_traffic caption is not optional: without it, anyone comparing this
+// to Cloudflare Web Analytics sees two wildly different numbers for what looks
+// like the same thing and reasonably concludes one is broken. Full reasoning in
+// cf-analytics.ts's header.
+function EdgeTrafficCard({ edge }: { edge: EdgeTraffic | null }) {
+  if (!edge) {
+    return (
+      <Muted className="block text-xs">
+        no data — the Cloudflare Analytics credentials are missing, expired, or the API didn't
+        answer. Deliberately blank rather than 0, which would read as "no traffic".
+      </Muted>
+    );
+  }
+  return (
+    <>
+      <div className="space-y-1">
+        <TerminalRow label="requests" value={String(edge.requests)} dimValue />
+        <TerminalRow label="page_views" value={String(edge.pageViews)} dimValue />
+        <TerminalRow label="window" value={`${edge.windowDays}d`} dimValue />
+      </div>
+      <div className="mt-3">
+        <Label className="mb-1 block text-xs text-grey">since {edge.startDay}</Label>
+        <TrendChart data={edge.dailyRequests} />
+      </div>
+      <p className="mt-3 text-xs text-grey/70">
+        HTTP requests counted at Cloudflare's edge, including bots, crawlers and asset requests —
+        not people, not sessions. Cloudflare Web Analytics counts real browsers running a beacon and
+        excludes bots, so its numbers are much lower. Both are correct; they measure different
+        things.
+      </p>
+      <p className="mt-1 text-xs text-grey/70">
+        window is however far back Cloudflare retains this zone's data, read per-request — not a
+        window we choose.
+      </p>
+    </>
+  );
 }
 
 // The landing tab (see dashboard.tsx): a full-width `totals` summary first,
@@ -18,9 +62,7 @@ interface UsageTabProps {
 // calendar_add_click carries no set_id/event_id (see trackableEvents.ts), so
 // it's a bare total like app_launches rather than a per-entity breakdown
 // that would need its own tab.
-export function UsageTab({ stats }: UsageTabProps) {
-  const edge = stats.edgeTraffic;
-
+export function UsageTab({ stats, edgeTraffic }: UsageTabProps) {
   return (
     // Two columns above mobile, matching SetsTab. Three columns made each card
     // too narrow for its TerminalRow label/value pairs.
@@ -32,7 +74,20 @@ export function UsageTab({ stats }: UsageTabProps) {
       <DashboardCard className="md:col-span-2">
         <Label className="mb-2 text-grey tracking-widest">{"// totals"}</Label>
         <div className="space-y-1">
-          <TerminalRow label="edge_requests" value={edge ? String(edge.requests) : "—"} dimValue />
+          {/* Same deferred promise as the edge_traffic card below, read in a
+              second <Await>. The fallback is the same em-dash this row shows
+              for a null result, so resolving causes no layout shift. */}
+          <Suspense fallback={<TerminalRow label="edge_requests" value="—" dimValue />}>
+            <Await promise={edgeTraffic}>
+              {(edge) => (
+                <TerminalRow
+                  label="edge_requests"
+                  value={edge ? String(edge.requests) : "—"}
+                  dimValue
+                />
+              )}
+            </Await>
+          </Suspense>
           <TerminalRow label="app_launches" value={String(stats.appLaunches.total)} dimValue />
           <TerminalRow label="plays" value={String(stats.plays.total)} dimValue />
           <TerminalRow
@@ -54,40 +109,12 @@ export function UsageTab({ stats }: UsageTabProps) {
           same computation, shown here as bare totals and there in context.
         </p>
       </DashboardCard>
-      {/* Label is `edge_traffic`, never "visitors" — see cf-analytics.ts. The
-          caption is not optional: without it, anyone comparing this to
-          Cloudflare Web Analytics sees two wildly different numbers for what
-          looks like the same thing and reasonably concludes one is broken. */}
+      {/* Label is `edge_traffic`, never "visitors" — see cf-analytics.ts. */}
       <DashboardCard>
         <Label className="mb-2 text-grey tracking-widest">{"// edge_traffic"}</Label>
-        {edge ? (
-          <>
-            <div className="space-y-1">
-              <TerminalRow label="requests" value={String(edge.requests)} dimValue />
-              <TerminalRow label="page_views" value={String(edge.pageViews)} dimValue />
-              <TerminalRow label="window" value={`${edge.windowDays}d`} dimValue />
-            </div>
-            <div className="mt-3">
-              <Label className="mb-1 block text-xs text-grey">since {edge.startDay}</Label>
-              <TrendChart data={edge.dailyRequests} />
-            </div>
-            <p className="mt-3 text-xs text-grey/70">
-              HTTP requests counted at Cloudflare's edge, including bots, crawlers and asset
-              requests — not people, not sessions. Cloudflare Web Analytics counts real browsers
-              running a beacon and excludes bots, so its numbers are much lower. Both are correct;
-              they measure different things.
-            </p>
-            <p className="mt-1 text-xs text-grey/70">
-              window is however far back Cloudflare retains this zone's data, read per-request — not
-              a window we choose.
-            </p>
-          </>
-        ) : (
-          <Muted className="block text-xs">
-            no data — the Cloudflare Analytics credentials are missing, expired, or the API didn't
-            answer. Deliberately blank rather than 0, which would read as "no traffic".
-          </Muted>
-        )}
+        <Suspense fallback={<Muted className="block text-xs">reading…</Muted>}>
+          <Await promise={edgeTraffic}>{(edge) => <EdgeTrafficCard edge={edge} />}</Await>
+        </Suspense>
       </DashboardCard>
 
       <DashboardCard>

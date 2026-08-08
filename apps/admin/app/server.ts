@@ -32,11 +32,12 @@ type AdminEnv = {
   VAPID_CONTACT_EMAIL?: string;
   CF_ACCESS_TEAM_DOMAIN?: string;
   CF_ACCESS_AUD?: string;
-  /** Cloudflare API token (Zone Analytics:Read) + the zone id for
-   *  formatglasgow.com, both Pages secrets on form-at-admin. Read by
-   *  data/cf-analytics.ts for the edge-traffic card, which degrades to an
-   *  explicit empty state when either is absent. */
+  /** Cloudflare API token (Zone Analytics:Read) — a Pages secret on
+   *  form-at-admin, never committed. Read by data/cf-analytics.ts for the
+   *  edge-traffic card, which degrades to an explicit empty state without it. */
   CF_ANALYTICS_TOKEN?: string;
+  /** Zone id for formatglasgow.com — a plain (non-secret) var from
+   *  wrangler.toml's [vars], like the CF_ACCESS_* pair. */
   CF_ZONE_ID?: string;
 };
 

@@ -2902,8 +2902,26 @@ non-2xx (a 403 is the likely token-scope misconfiguration), a GraphQL `errors`
 array inside a **200** body, timeout via `AbortSignal.timeout`, and an empty row
 set. The UI renders an explicit "no data" state for `null` and **never
 substitutes 0** — a zero states "no traffic", which is a wrong fact rather than
-a missing one. The call sits after the D1 batch and is awaited separately so a
-slow or broken Cloudflare API costs one card, never the page.
+a missing one.
+
+*Deferred, not merely non-throwing.* The first version of this awaited the
+Cloudflare call inside `fetchAdminDashboardStats` and claimed in a comment that
+a slow API "costs one card, not the dashboard". That was false: returning `null`
+instead of throwing means it can't FAIL the loader, but a plain `await` still
+made the whole page wait, up to the 8s timeout. Slowness and failure are
+different properties and the comment promised the one it didn't deliver. Fixed
+by making the claim true rather than narrowing it: `fetchEdgeTrafficStats` is its
+own server fn, and `dashboard.tsx`'s loader returns it through `defer()` — the
+same pattern apps/web's `/sets` loader already uses for `fetchOverallStats`. The
+dashboard renders immediately; the traffic card and the `edge_requests` row in
+`totals` each read the promise through their own `<Await>` inside `<Suspense>`.
+Two boundaries on one promise, so neither blocks the other, and the totals
+fallback is the same em-dash it shows for a null result — no layout shift.
+
+*Credentials.* `CF_ANALYTICS_TOKEN` is a Pages secret. `CF_ZONE_ID` is a plain
+`[vars]` entry in `apps/admin/wrangler.toml`, deliberately NOT a secret: it's a
+public identifier like the Access AUD tag, reading analytics with it still needs
+the token, and storing it as a secret would imply it needs protecting.
 
 *Verification honesty.* Unit tests cover the happy path, retention clamping, the
 requested date range, no-credentials, 403, GraphQL-errors-in-200, throw/timeout

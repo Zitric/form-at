@@ -25,3 +25,10 @@ database_id = "d2e6f2f0-b4cd-40c0-98b3-04c060ecbffa"
 [vars]
 CF_ACCESS_TEAM_DOMAIN = "https://holy-pine-0064.cloudflareaccess.com"
 CF_ACCESS_AUD = "6844a056d71815043f047d8132dcc15d4e62aff500338aa60188f89c235ff377"
+
+# Zone id for formatglasgow.com. Non-secret for the same reason as the AUD tag
+# above: it's a public identifier, not a credential — reading analytics with it
+# still requires CF_ANALYTICS_TOKEN, which IS a Pages secret and is never
+# committed. Storing this as a secret would imply it needs protecting.
+# Where to re-read it: the zone's Overview tab → API → Zone ID.
+CF_ZONE_ID = "REPLACE_WITH_FORMATGLASGOW_ZONE_ID"

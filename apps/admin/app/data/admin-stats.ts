@@ -7,7 +7,7 @@ import {
 import { getSet } from "@form-at/data/sets";
 import { createServerFn } from "@tanstack/react-start";
 import { type EdgeTraffic, fetchEdgeTraffic } from "./cf-analytics";
-import { SAMPLE_ADMIN_DASHBOARD_STATS } from "./sample-stats";
+import { SAMPLE_ADMIN_DASHBOARD_STATS, SAMPLE_EDGE_TRAFFIC } from "./sample-stats";
 
 // Read-only aggregate queries for the internal admin dashboard
 // (`routes/dashboard.tsx`). Same `createServerFn` + D1 pattern as
@@ -191,11 +191,6 @@ export type AdminDashboardStats = {
   notifyFunnel: NotifyFunnel;
   calendarAdds: CalendarAddStats;
   installToPushConversion: InstallToPushConversion;
-  /** Cloudflare zone edge traffic — a LIVE read, not from D1, and null on
-   *  every failure path (no credentials, auth failure, GraphQL error,
-   *  timeout, empty window). Render an explicit empty state for null; never
-   *  substitute 0, which reads as "no traffic" rather than "no data". */
-  edgeTraffic: EdgeTraffic | null;
   /** Non-null only when real tracking history is shorter than the 60-day
    *  trend window — see `computeTrackingStartDay`'s doc comment. Shared by
    *  `installFunnel` and `appLaunches` since both trend off the same
@@ -492,12 +487,6 @@ export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handle
         fetchPushSubscriptionsTrackingStart(db),
       ]);
 
-      // Deliberately AFTER the D1 batch and separately awaited: this is the
-      // only network call on the page, it resolves to null on any failure,
-      // and it must never be able to fail the whole loader — a broken
-      // Cloudflare API should cost one card, not the dashboard.
-      const edgeTraffic = await fetchEdgeTraffic(cf?.env?.CF_ANALYTICS_TOKEN, cf?.env?.CF_ZONE_ID);
-
       // No new query — just dividing two aggregates already fetched above.
       // See InstallToPushConversion's doc comment for why this can't be a
       // real per-user join.
@@ -515,7 +504,6 @@ export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handle
         notifyFunnel,
         calendarAdds,
         installToPushConversion,
-        edgeTraffic,
         eventsTrackingStartDay: computeTrackingStartDay(eventsEarliest),
         pushTrackingStartDay: computeTrackingStartDay(pushEarliest),
         isSampleData: false,
@@ -523,5 +511,28 @@ export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handle
     } catch {
       return null;
     }
+  },
+);
+
+// Separate from `fetchAdminDashboardStats` on purpose: this is the page's only
+// NETWORK call (Cloudflare's GraphQL API), so the route DEFERS it — see
+// dashboard.tsx's loader. Bundling it into the stats object would make the
+// whole dashboard wait on it, up to cf-analytics.ts's 8s timeout, which is
+// exactly what deferring avoids.
+//
+// Returns null on every failure (fetchEdgeTraffic swallows them all), and the
+// sample fixture when there's no Cloudflare env at all — mirroring
+// `pickStatsForMissingDb` so local dev and the e2e suite exercise the
+// populated card instead of only its empty state.
+export const fetchEdgeTrafficStats = createServerFn({ method: "GET" }).handler(
+  async ({ context }): Promise<EdgeTraffic | null> => {
+    const cf = (context as unknown as Record<string, unknown>).cloudflare as
+      | {
+          env: { CF_ANALYTICS_TOKEN?: string; CF_ZONE_ID?: string };
+          hasCloudflareEnv: boolean;
+        }
+      | undefined;
+    if (!cf?.hasCloudflareEnv) return SAMPLE_EDGE_TRAFFIC;
+    return fetchEdgeTraffic(cf.env?.CF_ANALYTICS_TOKEN, cf.env?.CF_ZONE_ID);
   },
 );
