@@ -13,12 +13,13 @@ import type { EdgeTraffic } from "./cf-analytics";
 export const SAMPLE_EDGE_TRAFFIC: EdgeTraffic = {
   requests: 18_432,
   pageViews: 4109,
-  dailyRequests: [
-    512, 488, 601, 640, 587, 622, 705, 668, 590, 631, 712, 690, 655, 601, 578, 640, 702, 688, 671,
-    645, 613, 590, 622, 660, 701, 688, 640, 612, 598, 621,
-  ],
+  // WEEKLY buckets — 30 days ÷ 7 = 5 (four full weeks + a 2-day tail), which is
+  // what a 30-day window really produces. A 30-length daily array here would
+  // reproduce the bug this fixture is meant to catch.
+  weeklyRequests: [4155, 4547, 4434, 4410, 886],
   windowDays: 30,
   startDay: "2026-07-09",
+  boundaryKnown: true,
 };
 
 // Hand-written fixture, NOT a dump of real D1 tables — values are invented

@@ -35,7 +35,10 @@ function EdgeTrafficCard({ edge }: { edge: EdgeTraffic | null }) {
       </div>
       <div className="mt-3">
         <Label className="mb-1 block text-xs text-grey">since {edge.startDay}</Label>
-        <TrendChart data={edge.dailyRequests} />
+        {/* WEEKLY buckets, like every other trend — TrendChart derives its axis
+            from length × bucketDays, so a daily series here would draw a
+            413-day span labelled "60 weeks". */}
+        <TrendChart data={edge.weeklyRequests} />
       </div>
       <p className="mt-3 text-xs text-grey/70">
         HTTP requests counted at Cloudflare's edge, including bots, crawlers and asset requests —
@@ -47,6 +50,12 @@ function EdgeTrafficCard({ edge }: { edge: EdgeTraffic | null }) {
         window is however far back Cloudflare retains this zone's data, read per-request — not a
         window we choose.
       </p>
+      {!edge.boundaryKnown && (
+        <p className="mt-1 text-xs text-grey/70">
+          retention boundary couldn't be read this time, so the full window was requested — the days
+          shown are still real returned days, but the cap wasn't confirmed.
+        </p>
+      )}
     </>
   );
 }

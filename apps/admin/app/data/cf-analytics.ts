@@ -18,6 +18,8 @@
 // the card renders an explicit empty state — NEVER a zero, which would read as
 // "no traffic" rather than "no data".
 
+import { TREND_BUCKET_DAYS, bucketByWeek, fillDailyWindow } from "@form-at/data/set-stats";
+
 const GRAPHQL_ENDPOINT = "https://api.cloudflare.com/client/v4/graphql";
 
 // Matches the 60-day window every other trend on the dashboard uses, so the
@@ -35,12 +37,22 @@ export type EdgeTraffic = {
   requests: number;
   /** Cloudflare's own pageViews sub-count — still edge-side, still bot-inclusive. */
   pageViews: number;
-  /** One entry per day, oldest first — feeds TrendChart. */
-  dailyRequests: number[];
-  /** How many days the data actually covers, after retention clamping. */
+  /** WEEKLY buckets, oldest first — the shape `TrendChart` expects, same as
+   *  `AppLaunchStats.weeklyTrend` and `SetStats.weeklyPlays`. Passing a daily
+   *  series here renders a confident, wrong chart: the axis is derived from
+   *  `length × bucketDays`, so 60 daily values draw a 413-day span labelled
+   *  "60 weeks". Bucket before it reaches the component. */
+  weeklyRequests: number[];
+  /** Days of data actually covered — derived from the oldest row returned, not
+   *  from the window we asked for. */
   windowDays: number;
   /** ISO date (YYYY-MM-DD) of the oldest day in the window. */
   startDay: string;
+  /** False when Cloudflare's retention boundary couldn't be read and the
+   *  full-window fallback fired. The row values stay substantiated either way
+   *  (`windowDays` counts real returned days), but a failed boundary read is
+   *  otherwise invisible from outside — surfaced so it can't hide. */
+  boundaryKnown: boolean;
 };
 
 type GraphQLResponse<T> = { data?: T; errors?: { message: string }[] };
@@ -105,12 +117,17 @@ type SettingsData = {
  * query itself is then the thing that fails or truncates, and we render
  * whatever days actually come back.
  */
-export async function resolveWindowDays(token: string, zoneTag: string): Promise<number> {
+export async function resolveWindowDays(
+  token: string,
+  zoneTag: string,
+): Promise<{ days: number; fromBoundary: boolean }> {
   const data = await postGraphQL<SettingsData>(token, SETTINGS_QUERY, { zoneTag });
   const seconds = data?.viewer?.zones?.[0]?.settings?.httpRequests1dGroups?.notOlderThan;
-  if (typeof seconds !== "number" || seconds <= 0) return EDGE_TRAFFIC_MAX_WINDOW_DAYS;
+  if (typeof seconds !== "number" || seconds <= 0) {
+    return { days: EDGE_TRAFFIC_MAX_WINDOW_DAYS, fromBoundary: false };
+  }
   const days = Math.floor(seconds / 86_400);
-  return Math.max(1, Math.min(days, EDGE_TRAFFIC_MAX_WINDOW_DAYS));
+  return { days: Math.max(1, Math.min(days, EDGE_TRAFFIC_MAX_WINDOW_DAYS)), fromBoundary: true };
 }
 
 const TRAFFIC_QUERY = `
@@ -153,10 +170,10 @@ export async function fetchEdgeTraffic(
 ): Promise<EdgeTraffic | null> {
   if (!token || !zoneTag) return null;
 
-  const windowDays = await resolveWindowDays(token, zoneTag);
+  const { days: requestedDays, fromBoundary } = await resolveWindowDays(token, zoneTag);
   const until = new Date(now);
   const since = new Date(now);
-  since.setUTCDate(since.getUTCDate() - (windowDays - 1));
+  since.setUTCDate(since.getUTCDate() - (requestedDays - 1));
 
   const data = await postGraphQL<TrafficData>(token, TRAFFIC_QUERY, {
     zoneTag,
@@ -169,14 +186,28 @@ export async function fetchEdgeTraffic(
   // chart — so both collapse to the same explicit empty state.
   if (!rows?.length) return null;
 
-  const dailyRequests = rows.map((r) => r.sum?.requests ?? 0);
+  const startDay = rows[0]?.dimensions?.date ?? isoDay(since);
+
+  // Span from the oldest real row to today, inclusive — the honest width of
+  // what came back, rather than the width we asked for.
+  const spanDays = Math.round((Date.parse(isoDay(until)) - Date.parse(startDay)) / 86_400_000) + 1;
+
+  // `fillDailyWindow` (shared with every D1 trend) both anchors the series to
+  // TODAY and inserts 0 for any day Cloudflare omitted, so the chart's axis —
+  // which is reconstructed backwards from now — lines up with the data.
+  // `bucketByWeek` then converts to the WEEKLY buckets TrendChart expects; the
+  // same two-step every other trend uses (see admin-stats.ts's weeklyTrend).
+  const daily = fillDailyWindow(
+    rows.map((r) => ({ day: r.dimensions?.date ?? "", count: r.sum?.requests ?? 0 })),
+    Math.max(1, spanDays),
+  );
+
   return {
-    requests: dailyRequests.reduce((a, b) => a + b, 0),
+    requests: rows.reduce((a, r) => a + (r.sum?.requests ?? 0), 0),
     pageViews: rows.reduce((a, r) => a + (r.sum?.pageViews ?? 0), 0),
-    dailyRequests,
-    // The ACTUAL number of days returned, not the number requested — if
-    // Cloudflare returns fewer, the caption must say the smaller number.
-    windowDays: rows.length,
-    startDay: rows[0]?.dimensions?.date ?? isoDay(since),
+    weeklyRequests: bucketByWeek(daily, TREND_BUCKET_DAYS),
+    windowDays: Math.max(1, spanDays),
+    startDay,
+    boundaryKnown: fromBoundary,
   };
 }
