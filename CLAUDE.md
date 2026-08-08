@@ -111,6 +111,23 @@ it; only the read-only aggregate queries may. There is deliberately no dev-mode
 bypass. Paired with the host-guard rule above — Access covers neither the
 `*.pages.dev` hostname nor individual endpoint calls.
 
+### Never substitute `0` for a metric that failed to load
+`AdminDashboardStats.edgeTraffic` is `null` on every failure path — missing
+credentials, 403, a GraphQL `errors` array inside a 200 body, timeout, empty
+window. `0` states "no traffic"; `null` states "we couldn't read it". Rendering
+the first for the second is a wrong fact, not a missing one, and it's
+indistinguishable to whoever reads the dashboard. Same reasoning as
+`conversionRate`/`acceptedRate` being nullable rather than 0. The
+`// edge_traffic` card's empty state is the reference example.
+
+### Never label edge traffic as visitors or people
+`data/cf-analytics.ts` reads `httpRequests1dGroups` — requests counted at
+Cloudflare's edge, **bots included**. Cloudflare Web Analytics counts real
+browsers and excludes bots, so the two disagree substantially. The card says
+`edge_traffic` / `requests` / `page_views` and carries a caption explaining the
+difference. Relabelling it "visitors" makes it look like a bug the first time
+someone compares it against Cloudflare's own dashboard.
+
 ### Never remove the `@source` directive from `apps/web/app/styles/global.css`
 Tailwind v4's automatic source scanning excludes `node_modules`, and
 `packages/ui` reaches `apps/web` only through a pnpm workspace symlink. Without

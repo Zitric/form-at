@@ -214,12 +214,43 @@ test.describe("admin dashboard", () => {
     await gotoAndHydrate(page, "/dashboard");
 
     const cards = page.getByTestId("dashboard-card");
-    const first = await cards.nth(0).boundingBox();
-    const second = await cards.nth(1).boundingBox();
+    // Card 0 is the full-width `totals` summary (md:col-span-2), so the
+    // two-column assertion applies to the first pair BELOW it.
+    const totals = await cards.nth(0).boundingBox();
+    const first = await cards.nth(1).boundingBox();
+    const second = await cards.nth(2).boundingBox();
     expect(first).not.toBeNull();
     expect(second).not.toBeNull();
     // Two columns: same row (y roughly aligned), side by side (different x).
     expect(Math.abs((second?.y ?? 0) - (first?.y ?? 0))).toBeLessThan(1);
     expect(second?.x ?? 0).toBeGreaterThan(first?.x ?? 0);
+    // The totals card really does span both columns — wider than either of
+    // the two beneath it, not merely first in the grid.
+    expect(totals?.width ?? 0).toBeGreaterThan((first?.width ?? 0) * 1.5);
+  });
+
+  test("the totals card and its rows fit at 375px with no horizontal overflow", async ({
+    page,
+  }) => {
+    // iPhone SE width — CLAUDE.md's stated narrow-viewport test case. A
+    // full-width card of label/value rows is the most likely thing to push
+    // the page wider than the viewport.
+    await page.setViewportSize({ width: 375, height: 800 });
+    await gotoAndHydrate(page, "/dashboard");
+
+    await expect(page.getByText("// totals")).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  test("edge_traffic is labelled as edge requests, never as visitors", async ({ page }) => {
+    await gotoAndHydrate(page, "/dashboard");
+    await expect(page.getByText("// edge_traffic")).toBeVisible();
+    // The caption is what stops someone reading this as people, or as a bug
+    // when it disagrees with Cloudflare Web Analytics — see cf-analytics.ts.
+    await expect(page.getByText(/including bots, crawlers and asset requests/i)).toBeVisible();
+    await expect(page.getByText(/\bvisitors\b/i)).toHaveCount(0);
   });
 });

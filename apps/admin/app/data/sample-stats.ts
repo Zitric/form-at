@@ -112,6 +112,20 @@ export const SAMPLE_ADMIN_DASHBOARD_STATS: AdminDashboardStats = {
     pushSubscribers: 17,
     ratio: 17 / 9,
   },
+  // A 30-day window rather than 60, on purpose: it exercises the
+  // retention-clamped path (the card must report the window it actually got,
+  // not the one it asked for) and keeps the sample honest about the fact that
+  // Cloudflare retention, not our choice, decides the width.
+  edgeTraffic: {
+    requests: 18_432,
+    pageViews: 4109,
+    dailyRequests: [
+      512, 488, 601, 640, 587, 622, 705, 668, 590, 631, 712, 690, 655, 601, 578, 640, 702, 688, 671,
+      645, 613, 590, 622, 660, 701, 688, 640, 612, 598, 621,
+    ],
+    windowDays: 30,
+    startDay: "2026-07-09",
+  },
   eventsTrackingStartDay: "2026-07-20",
   pushTrackingStartDay: "2026-07-22",
   isSampleData: true,

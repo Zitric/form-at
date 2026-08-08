@@ -32,6 +32,12 @@ type AdminEnv = {
   VAPID_CONTACT_EMAIL?: string;
   CF_ACCESS_TEAM_DOMAIN?: string;
   CF_ACCESS_AUD?: string;
+  /** Cloudflare API token (Zone Analytics:Read) + the zone id for
+   *  formatglasgow.com, both Pages secrets on form-at-admin. Read by
+   *  data/cf-analytics.ts for the edge-traffic card, which degrades to an
+   *  explicit empty state when either is absent. */
+  CF_ANALYTICS_TOKEN?: string;
+  CF_ZONE_ID?: string;
 };
 
 export default {

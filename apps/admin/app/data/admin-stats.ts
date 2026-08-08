@@ -6,6 +6,7 @@ import {
 } from "@form-at/data/set-stats";
 import { getSet } from "@form-at/data/sets";
 import { createServerFn } from "@tanstack/react-start";
+import { type EdgeTraffic, fetchEdgeTraffic } from "./cf-analytics";
 import { SAMPLE_ADMIN_DASHBOARD_STATS } from "./sample-stats";
 
 // Read-only aggregate queries for the internal admin dashboard
@@ -190,6 +191,11 @@ export type AdminDashboardStats = {
   notifyFunnel: NotifyFunnel;
   calendarAdds: CalendarAddStats;
   installToPushConversion: InstallToPushConversion;
+  /** Cloudflare zone edge traffic — a LIVE read, not from D1, and null on
+   *  every failure path (no credentials, auth failure, GraphQL error,
+   *  timeout, empty window). Render an explicit empty state for null; never
+   *  substitute 0, which reads as "no traffic" rather than "no data". */
+  edgeTraffic: EdgeTraffic | null;
   /** Non-null only when real tracking history is shorter than the 60-day
    *  trend window — see `computeTrackingStartDay`'s doc comment. Shared by
    *  `installFunnel` and `appLaunches` since both trend off the same
@@ -456,7 +462,10 @@ export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handle
   async ({ context }) => {
     try {
       const cf = (context as unknown as Record<string, unknown>).cloudflare as
-        | { env: { DB: D1Database }; hasCloudflareEnv: boolean }
+        | {
+            env: { DB: D1Database; CF_ANALYTICS_TOKEN?: string; CF_ZONE_ID?: string };
+            hasCloudflareEnv: boolean;
+          }
         | undefined;
       const db = cf?.env?.DB;
       if (!db) return pickStatsForMissingDb(cf?.hasCloudflareEnv);
@@ -483,6 +492,12 @@ export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handle
         fetchPushSubscriptionsTrackingStart(db),
       ]);
 
+      // Deliberately AFTER the D1 batch and separately awaited: this is the
+      // only network call on the page, it resolves to null on any failure,
+      // and it must never be able to fail the whole loader — a broken
+      // Cloudflare API should cost one card, not the dashboard.
+      const edgeTraffic = await fetchEdgeTraffic(cf?.env?.CF_ANALYTICS_TOKEN, cf?.env?.CF_ZONE_ID);
+
       // No new query — just dividing two aggregates already fetched above.
       // See InstallToPushConversion's doc comment for why this can't be a
       // real per-user join.
@@ -500,6 +515,7 @@ export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handle
         notifyFunnel,
         calendarAdds,
         installToPushConversion,
+        edgeTraffic,
         eventsTrackingStartDay: computeTrackingStartDay(eventsEarliest),
         pushTrackingStartDay: computeTrackingStartDay(pushEarliest),
         isSampleData: false,
