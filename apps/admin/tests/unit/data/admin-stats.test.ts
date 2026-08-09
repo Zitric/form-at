@@ -136,7 +136,11 @@ describe("fetchAppLaunchStats", () => {
 
 describe("fetchPlayStats", () => {
   it("maps offline/online counts and top sets from snake_case columns", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    // The trend query also reads FROM plays, so it needs its own route ahead of
+    // the general one — routes are matched in order against the SQL text.
     const { db } = createFakeD1([
+      { match: /GROUP BY day/, all: [{ day: today, count: 3 }] },
       {
         match: /FROM plays/,
         first: { total: 100, offline_count: 30, online_count: 70 },
@@ -155,6 +159,21 @@ describe("fetchPlayStats", () => {
     expect(result.topSets).toEqual([
       { setId: "set-002", setTitle: "Form:at 002", setArtist: "t.i.l.", playCount: 12 },
     ]);
+  });
+
+  it("buckets the daily play trend into weekly sums, like every other trend", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const { db } = createFakeD1([
+      { match: /GROUP BY day/, all: [{ day: today, count: 4 }] },
+      { match: /FROM plays/, first: { total: 4, offline_count: 4, online_count: 0 }, all: [] },
+    ]);
+
+    const result = await fetchPlayStats(db);
+
+    // Weekly buckets, not 60 daily values — TrendChart derives its axis from
+    // length x bucketDays, so a daily series would draw a 413-day span.
+    expect(result.weeklyTrend).toHaveLength(Math.ceil(TREND_WINDOW_DAYS / TREND_BUCKET_DAYS));
+    expect(result.weeklyTrend.at(-1)).toBe(4);
   });
 
   it("computes excludedCount as total minus offline/online (plays predating is_offline tracking)", async () => {

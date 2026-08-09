@@ -56,6 +56,10 @@ export const SAMPLE_ADMIN_DASHBOARD_STATS: AdminDashboardStats = {
     offlineCount: 12,
     onlineCount: 25,
     excludedCount: 4,
+    // A real-looking rising trend — plays are the one metric with history
+    // longer than the window, so unlike appLaunches this is deliberately NOT
+    // all zeros.
+    weeklyTrend: [2, 3, 5, 4, 6, 5, 7, 6, 3],
     topSets: [
       { setId: "set-002-hubey", setTitle: "Form:at 002", setArtist: "hubey", playCount: 18 },
       { setId: "set-002-til", setTitle: "Form:at 002", setArtist: "t.i.l.", playCount: 12 },

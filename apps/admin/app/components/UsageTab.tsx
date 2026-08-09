@@ -159,6 +159,13 @@ export function UsageTab({ stats, edgeTraffic }: UsageTabProps) {
             2026-07-08) and are excluded from this ratio.
           </p>
         )}
+        <div className="mb-4">
+          <Label className="mb-1 block text-xs text-grey">last_60d</Label>
+          {/* Total plays only — see PlayStats.weeklyTrend for why this isn't
+              split by offline/online. No "tracking since" caption: plays
+              predate the 60-day window, unlike the events table. */}
+          <TrendChart data={stats.plays.weeklyTrend} />
+        </div>
         {stats.plays.topSets.length > 0 && (
           <div className="space-y-1">
             {stats.plays.topSets.map((set) => (

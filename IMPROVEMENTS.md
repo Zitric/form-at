@@ -36,6 +36,15 @@ Running list of feature/functional improvements. Tick off as we ship.
   Not needed yet — same revisit trigger PWA_PROGRESS.md already uses for the deferred manage-offline-sets view: earns its place once the catalogue grows past ~10-15 sets, where scanning every card becomes a chore. At today's 4 sets, scanning is still instant. Placeholder so it isn't lost once the next few batches land.
   **Context update (2026-08-04):** this threshold used to require someone manually running a migration/seed script to add a set. Now that `apps/admin` has a self-serve upload form (PR4, 2026-07), adding a set is a few form fields and a click — the same trigger condition arrives much sooner than when this was written, on whatever cadence Julian actually uploads at rather than an engineering-effort-gated one.
 
+- [ ] **#12 — Archive Cloudflare RUM data into D1 before it degrades** *(idea, not a plan)*
+  Cloudflare keeps unsampled Web Analytics beacon data for **7 days**, then aggregates it down to ~10%, and retention ends the window entirely after some period. So a live query means yesterday's number is exact, last month's is an extrapolation from a 10% sample, and eventually it's gone. Capturing each day into D1 while it's still unsampled would preserve the accurate version permanently and give history past Cloudflare's retention — a small daily row, not a data pipeline.
+
+  **Same shape as the sets-catalogue snapshot** (`packages/data/src/sets.generated.ts`): a stored copy of something authoritative elsewhere, kept because the authoritative source isn't always reachable. There the reason is offline; here it's retention. Worth reusing that framing if this is ever built, rather than inventing a new one.
+
+  **Two open questions, both unresolved — don't build until they are:**
+  - *Does sampling actually bite at this volume?* If the RUM dataset reports `sampleInterval: 1` at tens of visits a day, the live numbers are already exact and the only thing archiving buys is history past retention — which is a much weaker case. The introspection done for the `visitors` card answers this.
+  - *What triggers the capture?* Deploy-time is unreliable in the way that matters: a two-week gap between deploys loses exactly the days the archive exists to save. A scheduled GitHub Action works but is a new moving part to keep alive, on a project heading toward maintenance mode. Neither is obviously right.
+
 ## Bigger but worth it
 
 - [ ] **#8 — Full PWA (install + share routing + offline + polish)**
