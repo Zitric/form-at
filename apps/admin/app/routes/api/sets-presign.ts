@@ -113,6 +113,7 @@ export const Route = createFileRoute("/api/sets-presign")({
                 DB: D1Database;
                 CF_ACCESS_TEAM_DOMAIN?: string;
                 CF_ACCESS_AUD?: string;
+                CF_ACCOUNT_ID?: string;
                 R2_ACCOUNT_ID?: string;
                 R2_ACCESS_KEY_ID?: string;
                 R2_SECRET_ACCESS_KEY?: string;
@@ -139,7 +140,16 @@ export const Route = createFileRoute("/api/sets-presign")({
         if (!body) return new Response(null, { status: 400 });
 
         const db = env?.DB;
-        const accountId = env?.R2_ACCOUNT_ID;
+        // One Cloudflare account id, one name. `R2_ACCOUNT_ID` is the same
+        // value under an R2-flavoured name and was stored as a Pages SECRET,
+        // which it never warranted — it's published in every R2 endpoint URL
+        // (`https://<accountId>.r2.cloudflarestorage.com/...`, see r2Sets.ts).
+        // It's now a plain [vars] entry as CF_ACCOUNT_ID, shared with the RUM
+        // analytics query. The fallback keeps uploads working if the old secret
+        // is still set; DELETE both it and the secret once CF_ACCOUNT_ID is
+        // confirmed live. R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY stay secrets —
+        // those genuinely are credentials.
+        const accountId = env?.CF_ACCOUNT_ID ?? env?.R2_ACCOUNT_ID;
         const accessKeyId = env?.R2_ACCESS_KEY_ID;
         const secretAccessKey = env?.R2_SECRET_ACCESS_KEY;
         if (!db || !accountId || !accessKeyId || !secretAccessKey) {

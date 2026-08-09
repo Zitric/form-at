@@ -6,8 +6,12 @@ import {
 } from "@form-at/data/set-stats";
 import { getSet } from "@form-at/data/sets";
 import { createServerFn } from "@tanstack/react-start";
-import { type EdgeTraffic, fetchEdgeTraffic } from "./cf-analytics";
-import { SAMPLE_ADMIN_DASHBOARD_STATS, SAMPLE_EDGE_TRAFFIC } from "./sample-stats";
+import { type EdgeTraffic, type RumVisits, fetchEdgeTraffic, fetchRumVisits } from "./cf-analytics";
+import {
+  SAMPLE_ADMIN_DASHBOARD_STATS,
+  SAMPLE_EDGE_TRAFFIC,
+  SAMPLE_RUM_VISITS,
+} from "./sample-stats";
 
 // Read-only aggregate queries for the internal admin dashboard
 // (`routes/dashboard.tsx`). Same `createServerFn` + D1 pattern as
@@ -553,5 +557,27 @@ export const fetchEdgeTrafficStats = createServerFn({ method: "GET" }).handler(
       | undefined;
     if (!cf?.hasCloudflareEnv) return SAMPLE_EDGE_TRAFFIC;
     return fetchEdgeTraffic(cf.env?.CF_ANALYTICS_TOKEN, cf.env?.CF_ZONE_ID);
+  },
+);
+
+// Independent of `fetchEdgeTrafficStats` on purpose, not merged into one call.
+// They query different scopes (account vs zone) needing DIFFERENT token
+// permissions, so a token missing one should blank one card, not both — and
+// the likely failure right now is exactly that. Two deferred round-trips, both
+// off the critical path.
+export const fetchRumVisitStats = createServerFn({ method: "GET" }).handler(
+  async ({ context }): Promise<RumVisits | null> => {
+    const cf = (context as unknown as Record<string, unknown>).cloudflare as
+      | {
+          env: { CF_ANALYTICS_TOKEN?: string; CF_ACCOUNT_ID?: string; CF_RUM_SITE_TAG?: string };
+          hasCloudflareEnv: boolean;
+        }
+      | undefined;
+    if (!cf?.hasCloudflareEnv) return SAMPLE_RUM_VISITS;
+    return fetchRumVisits(
+      cf.env?.CF_ANALYTICS_TOKEN,
+      cf.env?.CF_ACCOUNT_ID,
+      cf.env?.CF_RUM_SITE_TAG,
+    );
   },
 );

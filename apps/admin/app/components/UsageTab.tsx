@@ -2,7 +2,7 @@ import { Label, Muted, TerminalRow } from "@form-at/ui";
 import { Await } from "@tanstack/react-router";
 import { Suspense } from "react";
 import type { AdminDashboardStats } from "~/data/admin-stats";
-import type { EdgeTraffic } from "~/data/cf-analytics";
+import type { EdgeTraffic, RumVisits } from "~/data/cf-analytics";
 import { DashboardCard } from "./DashboardCard";
 import { TrendChart } from "./TrendChart";
 
@@ -11,6 +11,65 @@ interface UsageTabProps {
   /** Deferred — see dashboard.tsx's loader. Read through <Await> so a slow
    *  Cloudflare API delays only the two places that show it. */
   edgeTraffic: Promise<EdgeTraffic | null>;
+  /** Deferred, and fetched independently of edgeTraffic — see dashboard.tsx. */
+  rumVisits: Promise<RumVisits | null>;
+}
+
+// Sits beside edge_traffic so the two numbers can be compared directly: this
+// one counts real browsers, that one counts every request at the edge. The gap
+// between them IS the disclosure — the captions explain it, the pairing shows
+// it.
+function VisitsCard({ rum }: { rum: RumVisits | null }) {
+  if (!rum) {
+    return (
+      <Muted className="block text-xs">
+        no data — the Cloudflare Analytics credentials are missing, the token lacks Account
+        Analytics:Read (a different permission from the zone one edge_traffic uses), or the API
+        didn't answer. Deliberately blank rather than 0.
+      </Muted>
+    );
+  }
+  const sampled = rum.sampleInterval > 1;
+  return (
+    <>
+      <div className="space-y-1">
+        <TerminalRow label="visits" value={String(rum.visits)} dimValue />
+        <TerminalRow label="page_loads" value={String(rum.pageloads)} dimValue />
+        <TerminalRow label="bots_excluded" value={`${Math.round(rum.botShare * 100)}%`} dimValue />
+        <TerminalRow label="window" value={`${rum.windowDays}d`} dimValue />
+      </div>
+      {sampled ? (
+        // Above 1, the daily shape is an artefact of which events happened to
+        // be sampled — a curve here would be noise drawn confidently. State the
+        // rate instead of plotting it.
+        <p className="mt-3 text-xs text-grey/70">
+          sampled at roughly 1-in-{rum.sampleInterval}, so these are estimates and the day-to-day
+          shape isn't meaningful — no chart drawn. Cloudflare keeps beacon data unsampled for 7
+          days, then aggregates to about 10%.
+        </p>
+      ) : (
+        <div className="mt-3">
+          <Label className="mb-1 block text-xs text-grey">since {rum.startDay}</Label>
+          <TrendChart data={rum.weeklyVisits} />
+        </div>
+      )}
+      <p className="mt-3 text-xs text-grey/70">
+        a visit is a page load arriving from a different site or a direct link — Cloudflare compares
+        the referer against the hostname. Moving between pages here, or reloading, doesn't add one.
+        Not sessions, and not people: Web Analytics stores no cookie or identifier, so it can't
+        count distinct humans at all.
+      </p>
+      <p className="mt-1 text-xs text-grey/70">
+        real browsers running the beacon, with Cloudflare's bot-flagged rows removed — which is why
+        this is far below edge_traffic. {!sampled && "Unsampled at this volume."}
+      </p>
+      {!rum.boundaryKnown && (
+        <p className="mt-1 text-xs text-grey/70">
+          retention boundary couldn't be read this time, so the full window was requested.
+        </p>
+      )}
+    </>
+  );
 }
 
 // The edge_traffic caption is not optional: without it, anyone comparing this
@@ -62,7 +121,8 @@ function EdgeTrafficCard({ edge }: { edge: EdgeTraffic | null }) {
 
 // The landing tab (see dashboard.tsx): a full-width `totals` summary first,
 // then aggregate volume with no per-set dimension (that's the Sets tab) —
-// edge_traffic, app_launches, plays, calendar_adds.
+// edge_traffic and visits side by side, then app_launches, plays,
+// calendar_adds.
 //
 // `totals` repeats numbers that also appear in growth's funnels. That's
 // deliberate and safe: both read the same `admin-stats` computation, so they
@@ -71,7 +131,7 @@ function EdgeTrafficCard({ edge }: { edge: EdgeTraffic | null }) {
 // calendar_add_click carries no set_id/event_id (see trackableEvents.ts), so
 // it's a bare total like app_launches rather than a per-entity breakdown
 // that would need its own tab.
-export function UsageTab({ stats, edgeTraffic }: UsageTabProps) {
+export function UsageTab({ stats, edgeTraffic, rumVisits }: UsageTabProps) {
   return (
     // Two columns above mobile, matching SetsTab. Three columns made each card
     // too narrow for its TerminalRow label/value pairs.
@@ -94,6 +154,13 @@ export function UsageTab({ stats, edgeTraffic }: UsageTabProps) {
                   value={edge ? String(edge.requests) : "—"}
                   dimValue
                 />
+              )}
+            </Await>
+          </Suspense>
+          <Suspense fallback={<TerminalRow label="visits" value="—" dimValue />}>
+            <Await promise={rumVisits}>
+              {(rum) => (
+                <TerminalRow label="visits" value={rum ? String(rum.visits) : "—"} dimValue />
               )}
             </Await>
           </Suspense>
@@ -123,6 +190,13 @@ export function UsageTab({ stats, edgeTraffic }: UsageTabProps) {
         <Label className="mb-2 text-grey tracking-widest">{"// edge_traffic"}</Label>
         <Suspense fallback={<Muted className="block text-xs">reading…</Muted>}>
           <Await promise={edgeTraffic}>{(edge) => <EdgeTrafficCard edge={edge} />}</Await>
+        </Suspense>
+      </DashboardCard>
+
+      <DashboardCard>
+        <Label className="mb-2 text-grey tracking-widest">{"// visits"}</Label>
+        <Suspense fallback={<Muted className="block text-xs">reading…</Muted>}>
+          <Await promise={rumVisits}>{(rum) => <VisitsCard rum={rum} />}</Await>
         </Suspense>
       </DashboardCard>
 

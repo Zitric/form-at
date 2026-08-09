@@ -2841,6 +2841,67 @@ no test suite here can prove):
    set's variants (skip-if-exists working against real files, not just the
    unit-tested synthetic case).
 
+### Added 2026-08-09 — admin dashboard: a `visits` card from Web Analytics (RUM), beside `edge_traffic`
+
+Built on `feat/rum-visitors-card`. The point of the pairing: `edge_traffic` and
+`visits` disagree by a lot, and showing them side by side makes that legible
+instead of relying on a caption nobody reads. It's also the number actually
+wanted — roughly how many people arrive — which two of the three collective
+members can't see at all, having no Cloudflare account.
+
+**Schema pinned by introspection, not guessed.** Against
+`rumPageloadEventsAdaptiveGroups`, account-scoped (`viewer.accounts`, keyed on
+the Web Analytics site tag) rather than zone-scoped like the edge dataset.
+Confirmed by introspection: `sum { visits }` exists and there is **no
+`pageViews`** under `sum` — `count` is the pageload-event count, which is the
+page-view equivalent since Cloudflare defines a page view as an HTML document
+load and one beacon fires per load. Filters include `siteTag` and
+`date_geq`/`date_leq`; dimensions include `date`, `bot`, `deviceType`,
+`countryName`, `refererHost`, `requestPath`.
+
+**Bots are IN the RUM data — the assumption going in was backwards.**
+Cloudflare's own dimension docs describe "Exclude Bots" as making the dataset
+"a closer representation of real user traffic", which only makes sense if bots
+are present by default. The beacon is JavaScript so it misses non-JS crawlers,
+but headless ones execute it. So bot exclusion is required for the card to mean
+what it says, not a "just in case" filter.
+
+Implemented by grouping BY the `bot` dimension and summing only non-bot rows,
+rather than filtering server-side: the filter's value encoding isn't
+documented, and reading the dimension back needs no assumption about whether
+it's `0/1`, `"0"/"1"` or a boolean (`isBotRow` normalises all three, and a unit
+test covers each). It also yields the bot share for free, which is shown —
+concrete evidence for why the two cards differ.
+
+**Sampling is disclosed, and suppresses the chart when it bites.**
+`avg { sampleInterval }` exists: 1 means unsampled, N means roughly 1-in-N with
+real totals being the sampled figures × N (Cloudflare's sampling docs give the
+model: "5,000 events sampled at 10% → estimate 50,000"). Above 1 the day-to-day
+shape is an artefact of which events happened to be sampled, so the card
+**drops the trend chart** and states the rate instead of drawing a confident
+curve over noise. The reported interval is the COARSEST across the window, not
+an average — averaging would hide a sampled stretch behind unsampled days.
+
+**`confidence` is left unqueried.** Introspection surfaced a `confidence` field
+on the group type that neither of us knew about, but its semantics aren't
+documented anywhere findable — whether it returns a level, a margin or an
+interval. Querying a field whose meaning is unknown and rendering it would be
+worse than omitting it. `sampleInterval`, whose semantics ARE documented, does
+the disclosure for now. Revisit if its definition turns up.
+
+**Independent fetch, not merged with `edge_traffic`.** Two deferred round-trips
+instead of one, both already off the critical path. They query different scopes
+needing DIFFERENT token permissions — zone Analytics:Read versus account
+Analytics:Read — so a token missing one blanks one card rather than both. That
+was the live failure mode at build time, and one card working while the other
+explains itself is the more informative outcome.
+
+**Labelling.** `visits`, matching Cloudflare's own term, with the definition
+stated on the card: a page load arriving from a different site or a direct link,
+so moving between pages here or reloading doesn't add one; not sessions, and not
+people, because Web Analytics stores no cookie or identifier and therefore
+cannot count distinct humans at all.
+
 ### Added 2026-08-08 — admin dashboard: usage as landing tab, a totals card, and live Cloudflare edge traffic
 
 Three things, on `feat/usage-default-dashboard`.

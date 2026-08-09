@@ -32,3 +32,18 @@ CF_ACCESS_AUD = "6844a056d71815043f047d8132dcc15d4e62aff500338aa60188f89c235ff37
 # committed. Storing this as a secret would imply it needs protecting.
 # Where to re-read it: the zone's Overview tab → API → Zone ID.
 CF_ZONE_ID = "559d86b5a76e8415f83d4c3e0832935c"
+
+# Account id, and the Web Analytics site tag for formatglasgow.com. Non-secret
+# for the same reason as CF_ZONE_ID: the site tag is literally published in the
+# beacon snippet on every page of the public site, and the account id is
+# published in every R2 endpoint URL — treating either as a secret would
+# protect nothing and imply otherwise.
+#
+# CF_ACCOUNT_ID replaces the R2_ACCOUNT_ID Pages secret, which held this same
+# value under an R2-flavoured name. sets-presign.ts still falls back to the old
+# name; delete that fallback and the secret once this is confirmed live.
+# Where to re-read them: account id on any zone's Overview tab -> API; site tag
+# under Analytics & Logs -> Web Analytics -> formatglasgow.com (same value as
+# the `token` in the injected beacon).
+CF_ACCOUNT_ID = "REPLACE_WITH_ACCOUNT_ID"
+CF_RUM_SITE_TAG = "REPLACE_WITH_WEB_ANALYTICS_SITE_TAG"

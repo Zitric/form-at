@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   EDGE_TRAFFIC_MAX_WINDOW_DAYS,
   fetchEdgeTraffic,
+  fetchRumVisits,
+  resolveRumWindowDays,
   resolveWindowDays,
 } from "~/data/cf-analytics";
 
@@ -205,5 +207,165 @@ describe("fetchEdgeTraffic", () => {
     const [, init] = fetchMock.mock.calls[0];
     expect(init.headers.Authorization).toBe(`Bearer ${TOKEN}`);
     expect(JSON.parse(init.body).variables.zoneTag).toBe(ZONE);
+  });
+});
+
+const rumSettingsBody = (notOlderThan: number | null) => ({
+  data: {
+    viewer: {
+      accounts: [
+        {
+          settings: {
+            rumPageloadEventsAdaptiveGroups: notOlderThan === null ? {} : { notOlderThan },
+          },
+        },
+      ],
+    },
+  },
+});
+
+const rumBody = (
+  rows: { date: string; bot?: unknown; count: number; visits: number; sampleInterval?: number }[],
+) => ({
+  data: {
+    viewer: {
+      accounts: [
+        {
+          rumPageloadEventsAdaptiveGroups: rows.map((r) => ({
+            count: r.count,
+            dimensions: { date: r.date, bot: r.bot ?? 0 },
+            sum: { visits: r.visits },
+            avg: { sampleInterval: r.sampleInterval ?? 1 },
+          })),
+        },
+      ],
+    },
+  },
+});
+
+describe("resolveRumWindowDays", () => {
+  it("reads the boundary from the ACCOUNT settings node, not the zone one", async () => {
+    // Distinct nesting from resolveWindowDays (accounts vs zones) — the most
+    // plausible copy-paste bug in this pair, and it would fail silently by
+    // falling back to the full window.
+    mockFetchSequence({ body: rumSettingsBody(14 * 86_400) });
+    expect(await resolveRumWindowDays(TOKEN, "acct")).toEqual({ days: 14, fromBoundary: true });
+  });
+
+  it("falls back to the full window, flagged, when the boundary is unreadable", async () => {
+    mockFetchSequence({ body: rumSettingsBody(null) });
+    expect(await resolveRumWindowDays(TOKEN, "acct")).toEqual({
+      days: EDGE_TRAFFIC_MAX_WINDOW_DAYS,
+      fromBoundary: false,
+    });
+  });
+});
+
+describe("fetchRumVisits", () => {
+  it("excludes bot rows and reports the bot share of all page loads", async () => {
+    mockFetchSequence(
+      { body: rumSettingsBody(30 * 86_400) },
+      {
+        body: rumBody([
+          { date: "2026-08-07", bot: 0, count: 70, visits: 40 },
+          { date: "2026-08-07", bot: 1, count: 30, visits: 25 },
+        ]),
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
+
+    // Only the human row counts toward visits/page_loads — the whole point of
+    // this card is that it isn't edge traffic.
+    expect(result?.visits).toBe(40);
+    expect(result?.pageloads).toBe(70);
+    expect(result?.botShare).toBeCloseTo(0.3);
+  });
+
+  it("treats string and boolean bot encodings as bot, since the schema doesn't document one", async () => {
+    mockFetchSequence(
+      { body: rumSettingsBody(30 * 86_400) },
+      {
+        body: rumBody([
+          { date: "2026-08-07", bot: "0", count: 10, visits: 5 },
+          { date: "2026-08-07", bot: "1", count: 10, visits: 5 },
+          { date: "2026-08-07", bot: true, count: 10, visits: 5 },
+        ]),
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
+
+    expect(result?.visits).toBe(5);
+    expect(result?.pageloads).toBe(10);
+  });
+
+  it("reports the coarsest sampleInterval, not an average that hides a sampled stretch", async () => {
+    mockFetchSequence(
+      { body: rumSettingsBody(30 * 86_400) },
+      {
+        body: rumBody([
+          { date: "2026-08-06", count: 5, visits: 5, sampleInterval: 1 },
+          { date: "2026-08-07", count: 5, visits: 5, sampleInterval: 10 },
+        ]),
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
+
+    expect(result?.sampleInterval).toBe(10);
+  });
+
+  it("buckets visits weekly, like every other trend", async () => {
+    mockFetchSequence(
+      { body: rumSettingsBody(30 * 86_400) },
+      {
+        body: rumBody([
+          { date: "2026-08-01", count: 2, visits: 2 },
+          { date: "2026-08-02", count: 3, visits: 3 },
+          { date: "2026-08-03", count: 4, visits: 4 },
+        ]),
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-03T12:00:00Z"));
+
+    expect(result?.weeklyVisits).toEqual([9]);
+    expect(result?.windowDays).toBe(3);
+  });
+
+  it("returns null without credentials, and never calls the API", async () => {
+    const fetchMock = mockFetchSequence({ body: rumSettingsBody(30 * 86_400) });
+
+    expect(await fetchRumVisits(undefined, "acct", "site")).toBeNull();
+    expect(await fetchRumVisits(TOKEN, undefined, "site")).toBeNull();
+    expect(await fetchRumVisits(TOKEN, "acct", undefined)).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns null on a 403 — the shape of a token missing Account Analytics:Read", async () => {
+    mockFetchSequence({ status: 403, body: {} });
+    expect(await fetchRumVisits(TOKEN, "acct", "site")).toBeNull();
+  });
+
+  it("returns null on GraphQL errors inside a 200, and on an empty window", async () => {
+    mockFetchSequence({ body: { errors: [{ message: "no access" }] } });
+    expect(await fetchRumVisits(TOKEN, "acct", "site")).toBeNull();
+
+    mockFetchSequence({ body: rumSettingsBody(30 * 86_400) }, { body: rumBody([]) });
+    expect(await fetchRumVisits(TOKEN, "acct", "site")).toBeNull();
+  });
+
+  it("sends the account tag and site tag", async () => {
+    const fetchMock = mockFetchSequence(
+      { body: rumSettingsBody(30 * 86_400) },
+      { body: rumBody([{ date: "2026-08-07", count: 1, visits: 1 }]) },
+    );
+
+    await fetchRumVisits(TOKEN, "acct-1", "site-1", freezeAt("2026-08-07T12:00:00Z"));
+
+    const vars = JSON.parse(fetchMock.mock.calls[1][1].body).variables;
+    expect(vars.accountTag).toBe("acct-1");
+    expect(vars.siteTag).toBe("site-1");
   });
 });

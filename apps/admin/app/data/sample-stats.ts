@@ -1,6 +1,23 @@
 import type { SetStats } from "@form-at/data/set-stats";
 import type { AdminDashboardStats } from "./admin-stats";
-import type { EdgeTraffic } from "./cf-analytics";
+import type { EdgeTraffic, RumVisits } from "./cf-analytics";
+
+// Substituted by `fetchRumVisitStats` when there's no Cloudflare env.
+//
+// Unsampled (sampleInterval 1) so the fixture exercises the CHART path; the
+// sampled path is covered by unit tests rather than by making local dev show
+// the degraded card permanently. Visits far below edge requests, and a real
+// bot share, because that gap is the whole reason both cards exist.
+export const SAMPLE_RUM_VISITS: RumVisits = {
+  visits: 214,
+  pageloads: 389,
+  botShare: 0.31,
+  weeklyVisits: [38, 41, 45, 44, 46],
+  sampleInterval: 1,
+  windowDays: 30,
+  startDay: "2026-07-09",
+  boundaryKnown: true,
+};
 
 // Substituted by `fetchEdgeTrafficStats` when there's no Cloudflare env, so
 // local dev and e2e render the populated edge_traffic card rather than only its
