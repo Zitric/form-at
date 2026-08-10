@@ -23,12 +23,27 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
   if (!rum) {
     return (
       <Muted className="block text-xs">
-        no data — the Cloudflare Analytics credentials are missing, the token lacks Account
+        couldn't read — the Cloudflare Analytics credentials are missing, the token lacks Account
         Analytics:Read (a different permission from the zone one edge_traffic uses), or the API
-        didn't answer. Deliberately blank rather than 0.
+        didn't answer. This is a failed read, NOT "zero visits": an empty window reports itself
+        separately. Deliberately blank rather than 0.
       </Muted>
     );
   }
+  if (rum.noDataInWindow) {
+    // A successful read of an empty window — the ordinary state for a beacon
+    // that only just started collecting. Saying "0 visits" flatly would be
+    // true but misread as "nobody came"; saying "couldn't read" would be
+    // false. This is neither.
+    return (
+      <Muted className="block text-xs">
+        no visits recorded in the last {rum.windowDays}d. The beacon reports from real browsers and
+        only started collecting recently, so this is expected to stay empty until the site gets
+        traffic with it live — it is a successful read of an empty window, not a failure.
+      </Muted>
+    );
+  }
+
   const pct = (n: number) => Math.round(n * 100);
   return (
     <>

@@ -21,6 +21,7 @@ export const SAMPLE_RUM_VISITS: RumVisits = {
   // 30 days of data out of 45 available — exercises the "started recently"
   // caption via the honest comparison (data shorter than retention), not via a
   // short retention being mistaken for a late start.
+  noDataInWindow: false,
   requestedWindowDays: 45,
   windowDays: 30,
   startDay: "2026-07-09",

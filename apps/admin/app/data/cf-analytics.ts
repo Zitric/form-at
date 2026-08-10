@@ -284,6 +284,13 @@ export type RumVisits = {
   /** Weekly buckets of non-bot visits, oldest first — same shape as every
    *  other trend. Only plotted when `intervalValid`. */
   weeklyVisits: number[];
+  /** True when the query SUCCEEDED but the window held no rows — collection is
+   *  new, or genuinely nothing was recorded. Distinct from a null return, which
+   *  means we couldn't read at all. A real zero and a failed read look the same
+   *  on screen unless the card is told which it has; edge_traffic can collapse
+   *  them because its window is never legitimately empty, but a beacon that
+   *  started today is empty for an entirely ordinary reason. */
+  noDataInWindow: boolean;
   /** Days we ASKED for, i.e. min(Cloudflare's retention, our chart window).
    *  `windowDays` short of this means data genuinely starts later than
    *  retention allows — the beacon began collecting recently. Comparing
@@ -411,7 +418,28 @@ export async function fetchRumVisits(
     until: isoDay(until),
   });
   const rows = data?.viewer?.accounts?.[0]?.rumPageloadEventsAdaptiveGroups;
-  if (!rows?.length) return null;
+  // `data` present but no rows is a SUCCESSFUL read of an empty window — a real
+  // zero, which §1's never-substitute-0 rule permits and in fact wants
+  // distinguished. Only a failed read (null data) stays null.
+  if (!data) return null;
+  if (!rows?.length) {
+    return {
+      visits: 0,
+      visitsLower: 0,
+      visitsUpper: 0,
+      intervalValid: false,
+      confidenceLevel: 0,
+      sampleSize: 0,
+      pageloads: 0,
+      botShare: 0,
+      weeklyVisits: [],
+      noDataInWindow: true,
+      requestedWindowDays: requestedDays,
+      windowDays: requestedDays,
+      startDay: isoDay(since),
+      boundaryKnown: fromBoundary,
+    };
+  }
 
   const human = rows.filter((r) => !isBotRow(r.dimensions?.bot));
   const allPageloads = rows.reduce((a, r) => a + (r.count ?? 0), 0);
@@ -454,6 +482,7 @@ export async function fetchRumVisits(
     pageloads: human.reduce((a, r) => a + (r.count ?? 0), 0),
     botShare: allPageloads > 0 ? botPageloads / allPageloads : 0,
     weeklyVisits: bucketByWeek(daily, TREND_BUCKET_DAYS),
+    noDataInWindow: false,
     requestedWindowDays: requestedDays,
     windowDays: Math.max(1, spanDays),
     startDay,

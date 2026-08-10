@@ -445,12 +445,24 @@ describe("fetchRumVisits", () => {
     expect(await fetchRumVisits(TOKEN, "acct", "site")).toBeNull();
   });
 
-  it("returns null on GraphQL errors inside a 200, and on an empty window", async () => {
+  it("returns null on GraphQL errors inside a 200 — a failed read", async () => {
     mockFetchSequence({ body: { errors: [{ message: "no access" }] } });
     expect(await fetchRumVisits(TOKEN, "acct", "site")).toBeNull();
+  });
 
+  it("reports an empty window as a real zero, NOT as a failed read", async () => {
+    // The distinction the card depends on: a beacon that started collecting
+    // today returns no rows for an entirely ordinary reason, and telling the
+    // reader "credentials missing" would send them hunting a bug that isn't
+    // there. Only an unreadable response stays null.
     mockFetchSequence({ body: rumSettingsBody(30 * 86_400) }, { body: rumBody([]) });
-    expect(await fetchRumVisits(TOKEN, "acct", "site")).toBeNull();
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-10T12:00:00Z"));
+
+    expect(result).not.toBeNull();
+    expect(result?.noDataInWindow).toBe(true);
+    expect(result?.visits).toBe(0);
+    expect(result?.intervalValid).toBe(false);
   });
 
   it("sends the account tag and site tag", async () => {
