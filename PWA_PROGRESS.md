@@ -3107,6 +3107,24 @@ Split into two questions that were being conflated:
   extrapolated figures with no usable interval make the shape an artefact, and
   only then is the chart withheld.
 
+*The "too few samples (12)" beside "visits: 120" was a real bug, not wording.*
+The two figures reduce over the SAME rows, so they could never disagree by
+window — ruling that out left the data. Two causes, both fixed: `sampleSize` was
+summed with `?? 0`, so rows that omit it contributed silently and produced a
+small, confident, meaningless total (now `null` when no row reports one, and the
+caption omits it rather than printing a fabricated number); and it was being
+compared to the wrong quantity in the first place — Cloudflare defines it as
+"samples that contributed to the estimate", i.e. pageload EVENTS, so it tracks
+`pageloads`, not `visits`. Two different quantities placed side by side as
+though comparable.
+
+*Sampling ruled out empirically.* `estimate` equals `sampleSize` on every row
+(4=4, 6=6, 1=1, 1=1), which only happens at `sampleInterval: 1`. So the figures
+are exact counts, not extrapolations — which means, by the split above, the
+trend chart is honest and renders. The suppression branch is unreachable while
+unsampled; it exists for a future where volume triggers Cloudflare's adaptive
+sampling.
+
 *Two captions asserted causes they couldn't know.* The suppression caption said
 "too few samples (12)" beside "visits: 120" — two numbers with no stated
 relationship, implying they described the same thing. And the coverage caption

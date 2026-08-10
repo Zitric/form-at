@@ -86,8 +86,8 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
         // degenerate. Exact (unsampled) counts always get a chart, however
         // small — smallness makes an interval meaningless, not a count wrong.
         <p className="mt-3 text-xs text-grey/70">
-          no trend shown: these figures are extrapolated from a 1-in-
-          {rum.sampleInterval} sample ({rum.sampleSize} samples across the window), and the
+          no trend shown: these figures are extrapolated from a 1-in-{rum.sampleInterval} sample
+          {rum.sampleSize === null ? "" : ` (${rum.sampleSize} sampled page loads)`}, and the
           confidence interval is too wide to be useful, so the day-to-day shape would be an artefact
           of which events happened to be sampled rather than of real traffic.
         </p>

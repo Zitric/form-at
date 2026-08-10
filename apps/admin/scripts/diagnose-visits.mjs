@@ -61,6 +61,7 @@ const QUERY = `
           count
           dimensions { date bot }
           sum { visits }
+          avg { sampleInterval }
           confidence(level: $level) {
             level
             sum { visits { estimate lower upper isValid sampleSize } }
@@ -72,28 +73,35 @@ const QUERY = `
 
 const day = (d) => d.toISOString().slice(0, 10);
 const until = new Date();
-const since = new Date(until);
-since.setUTCDate(since.getUTCDate() - 6);
+const daysBack = (n) => {
+  const d = new Date(until);
+  d.setUTCDate(d.getUTCDate() - (n - 1));
+  return d;
+};
 
-const res = await fetch(ENDPOINT, {
-  method: "POST",
-  headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-  body: JSON.stringify({
-    query: QUERY,
-    variables: { a: accountTag, s: siteTag, since: day(since), until: day(until), level: LEVEL },
-  }),
-});
-const body = await res.json().catch(() => ({}));
+async function run(windowDays) {
+  const res = await fetch(ENDPOINT, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      query: QUERY,
+      variables: {
+        a: accountTag,
+        s: siteTag,
+        since: day(daysBack(windowDays)),
+        until: day(until),
+        level: LEVEL,
+      },
+    }),
+  });
+  return { status: res.status, body: await res.json().catch(() => ({})) };
+}
 
-console.log(`HTTP ${res.status}  site=${siteTag.slice(0, 8)}…  account=${accountTag.slice(0, 8)}…`);
-
-// Cloudflare reports query errors inside a 200 body — checking the status alone
-// is exactly how this went undiagnosed.
-if (body.errors?.length) {
+function explainError(status, body) {
   const msg = JSON.stringify(body.errors);
   console.log(`\nerrors:\n  ${msg.slice(0, 600)}`);
   const low = msg.toLowerCase();
-  if (res.status === 403 || low.includes("authentication") || low.includes("permission")) {
+  if (status === 403 || low.includes("authentication") || low.includes("permission")) {
     console.log("\n=> CAUSE: token scope. Add Account -> Account Analytics -> Read.");
     console.log("   Keep the existing Zone -> Analytics -> Read; edge_traffic needs it.");
   } else if (low.includes("confidence") && low.includes("level")) {
@@ -103,39 +111,62 @@ if (body.errors?.length) {
   } else {
     console.log("\n=> CAUSE: query rejected. Paste this output.");
   }
-  process.exit(0);
 }
 
-const rows = body?.data?.viewer?.accounts?.[0]?.rumPageloadEventsAdaptiveGroups ?? [];
-console.log(`query OK, rows: ${rows.length}`);
-if (rows.length === 0) {
-  console.log("\n=> CAUSE: no data yet. Credentials and query are fine — the beacon simply");
-  console.log("   hasn't recorded anything in this window. Nothing to fix.");
-  process.exit(0);
-}
+// The card queries the full retention-clamped window. A 7-day probe alone can't
+// say whether the wider window returns the rows the coverage caption claims, nor
+// whether per-row fields stay populated across it — so run both and compare.
+console.log(`site=${siteTag.slice(0, 8)}…  account=${accountTag.slice(0, 8)}…  level=${LEVEL}`);
 
-let sumVisits = 0;
-let sumEstimate = 0;
-for (const r of rows) {
-  const c = r.confidence?.sum?.visits ?? {};
-  sumVisits += r.sum?.visits ?? 0;
-  sumEstimate += c.estimate ?? 0;
+for (const windowDays of [7, 60]) {
+  const { status, body } = await run(windowDays);
+  console.log(`\n${"=".repeat(60)}\n${windowDays}-DAY WINDOW  (HTTP ${status})`);
+  if (body.errors?.length) {
+    explainError(status, body);
+    continue;
+  }
+  const rows = body?.data?.viewer?.accounts?.[0]?.rumPageloadEventsAdaptiveGroups ?? [];
+  if (rows.length === 0) {
+    console.log("  no rows — credentials and query fine, nothing recorded in this window.");
+    continue;
+  }
+
+  const human = rows.filter((r) => {
+    const b = r.dimensions?.bot;
+    return !(
+      b === true ||
+      (typeof b === "number" && b !== 0) ||
+      (typeof b === "string" && b !== "0")
+    );
+  });
+  const sum = (arr, f) => arr.reduce((a, x) => a + (f(x) ?? 0), 0);
+  const conf = (r) => r.confidence?.sum?.visits ?? {};
+
+  // The exact quantities the card computes, so a mismatch is attributable.
+  const visits = sum(human, (r) => conf(r).estimate);
+  const legacySum = sum(human, (r) => r.sum?.visits);
+  const samples = sum(human, (r) => conf(r).sampleSize);
+  const pageloads = sum(human, (r) => r.count);
+  const missingSampleSize = human.filter((r) => conf(r).sampleSize == null).length;
+  const intervals = [...new Set(rows.map((r) => r.avg?.sampleInterval ?? 1))].sort((a, b) => a - b);
+  const dates = [...new Set(rows.map((r) => r.dimensions?.date))].sort();
+
+  console.log(`  rows=${rows.length} (human ${human.length}, bot ${rows.length - human.length})`);
+  console.log(`  distinct days=${dates.length}  first=${dates[0]}  last=${dates.at(-1)}`);
+  console.log(`  sampleInterval values: ${intervals.join(", ")}`);
   console.log(
-    `  ${r.dimensions?.date} bot=${r.dimensions?.bot} count=${r.count} ` +
-      `visits=${r.sum?.visits} level=${r.confidence?.level} ` +
-      `estimate=${c.estimate} [${c.lower}, ${c.upper}] isValid=${c.isValid} n=${c.sampleSize}`,
+    `  visits(sum estimate)=${visits}   sum{visits}=${legacySum}   pageloads(count)=${pageloads}`,
   );
+  console.log(
+    `  sampleSize total=${samples}   rows missing sampleSize=${missingSampleSize}/${human.length}`,
+  );
+  if (samples !== pageloads) {
+    console.log(`  !! sampleSize (${samples}) != pageloads (${pageloads}) — the card's "samples"`);
+    console.log("     figure does not describe the same thing as its visit count.");
+  }
+  if (intervals.length === 1 && intervals[0] === 1) {
+    console.log("  => unsampled: figures are EXACT counts, so the trend is honest and charts.");
+  } else {
+    console.log(`  => sampled (interval up to ${intervals.at(-1)}): figures are extrapolations.`);
+  }
 }
-
-// The two questions the card's design depends on.
-const estimateVerdict =
-  sumEstimate === sumVisits
-    ? "IDENTICAL, so the plain sum query is redundant and can be dropped."
-    : "DIFFERENT, so both are needed; keep the sum as the fallback.";
-console.log(`\nestimate vs sum{visits}: ${sumEstimate} vs ${sumVisits} — ${estimateVerdict}`);
-const anyInvalid = rows.some((r) => r.confidence?.sum?.visits?.isValid === false);
-console.log(
-  anyInvalid
-    ? "isValid: FALSE on at least one day — the card suppresses bounds and chart, as designed."
-    : "isValid: true across the window — the card shows the interval and plots the trend.",
-);

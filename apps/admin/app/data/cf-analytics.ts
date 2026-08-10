@@ -292,9 +292,13 @@ export type RumVisits = {
   sampleInterval: number;
   /** Confidence level the interval was computed at, echoed back by the API. */
   confidenceLevel: number;
-  /** Samples behind the estimate — the concrete reason an interval is or isn't
-   *  trustworthy. */
-  sampleSize: number;
+  /** Samples behind the estimate, per Cloudflare: "Number of samples that
+   *  contributed to the estimate". These are pageload EVENTS, so it tracks
+   *  `pageloads`, NOT `visits` — comparing it to a visit count is comparing two
+   *  different quantities, which is how a card came to read "too few samples
+   *  (12)" beside "visits: 120". Null when no row reported one: a summed
+   *  `?? 0` silently produced a small, confident, meaningless number. */
+  sampleSize: number | null;
   /** Weekly buckets of non-bot visits, oldest first — same shape as every
    *  other trend. Only plotted when `intervalValid`. */
   weeklyVisits: number[];
@@ -470,7 +474,7 @@ export async function fetchRumVisits(
       intervalValid: false,
       sampleInterval: 1,
       confidenceLevel: 0,
-      sampleSize: 0,
+      sampleSize: null,
       pageloads: 0,
       botPageloads: 0,
       totalPageloads: 0,
@@ -527,7 +531,12 @@ export async function fetchRumVisits(
     sampleInterval: rows.reduce((max, r) => Math.max(max, r.avg?.sampleInterval ?? 1), 1),
     confidenceLevel:
       human.find((r) => r.confidence?.level)?.confidence?.level ?? RUM_CONFIDENCE_LEVEL,
-    sampleSize: conf.reduce((a, c) => a + (c?.sampleSize ?? 0), 0),
+    // Only report a total when at least one row actually carried the field.
+    // Summing `?? 0` over rows that omit it yields a number that looks precise
+    // and describes nothing.
+    sampleSize: conf.some((c) => typeof c?.sampleSize === "number")
+      ? conf.reduce((a, c) => a + (c?.sampleSize ?? 0), 0)
+      : null,
     pageloads: human.reduce((a, r) => a + (r.count ?? 0), 0),
     botPageloads,
     totalPageloads: allPageloads,

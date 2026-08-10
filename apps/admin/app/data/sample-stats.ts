@@ -15,7 +15,7 @@ export const SAMPLE_RUM_VISITS: RumVisits = {
   intervalValid: true,
   sampleInterval: 1,
   confidenceLevel: 0.95,
-  sampleSize: 214,
+  sampleSize: 564,
   pageloads: 389,
   botPageloads: 175,
   totalPageloads: 564,

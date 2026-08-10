@@ -525,6 +525,64 @@ describe("fetchRumVisits", () => {
     expect(result?.sampleInterval).toBe(10);
   });
 
+  it("reports no sample total rather than a fabricated 0 when rows omit sampleSize", async () => {
+    // The bug this guards: summing `?? 0` over rows that carry no sampleSize
+    // produced a small, confident number that described nothing — and it was
+    // printed beside the visit count as though the two were comparable.
+    mockFetchSequence(
+      { body: rumSettingsBody(30 * 86_400) },
+      {
+        body: {
+          data: {
+            viewer: {
+              accounts: [
+                {
+                  rumPageloadEventsAdaptiveGroups: [
+                    {
+                      count: 40,
+                      dimensions: { date: "2026-08-10", bot: 0 },
+                      avg: { sampleInterval: 1 },
+                      confidence: {
+                        level: 0.95,
+                        // estimate present, sampleSize absent
+                        sum: { visits: { estimate: 12, lower: 12, upper: 12, isValid: false } },
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-10T12:00:00Z"));
+
+    expect(result?.visits).toBe(12);
+    expect(result?.sampleSize).toBeNull();
+  });
+
+  it("counts sampleSize as page loads, tracking count rather than visits", async () => {
+    // sampleSize is "samples that contributed to the estimate" — pageload
+    // EVENTS. It tracks `pageloads`, not `visits`; conflating them is what made
+    // "too few samples (12)" sit incoherently beside "visits: 120".
+    mockFetchSequence(
+      { body: rumSettingsBody(30 * 86_400) },
+      {
+        body: rumBody([
+          { date: "2026-08-10", count: 40, visits: 12, estimate: 12, sampleSize: 40 },
+        ]),
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-10T12:00:00Z"));
+
+    expect(result?.visits).toBe(12);
+    expect(result?.pageloads).toBe(40);
+    expect(result?.sampleSize).toBe(40);
+  });
+
   it("returns null without credentials, and never calls the API", async () => {
     const fetchMock = mockFetchSequence({ body: rumSettingsBody(30 * 86_400) });
 
