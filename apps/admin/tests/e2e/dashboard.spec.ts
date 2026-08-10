@@ -271,6 +271,10 @@ test.describe("admin dashboard", () => {
     // The interval is the disclosure, not a sample rate — and it's labelled
     // with the level it was computed at.
     await expect(page.getByText(/95% interval/)).toBeVisible();
+    // The fixture's 30d window is shorter than the 60d ask, so the
+    // short-window disclosure must appear — a low count has to read as
+    // "recently started collecting", not "nobody visits".
+    await expect(page.getByText(/only 30d of data exists/i)).toBeVisible();
     // Sits beside edge_traffic so the gap between the two is visible.
     await expect(page.getByText("// edge_traffic")).toBeVisible();
   });

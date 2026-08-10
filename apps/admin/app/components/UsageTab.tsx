@@ -2,6 +2,7 @@ import { Label, Muted, TerminalRow } from "@form-at/ui";
 import { Await } from "@tanstack/react-router";
 import { Suspense } from "react";
 import type { AdminDashboardStats } from "~/data/admin-stats";
+import { EDGE_TRAFFIC_MAX_WINDOW_DAYS } from "~/data/cf-analytics";
 import type { EdgeTraffic, RumVisits } from "~/data/cf-analytics";
 import { DashboardCard } from "./DashboardCard";
 import { TrendChart } from "./TrendChart";
@@ -71,6 +72,18 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
         this is far below edge_traffic. Adaptively sampled, so it's an estimate
         {rum.intervalValid ? " with the interval shown above" : ""}.
       </p>
+      {rum.windowDays < EDGE_TRAFFIC_MAX_WINDOW_DAYS && (
+        // The beacon started collecting on 2026-08-10; before that it wasn't in
+        // the page at all, so a low number here means "only just started",
+        // not "nobody visits". Derived from the oldest day Cloudflare actually
+        // returned rather than a hardcoded date, so it self-corrects and this
+        // caption disappears once history fills the window — same pattern as
+        // app_launches' `tracking since`.
+        <p className="mt-1 text-xs text-grey/70">
+          only {rum.windowDays}d of data exists (since {rum.startDay}) — the beacon hasn't been
+          collecting for the full window, so a low count reflects that rather than low traffic.
+        </p>
+      )}
       {!rum.boundaryKnown && (
         <p className="mt-1 text-xs text-grey/70">
           retention boundary couldn't be read this time, so the full window was requested.

@@ -20,11 +20,13 @@ const handler = createStartHandler({ handler: defaultStreamHandler });
 //     download fetches from the audio host (see @form-at/data/sets, the
 //     canonical home of the hostname).
 //   static.cloudflareinsights.com (script-src) + cloudflareinsights.com
-//     (connect-src) — Cloudflare Web Analytics. Cloudflare auto-injects the
-//     beacon at the edge for this zone, so there is no script tag to find in
-//     this repo; without these two allowances the injected script is blocked
-//     and Web Analytics silently records NOTHING. Both are needed: one to
-//     load the beacon, one for it to report.
+//     (connect-src) — Cloudflare Web Analytics. BOTH are required and neither
+//     is redundant: the first loads the beacon `rootHead.ts` injects, the
+//     second lets it POST to https://cloudflareinsights.com/cdn-cgi/rum
+//     (confirmed by reading beacon.min.js, not assumed). Drop either and Web
+//     Analytics silently records NOTHING — no error surfaces server-side, and
+//     the only symptom is an empty dashboard. Keep in sync with the same
+//     policy in `public/_headers`.
 const DOCUMENT_CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com",
