@@ -1,7 +1,7 @@
 import { Label, Muted, TerminalRow } from "@form-at/ui";
 import { Await } from "@tanstack/react-router";
 import { Suspense } from "react";
-import type { AdminDashboardStats } from "~/data/admin-stats";
+import { type AdminDashboardStats, MIN_SAMPLE_FOR_RATE } from "~/data/admin-stats";
 import type { EdgeTraffic, RumVisits } from "~/data/cf-analytics";
 import { DashboardCard } from "./DashboardCard";
 import { TrendChart } from "./TrendChart";
@@ -45,6 +45,10 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
   }
 
   const pct = (n: number) => Math.round(n * 100);
+  const botsExcludedLabel =
+    rum.totalPageloads >= MIN_SAMPLE_FOR_RATE
+      ? `${rum.botPageloads} / ${rum.totalPageloads} (${pct(rum.botPageloads / rum.totalPageloads)}%)`
+      : `${rum.botPageloads} / ${rum.totalPageloads}`;
   return (
     <>
       <div className="space-y-1">
@@ -57,7 +61,11 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
           />
         )}
         <TerminalRow label="page_loads" value={String(rum.pageloads)} dimValue />
-        <TerminalRow label="bots_excluded" value={`${pct(rum.botShare)}%`} dimValue />
+        {/* Counts, not a bare percentage: at a denominator of a dozen page
+            loads "17%" swings to "8%" on one bot and reads far more precise
+            than it is. The percentage joins in only above MIN_SAMPLE_FOR_RATE,
+            the same small-n floor notify_funnel's accepted_rate uses. */}
+        <TerminalRow label="bots_excluded" value={botsExcludedLabel} dimValue />
         <TerminalRow label="window" value={`${rum.windowDays}d`} dimValue />
       </div>
       {rum.intervalValid ? (
@@ -72,7 +80,9 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
         <p className="mt-3 text-xs text-grey/70">
           too few samples ({rum.sampleSize}) to characterise — Cloudflare reports the confidence
           interval as invalid at this volume, so no range and no chart are shown. The visit count
-          above is still its best estimate.
+          above is still its best estimate. Nothing is broken: at single-digit daily samples the
+          interval comes back degenerate (a range of [4,4] tells you nothing), and both the range
+          and the trend appear on their own once traffic makes them meaningful.
         </p>
       )}
       <p className="mt-3 text-xs text-grey/70">

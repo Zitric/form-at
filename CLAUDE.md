@@ -280,9 +280,10 @@ by name.
 ### Naming a metric for what it measures
 Where two sources count different things, the label says which. `edge_traffic`
 (`requests`/`page_views`) is Cloudflare edge requests **including bots** — never
-"visitors" or "people", because Cloudflare Web Analytics counts real browsers
-and excludes bots, so the two disagree substantially and a shared label makes
-the smaller number look like a bug. Same reasoning behind `install_to_push`
+"visitors" or "people", because `visits` counts beacon page loads with
+bot-flagged rows removed **by us**, not by Cloudflare (RUM records bots too —
+confirmed in our own data, see PWA_PROGRESS). The two therefore disagree
+substantially, and a shared label makes the smaller number look like a bug. Same reasoning behind `install_to_push`
 being captioned an approximation and `avg_engaged_listening` saying it's
 cumulative. Reasoning per metric lives with the code — `data/cf-analytics.ts`'s
 header for this one.

@@ -3062,6 +3062,38 @@ started collecting today". Wrong for this dataset specifically: unlike
 edge_traffic, whose window is never legitimately empty, a beacon starts empty by
 definition.
 
+*First live run — three things settled with data, not inference.*
+
+1. **`estimate` is identical to `sum { visits }`** (12 vs 12), so the plain sum
+   was dropped from the query. One number beats two a reader has to reconcile.
+   It had been serving as a fallback for a row with no confidence block; without
+   it, such a response now returns **null** rather than 0 — there is no visit
+   count to report, and §1 forbids substituting 0 for a metric that didn't load.
+
+2. **`isValid` is false on every day**, and not because of sampling — the
+   samples are simply tiny (n = 4, 6, 1, 1), so the intervals come back
+   degenerate: `[4,4]`, `[6,6]`. The card suppresses bounds and chart, which is
+   the design working rather than failing. The interval machinery stays in place
+   precisely because it self-corrects: it re-appears when volume makes it
+   meaningful, so removing it would only mean rebuilding it later. The
+   suppression caption now says so explicitly, because "too few samples" alone
+   reads like a fault.
+
+3. **RUM records bots — confirmed in our own data**, not just inferred from
+   Cloudflare's docs: the 2026-08-09 rows include a `bot=1` group. The original
+   assumption ("the beacon is JavaScript, so bots won't run it") was wrong twice
+   over — first contradicted by the docs' "Exclude Bots" dimension, then by our
+   own dataset. **The bot exclusion is load-bearing, not precautionary**: without
+   it this card would silently include crawler traffic while claiming to count
+   real browsers.
+
+*Small-n honesty for the bot share.* At a dozen page loads, one extra bot moves
+the share from 8% to 17% — a swing that reads as a finding when it's noise. The
+data layer therefore reports raw counts (`botPageloads` / `totalPageloads`) and
+the card only adds a percentage above `MIN_SAMPLE_FOR_RATE`, reusing
+notify_funnel's existing small-sample floor rather than inventing a second
+mechanism.
+
 *Credentials.* `CF_ANALYTICS_TOKEN` is a Pages secret. `CF_ZONE_ID` is a plain
 `[vars]` entry in `apps/admin/wrangler.toml`, deliberately NOT a secret: it's a
 public identifier like the Access AUD tag, reading analytics with it still needs

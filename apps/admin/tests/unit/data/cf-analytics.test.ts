@@ -284,7 +284,7 @@ describe("resolveRumWindowDays", () => {
 });
 
 describe("fetchRumVisits", () => {
-  it("excludes bot rows and reports the bot share of all page loads", async () => {
+  it("excludes bot rows and reports the bot counts behind the exclusion", async () => {
     mockFetchSequence(
       { body: rumSettingsBody(30 * 86_400) },
       {
@@ -301,7 +301,10 @@ describe("fetchRumVisits", () => {
     // this card is that it isn't edge traffic.
     expect(result?.visits).toBe(40);
     expect(result?.pageloads).toBe(70);
-    expect(result?.botShare).toBeCloseTo(0.3);
+    // Raw counts, not a share: the card decides whether the denominator
+    // supports a percentage.
+    expect(result?.botPageloads).toBe(30);
+    expect(result?.totalPageloads).toBe(100);
   });
 
   it("treats string and boolean bot encodings as bot, since the schema doesn't document one", async () => {
@@ -361,7 +364,7 @@ describe("fetchRumVisits", () => {
     expect(result?.sampleSize).toBe(7);
   });
 
-  it("falls back to sum { visits } when a row carries no confidence block", async () => {
+  it("returns null when no row carries a confidence block — a failed read, not zero", async () => {
     mockFetchSequence(
       { body: rumSettingsBody(30 * 86_400) },
       {
@@ -387,9 +390,11 @@ describe("fetchRumVisits", () => {
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
 
-    // The card never shows a hole; it just can't show an interval.
-    expect(result?.visits).toBe(9);
-    expect(result?.intervalValid).toBe(false);
+    // `sum { visits }` is no longer queried (it was proven identical to
+    // `estimate`), so a response with no confidence block carries no visit
+    // count at all. Reporting 0 would state "nobody visited" for something we
+    // couldn't read — §1 forbids exactly that substitution.
+    expect(result).toBeNull();
   });
 
   it("buckets visits weekly, like every other trend", async () => {
@@ -408,6 +413,29 @@ describe("fetchRumVisits", () => {
 
     expect(result?.weeklyVisits).toEqual([9]);
     expect(result?.windowDays).toBe(3);
+  });
+
+  it("holds back the bot percentage until the denominator supports one", async () => {
+    // Real observed volume: single-digit daily samples. 1 bot in 12 page loads
+    // is "8%", and one more bot makes it "17%" — a swing that reads as a
+    // finding when it is noise. The data layer therefore reports counts and
+    // leaves the percentage to the card's MIN_SAMPLE_FOR_RATE floor.
+    mockFetchSequence(
+      { body: rumSettingsBody(30 * 86_400) },
+      {
+        body: rumBody([
+          { date: "2026-08-09", bot: 0, count: 11, visits: 11 },
+          { date: "2026-08-09", bot: 1, count: 1, visits: 1 },
+        ]),
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-09T12:00:00Z"));
+
+    expect(result?.botPageloads).toBe(1);
+    expect(result?.totalPageloads).toBe(12);
+    // No precomputed share to accidentally render.
+    expect(result).not.toHaveProperty("botShare");
   });
 
   it("reports the requested window alongside the one it got, so a short retention isn't mistaken for a late start", async () => {

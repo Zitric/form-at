@@ -263,10 +263,13 @@ export type RumVisits = {
    *  pageload, so this is the page-view equivalent — `sum` has no pageViews
    *  field of its own. */
   pageloads: number;
-  /** Share of ALL pageloads (0-1) that Cloudflare flagged as bot, before the
-   *  exclusion above. Shown because it's the concrete evidence for why this
-   *  card and edge_traffic disagree. */
-  botShare: number;
+  /** Bot-flagged page loads excluded from the figures above, and the total
+   *  before exclusion. Raw COUNTS rather than a share: a percentage computed
+   *  from a handful of page loads swings wildly day to day and implies a
+   *  precision the denominator can't support. The card derives a percentage
+   *  only once the denominator justifies one. */
+  botPageloads: number;
+  totalPageloads: number;
   /** Lower/upper bounds of Cloudflare's confidence interval on `visits`. */
   visitsLower: number;
   visitsUpper: number;
@@ -357,7 +360,6 @@ const RUM_QUERY = `
         ) {
           count
           dimensions { date bot }
-          sum { visits }
           confidence(level: $level) {
             level
             sum { visits { estimate lower upper isValid sampleSize } }
@@ -373,7 +375,6 @@ type RumData = {
       rumPageloadEventsAdaptiveGroups?: {
         count?: number;
         dimensions?: { date?: string; bot?: unknown };
-        sum?: { visits?: number };
         confidence?: {
           level?: number;
           sum?: {
@@ -441,7 +442,8 @@ export async function fetchRumVisits(
       confidenceLevel: 0,
       sampleSize: 0,
       pageloads: 0,
-      botShare: 0,
+      botPageloads: 0,
+      totalPageloads: 0,
       weeklyVisits: [],
       noDataInWindow: true,
       requestedWindowDays: requestedDays,
@@ -462,7 +464,7 @@ export async function fetchRumVisits(
   const perDay = new Map<string, number>();
   for (const r of human) {
     const day = r.dimensions?.date ?? "";
-    perDay.set(day, (perDay.get(day) ?? 0) + (r.sum?.visits ?? 0));
+    perDay.set(day, (perDay.get(day) ?? 0) + (r.confidence?.sum?.visits?.estimate ?? 0));
   }
   const daily = fillDailyWindow(
     [...perDay].map(([day, count]) => ({ day, count })),
@@ -474,24 +476,25 @@ export async function fetchRumVisits(
   // least trustworthy day — one invalid day makes the whole total's interval
   // meaningless, and reporting otherwise would launder it.
   const conf = human.map((r) => r.confidence?.sum?.visits);
-  const hasConfidence = conf.some(Boolean);
-  const estimate = conf.reduce((a, c) => a + (c?.estimate ?? 0), 0);
+  // `sum { visits }` is no longer queried: a live run confirmed `estimate` is
+  // identical to it (12 vs 12), and the schema describes the interval as being
+  // "for the corresponding point estimate". Two numbers a reader has to
+  // reconcile is worse than one. Without that fallback, a response carrying no
+  // confidence block at all has no visit count to report — so it's a failed
+  // read, NOT zero visits (§1: never substitute 0 for a metric that didn't load).
+  if (!conf.some(Boolean)) return null;
 
   return {
-    // `estimate` IS the point estimate that `sum { visits }` reports — the
-    // schema calls the interval "for the corresponding point estimate". Sum is
-    // still queried and used as the fallback for any row without a confidence
-    // block, so the card never shows a hole; it is never shown alongside the
-    // estimate, because two numbers a reader has to reconcile is worse than one.
-    visits: hasConfidence ? estimate : human.reduce((a, r) => a + (r.sum?.visits ?? 0), 0),
+    visits: conf.reduce((a, c) => a + (c?.estimate ?? 0), 0),
     visitsLower: conf.reduce((a, c) => a + (c?.lower ?? c?.estimate ?? 0), 0),
     visitsUpper: conf.reduce((a, c) => a + (c?.upper ?? c?.estimate ?? 0), 0),
-    intervalValid: hasConfidence && conf.every((c) => c?.isValid !== false),
+    intervalValid: conf.every((c) => c?.isValid !== false),
     confidenceLevel:
       human.find((r) => r.confidence?.level)?.confidence?.level ?? RUM_CONFIDENCE_LEVEL,
     sampleSize: conf.reduce((a, c) => a + (c?.sampleSize ?? 0), 0),
     pageloads: human.reduce((a, r) => a + (r.count ?? 0), 0),
-    botShare: allPageloads > 0 ? botPageloads / allPageloads : 0,
+    botPageloads,
+    totalPageloads: allPageloads,
     weeklyVisits: bucketByWeek(daily, TREND_BUCKET_DAYS),
     noDataInWindow: false,
     requestedWindowDays: requestedDays,
