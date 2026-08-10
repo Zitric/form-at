@@ -1,7 +1,8 @@
 import { Label, Muted, TerminalRow } from "@form-at/ui";
 import { Await } from "@tanstack/react-router";
 import { Suspense } from "react";
-import { type AdminDashboardStats, MIN_SAMPLE_FOR_RATE } from "~/data/admin-stats";
+import type { AdminDashboardStats } from "~/data/admin-stats";
+import { MIN_PAGELOADS_FOR_BOT_SHARE } from "~/data/cf-analytics";
 import type { EdgeTraffic, RumVisits } from "~/data/cf-analytics";
 import { DashboardCard } from "./DashboardCard";
 import { TrendChart } from "./TrendChart";
@@ -25,8 +26,9 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
       <Muted className="block text-xs">
         couldn't read — the Cloudflare Analytics credentials are missing, the token lacks Account
         Analytics:Read (a different permission from the zone one edge_traffic uses), or the API
-        didn't answer. This is a failed read, NOT "zero visits": an empty window reports itself
-        separately. Deliberately blank rather than 0.
+        didn't answer with the fields this needs. This is a failed read, NOT "zero visits": an empty
+        window reports itself separately. Deliberately blank rather than 0. Run `pnpm -C apps/admin
+        diagnose-visits` to see which.
       </Muted>
     );
   }
@@ -46,7 +48,7 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
 
   const pct = (n: number) => Math.round(n * 100);
   const botsExcludedLabel =
-    rum.totalPageloads >= MIN_SAMPLE_FOR_RATE
+    rum.totalPageloads >= MIN_PAGELOADS_FOR_BOT_SHARE
       ? `${rum.botPageloads} / ${rum.totalPageloads} (${pct(rum.botPageloads / rum.totalPageloads)}%)`
       : `${rum.botPageloads} / ${rum.totalPageloads}`;
   return (
@@ -63,8 +65,9 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
         <TerminalRow label="page_loads" value={String(rum.pageloads)} dimValue />
         {/* Counts, not a bare percentage: at a denominator of a dozen page
             loads "17%" swings to "8%" on one bot and reads far more precise
-            than it is. The percentage joins in only above MIN_SAMPLE_FOR_RATE,
-            the same small-n floor notify_funnel's accepted_rate uses. */}
+            than it is. The percentage joins in only above
+            MIN_PAGELOADS_FOR_BOT_SHARE — its own floor, not notify_funnel's:
+            same rule, very different scale. */}
         <TerminalRow label="bots_excluded" value={botsExcludedLabel} dimValue />
         <TerminalRow label="window" value={`${rum.windowDays}d`} dimValue />
       </div>

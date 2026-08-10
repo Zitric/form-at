@@ -349,6 +349,22 @@ export async function resolveRumWindowDays(
 // convention a reader will assume, and the card states it.
 export const RUM_CONFIDENCE_LEVEL = 0.95;
 
+// Below this many page loads in the window, the card shows bot exclusions as
+// raw counts and no percentage.
+//
+// Deliberately NOT `MIN_SAMPLE_FOR_RATE` (admin-stats.ts), despite being the
+// same shape of rule. That 10 is a floor over PROMPT IMPRESSIONS, where double
+// digits is a real sample; page loads accumulate orders of magnitude faster, so
+// 10 of them is a fraction of an hour and would stop suppressing long before the
+// percentage settles. Sharing the constant would also mean tuning one metric
+// silently retunes the other — the two need to move independently.
+//
+// 100 is chosen so one additional bot moves the figure by about a percentage
+// point instead of eight: at n=12 a single bot swings 8%→17%, which reads as a
+// finding when it is noise. Raise it if the number still looks jumpy; it only
+// ever gates the percentage, never the counts.
+export const MIN_PAGELOADS_FOR_BOT_SHARE = 100;
+
 const RUM_QUERY = `
   query RumVisits($accountTag: String!, $siteTag: String!, $since: String!, $until: String!, $level: Float!) {
     viewer {

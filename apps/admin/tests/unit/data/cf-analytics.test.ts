@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   EDGE_TRAFFIC_MAX_WINDOW_DAYS,
+  MIN_PAGELOADS_FOR_BOT_SHARE,
   RUM_CONFIDENCE_LEVEL,
   fetchEdgeTraffic,
   fetchRumVisits,
@@ -419,7 +420,9 @@ describe("fetchRumVisits", () => {
     // Real observed volume: single-digit daily samples. 1 bot in 12 page loads
     // is "8%", and one more bot makes it "17%" — a swing that reads as a
     // finding when it is noise. The data layer therefore reports counts and
-    // leaves the percentage to the card's MIN_SAMPLE_FOR_RATE floor.
+    // leaves the percentage to the card's own MIN_PAGELOADS_FOR_BOT_SHARE
+    // floor — deliberately not notify_funnel's, which is scaled for prompt
+    // impressions rather than page loads.
     mockFetchSequence(
       { body: rumSettingsBody(30 * 86_400) },
       {
@@ -436,6 +439,8 @@ describe("fetchRumVisits", () => {
     expect(result?.totalPageloads).toBe(12);
     // No precomputed share to accidentally render.
     expect(result).not.toHaveProperty("botShare");
+    // And this volume is well under the floor the card gates the percentage on.
+    expect(result?.totalPageloads).toBeLessThan(MIN_PAGELOADS_FOR_BOT_SHARE);
   });
 
   it("reports the requested window alongside the one it got, so a short retention isn't mistaken for a late start", async () => {

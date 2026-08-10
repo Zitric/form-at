@@ -3090,9 +3090,19 @@ definition.
 *Small-n honesty for the bot share.* At a dozen page loads, one extra bot moves
 the share from 8% to 17% — a swing that reads as a finding when it's noise. The
 data layer therefore reports raw counts (`botPageloads` / `totalPageloads`) and
-the card only adds a percentage above `MIN_SAMPLE_FOR_RATE`, reusing
-notify_funnel's existing small-sample floor rather than inventing a second
-mechanism.
+the card only adds a percentage above its own
+`MIN_PAGELOADS_FOR_BOT_SHARE`.
+
+That constant is deliberately separate from `MIN_SAMPLE_FOR_RATE`, despite
+being the same shape of rule. The first instinct was to share it — one
+mechanism, no new threshold to justify — but the two live at different orders
+of magnitude: `MIN_SAMPLE_FOR_RATE`'s 10 is a floor over PROMPT IMPRESSIONS,
+where double digits is a real sample, while page loads accumulate far faster,
+so 10 of them is a fraction of an hour and would stop suppressing long before
+the percentage settles. Sharing the name would also mean tuning one metric
+silently retunes the other. Same reasoning as §1 not taking one entry per
+feature: a shared name implies a shared meaning. 100 is chosen so one extra bot
+moves the figure by about a percentage point rather than eight.
 
 *Credentials.* `CF_ANALYTICS_TOKEN` is a Pages secret. `CF_ZONE_ID` is a plain
 `[vars]` entry in `apps/admin/wrangler.toml`, deliberately NOT a secret: it's a
