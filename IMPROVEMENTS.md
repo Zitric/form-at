@@ -41,9 +41,12 @@ Running list of feature/functional improvements. Tick off as we ship.
 
   **Same shape as the sets-catalogue snapshot** (`packages/data/src/sets.generated.ts`): a stored copy of something authoritative elsewhere, kept because the authoritative source isn't always reachable. There the reason is offline; here it's retention. Worth reusing that framing if this is ever built, rather than inventing a new one.
 
-  **Two open questions, both unresolved — don't build until they are:**
-  - *Does sampling actually bite at this volume?* If the RUM dataset reports `sampleInterval: 1` at tens of visits a day, the live numbers are already exact and the only thing archiving buys is history past retention — which is a much weaker case. The introspection done for the `visitors` card answers this.
-  - *What triggers the capture?* Deploy-time is unreliable in the way that matters: a two-week gap between deploys loses exactly the days the archive exists to save. A scheduled GitHub Action works but is a new moving part to keep alive, on a project heading toward maintenance mode. Neither is obviously right.
+  **First question now SETTLED with live data (2026-08-10), and it strengthens the case.** Sampling genuinely bites, definitively, after 7 days. Measured on this site: a 60-day query returned 120 visits extrapolated from **12 real observations** at an effective 1-in-10, with only **11 of 55 days** carrying any rows — sampling deletes whole days, not just precision. A 7-day query over the same data is exact and complete.
+
+  The `visits` card was therefore narrowed to a 7-day window (see PWA_PROGRESS), which buys exactness at the cost of history. That makes this item the **only** way to have accurate history beyond a week: capture each day into D1 while it is still unsampled, or accept that anything older than 7 days is a 10% extrapolation with gaps. Materially stronger than when this was logged, when the premise was still a guess.
+
+  **One open question remains — don't build until it's answered:**
+  - *What triggers the capture?* Deploy-time is unreliable in the way that matters: a two-week gap between deploys loses exactly the days the archive exists to save. A scheduled GitHub Action works but is a new moving part to keep alive, on a project heading toward maintenance mode. Neither is obviously right. Note the capture would need to run at least weekly to stay inside the unsampled window — that constraint is now a hard number rather than a guess.
 
 ## Bigger but worth it
 

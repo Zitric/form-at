@@ -121,11 +121,6 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
           low-volume days from wide windows — so this states coverage and claims no cause.
         </p>
       )}
-      {!rum.boundaryKnown && (
-        <p className="mt-1 text-xs text-grey/70">
-          retention boundary couldn't be read this time, so the full window was requested.
-        </p>
-      )}
     </>
   );
 }

@@ -3118,14 +3118,22 @@ compared to the wrong quantity in the first place — Cloudflare defines it as
 `pageloads`, not `visits`. Two different quantities placed side by side as
 though comparable.
 
-*Sampling depends on the WINDOW, which a 7-day probe hid.* An initial reading
-of a 7-day diagnostic showed `estimate == sampleSize` on every row and concluded
-the data was unsampled. Running both windows disproved it: at 7 days
-`sampleInterval` is 1 and the figures are exact, but at 60 days Cloudflare
-returns intervals of 10 and 16.67 and the figures are extrapolations. Same data,
-same site — the width of the query decides. So the card's own 60-day window is
-sampled, the trend is correctly suppressed, and the earlier "not sampled"
-conclusion was an artefact of probing too narrow a range.
+*Sampling is a property of the data's AGE, not the query — and the visits
+window is now 7 days because of it.* An initial 7-day probe showed
+`estimate == sampleSize` on every row and was read as "unsampled". A 60-day
+probe returned intervals of 10 and 16.67. The tempting conclusion — "the width
+of the query decides" — is wrong and implies a lever that doesn't exist:
+Cloudflare retains beacon data **unsampled for 7 days, then aggregates it to
+around 10%**, so rows simply degrade as they age. ANY window past a week drags
+in already-degraded data, permanently, and no width recovers it.
+
+So the `visits` window is pinned at `RUM_WINDOW_DAYS = 7`, entirely inside the
+unsampled period. What the 60-day window was actually reporting: 120 visits
+extrapolated from **12 real observations**, with only **11 of 55 days** carrying
+any rows — sampling had deleted whole days. That isn't history worth keeping
+over exactness. At 7 days: exact counts, every day present, a real chart, and no
+extrapolation caveats. `edge_traffic` keeps its 60 days, since zone request data
+isn't sampled this way.
 
 That also settles what `sampleSize` means: `sampleSize x sampleInterval ~= visits`
 (11 x 1 = 11 at 7 days; 12 x 10 = 120 at 60). It is the RAW count behind the
@@ -3152,6 +3160,21 @@ pattern as the interval/chart split above:
   is looking at rather than one row.
 - **"What period does the data cover?"** → the `startDay`–`endDay` pair, shown
   directly instead of a computed span that silently ran to "now".
+
+*What the narrowing made dormant, and what it deleted.* Nothing sampling-related
+was removed: Cloudflare's query-time sampling is volume-driven as well as
+age-driven, so a high-traffic future could sample even a 7-day window. So
+`countsAreExact`, the `sampleInterval` reporting and the chart-suppression
+branch all stay — currently unreachable, deliberately kept, and covered by unit
+tests rather than by any live path.
+
+What DID go is the RUM retention read. `resolveRumWindowDays` queried the
+account settings node to clamp the window against `notOlderThan`; with a fixed
+7-day window that clamp can never bind, since retention runs to at least 56 days
+(the 60-day probe returned rows from 55 days back). It was a round-trip on every
+dashboard load that could not change the answer. Deleted, along with
+`boundaryKnown`, which existed only to disclose that read failing. `edge_traffic`
+keeps its own boundary read — 60 days genuinely can exceed a zone's retention.
 
 *Span is not coverage.* `windowDays` measures from the oldest row to today: on
 the live card a 57-day span carried only **11 days** of rows. A caption reading

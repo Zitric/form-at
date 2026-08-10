@@ -268,19 +268,23 @@ test.describe("admin dashboard", () => {
     // session and not a person.
     await expect(page.getByText(/arriving from a different site or a direct link/i)).toBeVisible();
     await expect(page.getByText(/can't count distinct humans/i)).toBeVisible();
-    // The interval is the disclosure, not a sample rate — and it's labelled
-    // with the level it was computed at.
-    await expect(page.getByText(/95% interval/)).toBeVisible();
-    // The fixture's 30d window is shorter than the 45d retention, so the
-    // coverage line must appear — and must state coverage WITHOUT claiming a
-    // cause. An earlier version asserted "the beacon started collecting
-    // recently", which turned out to be false on the live card.
-    // Days-with-data and the span they cover are different facts — the fixture
-    // has 22 days of rows spread over a 30d span. Asserting the span as though
-    // it were coverage is the bug this replaced.
-    await expect(page.getByText(/22 days carry data/i)).toBeVisible();
-    await expect(page.getByText(/spread across the 30d/i)).toBeVisible();
-    await expect(page.getByText(/claims no cause/i)).toBeVisible();
+    // The fixture models the ORDINARY 7-day state: unsampled, so exact counts
+    // and a real chart, but a degenerate interval at this volume — so the
+    // bounds row is correctly absent rather than showing "41 – 41".
+    await expect(page.getByText(/95% interval/)).toHaveCount(0);
+    await expect(
+      page.getByText(/Unsampled at this volume, so these are exact counts/i),
+    ).toBeVisible();
+    // Exact counts chart even without a usable interval — the split that
+    // replaced an AND rule which could never unlock.
+    await expect(
+      page
+        .getByTestId("dashboard-card")
+        .filter({ hasText: "// visits" })
+        .getByTestId("trend-chart"),
+    ).toBeVisible();
+    // Full coverage in the fixture (7 of 7 days), so no coverage caption.
+    await expect(page.getByText(/carry data, between/i)).toHaveCount(0);
     // Sits beside edge_traffic so the gap between the two is visible.
     await expect(page.getByText("// edge_traffic")).toBeVisible();
   });

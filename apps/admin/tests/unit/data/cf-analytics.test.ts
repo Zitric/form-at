@@ -3,9 +3,9 @@ import {
   EDGE_TRAFFIC_MAX_WINDOW_DAYS,
   MIN_PAGELOADS_FOR_BOT_SHARE,
   RUM_CONFIDENCE_LEVEL,
+  RUM_WINDOW_DAYS,
   fetchEdgeTraffic,
   fetchRumVisits,
-  resolveRumWindowDays,
   resolveWindowDays,
 } from "~/data/cf-analytics";
 
@@ -212,20 +212,6 @@ describe("fetchEdgeTraffic", () => {
   });
 });
 
-const rumSettingsBody = (notOlderThan: number | null) => ({
-  data: {
-    viewer: {
-      accounts: [
-        {
-          settings: {
-            rumPageloadEventsAdaptiveGroups: notOlderThan === null ? {} : { notOlderThan },
-          },
-        },
-      ],
-    },
-  },
-});
-
 const rumBody = (
   rows: {
     date: string;
@@ -268,35 +254,14 @@ const rumBody = (
   },
 });
 
-describe("resolveRumWindowDays", () => {
-  it("reads the boundary from the ACCOUNT settings node, not the zone one", async () => {
-    // Distinct nesting from resolveWindowDays (accounts vs zones) — the most
-    // plausible copy-paste bug in this pair, and it would fail silently by
-    // falling back to the full window.
-    mockFetchSequence({ body: rumSettingsBody(14 * 86_400) });
-    expect(await resolveRumWindowDays(TOKEN, "acct")).toEqual({ days: 14, fromBoundary: true });
-  });
-
-  it("falls back to the full window, flagged, when the boundary is unreadable", async () => {
-    mockFetchSequence({ body: rumSettingsBody(null) });
-    expect(await resolveRumWindowDays(TOKEN, "acct")).toEqual({
-      days: EDGE_TRAFFIC_MAX_WINDOW_DAYS,
-      fromBoundary: false,
-    });
-  });
-});
-
 describe("fetchRumVisits", () => {
   it("excludes bot rows and reports the bot counts behind the exclusion", async () => {
-    mockFetchSequence(
-      { body: rumSettingsBody(30 * 86_400) },
-      {
-        body: rumBody([
-          { date: "2026-08-07", bot: 0, count: 70, visits: 40 },
-          { date: "2026-08-07", bot: 1, count: 30, visits: 25 },
-        ]),
-      },
-    );
+    mockFetchSequence({
+      body: rumBody([
+        { date: "2026-08-07", bot: 0, count: 70, visits: 40 },
+        { date: "2026-08-07", bot: 1, count: 30, visits: 25 },
+      ]),
+    });
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
 
@@ -311,16 +276,13 @@ describe("fetchRumVisits", () => {
   });
 
   it("treats string and boolean bot encodings as bot, since the schema doesn't document one", async () => {
-    mockFetchSequence(
-      { body: rumSettingsBody(30 * 86_400) },
-      {
-        body: rumBody([
-          { date: "2026-08-07", bot: "0", count: 10, visits: 5 },
-          { date: "2026-08-07", bot: "1", count: 10, visits: 5 },
-          { date: "2026-08-07", bot: true, count: 10, visits: 5 },
-        ]),
-      },
-    );
+    mockFetchSequence({
+      body: rumBody([
+        { date: "2026-08-07", bot: "0", count: 10, visits: 5 },
+        { date: "2026-08-07", bot: "1", count: 10, visits: 5 },
+        { date: "2026-08-07", bot: true, count: 10, visits: 5 },
+      ]),
+    });
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
 
@@ -329,15 +291,12 @@ describe("fetchRumVisits", () => {
   });
 
   it("sums the interval bounds and echoes the confidence level", async () => {
-    mockFetchSequence(
-      { body: rumSettingsBody(30 * 86_400) },
-      {
-        body: rumBody([
-          { date: "2026-08-06", count: 5, visits: 5, estimate: 5, lower: 3, upper: 8 },
-          { date: "2026-08-07", count: 5, visits: 5, estimate: 5, lower: 4, upper: 9 },
-        ]),
-      },
-    );
+    mockFetchSequence({
+      body: rumBody([
+        { date: "2026-08-06", count: 5, visits: 5, estimate: 5, lower: 3, upper: 8 },
+        { date: "2026-08-07", count: 5, visits: 5, estimate: 5, lower: 4, upper: 9 },
+      ]),
+    });
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
 
@@ -351,15 +310,12 @@ describe("fetchRumVisits", () => {
   it("marks the whole window invalid if ANY day's interval is invalid", async () => {
     // A window is only as trustworthy as its least trustworthy day — reporting
     // a valid interval over a mix would launder the bad one.
-    mockFetchSequence(
-      { body: rumSettingsBody(30 * 86_400) },
-      {
-        body: rumBody([
-          { date: "2026-08-06", count: 5, visits: 5, isValid: true },
-          { date: "2026-08-07", count: 5, visits: 5, isValid: false, sampleSize: 2 },
-        ]),
-      },
-    );
+    mockFetchSequence({
+      body: rumBody([
+        { date: "2026-08-06", count: 5, visits: 5, isValid: true },
+        { date: "2026-08-07", count: 5, visits: 5, isValid: false, sampleSize: 2 },
+      ]),
+    });
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
 
@@ -368,28 +324,25 @@ describe("fetchRumVisits", () => {
   });
 
   it("returns null when no row carries a confidence block — a failed read, not zero", async () => {
-    mockFetchSequence(
-      { body: rumSettingsBody(30 * 86_400) },
-      {
-        body: {
-          data: {
-            viewer: {
-              accounts: [
-                {
-                  rumPageloadEventsAdaptiveGroups: [
-                    {
-                      count: 9,
-                      dimensions: { date: "2026-08-07", bot: 0 },
-                      sum: { visits: 9 },
-                    },
-                  ],
-                },
-              ],
-            },
+    mockFetchSequence({
+      body: {
+        data: {
+          viewer: {
+            accounts: [
+              {
+                rumPageloadEventsAdaptiveGroups: [
+                  {
+                    count: 9,
+                    dimensions: { date: "2026-08-07", bot: 0 },
+                    sum: { visits: 9 },
+                  },
+                ],
+              },
+            ],
           },
         },
       },
-    );
+    });
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
 
@@ -401,16 +354,13 @@ describe("fetchRumVisits", () => {
   });
 
   it("buckets visits weekly, like every other trend", async () => {
-    mockFetchSequence(
-      { body: rumSettingsBody(30 * 86_400) },
-      {
-        body: rumBody([
-          { date: "2026-08-01", count: 2, visits: 2 },
-          { date: "2026-08-02", count: 3, visits: 3 },
-          { date: "2026-08-03", count: 4, visits: 4 },
-        ]),
-      },
-    );
+    mockFetchSequence({
+      body: rumBody([
+        { date: "2026-08-01", count: 2, visits: 2 },
+        { date: "2026-08-02", count: 3, visits: 3 },
+        { date: "2026-08-03", count: 4, visits: 4 },
+      ]),
+    });
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-03T12:00:00Z"));
 
@@ -425,15 +375,12 @@ describe("fetchRumVisits", () => {
     // leaves the percentage to the card's own MIN_PAGELOADS_FOR_BOT_SHARE
     // floor — deliberately not notify_funnel's, which is scaled for prompt
     // impressions rather than page loads.
-    mockFetchSequence(
-      { body: rumSettingsBody(30 * 86_400) },
-      {
-        body: rumBody([
-          { date: "2026-08-09", bot: 0, count: 11, visits: 11 },
-          { date: "2026-08-09", bot: 1, count: 1, visits: 1 },
-        ]),
-      },
-    );
+    mockFetchSequence({
+      body: rumBody([
+        { date: "2026-08-09", bot: 0, count: 11, visits: 11 },
+        { date: "2026-08-09", bot: 1, count: 1, visits: 1 },
+      ]),
+    });
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-09T12:00:00Z"));
 
@@ -445,26 +392,22 @@ describe("fetchRumVisits", () => {
     expect(result?.totalPageloads).toBeLessThan(MIN_PAGELOADS_FOR_BOT_SHARE);
   });
 
-  it("reports the requested window alongside the one it got, so a short retention isn't mistaken for a late start", async () => {
-    // Retention allows 14 days; only 3 days of data exist. The card needs BOTH
-    // numbers to say "started collecting recently" honestly — comparing the 3
-    // against a hardcoded 60 would fire that caption even when the beacon had
-    // been collecting for the whole retention period.
-    mockFetchSequence(
-      { body: rumSettingsBody(14 * 86_400) },
-      {
-        body: rumBody([
-          { date: "2026-08-05", count: 2, visits: 2 },
-          { date: "2026-08-06", count: 2, visits: 2 },
-          { date: "2026-08-07", count: 2, visits: 2 },
-        ]),
-      },
-    );
+  it("reports the fixed 7-day window alongside the days that carry data", async () => {
+    // The window no longer comes from a retention read — it's pinned inside
+    // Cloudflare's unsampled period. The card still needs both numbers so its
+    // coverage caption compares days-with-data against days-asked-for.
+    mockFetchSequence({
+      body: rumBody([
+        { date: "2026-08-05", count: 2, visits: 2 },
+        { date: "2026-08-06", count: 2, visits: 2 },
+        { date: "2026-08-07", count: 2, visits: 2 },
+      ]),
+    });
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
 
-    expect(result?.requestedWindowDays).toBe(14);
-    expect(result?.windowDays).toBe(3);
+    expect(result?.requestedWindowDays).toBe(RUM_WINDOW_DAYS);
+    expect(result?.daysWithData).toBe(3);
   });
 
   it("does not AND isValid across days — that could never unlock at real traffic", async () => {
@@ -473,15 +416,12 @@ describe("fetchRumVisits", () => {
     // false and the chart could never appear however much traffic grew — a
     // permanent suppression that looked temporary. Validity is now a property
     // of the summed bounds, which one quiet day cannot veto.
-    mockFetchSequence(
-      { body: rumSettingsBody(30 * 86_400) },
-      {
-        body: rumBody([
-          { date: "2026-08-06", count: 80, visits: 80, lower: 60, upper: 100, isValid: true },
-          { date: "2026-08-07", count: 1, visits: 1, lower: 1, upper: 1, isValid: false },
-        ]),
-      },
-    );
+    mockFetchSequence({
+      body: rumBody([
+        { date: "2026-08-06", count: 80, visits: 80, lower: 60, upper: 100, isValid: true },
+        { date: "2026-08-07", count: 1, visits: 1, lower: 1, upper: 1, isValid: false },
+      ]),
+    });
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
 
@@ -491,14 +431,11 @@ describe("fetchRumVisits", () => {
   });
 
   it("treats degenerate summed bounds as no usable interval", async () => {
-    mockFetchSequence(
-      { body: rumSettingsBody(30 * 86_400) },
-      {
-        body: rumBody([
-          { date: "2026-08-07", count: 4, visits: 4, lower: 4, upper: 4, isValid: false },
-        ]),
-      },
-    );
+    mockFetchSequence({
+      body: rumBody([
+        { date: "2026-08-07", count: 4, visits: 4, lower: 4, upper: 4, isValid: false },
+      ]),
+    });
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
 
@@ -515,15 +452,12 @@ describe("fetchRumVisits", () => {
     // the window computes to 1. `countsAreExact` must still be FALSE — for
     // "was any of this extrapolated?" the conservative reading wins, because
     // understating sampling would chart an artefact as real traffic.
-    mockFetchSequence(
-      { body: rumSettingsBody(30 * 86_400) },
-      {
-        body: rumBody([
-          { date: "2026-08-06", count: 5, visits: 5, sampleInterval: 1 },
-          { date: "2026-08-07", count: 5, visits: 5, sampleInterval: 10 },
-        ]),
-      },
-    );
+    mockFetchSequence({
+      body: rumBody([
+        { date: "2026-08-06", count: 5, visits: 5, sampleInterval: 1 },
+        { date: "2026-08-07", count: 5, visits: 5, sampleInterval: 10 },
+      ]),
+    });
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
 
@@ -536,33 +470,30 @@ describe("fetchRumVisits", () => {
     // The bug this guards: summing `?? 0` over rows that carry no sampleSize
     // produced a small, confident number that described nothing — and it was
     // printed beside the visit count as though the two were comparable.
-    mockFetchSequence(
-      { body: rumSettingsBody(30 * 86_400) },
-      {
-        body: {
-          data: {
-            viewer: {
-              accounts: [
-                {
-                  rumPageloadEventsAdaptiveGroups: [
-                    {
-                      count: 40,
-                      dimensions: { date: "2026-08-10", bot: 0 },
-                      avg: { sampleInterval: 1 },
-                      confidence: {
-                        level: 0.95,
-                        // estimate present, sampleSize absent
-                        sum: { visits: { estimate: 12, lower: 12, upper: 12, isValid: false } },
-                      },
+    mockFetchSequence({
+      body: {
+        data: {
+          viewer: {
+            accounts: [
+              {
+                rumPageloadEventsAdaptiveGroups: [
+                  {
+                    count: 40,
+                    dimensions: { date: "2026-08-10", bot: 0 },
+                    avg: { sampleInterval: 1 },
+                    confidence: {
+                      level: 0.95,
+                      // estimate present, sampleSize absent
+                      sum: { visits: { estimate: 12, lower: 12, upper: 12, isValid: false } },
                     },
-                  ],
-                },
-              ],
-            },
+                  },
+                ],
+              },
+            ],
           },
         },
       },
-    );
+    });
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-10T12:00:00Z"));
 
@@ -575,21 +506,18 @@ describe("fetchRumVisits", () => {
     // Unsampled, 11 samples gave 11 visits; sampled 1-in-10, 12 samples gave
     // 120. An earlier version of this test asserted sampleSize tracked
     // `pageloads` — wrong, and the diagnostic disproved it (11 vs 23 raw).
-    mockFetchSequence(
-      { body: rumSettingsBody(60 * 86_400) },
-      {
-        body: rumBody([
-          {
-            date: "2026-08-08",
-            count: 240,
-            visits: 120,
-            estimate: 120,
-            sampleSize: 12,
-            sampleInterval: 10,
-          },
-        ]),
-      },
-    );
+    mockFetchSequence({
+      body: rumBody([
+        {
+          date: "2026-08-08",
+          count: 240,
+          visits: 120,
+          estimate: 120,
+          sampleSize: 12,
+          sampleInterval: 10,
+        },
+      ]),
+    });
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-08T12:00:00Z"));
 
@@ -605,29 +533,26 @@ describe("fetchRumVisits", () => {
     // factor was exactly 10 (120 visits from 12 samples). Reporting the max
     // would tell a reader "1-in-17" about figures scaled by 10 — the max
     // describes one row, this describes the number on screen.
-    mockFetchSequence(
-      { body: rumSettingsBody(60 * 86_400) },
-      {
-        body: rumBody([
-          {
-            date: "2026-08-07",
-            count: 120,
-            visits: 60,
-            estimate: 60,
-            sampleSize: 6,
-            sampleInterval: 10,
-          },
-          {
-            date: "2026-08-08",
-            count: 120,
-            visits: 60,
-            estimate: 60,
-            sampleSize: 6,
-            sampleInterval: 16.666666666666668,
-          },
-        ]),
-      },
-    );
+    mockFetchSequence({
+      body: rumBody([
+        {
+          date: "2026-08-07",
+          count: 120,
+          visits: 60,
+          estimate: 60,
+          sampleSize: 6,
+          sampleInterval: 10,
+        },
+        {
+          date: "2026-08-08",
+          count: 120,
+          visits: 60,
+          estimate: 60,
+          sampleSize: 6,
+          sampleInterval: 16.666666666666668,
+        },
+      ]),
+    });
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-08T12:00:00Z"));
 
@@ -640,15 +565,12 @@ describe("fetchRumVisits", () => {
     // windowDays measures to "now", so a window whose newest row is two days
     // old overstates coverage by exactly that much. The card shows the date
     // pair instead.
-    mockFetchSequence(
-      { body: rumSettingsBody(60 * 86_400) },
-      {
-        body: rumBody([
-          { date: "2026-06-15", count: 5, visits: 5 },
-          { date: "2026-08-08", count: 5, visits: 5 },
-        ]),
-      },
-    );
+    mockFetchSequence({
+      body: rumBody([
+        { date: "2026-06-15", count: 5, visits: 5 },
+        { date: "2026-08-08", count: 5, visits: 5 },
+      ]),
+    });
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-10T12:00:00Z"));
 
@@ -660,16 +582,13 @@ describe("fetchRumVisits", () => {
   it("counts days that carry data, not the span they're spread over", async () => {
     // A 57-day span held only 11 days of rows on the live card, so a caption
     // reading "57 of 60 retained days have data" off the span was false.
-    mockFetchSequence(
-      { body: rumSettingsBody(60 * 86_400) },
-      {
-        body: rumBody([
-          { date: "2026-06-15", count: 5, visits: 5 },
-          { date: "2026-07-20", count: 5, visits: 5 },
-          { date: "2026-08-08", count: 5, visits: 5 },
-        ]),
-      },
-    );
+    mockFetchSequence({
+      body: rumBody([
+        { date: "2026-06-15", count: 5, visits: 5 },
+        { date: "2026-07-20", count: 5, visits: 5 },
+        { date: "2026-08-08", count: 5, visits: 5 },
+      ]),
+    });
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-08T12:00:00Z"));
 
@@ -679,7 +598,7 @@ describe("fetchRumVisits", () => {
   });
 
   it("returns null without credentials, and never calls the API", async () => {
-    const fetchMock = mockFetchSequence({ body: rumSettingsBody(30 * 86_400) });
+    const fetchMock = mockFetchSequence({ body: rumBody([]) });
 
     expect(await fetchRumVisits(undefined, "acct", "site")).toBeNull();
     expect(await fetchRumVisits(TOKEN, undefined, "site")).toBeNull();
@@ -702,7 +621,7 @@ describe("fetchRumVisits", () => {
     // today returns no rows for an entirely ordinary reason, and telling the
     // reader "credentials missing" would send them hunting a bug that isn't
     // there. Only an unreadable response stays null.
-    mockFetchSequence({ body: rumSettingsBody(30 * 86_400) }, { body: rumBody([]) });
+    mockFetchSequence({ body: rumBody([]) });
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-10T12:00:00Z"));
 
@@ -717,14 +636,13 @@ describe("fetchRumVisits", () => {
     // HTTP 200 carrying `error parsing args for "confidence": level: not a
     // number`, so every load silently produced a failed read. This asserts the
     // variable actually goes out.
-    const fetchMock = mockFetchSequence(
-      { body: rumSettingsBody(30 * 86_400) },
-      { body: rumBody([{ date: "2026-08-10", count: 1, visits: 1 }]) },
-    );
+    const fetchMock = mockFetchSequence({
+      body: rumBody([{ date: "2026-08-10", count: 1, visits: 1 }]),
+    });
 
     await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-10T12:00:00Z"));
 
-    const call = JSON.parse(fetchMock.mock.calls[1][1].body);
+    const call = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(call.variables.level).toBe(RUM_CONFIDENCE_LEVEL);
     expect(call.query).toContain("confidence(level: $level)");
   });
@@ -732,33 +650,30 @@ describe("fetchRumVisits", () => {
   it("falls back to the requested level if the API doesn't echo one", async () => {
     // A 0 here would render "0% interval", which is worse than restating our
     // own input.
-    mockFetchSequence(
-      { body: rumSettingsBody(30 * 86_400) },
-      {
-        body: {
-          data: {
-            viewer: {
-              accounts: [
-                {
-                  rumPageloadEventsAdaptiveGroups: [
-                    {
-                      count: 1,
-                      dimensions: { date: "2026-08-10", bot: 0 },
-                      sum: { visits: 1 },
-                      confidence: {
-                        sum: {
-                          visits: { estimate: 1, lower: 1, upper: 1, isValid: true, sampleSize: 1 },
-                        },
+    mockFetchSequence({
+      body: {
+        data: {
+          viewer: {
+            accounts: [
+              {
+                rumPageloadEventsAdaptiveGroups: [
+                  {
+                    count: 1,
+                    dimensions: { date: "2026-08-10", bot: 0 },
+                    sum: { visits: 1 },
+                    confidence: {
+                      sum: {
+                        visits: { estimate: 1, lower: 1, upper: 1, isValid: true, sampleSize: 1 },
                       },
                     },
-                  ],
-                },
-              ],
-            },
+                  },
+                ],
+              },
+            ],
           },
         },
       },
-    );
+    });
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-10T12:00:00Z"));
 
@@ -766,14 +681,13 @@ describe("fetchRumVisits", () => {
   });
 
   it("sends the account tag and site tag", async () => {
-    const fetchMock = mockFetchSequence(
-      { body: rumSettingsBody(30 * 86_400) },
-      { body: rumBody([{ date: "2026-08-07", count: 1, visits: 1 }]) },
-    );
+    const fetchMock = mockFetchSequence({
+      body: rumBody([{ date: "2026-08-07", count: 1, visits: 1 }]),
+    });
 
     await fetchRumVisits(TOKEN, "acct-1", "site-1", freezeAt("2026-08-07T12:00:00Z"));
 
-    const vars = JSON.parse(fetchMock.mock.calls[1][1].body).variables;
+    const vars = JSON.parse(fetchMock.mock.calls[0][1].body).variables;
     expect(vars.accountTag).toBe("acct-1");
     expect(vars.siteTag).toBe("site-1");
   });

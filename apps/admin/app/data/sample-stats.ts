@@ -4,33 +4,33 @@ import type { EdgeTraffic, RumVisits } from "./cf-analytics";
 
 // Substituted by `fetchRumVisitStats` when there's no Cloudflare env.
 //
-// A VALID interval so the fixture exercises the chart-and-bounds path; the
-// too-few-samples path is covered by unit tests rather than by making local dev
-// show the degraded card permanently. Visits far below edge requests, and a real
-// bot share, because that gap is the whole reason both cards exist.
+// Modelled on the real 7-day shape: unsampled, exact counts, degenerate
+// interval. That combination is the ORDINARY state at this volume, so the
+// fixture exercises it rather than an idealised one — chart renders, bounds
+// suppressed. Visits far below edge requests, with a real bot share, because
+// that gap is the whole reason both cards exist. The sampled path is covered by
+// unit tests instead of being made permanently visible in local dev.
 export const SAMPLE_RUM_VISITS: RumVisits = {
-  visits: 214,
-  visitsLower: 191,
-  visitsUpper: 237,
-  intervalValid: true,
+  visits: 41,
+  visitsLower: 41,
+  visitsUpper: 41,
+  // Degenerate bounds and no usable interval — the ordinary state at this
+  // volume. The chart still renders, because unsampled counts are exact.
+  intervalValid: false,
   sampleInterval: 1,
   countsAreExact: true,
   confidenceLevel: 0.95,
-  sampleSize: 214,
-  pageloads: 389,
-  botPageloads: 175,
-  totalPageloads: 564,
-  weeklyVisits: [38, 41, 45, 44, 46],
-  // 30 days of data out of 45 available — exercises the "started recently"
-  // caption via the honest comparison (data shorter than retention), not via a
-  // short retention being mistaken for a late start.
+  sampleSize: 41,
+  pageloads: 96,
+  botPageloads: 7,
+  totalPageloads: 103,
+  weeklyVisits: [41],
   noDataInWindow: false,
-  daysWithData: 22,
-  requestedWindowDays: 45,
-  windowDays: 30,
-  startDay: "2026-07-09",
-  endDay: "2026-08-05",
-  boundaryKnown: true,
+  daysWithData: 7,
+  requestedWindowDays: 7,
+  windowDays: 7,
+  startDay: "2026-08-04",
+  endDay: "2026-08-10",
 };
 
 // Substituted by `fetchEdgeTrafficStats` when there's no Cloudflare env, so

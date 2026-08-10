@@ -335,11 +335,10 @@ export type RumVisits = {
    *  data" off the span alone is simply false. */
   daysWithData: number;
   /** Days we ASKED for, i.e. min(Cloudflare's retention, our chart window).
-   *  `windowDays` short of this means data genuinely starts later than
-   *  retention allows — the beacon began collecting recently. Comparing
-   *  `windowDays` against the chart maximum instead would fire permanently
-   *  whenever retention is under 60 days, blaming collection for what is
-   *  really retention. */
+   *  Always `RUM_WINDOW_DAYS` now that the window is fixed at 7 days — kept as
+   *  a field rather than inlined so the card's coverage caption compares days
+   *  that HAVE data against days that were ASKED for, without hardcoding the
+   *  number in two places. */
   requestedWindowDays: number;
   windowDays: number;
   /** ISO dates (YYYY-MM-DD) of the oldest and newest days that returned rows.
@@ -349,66 +348,37 @@ export type RumVisits = {
    *  wrong by exactly that much. */
   startDay: string;
   endDay: string;
-  boundaryKnown: boolean;
 };
 
-const RUM_SETTINGS_QUERY = `
-  query RumRetention($accountTag: String!) {
-    viewer {
-      accounts(filter: { accountTag: $accountTag }) {
-        settings {
-          rumPageloadEventsAdaptiveGroups { notOlderThan }
-        }
-      }
-    }
-  }`;
-
-type RumSettingsData = {
-  viewer?: {
-    accounts?: { settings?: { rumPageloadEventsAdaptiveGroups?: { notOlderThan?: number } } }[];
-  };
-};
-
-/** Account-scoped twin of `resolveWindowDays`. Same fallback rule: an
- *  unreadable boundary means we ask for the full window and render whatever
- *  comes back, with `boundaryKnown: false` so the card can disclose it. */
-export async function resolveRumWindowDays(
-  token: string,
-  accountTag: string,
-): Promise<{ days: number; fromBoundary: boolean }> {
-  const data = await postGraphQL<RumSettingsData>(token, RUM_SETTINGS_QUERY, { accountTag });
-  const seconds =
-    data?.viewer?.accounts?.[0]?.settings?.rumPageloadEventsAdaptiveGroups?.notOlderThan;
-  if (typeof seconds !== "number" || seconds <= 0) {
-    return { days: EDGE_TRAFFIC_MAX_WINDOW_DAYS, fromBoundary: false };
-  }
-  const days = Math.floor(seconds / 86_400);
-  return { days: Math.max(1, Math.min(days, EDGE_TRAFFIC_MAX_WINDOW_DAYS)), fromBoundary: true };
-}
+// Cloudflare keeps beacon data UNSAMPLED for 7 days, then aggregates it to
+// around 10%. That's a property of the data's AGE, not of the query — so any
+// window past a week permanently drags in already-degraded rows, and no width
+// we pick can recover them. Measured on this site: a 60-day window returned
+// 120 visits extrapolated from 12 real observations, with only 11 of 55 days
+// carrying rows at all — sampling had deleted whole days. A 7-day window sits
+// entirely inside the unsampled period: exact counts, every day present, no
+// extrapolation.
+//
+// The trade is history for accuracy, taken deliberately. `edge_traffic` keeps
+// its 60 days because zone request data isn't sampled this way. Accurate
+// history beyond a week would need capturing each day into D1 while it's still
+// unsampled — see IMPROVEMENTS.md #12.
+export const RUM_WINDOW_DAYS = 7;
 
 // `confidence` takes a REQUIRED `level` argument — omitting it fails the whole
 // query with `error parsing args for "confidence": level: not a number`, inside
-// an HTTP 200. Pinned rather than left to a default for two reasons: an
-// unstated confidence level makes an interval uninterpretable (a 99% and a 50%
-// interval are very different widths on identical data), and a default that
-// shifted under us would silently change what the card claims. 0.95 is the
-// convention a reader will assume, and the card states it.
+// an HTTP 200. Pinned rather than left to a default: an unstated confidence
+// level makes an interval uninterpretable, and a default that shifted under us
+// would silently change what the card claims.
 export const RUM_CONFIDENCE_LEVEL = 0.95;
 
 // Below this many page loads in the window, the card shows bot exclusions as
-// raw counts and no percentage.
-//
-// Deliberately NOT `MIN_SAMPLE_FOR_RATE` (admin-stats.ts), despite being the
-// same shape of rule. That 10 is a floor over PROMPT IMPRESSIONS, where double
-// digits is a real sample; page loads accumulate orders of magnitude faster, so
-// 10 of them is a fraction of an hour and would stop suppressing long before the
-// percentage settles. Sharing the constant would also mean tuning one metric
-// silently retunes the other — the two need to move independently.
-//
-// 100 is chosen so one additional bot moves the figure by about a percentage
-// point instead of eight: at n=12 a single bot swings 8%→17%, which reads as a
-// finding when it is noise. Raise it if the number still looks jumpy; it only
-// ever gates the percentage, never the counts.
+// raw counts and no percentage. Deliberately NOT `MIN_SAMPLE_FOR_RATE`
+// (admin-stats.ts), despite being the same shape of rule: that 10 is a floor
+// over PROMPT IMPRESSIONS, where double digits is a real sample, while page
+// loads accumulate orders of magnitude faster. Sharing the constant would also
+// mean tuning one metric silently retunes the other. 100 is chosen so one extra
+// bot moves the figure by about a percentage point instead of eight.
 export const MIN_PAGELOADS_FOR_BOT_SHARE = 100;
 
 const RUM_QUERY = `
@@ -480,7 +450,11 @@ export async function fetchRumVisits(
 ): Promise<RumVisits | null> {
   if (!token || !accountTag || !siteTag) return null;
 
-  const { days: requestedDays, fromBoundary } = await resolveRumWindowDays(token, accountTag);
+  // Fixed 7-day window, so no retention read: Cloudflare's RUM retention runs
+  // to at least 56 days (a 60-day probe returned rows from 55 days back), so a
+  // clamp against it could never bind here. Dropping it removes a round-trip
+  // that can't change the answer.
+  const requestedDays = RUM_WINDOW_DAYS;
   const until = new Date(now);
   const since = new Date(now);
   since.setUTCDate(since.getUTCDate() - (requestedDays - 1));
@@ -517,7 +491,6 @@ export async function fetchRumVisits(
       windowDays: requestedDays,
       startDay: isoDay(since),
       endDay: isoDay(since),
-      boundaryKnown: fromBoundary,
     };
   }
 
@@ -589,6 +562,5 @@ export async function fetchRumVisits(
     windowDays: Math.max(1, spanDays),
     startDay,
     endDay: dayList.length ? (dayList[dayList.length - 1] as string) : startDay,
-    boundaryKnown: fromBoundary,
   };
 }
