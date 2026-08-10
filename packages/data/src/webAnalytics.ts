@@ -17,7 +17,7 @@
 // Cloudflare's own docs note manual setup is the more precise option anyway:
 // automatic injects across every page of the zone, manual only where the
 // snippet renders. See `apps/web/app/utils/rootHead.ts` for the injection.
-export const WEB_ANALYTICS_SITE_TAG = "REPLACE_WITH_WEB_ANALYTICS_SITE_TAG";
+export const WEB_ANALYTICS_SITE_TAG = "d2a9ea502ebf4cc281ca1775dac32502";
 
 /**
  * False while the constant is still the placeholder. `rootHead.ts` uses this to
