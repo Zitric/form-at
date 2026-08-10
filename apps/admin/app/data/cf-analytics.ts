@@ -284,6 +284,20 @@ export type RumVisits = {
   /** Weekly buckets of non-bot visits, oldest first — same shape as every
    *  other trend. Only plotted when `intervalValid`. */
   weeklyVisits: number[];
+  /** True when the query SUCCEEDED but the window held no rows — collection is
+   *  new, or genuinely nothing was recorded. Distinct from a null return, which
+   *  means we couldn't read at all. A real zero and a failed read look the same
+   *  on screen unless the card is told which it has; edge_traffic can collapse
+   *  them because its window is never legitimately empty, but a beacon that
+   *  started today is empty for an entirely ordinary reason. */
+  noDataInWindow: boolean;
+  /** Days we ASKED for, i.e. min(Cloudflare's retention, our chart window).
+   *  `windowDays` short of this means data genuinely starts later than
+   *  retention allows — the beacon began collecting recently. Comparing
+   *  `windowDays` against the chart maximum instead would fire permanently
+   *  whenever retention is under 60 days, blaming collection for what is
+   *  really retention. */
+  requestedWindowDays: number;
   windowDays: number;
   startDay: string;
   boundaryKnown: boolean;
@@ -323,8 +337,17 @@ export async function resolveRumWindowDays(
   return { days: Math.max(1, Math.min(days, EDGE_TRAFFIC_MAX_WINDOW_DAYS)), fromBoundary: true };
 }
 
+// `confidence` takes a REQUIRED `level` argument — omitting it fails the whole
+// query with `error parsing args for "confidence": level: not a number`, inside
+// an HTTP 200. Pinned rather than left to a default for two reasons: an
+// unstated confidence level makes an interval uninterpretable (a 99% and a 50%
+// interval are very different widths on identical data), and a default that
+// shifted under us would silently change what the card claims. 0.95 is the
+// convention a reader will assume, and the card states it.
+export const RUM_CONFIDENCE_LEVEL = 0.95;
+
 const RUM_QUERY = `
-  query RumVisits($accountTag: String!, $siteTag: String!, $since: String!, $until: String!) {
+  query RumVisits($accountTag: String!, $siteTag: String!, $since: String!, $until: String!, $level: Float!) {
     viewer {
       accounts(filter: { accountTag: $accountTag }) {
         rumPageloadEventsAdaptiveGroups(
@@ -335,7 +358,7 @@ const RUM_QUERY = `
           count
           dimensions { date bot }
           sum { visits }
-          confidence {
+          confidence(level: $level) {
             level
             sum { visits { estimate lower upper isValid sampleSize } }
           }
@@ -402,9 +425,31 @@ export async function fetchRumVisits(
     siteTag,
     since: isoDay(since),
     until: isoDay(until),
+    level: RUM_CONFIDENCE_LEVEL,
   });
   const rows = data?.viewer?.accounts?.[0]?.rumPageloadEventsAdaptiveGroups;
-  if (!rows?.length) return null;
+  // `data` present but no rows is a SUCCESSFUL read of an empty window — a real
+  // zero, which §1's never-substitute-0 rule permits and in fact wants
+  // distinguished. Only a failed read (null data) stays null.
+  if (!data) return null;
+  if (!rows?.length) {
+    return {
+      visits: 0,
+      visitsLower: 0,
+      visitsUpper: 0,
+      intervalValid: false,
+      confidenceLevel: 0,
+      sampleSize: 0,
+      pageloads: 0,
+      botShare: 0,
+      weeklyVisits: [],
+      noDataInWindow: true,
+      requestedWindowDays: requestedDays,
+      windowDays: requestedDays,
+      startDay: isoDay(since),
+      boundaryKnown: fromBoundary,
+    };
+  }
 
   const human = rows.filter((r) => !isBotRow(r.dimensions?.bot));
   const allPageloads = rows.reduce((a, r) => a + (r.count ?? 0), 0);
@@ -442,11 +487,14 @@ export async function fetchRumVisits(
     visitsLower: conf.reduce((a, c) => a + (c?.lower ?? c?.estimate ?? 0), 0),
     visitsUpper: conf.reduce((a, c) => a + (c?.upper ?? c?.estimate ?? 0), 0),
     intervalValid: hasConfidence && conf.every((c) => c?.isValid !== false),
-    confidenceLevel: human.find((r) => r.confidence?.level)?.confidence?.level ?? 0,
+    confidenceLevel:
+      human.find((r) => r.confidence?.level)?.confidence?.level ?? RUM_CONFIDENCE_LEVEL,
     sampleSize: conf.reduce((a, c) => a + (c?.sampleSize ?? 0), 0),
     pageloads: human.reduce((a, r) => a + (r.count ?? 0), 0),
     botShare: allPageloads > 0 ? botPageloads / allPageloads : 0,
     weeklyVisits: bucketByWeek(daily, TREND_BUCKET_DAYS),
+    noDataInWindow: false,
+    requestedWindowDays: requestedDays,
     windowDays: Math.max(1, spanDays),
     startDay,
     boundaryKnown: fromBoundary,

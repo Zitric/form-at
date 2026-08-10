@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   EDGE_TRAFFIC_MAX_WINDOW_DAYS,
+  RUM_CONFIDENCE_LEVEL,
   fetchEdgeTraffic,
   fetchRumVisits,
   resolveRumWindowDays,
@@ -409,6 +410,28 @@ describe("fetchRumVisits", () => {
     expect(result?.windowDays).toBe(3);
   });
 
+  it("reports the requested window alongside the one it got, so a short retention isn't mistaken for a late start", async () => {
+    // Retention allows 14 days; only 3 days of data exist. The card needs BOTH
+    // numbers to say "started collecting recently" honestly — comparing the 3
+    // against a hardcoded 60 would fire that caption even when the beacon had
+    // been collecting for the whole retention period.
+    mockFetchSequence(
+      { body: rumSettingsBody(14 * 86_400) },
+      {
+        body: rumBody([
+          { date: "2026-08-05", count: 2, visits: 2 },
+          { date: "2026-08-06", count: 2, visits: 2 },
+          { date: "2026-08-07", count: 2, visits: 2 },
+        ]),
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
+
+    expect(result?.requestedWindowDays).toBe(14);
+    expect(result?.windowDays).toBe(3);
+  });
+
   it("returns null without credentials, and never calls the API", async () => {
     const fetchMock = mockFetchSequence({ body: rumSettingsBody(30 * 86_400) });
 
@@ -423,12 +446,77 @@ describe("fetchRumVisits", () => {
     expect(await fetchRumVisits(TOKEN, "acct", "site")).toBeNull();
   });
 
-  it("returns null on GraphQL errors inside a 200, and on an empty window", async () => {
+  it("returns null on GraphQL errors inside a 200 — a failed read", async () => {
     mockFetchSequence({ body: { errors: [{ message: "no access" }] } });
     expect(await fetchRumVisits(TOKEN, "acct", "site")).toBeNull();
+  });
 
+  it("reports an empty window as a real zero, NOT as a failed read", async () => {
+    // The distinction the card depends on: a beacon that started collecting
+    // today returns no rows for an entirely ordinary reason, and telling the
+    // reader "credentials missing" would send them hunting a bug that isn't
+    // there. Only an unreadable response stays null.
     mockFetchSequence({ body: rumSettingsBody(30 * 86_400) }, { body: rumBody([]) });
-    expect(await fetchRumVisits(TOKEN, "acct", "site")).toBeNull();
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-10T12:00:00Z"));
+
+    expect(result).not.toBeNull();
+    expect(result?.noDataInWindow).toBe(true);
+    expect(result?.visits).toBe(0);
+    expect(result?.intervalValid).toBe(false);
+  });
+
+  it("sends the required confidence level — omitting it fails the whole query", async () => {
+    // `confidence` takes a REQUIRED `level` arg. Without it Cloudflare returns
+    // HTTP 200 carrying `error parsing args for "confidence": level: not a
+    // number`, so every load silently produced a failed read. This asserts the
+    // variable actually goes out.
+    const fetchMock = mockFetchSequence(
+      { body: rumSettingsBody(30 * 86_400) },
+      { body: rumBody([{ date: "2026-08-10", count: 1, visits: 1 }]) },
+    );
+
+    await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-10T12:00:00Z"));
+
+    const call = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(call.variables.level).toBe(RUM_CONFIDENCE_LEVEL);
+    expect(call.query).toContain("confidence(level: $level)");
+  });
+
+  it("falls back to the requested level if the API doesn't echo one", async () => {
+    // A 0 here would render "0% interval", which is worse than restating our
+    // own input.
+    mockFetchSequence(
+      { body: rumSettingsBody(30 * 86_400) },
+      {
+        body: {
+          data: {
+            viewer: {
+              accounts: [
+                {
+                  rumPageloadEventsAdaptiveGroups: [
+                    {
+                      count: 1,
+                      dimensions: { date: "2026-08-10", bot: 0 },
+                      sum: { visits: 1 },
+                      confidence: {
+                        sum: {
+                          visits: { estimate: 1, lower: 1, upper: 1, isValid: true, sampleSize: 1 },
+                        },
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-10T12:00:00Z"));
+
+    expect(result?.confidenceLevel).toBe(RUM_CONFIDENCE_LEVEL);
   });
 
   it("sends the account tag and site tag", async () => {

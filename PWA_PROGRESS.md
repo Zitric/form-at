@@ -3032,6 +3032,36 @@ request proves retention >= 60 days either way. What was hidden was whether the
 settings query works at all — if it never does, it's a wasted round-trip and
 the clamping logic is dead code.
 
+*`confidence` takes a REQUIRED `level` argument — and the query never once
+succeeded until this was found.* Omitting it returns **HTTP 200** carrying
+`error parsing args for "confidence": level: not a number`. `postGraphQL`
+correctly treats a body-level `errors` array as a failure and returns null, so
+the card sat in its failure branch from the moment it shipped — not the
+empty-window branch, and not because of the token. Two guesses (mine: "no data
+yet"; the token scope) were both wrong, and only running the real query settled
+it. `level` is now pinned to `RUM_CONFIDENCE_LEVEL = 0.95` rather than left to a
+default: an unstated level makes an interval uninterpretable, since a 99% and a
+50% interval are very different widths on identical data, and a default that
+shifted under us would silently change what the card claims.
+
+*The diagnostic lives in the repo now* — `apps/admin/scripts/diagnose-visits.mjs`,
+run with `pnpm -C apps/admin diagnose-visits`. The card deliberately collapses
+every failure into one state, which is right for a dashboard and useless for
+debugging, so the diagnosis has to live somewhere. It runs the app's exact
+query, reads the account id and site tag from the same committed files the app
+reads (so a stale copy can't send someone chasing a phantom difference), and
+names the cause: token scope, a bad `level`, a renamed field, or genuinely no
+data. It has already settled two questions that guesswork got wrong.
+
+*Empty window vs failed read.* An empty window now returns a real zero carrying
+`noDataInWindow`, not null; only an unreadable response stays null. §1's
+never-substitute-0 rule forbids substituting 0 for a FAILED read — a window with
+no rows is a successful read of zero, and conflating the two had the card
+telling a reader to check credentials when the honest answer was "the beacon
+started collecting today". Wrong for this dataset specifically: unlike
+edge_traffic, whose window is never legitimately empty, a beacon starts empty by
+definition.
+
 *Credentials.* `CF_ANALYTICS_TOKEN` is a Pages secret. `CF_ZONE_ID` is a plain
 `[vars]` entry in `apps/admin/wrangler.toml`, deliberately NOT a secret: it's a
 public identifier like the Access AUD tag, reading analytics with it still needs

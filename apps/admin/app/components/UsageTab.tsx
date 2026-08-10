@@ -2,7 +2,6 @@ import { Label, Muted, TerminalRow } from "@form-at/ui";
 import { Await } from "@tanstack/react-router";
 import { Suspense } from "react";
 import type { AdminDashboardStats } from "~/data/admin-stats";
-import { EDGE_TRAFFIC_MAX_WINDOW_DAYS } from "~/data/cf-analytics";
 import type { EdgeTraffic, RumVisits } from "~/data/cf-analytics";
 import { DashboardCard } from "./DashboardCard";
 import { TrendChart } from "./TrendChart";
@@ -24,12 +23,27 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
   if (!rum) {
     return (
       <Muted className="block text-xs">
-        no data — the Cloudflare Analytics credentials are missing, the token lacks Account
+        couldn't read — the Cloudflare Analytics credentials are missing, the token lacks Account
         Analytics:Read (a different permission from the zone one edge_traffic uses), or the API
-        didn't answer. Deliberately blank rather than 0.
+        didn't answer. This is a failed read, NOT "zero visits": an empty window reports itself
+        separately. Deliberately blank rather than 0.
       </Muted>
     );
   }
+  if (rum.noDataInWindow) {
+    // A successful read of an empty window — the ordinary state for a beacon
+    // that only just started collecting. Saying "0 visits" flatly would be
+    // true but misread as "nobody came"; saying "couldn't read" would be
+    // false. This is neither.
+    return (
+      <Muted className="block text-xs">
+        no visits recorded in the last {rum.windowDays}d. The beacon reports from real browsers and
+        only started collecting recently, so this is expected to stay empty until the site gets
+        traffic with it live — it is a successful read of an empty window, not a failure.
+      </Muted>
+    );
+  }
+
   const pct = (n: number) => Math.round(n * 100);
   return (
     <>
@@ -72,16 +86,18 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
         this is far below edge_traffic. Adaptively sampled, so it's an estimate
         {rum.intervalValid ? " with the interval shown above" : ""}.
       </p>
-      {rum.windowDays < EDGE_TRAFFIC_MAX_WINDOW_DAYS && (
-        // The beacon started collecting on 2026-08-10; before that it wasn't in
-        // the page at all, so a low number here means "only just started",
-        // not "nobody visits". Derived from the oldest day Cloudflare actually
-        // returned rather than a hardcoded date, so it self-corrects and this
-        // caption disappears once history fills the window — same pattern as
-        // app_launches' `tracking since`.
+      {rum.windowDays < rum.requestedWindowDays && (
+        // Compared against what was REQUESTED (retention-clamped), not the
+        // chart maximum: data shorter than retention allows means the beacon
+        // genuinely started collecting recently, which is the thing worth
+        // saying. Against the maximum this would fire forever whenever
+        // retention is under 60 days and blame collection for retention.
+        // Derived, so it self-corrects and disappears once history fills the
+        // window — same pattern as app_launches' `tracking since`.
         <p className="mt-1 text-xs text-grey/70">
-          only {rum.windowDays}d of data exists (since {rum.startDay}) — the beacon hasn't been
-          collecting for the full window, so a low count reflects that rather than low traffic.
+          only {rum.windowDays}d of data exists (since {rum.startDay}), out of the{" "}
+          {rum.requestedWindowDays}d available — the beacon started collecting recently, so a low
+          count reflects that rather than low traffic.
         </p>
       )}
       {!rum.boundaryKnown && (
