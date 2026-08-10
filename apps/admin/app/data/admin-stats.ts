@@ -5,6 +5,7 @@ import {
   fillDailyWindow,
 } from "@form-at/data/set-stats";
 import { getSet } from "@form-at/data/sets";
+import { WEB_ANALYTICS_SITE_TAG } from "@form-at/data/webAnalytics";
 import { createServerFn } from "@tanstack/react-start";
 import { type EdgeTraffic, type RumVisits, fetchEdgeTraffic, fetchRumVisits } from "./cf-analytics";
 import {
@@ -569,15 +570,17 @@ export const fetchRumVisitStats = createServerFn({ method: "GET" }).handler(
   async ({ context }): Promise<RumVisits | null> => {
     const cf = (context as unknown as Record<string, unknown>).cloudflare as
       | {
-          env: { CF_ANALYTICS_TOKEN?: string; CF_ACCOUNT_ID?: string; CF_RUM_SITE_TAG?: string };
+          env: { CF_ANALYTICS_TOKEN?: string; CF_ACCOUNT_ID?: string };
           hasCloudflareEnv: boolean;
         }
       | undefined;
     if (!cf?.hasCloudflareEnv) return SAMPLE_RUM_VISITS;
+    // Site tag comes from @form-at/data, not env: it's already published in
+    // every page of the public site, so one committed constant beats two copies.
     return fetchRumVisits(
       cf.env?.CF_ANALYTICS_TOKEN,
       cf.env?.CF_ACCOUNT_ID,
-      cf.env?.CF_RUM_SITE_TAG,
+      WEB_ANALYTICS_SITE_TAG,
     );
   },
 );

@@ -225,7 +225,17 @@ const rumSettingsBody = (notOlderThan: number | null) => ({
 });
 
 const rumBody = (
-  rows: { date: string; bot?: unknown; count: number; visits: number; sampleInterval?: number }[],
+  rows: {
+    date: string;
+    bot?: unknown;
+    count: number;
+    visits: number;
+    estimate?: number;
+    lower?: number;
+    upper?: number;
+    isValid?: boolean;
+    sampleSize?: number;
+  }[],
 ) => ({
   data: {
     viewer: {
@@ -235,7 +245,18 @@ const rumBody = (
             count: r.count,
             dimensions: { date: r.date, bot: r.bot ?? 0 },
             sum: { visits: r.visits },
-            avg: { sampleInterval: r.sampleInterval ?? 1 },
+            confidence: {
+              level: 0.95,
+              sum: {
+                visits: {
+                  estimate: r.estimate ?? r.visits,
+                  lower: r.lower ?? r.visits,
+                  upper: r.upper ?? r.visits,
+                  isValid: r.isValid ?? true,
+                  sampleSize: r.sampleSize ?? r.visits,
+                },
+              },
+            },
           })),
         },
       ],
@@ -300,20 +321,74 @@ describe("fetchRumVisits", () => {
     expect(result?.pageloads).toBe(10);
   });
 
-  it("reports the coarsest sampleInterval, not an average that hides a sampled stretch", async () => {
+  it("sums the interval bounds and echoes the confidence level", async () => {
     mockFetchSequence(
       { body: rumSettingsBody(30 * 86_400) },
       {
         body: rumBody([
-          { date: "2026-08-06", count: 5, visits: 5, sampleInterval: 1 },
-          { date: "2026-08-07", count: 5, visits: 5, sampleInterval: 10 },
+          { date: "2026-08-06", count: 5, visits: 5, estimate: 5, lower: 3, upper: 8 },
+          { date: "2026-08-07", count: 5, visits: 5, estimate: 5, lower: 4, upper: 9 },
         ]),
       },
     );
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
 
-    expect(result?.sampleInterval).toBe(10);
+    expect(result?.visits).toBe(10);
+    expect(result?.visitsLower).toBe(7);
+    expect(result?.visitsUpper).toBe(17);
+    expect(result?.confidenceLevel).toBe(0.95);
+    expect(result?.intervalValid).toBe(true);
+  });
+
+  it("marks the whole window invalid if ANY day's interval is invalid", async () => {
+    // A window is only as trustworthy as its least trustworthy day — reporting
+    // a valid interval over a mix would launder the bad one.
+    mockFetchSequence(
+      { body: rumSettingsBody(30 * 86_400) },
+      {
+        body: rumBody([
+          { date: "2026-08-06", count: 5, visits: 5, isValid: true },
+          { date: "2026-08-07", count: 5, visits: 5, isValid: false, sampleSize: 2 },
+        ]),
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
+
+    expect(result?.intervalValid).toBe(false);
+    expect(result?.sampleSize).toBe(7);
+  });
+
+  it("falls back to sum { visits } when a row carries no confidence block", async () => {
+    mockFetchSequence(
+      { body: rumSettingsBody(30 * 86_400) },
+      {
+        body: {
+          data: {
+            viewer: {
+              accounts: [
+                {
+                  rumPageloadEventsAdaptiveGroups: [
+                    {
+                      count: 9,
+                      dimensions: { date: "2026-08-07", bot: 0 },
+                      sum: { visits: 9 },
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
+
+    // The card never shows a hole; it just can't show an interval.
+    expect(result?.visits).toBe(9);
+    expect(result?.intervalValid).toBe(false);
   });
 
   it("buckets visits weekly, like every other trend", async () => {

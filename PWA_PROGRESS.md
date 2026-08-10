@@ -2873,21 +2873,34 @@ it's `0/1`, `"0"/"1"` or a boolean (`isBotRow` normalises all three, and a unit
 test covers each). It also yields the bot share for free, which is shown —
 concrete evidence for why the two cards differ.
 
-**Sampling is disclosed, and suppresses the chart when it bites.**
-`avg { sampleInterval }` exists: 1 means unsampled, N means roughly 1-in-N with
-real totals being the sampled figures × N (Cloudflare's sampling docs give the
-model: "5,000 events sampled at 10% → estimate 50,000"). Above 1 the day-to-day
-shape is an artefact of which events happened to be sampled, so the card
-**drops the trend chart** and states the rate instead of drawing a confident
-curve over noise. The reported interval is the COARSEST across the window, not
-an average — averaging would hide a sampled stretch behind unsampled days.
+**The uncertainty disclosure is a confidence interval, not a sample rate.**
+The first cut showed `avg { sampleInterval }` (1 = unsampled, N = roughly
+1-in-N). That was replaced after introspecting the `confidence` field, which
+turned out to be far better suited: `Confidence` is an OBJECT (output only)
+carrying `estimate`, `lower`, `upper`, `sampleSize`, and — the find —
+`isValid`: *"True if the confidence interval is valid, i.e. there is enough
+samples at low enough sample interval"*. `AccountRumPageloadEventsAdaptiveGroupsSumConfidence`
+has exactly one field, `visits: Confidence`, so the number the card actually
+shows is the one with an interval attached.
 
-**`confidence` is left unqueried.** Introspection surfaced a `confidence` field
-on the group type that neither of us knew about, but its semantics aren't
-documented anywhere findable — whether it returns a level, a margin or an
-interval. Querying a field whose meaning is unknown and rendering it would be
-worse than omitting it. `sampleInterval`, whose semantics ARE documented, does
-the disclosure for now. Revisit if its definition turns up.
+`sampleInterval` was then REMOVED rather than shown alongside. Both disclose the
+same uncertainty, but the rate only proxies the question a reader has ("how much
+can I trust this?") while the interval answers it. Showing both invites
+reconciling two figures that say the same thing, and the simpler, weaker one
+wins attention.
+
+**`isValid` is the gate, not a threshold invented here.** True → show the
+estimate with its bounds and plot the trend. False → show neither bounds nor
+chart, and say the sample is too small to characterise. Cloudflare is better
+placed than we are to judge whether its own interval means anything, and a
+hand-picked cutoff would have been a guess dressed as rigour.
+
+Per-row confidence is aggregated for the window total: bounds add, and
+`isValid` is **ANDed** — a window is only as trustworthy as its least
+trustworthy day, and reporting a valid interval across a mixed window would
+launder the bad one. `sum { visits }` is still queried and used as a fallback
+for any row without a confidence block, so the card never shows a hole, but it
+is never displayed beside the estimate.
 
 **Independent fetch, not merged with `edge_traffic`.** Two deferred round-trips
 instead of one, both already off the critical path. They query different scopes

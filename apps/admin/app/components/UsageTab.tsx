@@ -29,29 +29,36 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
       </Muted>
     );
   }
-  const sampled = rum.sampleInterval > 1;
+  const pct = (n: number) => Math.round(n * 100);
   return (
     <>
       <div className="space-y-1">
         <TerminalRow label="visits" value={String(rum.visits)} dimValue />
+        {rum.intervalValid && (
+          <TerminalRow
+            label={`${pct(rum.confidenceLevel)}% interval`}
+            value={`${rum.visitsLower} – ${rum.visitsUpper}`}
+            dimValue
+          />
+        )}
         <TerminalRow label="page_loads" value={String(rum.pageloads)} dimValue />
-        <TerminalRow label="bots_excluded" value={`${Math.round(rum.botShare * 100)}%`} dimValue />
+        <TerminalRow label="bots_excluded" value={`${pct(rum.botShare)}%`} dimValue />
         <TerminalRow label="window" value={`${rum.windowDays}d`} dimValue />
       </div>
-      {sampled ? (
-        // Above 1, the daily shape is an artefact of which events happened to
-        // be sampled — a curve here would be noise drawn confidently. State the
-        // rate instead of plotting it.
-        <p className="mt-3 text-xs text-grey/70">
-          sampled at roughly 1-in-{rum.sampleInterval}, so these are estimates and the day-to-day
-          shape isn't meaningful — no chart drawn. Cloudflare keeps beacon data unsampled for 7
-          days, then aggregates to about 10%.
-        </p>
-      ) : (
+      {rum.intervalValid ? (
         <div className="mt-3">
           <Label className="mb-1 block text-xs text-grey">since {rum.startDay}</Label>
           <TrendChart data={rum.weeklyVisits} />
         </div>
+      ) : (
+        // Cloudflare's own isValid, not a threshold invented here: with too few
+        // samples the interval is meaningless, so neither bounds nor a curve
+        // are shown — both would read as precision that doesn't exist.
+        <p className="mt-3 text-xs text-grey/70">
+          too few samples ({rum.sampleSize}) to characterise — Cloudflare reports the confidence
+          interval as invalid at this volume, so no range and no chart are shown. The visit count
+          above is still its best estimate.
+        </p>
       )}
       <p className="mt-3 text-xs text-grey/70">
         a visit is a page load arriving from a different site or a direct link — Cloudflare compares
@@ -61,7 +68,8 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
       </p>
       <p className="mt-1 text-xs text-grey/70">
         real browsers running the beacon, with Cloudflare's bot-flagged rows removed — which is why
-        this is far below edge_traffic. {!sampled && "Unsampled at this volume."}
+        this is far below edge_traffic. Adaptively sampled, so it's an estimate
+        {rum.intervalValid ? " with the interval shown above" : ""}.
       </p>
       {!rum.boundaryKnown && (
         <p className="mt-1 text-xs text-grey/70">

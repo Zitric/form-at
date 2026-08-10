@@ -238,13 +238,21 @@ export async function fetchEdgeTraffic(
 // the dimension back needs no assumption about it. It also yields the bot share
 // for free, which is worth showing.
 //
-// SAMPLING. These are adaptive-sampled datasets. `avg { sampleInterval }` is
-// the multiplier: 1 means every event was recorded, N means roughly 1-in-N and
-// real totals are the sampled figures x N. Cloudflare's own sampling docs give
-// the model ("5,000 events sampled at 10% -> estimate 50,000"). When the
-// interval is above 1 the DAILY SHAPE is an artefact of which events happened
-// to be sampled, so the card drops the chart and states the rate instead of
-// drawing a curve that looks like information.
+// SAMPLING, and why the card shows a confidence interval rather than a sample
+// rate. These are adaptive-sampled datasets, so every figure is an estimate.
+// `avg { sampleInterval }` exists and reports the 1-in-N rate, but it only
+// PROXIES the question a reader actually has — how much can I trust this
+// number. Cloudflare answers that directly: `confidence { sum { visits } }`
+// returns `estimate` with `lower`/`upper` bounds, plus `isValid` — "True if the
+// confidence interval is valid, i.e. there is enough samples at low enough
+// sample interval" — and `sampleSize`.
+//
+// So `isValid` is the gate, not a threshold we invented: true means show the
+// estimate with its bounds and plot the trend; false means the interval is
+// meaningless and the card says the sample is too small to characterise rather
+// than drawing a curve over noise. `sampleInterval` is deliberately NOT shown
+// alongside it: two disclosures of the same uncertainty compete, and the
+// weaker, simpler one wins the reader's attention.
 
 export type RumVisits = {
   /** Cloudflare's `visits` — arrivals from a different site or a direct link,
@@ -259,12 +267,23 @@ export type RumVisits = {
    *  exclusion above. Shown because it's the concrete evidence for why this
    *  card and edge_traffic disagree. */
   botShare: number;
+  /** Lower/upper bounds of Cloudflare's confidence interval on `visits`. */
+  visitsLower: number;
+  visitsUpper: number;
+  /** Cloudflare's own verdict, not a threshold we invented: "True if the
+   *  confidence interval is valid, i.e. there is enough samples at low enough
+   *  sample interval". False means the interval is meaningless — so the card
+   *  suppresses the chart and the bounds rather than showing numbers nobody
+   *  should read. */
+  intervalValid: boolean;
+  /** Confidence level the interval was computed at, echoed back by the API. */
+  confidenceLevel: number;
+  /** Samples behind the estimate — the concrete reason an interval is or isn't
+   *  trustworthy. */
+  sampleSize: number;
   /** Weekly buckets of non-bot visits, oldest first — same shape as every
-   *  other trend. Only meaningful when `sampleInterval` is 1. */
+   *  other trend. Only plotted when `intervalValid`. */
   weeklyVisits: number[];
-  /** 1 = unsampled. Above 1, figures are estimates and the daily shape is an
-   *  artefact — the card must not plot it. */
-  sampleInterval: number;
   windowDays: number;
   startDay: string;
   boundaryKnown: boolean;
@@ -316,7 +335,10 @@ const RUM_QUERY = `
           count
           dimensions { date bot }
           sum { visits }
-          avg { sampleInterval }
+          confidence {
+            level
+            sum { visits { estimate lower upper isValid sampleSize } }
+          }
         }
       }
     }
@@ -329,7 +351,18 @@ type RumData = {
         count?: number;
         dimensions?: { date?: string; bot?: unknown };
         sum?: { visits?: number };
-        avg?: { sampleInterval?: number };
+        confidence?: {
+          level?: number;
+          sum?: {
+            visits?: {
+              estimate?: number;
+              lower?: number;
+              upper?: number;
+              isValid?: boolean;
+              sampleSize?: number;
+            };
+          };
+        };
       }[];
     }[];
   };
@@ -391,16 +424,29 @@ export async function fetchRumVisits(
     Math.max(1, spanDays),
   );
 
-  // The coarsest interval across the window is the honest one to report —
-  // averaging it would hide a sampled stretch behind unsampled days.
-  const sampleInterval = rows.reduce((max, r) => Math.max(max, r.avg?.sampleInterval ?? 1), 1);
+  // Confidence is per-row; the card shows one figure for the window, so bounds
+  // add and the validity flag is ANDed. A window is only as trustworthy as its
+  // least trustworthy day — one invalid day makes the whole total's interval
+  // meaningless, and reporting otherwise would launder it.
+  const conf = human.map((r) => r.confidence?.sum?.visits);
+  const hasConfidence = conf.some(Boolean);
+  const estimate = conf.reduce((a, c) => a + (c?.estimate ?? 0), 0);
 
   return {
-    visits: human.reduce((a, r) => a + (r.sum?.visits ?? 0), 0),
+    // `estimate` IS the point estimate that `sum { visits }` reports — the
+    // schema calls the interval "for the corresponding point estimate". Sum is
+    // still queried and used as the fallback for any row without a confidence
+    // block, so the card never shows a hole; it is never shown alongside the
+    // estimate, because two numbers a reader has to reconcile is worse than one.
+    visits: hasConfidence ? estimate : human.reduce((a, r) => a + (r.sum?.visits ?? 0), 0),
+    visitsLower: conf.reduce((a, c) => a + (c?.lower ?? c?.estimate ?? 0), 0),
+    visitsUpper: conf.reduce((a, c) => a + (c?.upper ?? c?.estimate ?? 0), 0),
+    intervalValid: hasConfidence && conf.every((c) => c?.isValid !== false),
+    confidenceLevel: human.find((r) => r.confidence?.level)?.confidence?.level ?? 0,
+    sampleSize: conf.reduce((a, c) => a + (c?.sampleSize ?? 0), 0),
     pageloads: human.reduce((a, r) => a + (r.count ?? 0), 0),
     botShare: allPageloads > 0 ? botPageloads / allPageloads : 0,
     weeklyVisits: bucketByWeek(daily, TREND_BUCKET_DAYS),
-    sampleInterval,
     windowDays: Math.max(1, spanDays),
     startDay,
     boundaryKnown: fromBoundary,

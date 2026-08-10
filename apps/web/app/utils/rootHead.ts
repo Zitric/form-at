@@ -1,3 +1,4 @@
+import { WEB_ANALYTICS_SITE_TAG, hasWebAnalyticsSiteTag } from "@form-at/data/webAnalytics";
 // The site-wide default `<head>` config — meta/links/scripts that apply to
 // every route unless a page's own `head()` overrides them (see `pageHead()`
 // in this same directory for the per-route builder this feeds into).
@@ -85,8 +86,27 @@ export function rootHead() {
       { rel: "manifest", href: "/manifest.json" },
     ],
     scripts: [
-      // Cloudflare Web Analytics — replace token after adding site in CF dashboard → Web Analytics
-      // { src: "https://static.cloudflareinsights.com/beacon.min.js", defer: true, "data-cf-beacon": '{"token":"REPLACE_WITH_YOUR_TOKEN"}' },
+      // Cloudflare Web Analytics beacon, injected by US rather than left to
+      // Cloudflare's automatic edge injection — see the reasoning on
+      // WEB_ANALYTICS_SITE_TAG in @form-at/data/webAnalytics (short version:
+      // edge injection worked, then silently stopped). Skipped entirely while
+      // the site tag is still the placeholder, so a forgotten value means "no
+      // analytics" rather than a beacon posting with a bogus token.
+      //
+      // `defer` not `async`: the beacon reports page-load timing, and it has no
+      // ordering relationship with our other scripts. Its host is allowlisted
+      // in the CSP in `apps/web/app/server.ts` AND `public/_headers` — both,
+      // because SSR documents get the policy from the former and offline.html
+      // from the latter. Removing either allowlist silently kills collection.
+      ...(hasWebAnalyticsSiteTag()
+        ? [
+            {
+              src: "https://static.cloudflareinsights.com/beacon.min.js",
+              defer: true,
+              "data-cf-beacon": JSON.stringify({ token: WEB_ANALYTICS_SITE_TAG }),
+            },
+          ]
+        : []),
       // Service worker registration. Inline rather than external because the
       // file is tiny and we don't want a second round-trip on every cold
       // start just to fetch a 4-line snippet. Classic worker (no

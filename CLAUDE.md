@@ -32,6 +32,15 @@ hadn't checked — including the `schema.sql` line directly beneath this one, wh
 would have failed against production. If you didn't run the command, read the
 file, or see the test pass, say which one you didn't do.
 
+**A specific trap that fakes a passing check:** `grep` silently suppresses ALL
+output on a file it classifies as binary, and the SSR'd HTML this app serves
+qualifies (`file` reports it as `data`). So `curl … | grep -c something` returns
+`0` for content that is definitely present — a confident wrong answer from a
+command that looks like it worked. It nearly inverted a diagnosis here: a check
+for the analytics beacon reported zero, and so did a control check for
+`<script`, which is what exposed it. **Pass `-a` when grepping fetched HTML**,
+and always grep for something you know is present as a control.
+
 ### Never gate the offline-set purge on `catalogueReady` — it must be `catalogueConfirmed`
 **The only thing in this repo that can silently destroy user data.**
 `reconcileFromIdb` (`apps/web/app/store/offlineSlice.ts`) purges a downloaded set
@@ -324,7 +333,8 @@ things you need *at the moment of editing* that no section heading can give you.
 | Service worker build | `buildServiceWorker` in `apps/web/vite.config.ts` (owns the precache allowlist and revision derivation) | README → *"Technology choices"*, Workbox entry. `vite-plugin-pwa` is **not** a dependency. |
 | Design system | `packages/ui/src/` — one folder per component, `icons/` flat | README → *"Monorepo structure"* (late extraction, no build step) |
 | Navigation | `apps/web/app/components/SwipeNavigator.tsx` — wraps `<Outlet />`, swipes across `ROUTES = ["/", "/sets", "/events", "/djs"]` | Outgoing page animates via a `cloneNode` snapshot + direct DOM writes; the gold dot indicator likewise. Deliberately not React re-renders. |
-| Analytics | `apps/web/app/routes/api/signal.ts`, `hooks/useTrackEvent.ts` | `navigator.sendBeacon` on pause, track change and tab close; plays under 3s ignored. Lands in D1 `plays`. Cloudflare Web Analytics is auto-injected — no script tag. |
+| Analytics | `apps/web/app/routes/api/signal.ts`, `hooks/useTrackEvent.ts` | `navigator.sendBeacon` on pause, track change and tab close; plays under 3s ignored. Lands in D1 `plays`. |
+| Web Analytics beacon | `apps/web/app/utils/rootHead.ts`, tag in `packages/data/src/webAnalytics.ts` | **We inject it ourselves** — Cloudflare's automatic edge injection worked, then silently stopped. That file's header has the evidence and why manual is also the more precise option. Its host must stay allowlisted in the CSP in BOTH `apps/web/app/server.ts` and `public/_headers`. |
 | Server entry | `apps/web/app/server.ts`, `apps/admin/app/server.ts` | Forwards `env.DB` as `context.cloudflare.env`. See §1 — deleting either breaks all D1 access. |
 
 ### Store slice map — `apps/web/app/store/`

@@ -268,6 +268,9 @@ test.describe("admin dashboard", () => {
     // session and not a person.
     await expect(page.getByText(/arriving from a different site or a direct link/i)).toBeVisible();
     await expect(page.getByText(/can't count distinct humans/i)).toBeVisible();
+    // The interval is the disclosure, not a sample rate — and it's labelled
+    // with the level it was computed at.
+    await expect(page.getByText(/95% interval/)).toBeVisible();
     // Sits beside edge_traffic so the gap between the two is visible.
     await expect(page.getByText("// edge_traffic")).toBeVisible();
   });

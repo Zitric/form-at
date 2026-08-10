@@ -7,7 +7,8 @@
   "exports": {
     "./sets": "./src/sets.ts",
     "./set-stats": "./src/set-stats.ts",
-    "./webPush": "./src/webPush.ts"
+    "./webPush": "./src/webPush.ts",
+    "./webAnalytics": "./src/webAnalytics.ts"
   },
   "scripts": {
     "lint": "biome check src",
