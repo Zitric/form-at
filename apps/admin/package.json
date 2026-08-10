@@ -13,7 +13,8 @@
     "test:run": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "deploy": "pnpm build && npx wrangler pages deploy dist/client --project-name=form-at-admin --config wrangler.toml --commit-dirty=true"
+    "deploy": "pnpm build && npx wrangler pages deploy dist/client --project-name=form-at-admin --config wrangler.toml --commit-dirty=true",
+    "diagnose-visits": "node scripts/diagnose-visits.mjs"
   },
   "dependencies": {
     "@form-at/data": "workspace:*",

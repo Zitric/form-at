@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   EDGE_TRAFFIC_MAX_WINDOW_DAYS,
+  RUM_CONFIDENCE_LEVEL,
   fetchEdgeTraffic,
   fetchRumVisits,
   resolveRumWindowDays,
@@ -463,6 +464,59 @@ describe("fetchRumVisits", () => {
     expect(result?.noDataInWindow).toBe(true);
     expect(result?.visits).toBe(0);
     expect(result?.intervalValid).toBe(false);
+  });
+
+  it("sends the required confidence level — omitting it fails the whole query", async () => {
+    // `confidence` takes a REQUIRED `level` arg. Without it Cloudflare returns
+    // HTTP 200 carrying `error parsing args for "confidence": level: not a
+    // number`, so every load silently produced a failed read. This asserts the
+    // variable actually goes out.
+    const fetchMock = mockFetchSequence(
+      { body: rumSettingsBody(30 * 86_400) },
+      { body: rumBody([{ date: "2026-08-10", count: 1, visits: 1 }]) },
+    );
+
+    await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-10T12:00:00Z"));
+
+    const call = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(call.variables.level).toBe(RUM_CONFIDENCE_LEVEL);
+    expect(call.query).toContain("confidence(level: $level)");
+  });
+
+  it("falls back to the requested level if the API doesn't echo one", async () => {
+    // A 0 here would render "0% interval", which is worse than restating our
+    // own input.
+    mockFetchSequence(
+      { body: rumSettingsBody(30 * 86_400) },
+      {
+        body: {
+          data: {
+            viewer: {
+              accounts: [
+                {
+                  rumPageloadEventsAdaptiveGroups: [
+                    {
+                      count: 1,
+                      dimensions: { date: "2026-08-10", bot: 0 },
+                      sum: { visits: 1 },
+                      confidence: {
+                        sum: {
+                          visits: { estimate: 1, lower: 1, upper: 1, isValid: true, sampleSize: 1 },
+                        },
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-10T12:00:00Z"));
+
+    expect(result?.confidenceLevel).toBe(RUM_CONFIDENCE_LEVEL);
   });
 
   it("sends the account tag and site tag", async () => {

@@ -26,9 +26,10 @@
         "app/server.ts",
         "app/router.tsx",
         "app/routes/**/*.{ts,tsx}",
-        "tests/**/*.{ts,tsx}"
+        "tests/**/*.{ts,tsx}",
+        "scripts/*.{ts,mjs,js}"
       ],
-      "project": ["app/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
+      "project": ["app/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}", "scripts/**/*.{ts,mjs,js}"],
       "paths": {
         "~/*": ["app/*"]
       },
