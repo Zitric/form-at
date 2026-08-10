@@ -21,7 +21,11 @@ import { type DashboardTabId, DashboardTabs } from "~/components/DashboardTabs";
 import { GrowthTab } from "~/components/GrowthTab";
 import { SetsTab } from "~/components/SetsTab";
 import { UsageTab } from "~/components/UsageTab";
-import { fetchAdminDashboardStats, fetchEdgeTrafficStats } from "~/data/admin-stats";
+import {
+  fetchAdminDashboardStats,
+  fetchEdgeTrafficStats,
+  fetchRumVisitStats,
+} from "~/data/admin-stats";
 import { SAMPLE_SET_STATS } from "~/data/sample-stats";
 
 export const Route = createFileRoute("/dashboard")({
@@ -38,6 +42,9 @@ export const Route = createFileRoute("/dashboard")({
   loader: async () => ({
     stats: await fetchAdminDashboardStats(),
     edgeTraffic: defer(fetchEdgeTrafficStats().catch(() => null)),
+    // Independent of edgeTraffic: different scope, different token permission,
+    // so one failing must not blank the other.
+    rumVisits: defer(fetchRumVisitStats().catch(() => null)),
   }),
   head: () => ({ meta: [{ title: "Analytics · Form:at Admin" }] }),
   component: AdminDashboard,
@@ -48,7 +55,7 @@ export const Route = createFileRoute("/dashboard")({
 // lives in GrowthTab/UsageTab/SetsTab (~/components/) — this file exceeded
 // CLAUDE.md's ~150-line extraction threshold once, splitting it out.
 function AdminDashboard() {
-  const { stats, edgeTraffic } = Route.useLoaderData();
+  const { stats, edgeTraffic, rumVisits } = Route.useLoaderData();
   // `usage` is the landing tab — the headline totals answer "how is it doing?"
   // in one glance, which is what the dashboard is opened for. Growth's funnels
   // and Sets' per-set detail are follow-up questions.
@@ -118,7 +125,9 @@ function AdminDashboard() {
         <>
           <DashboardTabs active={activeTab} onChange={setActiveTab} />
           {activeTab === "growth" && <GrowthTab stats={stats} />}
-          {activeTab === "usage" && <UsageTab stats={stats} edgeTraffic={edgeTraffic} />}
+          {activeTab === "usage" && (
+            <UsageTab stats={stats} edgeTraffic={edgeTraffic} rumVisits={rumVisits} />
+          )}
           {activeTab === "sets" && (
             <SetsTab
               stats={stats}

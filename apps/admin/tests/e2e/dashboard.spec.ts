@@ -252,10 +252,31 @@ test.describe("admin dashboard", () => {
     // sr-only caption in TrendChartInner is where the bucket count is stated
     // in text, so it's the assertable surface for the units.
     await expect(page.getByText("// edge_traffic")).toBeVisible();
-    await expect(page.getByText(/^5 weeks, latest /)).toBeVisible();
+    // Scoped to the edge_traffic card: the visits card beside it also renders a
+    // 5-bucket chart, so an unscoped match hits two elements.
+    const edgeCard = page.getByTestId("dashboard-card").filter({ hasText: "// edge_traffic" });
+    await expect(edgeCard.getByText(/^5 weeks, latest /)).toBeVisible();
     // Nothing on the page should claim a bucket count anywhere near a raw
     // daily series for a 30- or 60-day window.
     await expect(page.getByText(/\b(30|60) weeks,/)).toHaveCount(0);
+  });
+
+  test("visits card states what a visit is and that bots are excluded", async ({ page }) => {
+    await gotoAndHydrate(page, "/dashboard");
+    await expect(page.getByText("// visits")).toBeVisible();
+    // The definition is the whole disclosure: a visit is an arrival, not a
+    // session and not a person.
+    await expect(page.getByText(/arriving from a different site or a direct link/i)).toBeVisible();
+    await expect(page.getByText(/can't count distinct humans/i)).toBeVisible();
+    // The interval is the disclosure, not a sample rate — and it's labelled
+    // with the level it was computed at.
+    await expect(page.getByText(/95% interval/)).toBeVisible();
+    // The fixture's 30d window is shorter than the 60d ask, so the
+    // short-window disclosure must appear — a low count has to read as
+    // "recently started collecting", not "nobody visits".
+    await expect(page.getByText(/only 30d of data exists/i)).toBeVisible();
+    // Sits beside edge_traffic so the gap between the two is visible.
+    await expect(page.getByText("// edge_traffic")).toBeVisible();
   });
 
   test("edge_traffic is labelled as edge requests, never as visitors", async ({ page }) => {

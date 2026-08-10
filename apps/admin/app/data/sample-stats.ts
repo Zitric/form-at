@@ -1,6 +1,27 @@
 import type { SetStats } from "@form-at/data/set-stats";
 import type { AdminDashboardStats } from "./admin-stats";
-import type { EdgeTraffic } from "./cf-analytics";
+import type { EdgeTraffic, RumVisits } from "./cf-analytics";
+
+// Substituted by `fetchRumVisitStats` when there's no Cloudflare env.
+//
+// A VALID interval so the fixture exercises the chart-and-bounds path; the
+// too-few-samples path is covered by unit tests rather than by making local dev
+// show the degraded card permanently. Visits far below edge requests, and a real
+// bot share, because that gap is the whole reason both cards exist.
+export const SAMPLE_RUM_VISITS: RumVisits = {
+  visits: 214,
+  visitsLower: 191,
+  visitsUpper: 237,
+  intervalValid: true,
+  confidenceLevel: 0.95,
+  sampleSize: 214,
+  pageloads: 389,
+  botShare: 0.31,
+  weeklyVisits: [38, 41, 45, 44, 46],
+  windowDays: 30,
+  startDay: "2026-07-09",
+  boundaryKnown: true,
+};
 
 // Substituted by `fetchEdgeTrafficStats` when there's no Cloudflare env, so
 // local dev and e2e render the populated edge_traffic card rather than only its
@@ -56,6 +77,10 @@ export const SAMPLE_ADMIN_DASHBOARD_STATS: AdminDashboardStats = {
     offlineCount: 12,
     onlineCount: 25,
     excludedCount: 4,
+    // A real-looking rising trend — plays are the one metric with history
+    // longer than the window, so unlike appLaunches this is deliberately NOT
+    // all zeros.
+    weeklyTrend: [2, 3, 5, 4, 6, 5, 7, 6, 3],
     topSets: [
       { setId: "set-002-hubey", setTitle: "Form:at 002", setArtist: "hubey", playCount: 18 },
       { setId: "set-002-til", setTitle: "Form:at 002", setArtist: "t.i.l.", playCount: 12 },

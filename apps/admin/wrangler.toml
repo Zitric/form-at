@@ -32,3 +32,15 @@ CF_ACCESS_AUD = "6844a056d71815043f047d8132dcc15d4e62aff500338aa60188f89c235ff37
 # committed. Storing this as a secret would imply it needs protecting.
 # Where to re-read it: the zone's Overview tab → API → Zone ID.
 CF_ZONE_ID = "559d86b5a76e8415f83d4c3e0832935c"
+
+# Cloudflare account id. Non-secret for the same reason as CF_ZONE_ID: it's
+# published in every R2 endpoint URL, so treating it as a secret would protect
+# nothing and imply otherwise. The Web Analytics site tag deliberately does NOT
+# live here — it's a committed constant in packages/data/src/webAnalytics.ts,
+# shared with apps/web, which renders it into every page anyway.
+#
+# CF_ACCOUNT_ID replaces the R2_ACCOUNT_ID Pages secret, which held this same
+# value under an R2-flavoured name. sets-presign.ts still falls back to the old
+# name; delete that fallback and the secret once this is confirmed live.
+# Where to re-read it: any zone's Overview tab -> API -> Account ID.
+CF_ACCOUNT_ID = "12c493ef8348bf33e0acc9c38c1d8b20"

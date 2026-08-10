@@ -39,6 +39,12 @@ type AdminEnv = {
   /** Zone id for formatglasgow.com — a plain (non-secret) var from
    *  wrangler.toml's [vars], like the CF_ACCESS_* pair. */
   CF_ZONE_ID?: string;
+  /** Account id for the RUM `visits` card and the R2 presigner. A plain var,
+   *  not a secret — it's published in every R2 endpoint URL. The Web Analytics
+   *  site tag is NOT here: it's a committed constant in
+   *  @form-at/data/webAnalytics, shared with apps/web which renders it into
+   *  every page. */
+  CF_ACCOUNT_ID?: string;
 };
 
 export default {

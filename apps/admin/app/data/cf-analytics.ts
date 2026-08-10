@@ -211,3 +211,244 @@ export async function fetchEdgeTraffic(
     boundaryKnown: fromBoundary,
   };
 }
+
+// ── Web Analytics (RUM) ────────────────────────────────────────────────────
+//
+// A DIFFERENT dataset from the edge traffic above, and the contrast is the
+// point: `rumPageloadEventsAdaptiveGroups` is beacon data from real browsers,
+// account-scoped (`viewer.accounts`, keyed on the Web Analytics site tag),
+// where `httpRequests1dGroups` is zone-scoped edge counting. Side by side the
+// two numbers make the difference legible without relying on a caption.
+//
+// WHAT A VISIT IS, per Cloudflare's own definition: "A page view that
+// originated from a different website or direct link. Cloudflare checks where
+// the HTTP referer does not match the hostname. One visit can consist of
+// multiple page views." So it counts ARRIVALS — navigating between pages on
+// the site doesn't add to it, and neither does a reload. It is not sessions
+// and not people. There is no unique-visitor metric: Web Analytics stores no
+// cookie or identifier, so it cannot count distinct humans at all.
+//
+// BOTS ARE INCLUDED BY DEFAULT. Cloudflare's own dimension docs say the
+// "Exclude Bots" dimension exists so "the resulting dataset will be a closer
+// representation of real user traffic" — which only makes sense if bots are in
+// there to begin with. The beacon is JavaScript, so it misses bots that don't
+// execute JS, but headless ones do run it. This module therefore groups BY the
+// `bot` dimension and sums only the non-bot rows, rather than filtering
+// server-side: the filter's value representation isn't documented, and reading
+// the dimension back needs no assumption about it. It also yields the bot share
+// for free, which is worth showing.
+//
+// SAMPLING, and why the card shows a confidence interval rather than a sample
+// rate. These are adaptive-sampled datasets, so every figure is an estimate.
+// `avg { sampleInterval }` exists and reports the 1-in-N rate, but it only
+// PROXIES the question a reader actually has — how much can I trust this
+// number. Cloudflare answers that directly: `confidence { sum { visits } }`
+// returns `estimate` with `lower`/`upper` bounds, plus `isValid` — "True if the
+// confidence interval is valid, i.e. there is enough samples at low enough
+// sample interval" — and `sampleSize`.
+//
+// So `isValid` is the gate, not a threshold we invented: true means show the
+// estimate with its bounds and plot the trend; false means the interval is
+// meaningless and the card says the sample is too small to characterise rather
+// than drawing a curve over noise. `sampleInterval` is deliberately NOT shown
+// alongside it: two disclosures of the same uncertainty compete, and the
+// weaker, simpler one wins the reader's attention.
+
+export type RumVisits = {
+  /** Cloudflare's `visits` — arrivals from a different site or a direct link,
+   *  bot rows excluded. Not sessions, not people. */
+  visits: number;
+  /** Pageload beacon events, bot rows excluded. Cloudflare's Web Analytics
+   *  defines a page view as an HTML document load, and one beacon fires per
+   *  pageload, so this is the page-view equivalent — `sum` has no pageViews
+   *  field of its own. */
+  pageloads: number;
+  /** Share of ALL pageloads (0-1) that Cloudflare flagged as bot, before the
+   *  exclusion above. Shown because it's the concrete evidence for why this
+   *  card and edge_traffic disagree. */
+  botShare: number;
+  /** Lower/upper bounds of Cloudflare's confidence interval on `visits`. */
+  visitsLower: number;
+  visitsUpper: number;
+  /** Cloudflare's own verdict, not a threshold we invented: "True if the
+   *  confidence interval is valid, i.e. there is enough samples at low enough
+   *  sample interval". False means the interval is meaningless — so the card
+   *  suppresses the chart and the bounds rather than showing numbers nobody
+   *  should read. */
+  intervalValid: boolean;
+  /** Confidence level the interval was computed at, echoed back by the API. */
+  confidenceLevel: number;
+  /** Samples behind the estimate — the concrete reason an interval is or isn't
+   *  trustworthy. */
+  sampleSize: number;
+  /** Weekly buckets of non-bot visits, oldest first — same shape as every
+   *  other trend. Only plotted when `intervalValid`. */
+  weeklyVisits: number[];
+  windowDays: number;
+  startDay: string;
+  boundaryKnown: boolean;
+};
+
+const RUM_SETTINGS_QUERY = `
+  query RumRetention($accountTag: String!) {
+    viewer {
+      accounts(filter: { accountTag: $accountTag }) {
+        settings {
+          rumPageloadEventsAdaptiveGroups { notOlderThan }
+        }
+      }
+    }
+  }`;
+
+type RumSettingsData = {
+  viewer?: {
+    accounts?: { settings?: { rumPageloadEventsAdaptiveGroups?: { notOlderThan?: number } } }[];
+  };
+};
+
+/** Account-scoped twin of `resolveWindowDays`. Same fallback rule: an
+ *  unreadable boundary means we ask for the full window and render whatever
+ *  comes back, with `boundaryKnown: false` so the card can disclose it. */
+export async function resolveRumWindowDays(
+  token: string,
+  accountTag: string,
+): Promise<{ days: number; fromBoundary: boolean }> {
+  const data = await postGraphQL<RumSettingsData>(token, RUM_SETTINGS_QUERY, { accountTag });
+  const seconds =
+    data?.viewer?.accounts?.[0]?.settings?.rumPageloadEventsAdaptiveGroups?.notOlderThan;
+  if (typeof seconds !== "number" || seconds <= 0) {
+    return { days: EDGE_TRAFFIC_MAX_WINDOW_DAYS, fromBoundary: false };
+  }
+  const days = Math.floor(seconds / 86_400);
+  return { days: Math.max(1, Math.min(days, EDGE_TRAFFIC_MAX_WINDOW_DAYS)), fromBoundary: true };
+}
+
+const RUM_QUERY = `
+  query RumVisits($accountTag: String!, $siteTag: String!, $since: String!, $until: String!) {
+    viewer {
+      accounts(filter: { accountTag: $accountTag }) {
+        rumPageloadEventsAdaptiveGroups(
+          limit: 5000
+          filter: { siteTag: $siteTag, date_geq: $since, date_leq: $until }
+          orderBy: [date_ASC]
+        ) {
+          count
+          dimensions { date bot }
+          sum { visits }
+          confidence {
+            level
+            sum { visits { estimate lower upper isValid sampleSize } }
+          }
+        }
+      }
+    }
+  }`;
+
+type RumData = {
+  viewer?: {
+    accounts?: {
+      rumPageloadEventsAdaptiveGroups?: {
+        count?: number;
+        dimensions?: { date?: string; bot?: unknown };
+        sum?: { visits?: number };
+        confidence?: {
+          level?: number;
+          sum?: {
+            visits?: {
+              estimate?: number;
+              lower?: number;
+              upper?: number;
+              isValid?: boolean;
+              sampleSize?: number;
+            };
+          };
+        };
+      }[];
+    }[];
+  };
+};
+
+/** Cloudflare's `bot` dimension representation isn't documented — it could be
+ *  0/1, "0"/"1", or a boolean. Treat anything falsy or an explicit zero-ish
+ *  value as human rather than assuming one encoding. */
+function isBotRow(value: unknown): boolean {
+  if (value === true) return true;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") return value !== "0" && value.toLowerCase() !== "false";
+  return false;
+}
+
+/**
+ * Live Web Analytics read. Null on every failure path, exactly like
+ * `fetchEdgeTraffic` — missing credentials, auth failure (a 403 here means the
+ * token lacks Account Analytics:Read, which is a DIFFERENT permission from the
+ * zone one edge_traffic needs), GraphQL error, timeout, or an empty window.
+ */
+export async function fetchRumVisits(
+  token: string | undefined,
+  accountTag: string | undefined,
+  siteTag: string | undefined,
+  now: Date = new Date(),
+): Promise<RumVisits | null> {
+  if (!token || !accountTag || !siteTag) return null;
+
+  const { days: requestedDays, fromBoundary } = await resolveRumWindowDays(token, accountTag);
+  const until = new Date(now);
+  const since = new Date(now);
+  since.setUTCDate(since.getUTCDate() - (requestedDays - 1));
+
+  const data = await postGraphQL<RumData>(token, RUM_QUERY, {
+    accountTag,
+    siteTag,
+    since: isoDay(since),
+    until: isoDay(until),
+  });
+  const rows = data?.viewer?.accounts?.[0]?.rumPageloadEventsAdaptiveGroups;
+  if (!rows?.length) return null;
+
+  const human = rows.filter((r) => !isBotRow(r.dimensions?.bot));
+  const allPageloads = rows.reduce((a, r) => a + (r.count ?? 0), 0);
+  const botPageloads = allPageloads - human.reduce((a, r) => a + (r.count ?? 0), 0);
+
+  const startDay = human[0]?.dimensions?.date ?? rows[0]?.dimensions?.date ?? isoDay(since);
+  const spanDays = Math.round((Date.parse(isoDay(until)) - Date.parse(startDay)) / 86_400_000) + 1;
+
+  // Rows are per (date, bot), so collapse to one count per day before filling.
+  const perDay = new Map<string, number>();
+  for (const r of human) {
+    const day = r.dimensions?.date ?? "";
+    perDay.set(day, (perDay.get(day) ?? 0) + (r.sum?.visits ?? 0));
+  }
+  const daily = fillDailyWindow(
+    [...perDay].map(([day, count]) => ({ day, count })),
+    Math.max(1, spanDays),
+  );
+
+  // Confidence is per-row; the card shows one figure for the window, so bounds
+  // add and the validity flag is ANDed. A window is only as trustworthy as its
+  // least trustworthy day — one invalid day makes the whole total's interval
+  // meaningless, and reporting otherwise would launder it.
+  const conf = human.map((r) => r.confidence?.sum?.visits);
+  const hasConfidence = conf.some(Boolean);
+  const estimate = conf.reduce((a, c) => a + (c?.estimate ?? 0), 0);
+
+  return {
+    // `estimate` IS the point estimate that `sum { visits }` reports — the
+    // schema calls the interval "for the corresponding point estimate". Sum is
+    // still queried and used as the fallback for any row without a confidence
+    // block, so the card never shows a hole; it is never shown alongside the
+    // estimate, because two numbers a reader has to reconcile is worse than one.
+    visits: hasConfidence ? estimate : human.reduce((a, r) => a + (r.sum?.visits ?? 0), 0),
+    visitsLower: conf.reduce((a, c) => a + (c?.lower ?? c?.estimate ?? 0), 0),
+    visitsUpper: conf.reduce((a, c) => a + (c?.upper ?? c?.estimate ?? 0), 0),
+    intervalValid: hasConfidence && conf.every((c) => c?.isValid !== false),
+    confidenceLevel: human.find((r) => r.confidence?.level)?.confidence?.level ?? 0,
+    sampleSize: conf.reduce((a, c) => a + (c?.sampleSize ?? 0), 0),
+    pageloads: human.reduce((a, r) => a + (r.count ?? 0), 0),
+    botShare: allPageloads > 0 ? botPageloads / allPageloads : 0,
+    weeklyVisits: bucketByWeek(daily, TREND_BUCKET_DAYS),
+    windowDays: Math.max(1, spanDays),
+    startDay,
+    boundaryKnown: fromBoundary,
+  };
+}

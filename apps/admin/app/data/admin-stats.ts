@@ -5,9 +5,14 @@ import {
   fillDailyWindow,
 } from "@form-at/data/set-stats";
 import { getSet } from "@form-at/data/sets";
+import { WEB_ANALYTICS_SITE_TAG } from "@form-at/data/webAnalytics";
 import { createServerFn } from "@tanstack/react-start";
-import { type EdgeTraffic, fetchEdgeTraffic } from "./cf-analytics";
-import { SAMPLE_ADMIN_DASHBOARD_STATS, SAMPLE_EDGE_TRAFFIC } from "./sample-stats";
+import { type EdgeTraffic, type RumVisits, fetchEdgeTraffic, fetchRumVisits } from "./cf-analytics";
+import {
+  SAMPLE_ADMIN_DASHBOARD_STATS,
+  SAMPLE_EDGE_TRAFFIC,
+  SAMPLE_RUM_VISITS,
+} from "./sample-stats";
 
 // Read-only aggregate queries for the internal admin dashboard
 // (`routes/dashboard.tsx`). Same `createServerFn` + D1 pattern as
@@ -52,6 +57,13 @@ export type PlayStats = {
    *  Surfaced so the dashboard can disclose it rather than presenting that
    *  ratio as if it covered every play ever recorded. */
   excludedCount: number;
+  /** Same 60-day/7-day shape as `AppLaunchStats.weeklyTrend`. TOTAL plays only,
+   *  deliberately not split by offline/online: `is_offline` is NULL for every
+   *  play before tracking was added, so a split series would draw a flat-zero
+   *  offline line across most of the window, reading as "nobody listened
+   *  offline" rather than "not recorded". The all-time ratio row carries that
+   *  breakdown instead, with its own exclusion caption. */
+  weeklyTrend: number[];
   topSets: { setId: string; setTitle: string; setArtist: string; playCount: number }[];
 };
 
@@ -279,7 +291,7 @@ export async function fetchAppLaunchStats(db: D1Database): Promise<AppLaunchStat
 }
 
 export async function fetchPlayStats(db: D1Database): Promise<PlayStats> {
-  const [totals, topSets] = await Promise.all([
+  const [totals, topSets, trend] = await Promise.all([
     db
       .prepare(
         `SELECT COUNT(*) as total,
@@ -297,6 +309,17 @@ export async function fetchPlayStats(db: D1Database): Promise<PlayStats> {
          LIMIT 5`,
       )
       .all<{ set_id: string; set_title: string; set_artist: string; play_count: number }>(),
+    // `started_at` (unix ms), not `created_at` — `plays` has no created_at
+    // column; the play's own start time is the event time here.
+    db
+      .prepare(
+        `SELECT DATE(started_at/1000, 'unixepoch') AS day, COUNT(*) AS count
+         FROM plays
+         WHERE started_at >= (strftime('%s', 'now', '-${TREND_WINDOW_DAYS} days') * 1000)
+         GROUP BY day
+         ORDER BY day ASC`,
+      )
+      .all<{ day: string; count: number }>(),
   ]);
 
   const total = totals?.total ?? 0;
@@ -307,6 +330,7 @@ export async function fetchPlayStats(db: D1Database): Promise<PlayStats> {
     offlineCount,
     onlineCount,
     excludedCount: total - offlineCount - onlineCount,
+    weeklyTrend: bucketByWeek(fillDailyWindow(trend.results, TREND_WINDOW_DAYS), TREND_BUCKET_DAYS),
     topSets: topSets.results.map((r) => ({
       setId: r.set_id,
       setTitle: r.set_title,
@@ -534,5 +558,29 @@ export const fetchEdgeTrafficStats = createServerFn({ method: "GET" }).handler(
       | undefined;
     if (!cf?.hasCloudflareEnv) return SAMPLE_EDGE_TRAFFIC;
     return fetchEdgeTraffic(cf.env?.CF_ANALYTICS_TOKEN, cf.env?.CF_ZONE_ID);
+  },
+);
+
+// Independent of `fetchEdgeTrafficStats` on purpose, not merged into one call.
+// They query different scopes (account vs zone) needing DIFFERENT token
+// permissions, so a token missing one should blank one card, not both — and
+// the likely failure right now is exactly that. Two deferred round-trips, both
+// off the critical path.
+export const fetchRumVisitStats = createServerFn({ method: "GET" }).handler(
+  async ({ context }): Promise<RumVisits | null> => {
+    const cf = (context as unknown as Record<string, unknown>).cloudflare as
+      | {
+          env: { CF_ANALYTICS_TOKEN?: string; CF_ACCOUNT_ID?: string };
+          hasCloudflareEnv: boolean;
+        }
+      | undefined;
+    if (!cf?.hasCloudflareEnv) return SAMPLE_RUM_VISITS;
+    // Site tag comes from @form-at/data, not env: it's already published in
+    // every page of the public site, so one committed constant beats two copies.
+    return fetchRumVisits(
+      cf.env?.CF_ANALYTICS_TOKEN,
+      cf.env?.CF_ACCOUNT_ID,
+      WEB_ANALYTICS_SITE_TAG,
+    );
   },
 );

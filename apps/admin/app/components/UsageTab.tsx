@@ -2,7 +2,8 @@ import { Label, Muted, TerminalRow } from "@form-at/ui";
 import { Await } from "@tanstack/react-router";
 import { Suspense } from "react";
 import type { AdminDashboardStats } from "~/data/admin-stats";
-import type { EdgeTraffic } from "~/data/cf-analytics";
+import { EDGE_TRAFFIC_MAX_WINDOW_DAYS } from "~/data/cf-analytics";
+import type { EdgeTraffic, RumVisits } from "~/data/cf-analytics";
 import { DashboardCard } from "./DashboardCard";
 import { TrendChart } from "./TrendChart";
 
@@ -11,6 +12,85 @@ interface UsageTabProps {
   /** Deferred — see dashboard.tsx's loader. Read through <Await> so a slow
    *  Cloudflare API delays only the two places that show it. */
   edgeTraffic: Promise<EdgeTraffic | null>;
+  /** Deferred, and fetched independently of edgeTraffic — see dashboard.tsx. */
+  rumVisits: Promise<RumVisits | null>;
+}
+
+// Sits beside edge_traffic so the two numbers can be compared directly: this
+// one counts real browsers, that one counts every request at the edge. The gap
+// between them IS the disclosure — the captions explain it, the pairing shows
+// it.
+function VisitsCard({ rum }: { rum: RumVisits | null }) {
+  if (!rum) {
+    return (
+      <Muted className="block text-xs">
+        no data — the Cloudflare Analytics credentials are missing, the token lacks Account
+        Analytics:Read (a different permission from the zone one edge_traffic uses), or the API
+        didn't answer. Deliberately blank rather than 0.
+      </Muted>
+    );
+  }
+  const pct = (n: number) => Math.round(n * 100);
+  return (
+    <>
+      <div className="space-y-1">
+        <TerminalRow label="visits" value={String(rum.visits)} dimValue />
+        {rum.intervalValid && (
+          <TerminalRow
+            label={`${pct(rum.confidenceLevel)}% interval`}
+            value={`${rum.visitsLower} – ${rum.visitsUpper}`}
+            dimValue
+          />
+        )}
+        <TerminalRow label="page_loads" value={String(rum.pageloads)} dimValue />
+        <TerminalRow label="bots_excluded" value={`${pct(rum.botShare)}%`} dimValue />
+        <TerminalRow label="window" value={`${rum.windowDays}d`} dimValue />
+      </div>
+      {rum.intervalValid ? (
+        <div className="mt-3">
+          <Label className="mb-1 block text-xs text-grey">since {rum.startDay}</Label>
+          <TrendChart data={rum.weeklyVisits} />
+        </div>
+      ) : (
+        // Cloudflare's own isValid, not a threshold invented here: with too few
+        // samples the interval is meaningless, so neither bounds nor a curve
+        // are shown — both would read as precision that doesn't exist.
+        <p className="mt-3 text-xs text-grey/70">
+          too few samples ({rum.sampleSize}) to characterise — Cloudflare reports the confidence
+          interval as invalid at this volume, so no range and no chart are shown. The visit count
+          above is still its best estimate.
+        </p>
+      )}
+      <p className="mt-3 text-xs text-grey/70">
+        a visit is a page load arriving from a different site or a direct link — Cloudflare compares
+        the referer against the hostname. Moving between pages here, or reloading, doesn't add one.
+        Not sessions, and not people: Web Analytics stores no cookie or identifier, so it can't
+        count distinct humans at all.
+      </p>
+      <p className="mt-1 text-xs text-grey/70">
+        real browsers running the beacon, with Cloudflare's bot-flagged rows removed — which is why
+        this is far below edge_traffic. Adaptively sampled, so it's an estimate
+        {rum.intervalValid ? " with the interval shown above" : ""}.
+      </p>
+      {rum.windowDays < EDGE_TRAFFIC_MAX_WINDOW_DAYS && (
+        // The beacon started collecting on 2026-08-10; before that it wasn't in
+        // the page at all, so a low number here means "only just started",
+        // not "nobody visits". Derived from the oldest day Cloudflare actually
+        // returned rather than a hardcoded date, so it self-corrects and this
+        // caption disappears once history fills the window — same pattern as
+        // app_launches' `tracking since`.
+        <p className="mt-1 text-xs text-grey/70">
+          only {rum.windowDays}d of data exists (since {rum.startDay}) — the beacon hasn't been
+          collecting for the full window, so a low count reflects that rather than low traffic.
+        </p>
+      )}
+      {!rum.boundaryKnown && (
+        <p className="mt-1 text-xs text-grey/70">
+          retention boundary couldn't be read this time, so the full window was requested.
+        </p>
+      )}
+    </>
+  );
 }
 
 // The edge_traffic caption is not optional: without it, anyone comparing this
@@ -62,7 +142,8 @@ function EdgeTrafficCard({ edge }: { edge: EdgeTraffic | null }) {
 
 // The landing tab (see dashboard.tsx): a full-width `totals` summary first,
 // then aggregate volume with no per-set dimension (that's the Sets tab) —
-// edge_traffic, app_launches, plays, calendar_adds.
+// edge_traffic and visits side by side, then app_launches, plays,
+// calendar_adds.
 //
 // `totals` repeats numbers that also appear in growth's funnels. That's
 // deliberate and safe: both read the same `admin-stats` computation, so they
@@ -71,7 +152,7 @@ function EdgeTrafficCard({ edge }: { edge: EdgeTraffic | null }) {
 // calendar_add_click carries no set_id/event_id (see trackableEvents.ts), so
 // it's a bare total like app_launches rather than a per-entity breakdown
 // that would need its own tab.
-export function UsageTab({ stats, edgeTraffic }: UsageTabProps) {
+export function UsageTab({ stats, edgeTraffic, rumVisits }: UsageTabProps) {
   return (
     // Two columns above mobile, matching SetsTab. Three columns made each card
     // too narrow for its TerminalRow label/value pairs.
@@ -94,6 +175,13 @@ export function UsageTab({ stats, edgeTraffic }: UsageTabProps) {
                   value={edge ? String(edge.requests) : "—"}
                   dimValue
                 />
+              )}
+            </Await>
+          </Suspense>
+          <Suspense fallback={<TerminalRow label="visits" value="—" dimValue />}>
+            <Await promise={rumVisits}>
+              {(rum) => (
+                <TerminalRow label="visits" value={rum ? String(rum.visits) : "—"} dimValue />
               )}
             </Await>
           </Suspense>
@@ -123,6 +211,13 @@ export function UsageTab({ stats, edgeTraffic }: UsageTabProps) {
         <Label className="mb-2 text-grey tracking-widest">{"// edge_traffic"}</Label>
         <Suspense fallback={<Muted className="block text-xs">reading…</Muted>}>
           <Await promise={edgeTraffic}>{(edge) => <EdgeTrafficCard edge={edge} />}</Await>
+        </Suspense>
+      </DashboardCard>
+
+      <DashboardCard>
+        <Label className="mb-2 text-grey tracking-widest">{"// visits"}</Label>
+        <Suspense fallback={<Muted className="block text-xs">reading…</Muted>}>
+          <Await promise={rumVisits}>{(rum) => <VisitsCard rum={rum} />}</Await>
         </Suspense>
       </DashboardCard>
 
@@ -159,6 +254,13 @@ export function UsageTab({ stats, edgeTraffic }: UsageTabProps) {
             2026-07-08) and are excluded from this ratio.
           </p>
         )}
+        <div className="mb-4">
+          <Label className="mb-1 block text-xs text-grey">last_60d</Label>
+          {/* Total plays only — see PlayStats.weeklyTrend for why this isn't
+              split by offline/online. No "tracking since" caption: plays
+              predate the 60-day window, unlike the events table. */}
+          <TrendChart data={stats.plays.weeklyTrend} />
+        </div>
         {stats.plays.topSets.length > 0 && (
           <div className="space-y-1">
             {stats.plays.topSets.map((set) => (

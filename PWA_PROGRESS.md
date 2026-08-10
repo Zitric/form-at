@@ -2841,6 +2841,80 @@ no test suite here can prove):
    set's variants (skip-if-exists working against real files, not just the
    unit-tested synthetic case).
 
+### Added 2026-08-09 — admin dashboard: a `visits` card from Web Analytics (RUM), beside `edge_traffic`
+
+Built on `feat/rum-visitors-card`. The point of the pairing: `edge_traffic` and
+`visits` disagree by a lot, and showing them side by side makes that legible
+instead of relying on a caption nobody reads. It's also the number actually
+wanted — roughly how many people arrive — which two of the three collective
+members can't see at all, having no Cloudflare account.
+
+**Schema pinned by introspection, not guessed.** Against
+`rumPageloadEventsAdaptiveGroups`, account-scoped (`viewer.accounts`, keyed on
+the Web Analytics site tag) rather than zone-scoped like the edge dataset.
+Confirmed by introspection: `sum { visits }` exists and there is **no
+`pageViews`** under `sum` — `count` is the pageload-event count, which is the
+page-view equivalent since Cloudflare defines a page view as an HTML document
+load and one beacon fires per load. Filters include `siteTag` and
+`date_geq`/`date_leq`; dimensions include `date`, `bot`, `deviceType`,
+`countryName`, `refererHost`, `requestPath`.
+
+**Bots are IN the RUM data — the assumption going in was backwards.**
+Cloudflare's own dimension docs describe "Exclude Bots" as making the dataset
+"a closer representation of real user traffic", which only makes sense if bots
+are present by default. The beacon is JavaScript so it misses non-JS crawlers,
+but headless ones execute it. So bot exclusion is required for the card to mean
+what it says, not a "just in case" filter.
+
+Implemented by grouping BY the `bot` dimension and summing only non-bot rows,
+rather than filtering server-side: the filter's value encoding isn't
+documented, and reading the dimension back needs no assumption about whether
+it's `0/1`, `"0"/"1"` or a boolean (`isBotRow` normalises all three, and a unit
+test covers each). It also yields the bot share for free, which is shown —
+concrete evidence for why the two cards differ.
+
+**The uncertainty disclosure is a confidence interval, not a sample rate.**
+The first cut showed `avg { sampleInterval }` (1 = unsampled, N = roughly
+1-in-N). That was replaced after introspecting the `confidence` field, which
+turned out to be far better suited: `Confidence` is an OBJECT (output only)
+carrying `estimate`, `lower`, `upper`, `sampleSize`, and — the find —
+`isValid`: *"True if the confidence interval is valid, i.e. there is enough
+samples at low enough sample interval"*. `AccountRumPageloadEventsAdaptiveGroupsSumConfidence`
+has exactly one field, `visits: Confidence`, so the number the card actually
+shows is the one with an interval attached.
+
+`sampleInterval` was then REMOVED rather than shown alongside. Both disclose the
+same uncertainty, but the rate only proxies the question a reader has ("how much
+can I trust this?") while the interval answers it. Showing both invites
+reconciling two figures that say the same thing, and the simpler, weaker one
+wins attention.
+
+**`isValid` is the gate, not a threshold invented here.** True → show the
+estimate with its bounds and plot the trend. False → show neither bounds nor
+chart, and say the sample is too small to characterise. Cloudflare is better
+placed than we are to judge whether its own interval means anything, and a
+hand-picked cutoff would have been a guess dressed as rigour.
+
+Per-row confidence is aggregated for the window total: bounds add, and
+`isValid` is **ANDed** — a window is only as trustworthy as its least
+trustworthy day, and reporting a valid interval across a mixed window would
+launder the bad one. `sum { visits }` is still queried and used as a fallback
+for any row without a confidence block, so the card never shows a hole, but it
+is never displayed beside the estimate.
+
+**Independent fetch, not merged with `edge_traffic`.** Two deferred round-trips
+instead of one, both already off the critical path. They query different scopes
+needing DIFFERENT token permissions — zone Analytics:Read versus account
+Analytics:Read — so a token missing one blanks one card rather than both. That
+was the live failure mode at build time, and one card working while the other
+explains itself is the more informative outcome.
+
+**Labelling.** `visits`, matching Cloudflare's own term, with the definition
+stated on the card: a page load arriving from a different site or a direct link,
+so moving between pages here or reloading doesn't add one; not sessions, and not
+people, because Web Analytics stores no cookie or identifier and therefore
+cannot count distinct humans at all.
+
 ### Added 2026-08-08 — admin dashboard: usage as landing tab, a totals card, and live Cloudflare edge traffic
 
 Three things, on `feat/usage-default-dashboard`.
