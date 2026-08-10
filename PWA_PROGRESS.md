@@ -3087,6 +3087,34 @@ definition.
    it this card would silently include crawler traffic while claiming to count
    real browsers.
 
+*The `isValid` AND rule could never unlock — found on the live card.* Validity
+was aggregated as `conf.every(c => c.isValid !== false)` across every daily row.
+Sound-sounding ("a window is only as trustworthy as its least trustworthy day")
+and wrong in practice: over ~57 days there is always a quiet day with n=1, so
+the AND was permanently false and the chart could never appear however much
+traffic grew. A permanent suppression wearing a temporary one's clothes.
+
+Split into two questions that were being conflated:
+- **Does the window total's interval say anything?** Now `upper > lower` on the
+  SUMMED bounds — degenerate bounds carry no information whatever Cloudflare
+  says about them, and one quiet day can't veto the rest. Summing per-day bounds
+  is a conservative containment: if each day's true value lies in its own
+  bounds, the total lies in the sum.
+- **Is the daily trend honest?** That depends on sampling, not on interval
+  width. `avg { sampleInterval }` is queried again for exactly this: at 1 the
+  daily figures are EXACT COUNTS and the shape is real, however small the
+  numbers — smallness makes an interval meaningless, not a count wrong. Only
+  extrapolated figures with no usable interval make the shape an artefact, and
+  only then is the chart withheld.
+
+*Two captions asserted causes they couldn't know.* The suppression caption said
+"too few samples (12)" beside "visits: 120" — two numbers with no stated
+relationship, implying they described the same thing. And the coverage caption
+claimed "the beacon started collecting recently" for a 57-of-60-day window, when
+the beacon had in fact been collecting for months via edge injection and had
+only just stopped. Both now state what is observable and claim no cause: why the
+earlier days are empty is not knowable from this data.
+
 *Small-n honesty for the bot share.* At a dozen page loads, one extra bot moves
 the share from 8% to 17% — a swing that reads as a finding when it's noise. The
 data layer therefore reports raw counts (`botPageloads` / `totalPageloads`) and

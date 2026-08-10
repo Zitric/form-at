@@ -237,6 +237,7 @@ const rumBody = (
     upper?: number;
     isValid?: boolean;
     sampleSize?: number;
+    sampleInterval?: number;
   }[],
 ) => ({
   data: {
@@ -246,6 +247,7 @@ const rumBody = (
           rumPageloadEventsAdaptiveGroups: rows.map((r) => ({
             count: r.count,
             dimensions: { date: r.date, bot: r.bot ?? 0 },
+            avg: { sampleInterval: r.sampleInterval ?? 1 },
             sum: { visits: r.visits },
             confidence: {
               level: 0.95,
@@ -463,6 +465,64 @@ describe("fetchRumVisits", () => {
 
     expect(result?.requestedWindowDays).toBe(14);
     expect(result?.windowDays).toBe(3);
+  });
+
+  it("does not AND isValid across days — that could never unlock at real traffic", async () => {
+    // The bug this replaced: `every(isValid)` over ~57 daily rows. At this
+    // scale there is always a quiet day with n=1, so the AND was permanently
+    // false and the chart could never appear however much traffic grew — a
+    // permanent suppression that looked temporary. Validity is now a property
+    // of the summed bounds, which one quiet day cannot veto.
+    mockFetchSequence(
+      { body: rumSettingsBody(30 * 86_400) },
+      {
+        body: rumBody([
+          { date: "2026-08-06", count: 80, visits: 80, lower: 60, upper: 100, isValid: true },
+          { date: "2026-08-07", count: 1, visits: 1, lower: 1, upper: 1, isValid: false },
+        ]),
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
+
+    expect(result?.intervalValid).toBe(true);
+    expect(result?.visitsLower).toBe(61);
+    expect(result?.visitsUpper).toBe(101);
+  });
+
+  it("treats degenerate summed bounds as no usable interval", async () => {
+    mockFetchSequence(
+      { body: rumSettingsBody(30 * 86_400) },
+      {
+        body: rumBody([
+          { date: "2026-08-07", count: 4, visits: 4, lower: 4, upper: 4, isValid: false },
+        ]),
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
+
+    // Bounds that equal the estimate carry no information, whatever Cloudflare
+    // says about them.
+    expect(result?.intervalValid).toBe(false);
+    // But unsampled, so the counts are exact and the card still charts them.
+    expect(result?.sampleInterval).toBe(1);
+  });
+
+  it("reports the coarsest sampleInterval, so a sampled stretch can't hide", async () => {
+    mockFetchSequence(
+      { body: rumSettingsBody(30 * 86_400) },
+      {
+        body: rumBody([
+          { date: "2026-08-06", count: 5, visits: 5, sampleInterval: 1 },
+          { date: "2026-08-07", count: 5, visits: 5, sampleInterval: 10 },
+        ]),
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
+
+    expect(result?.sampleInterval).toBe(10);
   });
 
   it("returns null without credentials, and never calls the API", async () => {

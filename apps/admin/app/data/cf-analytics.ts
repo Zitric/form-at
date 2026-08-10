@@ -278,7 +278,18 @@ export type RumVisits = {
    *  sample interval". False means the interval is meaningless — so the card
    *  suppresses the chart and the bounds rather than showing numbers nobody
    *  should read. */
+  /** True when the summed bounds actually say something — i.e. they aren't
+   *  degenerate. Deliberately NOT an AND of Cloudflare's per-day `isValid`:
+   *  that flag is per row, and ANDing it across a 60-day window means one quiet
+   *  day (n=1) invalidates all sixty. At this traffic there is always such a
+   *  day, so the AND could never flip true however much traffic grew — a
+   *  permanent suppression masquerading as a temporary one. */
   intervalValid: boolean;
+  /** 1 = every event recorded, so the daily figures are exact counts and the
+   *  trend is honest as a SHAPE even when no single day has enough samples to
+   *  characterise an interval. Above 1 the figures are extrapolations and the
+   *  day-to-day shape is an artefact of which events happened to be sampled. */
+  sampleInterval: number;
   /** Confidence level the interval was computed at, echoed back by the API. */
   confidenceLevel: number;
   /** Samples behind the estimate — the concrete reason an interval is or isn't
@@ -376,6 +387,7 @@ const RUM_QUERY = `
         ) {
           count
           dimensions { date bot }
+          avg { sampleInterval }
           confidence(level: $level) {
             level
             sum { visits { estimate lower upper isValid sampleSize } }
@@ -391,6 +403,7 @@ type RumData = {
       rumPageloadEventsAdaptiveGroups?: {
         count?: number;
         dimensions?: { date?: string; bot?: unknown };
+        avg?: { sampleInterval?: number };
         confidence?: {
           level?: number;
           sum?: {
@@ -455,6 +468,7 @@ export async function fetchRumVisits(
       visitsLower: 0,
       visitsUpper: 0,
       intervalValid: false,
+      sampleInterval: 1,
       confidenceLevel: 0,
       sampleSize: 0,
       pageloads: 0,
@@ -500,11 +514,17 @@ export async function fetchRumVisits(
   // read, NOT zero visits (§1: never substitute 0 for a metric that didn't load).
   if (!conf.some(Boolean)) return null;
 
+  // Summing per-day bounds is a conservative containment for the total: if each
+  // day's true value lies in its own bounds, the sum lies in the summed bounds.
+  const lower = conf.reduce((a, c) => a + (c?.lower ?? c?.estimate ?? 0), 0);
+  const upper = conf.reduce((a, c) => a + (c?.upper ?? c?.estimate ?? 0), 0);
+
   return {
     visits: conf.reduce((a, c) => a + (c?.estimate ?? 0), 0),
-    visitsLower: conf.reduce((a, c) => a + (c?.lower ?? c?.estimate ?? 0), 0),
-    visitsUpper: conf.reduce((a, c) => a + (c?.upper ?? c?.estimate ?? 0), 0),
-    intervalValid: conf.every((c) => c?.isValid !== false),
+    visitsLower: lower,
+    visitsUpper: upper,
+    intervalValid: upper > lower,
+    sampleInterval: rows.reduce((max, r) => Math.max(max, r.avg?.sampleInterval ?? 1), 1),
     confidenceLevel:
       human.find((r) => r.confidence?.level)?.confidence?.level ?? RUM_CONFIDENCE_LEVEL,
     sampleSize: conf.reduce((a, c) => a + (c?.sampleSize ?? 0), 0),

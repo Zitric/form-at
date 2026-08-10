@@ -47,6 +47,11 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
   }
 
   const pct = (n: number) => Math.round(n * 100);
+  // Unsampled figures are exact counts, so the trend is honest as a shape even
+  // when no single day has enough samples for an interval. Only extrapolated
+  // (sampled) figures with no usable interval make the shape an artefact.
+  const countsAreExact = rum.sampleInterval === 1;
+  const chartIsHonest = countsAreExact || rum.intervalValid;
   const botsExcludedLabel =
     rum.totalPageloads >= MIN_PAGELOADS_FOR_BOT_SHARE
       ? `${rum.botPageloads} / ${rum.totalPageloads} (${pct(rum.botPageloads / rum.totalPageloads)}%)`
@@ -71,21 +76,20 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
         <TerminalRow label="bots_excluded" value={botsExcludedLabel} dimValue />
         <TerminalRow label="window" value={`${rum.windowDays}d`} dimValue />
       </div>
-      {rum.intervalValid ? (
+      {chartIsHonest ? (
         <div className="mt-3">
           <Label className="mb-1 block text-xs text-grey">since {rum.startDay}</Label>
           <TrendChart data={rum.weeklyVisits} />
         </div>
       ) : (
-        // Cloudflare's own isValid, not a threshold invented here: with too few
-        // samples the interval is meaningless, so neither bounds nor a curve
-        // are shown — both would read as precision that doesn't exist.
+        // Reached only when the figures are EXTRAPOLATED and the interval is
+        // degenerate. Exact (unsampled) counts always get a chart, however
+        // small — smallness makes an interval meaningless, not a count wrong.
         <p className="mt-3 text-xs text-grey/70">
-          too few samples ({rum.sampleSize}) to characterise — Cloudflare reports the confidence
-          interval as invalid at this volume, so no range and no chart are shown. The visit count
-          above is still its best estimate. Nothing is broken: at single-digit daily samples the
-          interval comes back degenerate (a range of [4,4] tells you nothing), and both the range
-          and the trend appear on their own once traffic makes them meaningful.
+          no trend shown: these figures are extrapolated from a 1-in-
+          {rum.sampleInterval} sample ({rum.sampleSize} samples across the window), and the
+          confidence interval is too wide to be useful, so the day-to-day shape would be an artefact
+          of which events happened to be sampled rather than of real traffic.
         </p>
       )}
       <p className="mt-3 text-xs text-grey/70">
@@ -96,21 +100,22 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
       </p>
       <p className="mt-1 text-xs text-grey/70">
         real browsers running the beacon, with Cloudflare's bot-flagged rows removed — which is why
-        this is far below edge_traffic. Adaptively sampled, so it's an estimate
-        {rum.intervalValid ? " with the interval shown above" : ""}.
+        this is far below edge_traffic.{" "}
+        {countsAreExact
+          ? "Unsampled at this volume, so these are exact counts."
+          : `Sampled 1-in-${rum.sampleInterval}, so these are estimates.`}
       </p>
       {rum.windowDays < rum.requestedWindowDays && (
         // Compared against what was REQUESTED (retention-clamped), not the
-        // chart maximum: data shorter than retention allows means the beacon
-        // genuinely started collecting recently, which is the thing worth
-        // saying. Against the maximum this would fire forever whenever
-        // retention is under 60 days and blame collection for retention.
-        // Derived, so it self-corrects and disappears once history fills the
-        // window — same pattern as app_launches' `tracking since`.
+        // chart maximum — against the maximum this fires forever whenever
+        // retention is under 60 days. States COVERAGE only: an earlier version
+        // asserted "the beacon started collecting recently", which was simply
+        // false (it had been collecting for months via edge injection) and is
+        // not knowable from this data either way.
         <p className="mt-1 text-xs text-grey/70">
-          only {rum.windowDays}d of data exists (since {rum.startDay}), out of the{" "}
-          {rum.requestedWindowDays}d available — the beacon started collecting recently, so a low
-          count reflects that rather than low traffic.
+          {rum.windowDays} of the {rum.requestedWindowDays} retained days have data, starting{" "}
+          {rum.startDay}. Why the earlier days are missing isn't knowable from here — no traffic, or
+          the beacon not yet collecting — so this states the coverage and claims no cause.
         </p>
       )}
       {!rum.boundaryKnown && (

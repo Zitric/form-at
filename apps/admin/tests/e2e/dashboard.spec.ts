@@ -271,10 +271,12 @@ test.describe("admin dashboard", () => {
     // The interval is the disclosure, not a sample rate — and it's labelled
     // with the level it was computed at.
     await expect(page.getByText(/95% interval/)).toBeVisible();
-    // The fixture's 30d window is shorter than the 60d ask, so the
-    // short-window disclosure must appear — a low count has to read as
-    // "recently started collecting", not "nobody visits".
-    await expect(page.getByText(/only 30d of data exists/i)).toBeVisible();
+    // The fixture's 30d window is shorter than the 45d retention, so the
+    // coverage line must appear — and must state coverage WITHOUT claiming a
+    // cause. An earlier version asserted "the beacon started collecting
+    // recently", which turned out to be false on the live card.
+    await expect(page.getByText(/30 of the 45 retained days have data/i)).toBeVisible();
+    await expect(page.getByText(/claims no cause/i)).toBeVisible();
     // Sits beside edge_traffic so the gap between the two is visible.
     await expect(page.getByText("// edge_traffic")).toBeVisible();
   });

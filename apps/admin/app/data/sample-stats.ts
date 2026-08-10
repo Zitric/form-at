@@ -13,6 +13,7 @@ export const SAMPLE_RUM_VISITS: RumVisits = {
   visitsLower: 191,
   visitsUpper: 237,
   intervalValid: true,
+  sampleInterval: 1,
   confidenceLevel: 0.95,
   sampleSize: 214,
   pageloads: 389,
