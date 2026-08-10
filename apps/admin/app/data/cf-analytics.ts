@@ -284,6 +284,13 @@ export type RumVisits = {
   /** Weekly buckets of non-bot visits, oldest first — same shape as every
    *  other trend. Only plotted when `intervalValid`. */
   weeklyVisits: number[];
+  /** Days we ASKED for, i.e. min(Cloudflare's retention, our chart window).
+   *  `windowDays` short of this means data genuinely starts later than
+   *  retention allows — the beacon began collecting recently. Comparing
+   *  `windowDays` against the chart maximum instead would fire permanently
+   *  whenever retention is under 60 days, blaming collection for what is
+   *  really retention. */
+  requestedWindowDays: number;
   windowDays: number;
   startDay: string;
   boundaryKnown: boolean;
@@ -447,6 +454,7 @@ export async function fetchRumVisits(
     pageloads: human.reduce((a, r) => a + (r.count ?? 0), 0),
     botShare: allPageloads > 0 ? botPageloads / allPageloads : 0,
     weeklyVisits: bucketByWeek(daily, TREND_BUCKET_DAYS),
+    requestedWindowDays: requestedDays,
     windowDays: Math.max(1, spanDays),
     startDay,
     boundaryKnown: fromBoundary,

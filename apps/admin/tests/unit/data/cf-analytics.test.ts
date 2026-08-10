@@ -409,6 +409,28 @@ describe("fetchRumVisits", () => {
     expect(result?.windowDays).toBe(3);
   });
 
+  it("reports the requested window alongside the one it got, so a short retention isn't mistaken for a late start", async () => {
+    // Retention allows 14 days; only 3 days of data exist. The card needs BOTH
+    // numbers to say "started collecting recently" honestly — comparing the 3
+    // against a hardcoded 60 would fire that caption even when the beacon had
+    // been collecting for the whole retention period.
+    mockFetchSequence(
+      { body: rumSettingsBody(14 * 86_400) },
+      {
+        body: rumBody([
+          { date: "2026-08-05", count: 2, visits: 2 },
+          { date: "2026-08-06", count: 2, visits: 2 },
+          { date: "2026-08-07", count: 2, visits: 2 },
+        ]),
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
+
+    expect(result?.requestedWindowDays).toBe(14);
+    expect(result?.windowDays).toBe(3);
+  });
+
   it("returns null without credentials, and never calls the API", async () => {
     const fetchMock = mockFetchSequence({ body: rumSettingsBody(30 * 86_400) });
 

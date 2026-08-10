@@ -18,6 +18,10 @@ export const SAMPLE_RUM_VISITS: RumVisits = {
   pageloads: 389,
   botShare: 0.31,
   weeklyVisits: [38, 41, 45, 44, 46],
+  // 30 days of data out of 45 available — exercises the "started recently"
+  // caption via the honest comparison (data shorter than retention), not via a
+  // short retention being mistaken for a late start.
+  requestedWindowDays: 45,
   windowDays: 30,
   startDay: "2026-07-09",
   boundaryKnown: true,
