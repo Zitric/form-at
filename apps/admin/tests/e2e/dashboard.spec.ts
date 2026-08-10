@@ -275,7 +275,11 @@ test.describe("admin dashboard", () => {
     // coverage line must appear — and must state coverage WITHOUT claiming a
     // cause. An earlier version asserted "the beacon started collecting
     // recently", which turned out to be false on the live card.
-    await expect(page.getByText(/30 of the 45 retained days have data/i)).toBeVisible();
+    // Days-with-data and the span they cover are different facts — the fixture
+    // has 22 days of rows spread over a 30d span. Asserting the span as though
+    // it were coverage is the bug this replaced.
+    await expect(page.getByText(/22 days carry data/i)).toBeVisible();
+    await expect(page.getByText(/spread across the 30d/i)).toBeVisible();
     await expect(page.getByText(/claims no cause/i)).toBeVisible();
     // Sits beside edge_traffic so the gap between the two is visible.
     await expect(page.getByText("// edge_traffic")).toBeVisible();

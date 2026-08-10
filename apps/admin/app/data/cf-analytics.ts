@@ -292,12 +292,14 @@ export type RumVisits = {
   sampleInterval: number;
   /** Confidence level the interval was computed at, echoed back by the API. */
   confidenceLevel: number;
-  /** Samples behind the estimate, per Cloudflare: "Number of samples that
-   *  contributed to the estimate". These are pageload EVENTS, so it tracks
-   *  `pageloads`, NOT `visits` — comparing it to a visit count is comparing two
-   *  different quantities, which is how a card came to read "too few samples
-   *  (12)" beside "visits: 120". Null when no row reported one: a summed
-   *  `?? 0` silently produced a small, confident, meaningless number. */
+  /** RAW samples behind the visits estimate, before extrapolation. The
+   *  relationship, confirmed against live data across two windows, is
+   *  `sampleSize x sampleInterval ~= visits`: unsampled, 11 samples gave 11
+   *  visits; sampled 1-in-10, 12 samples gave 120. So it is neither a page-load
+   *  count nor comparable to `visits` directly — printing it beside a visit
+   *  total, as an earlier card did ("too few samples (12)" next to
+   *  "visits: 120"), states a false relationship. Null when no row reports one:
+   *  a summed `?? 0` produced a small, confident, meaningless number. */
   sampleSize: number | null;
   /** Weekly buckets of non-bot visits, oldest first — same shape as every
    *  other trend. Only plotted when `intervalValid`. */
@@ -309,6 +311,11 @@ export type RumVisits = {
    *  them because its window is never legitimately empty, but a beacon that
    *  started today is empty for an entirely ordinary reason. */
   noDataInWindow: boolean;
+  /** Distinct days that actually returned rows. NOT the same as `windowDays`,
+   *  which is the SPAN from the oldest row to today: a 57-day span can hold as
+   *  few as 11 days of data, and a caption reading "57 of 60 retained days have
+   *  data" off the span alone is simply false. */
+  daysWithData: number;
   /** Days we ASKED for, i.e. min(Cloudflare's retention, our chart window).
    *  `windowDays` short of this means data genuinely starts later than
    *  retention allows — the beacon began collecting recently. Comparing
@@ -481,6 +488,7 @@ export async function fetchRumVisits(
       weeklyVisits: [],
       noDataInWindow: true,
       requestedWindowDays: requestedDays,
+      daysWithData: 0,
       windowDays: requestedDays,
       startDay: isoDay(since),
       boundaryKnown: fromBoundary,
@@ -543,6 +551,7 @@ export async function fetchRumVisits(
     weeklyVisits: bucketByWeek(daily, TREND_BUCKET_DAYS),
     noDataInWindow: false,
     requestedWindowDays: requestedDays,
+    daysWithData: new Set(human.map((r) => r.dimensions?.date).filter(Boolean)).size,
     windowDays: Math.max(1, spanDays),
     startDay,
     boundaryKnown: fromBoundary,

@@ -563,24 +563,55 @@ describe("fetchRumVisits", () => {
     expect(result?.sampleSize).toBeNull();
   });
 
-  it("counts sampleSize as page loads, tracking count rather than visits", async () => {
-    // sampleSize is "samples that contributed to the estimate" — pageload
-    // EVENTS. It tracks `pageloads`, not `visits`; conflating them is what made
-    // "too few samples (12)" sit incoherently beside "visits: 120".
+  it("keeps sampleSize as the RAW pre-extrapolation count, not page loads", async () => {
+    // Live data settled the relationship: sampleSize x sampleInterval ~= visits.
+    // Unsampled, 11 samples gave 11 visits; sampled 1-in-10, 12 samples gave
+    // 120. An earlier version of this test asserted sampleSize tracked
+    // `pageloads` — wrong, and the diagnostic disproved it (11 vs 23 raw).
     mockFetchSequence(
-      { body: rumSettingsBody(30 * 86_400) },
+      { body: rumSettingsBody(60 * 86_400) },
       {
         body: rumBody([
-          { date: "2026-08-10", count: 40, visits: 12, estimate: 12, sampleSize: 40 },
+          {
+            date: "2026-08-08",
+            count: 240,
+            visits: 120,
+            estimate: 120,
+            sampleSize: 12,
+            sampleInterval: 10,
+          },
         ]),
       },
     );
 
-    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-10T12:00:00Z"));
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-08T12:00:00Z"));
 
-    expect(result?.visits).toBe(12);
-    expect(result?.pageloads).toBe(40);
-    expect(result?.sampleSize).toBe(40);
+    expect(result?.visits).toBe(120);
+    expect(result?.sampleSize).toBe(12);
+    expect(result?.pageloads).toBe(240);
+    // The invariant that makes the figure interpretable at all.
+    expect((result?.sampleSize ?? 0) * (result?.sampleInterval ?? 1)).toBe(result?.visits);
+  });
+
+  it("counts days that carry data, not the span they're spread over", async () => {
+    // A 57-day span held only 11 days of rows on the live card, so a caption
+    // reading "57 of 60 retained days have data" off the span was false.
+    mockFetchSequence(
+      { body: rumSettingsBody(60 * 86_400) },
+      {
+        body: rumBody([
+          { date: "2026-06-15", count: 5, visits: 5 },
+          { date: "2026-07-20", count: 5, visits: 5 },
+          { date: "2026-08-08", count: 5, visits: 5 },
+        ]),
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-08T12:00:00Z"));
+
+    expect(result?.daysWithData).toBe(3);
+    // Span from the oldest row to today — much larger, and a different fact.
+    expect(result?.windowDays).toBe(55);
   });
 
   it("returns null without credentials, and never calls the API", async () => {

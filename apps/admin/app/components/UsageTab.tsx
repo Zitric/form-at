@@ -86,7 +86,8 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
         // degenerate. Exact (unsampled) counts always get a chart, however
         // small — smallness makes an interval meaningless, not a count wrong.
         <p className="mt-3 text-xs text-grey/70">
-          no trend shown: these figures are extrapolated from a 1-in-{rum.sampleInterval} sample
+          no trend shown: these figures are extrapolated from a 1-in-
+          {Math.round(rum.sampleInterval)} sample
           {rum.sampleSize === null ? "" : ` (${rum.sampleSize} sampled page loads)`}, and the
           confidence interval is too wide to be useful, so the day-to-day shape would be an artefact
           of which events happened to be sampled rather than of real traffic.
@@ -103,7 +104,7 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
         this is far below edge_traffic.{" "}
         {countsAreExact
           ? "Unsampled at this volume, so these are exact counts."
-          : `Sampled 1-in-${rum.sampleInterval}, so these are estimates.`}
+          : `Sampled 1-in-${Math.round(rum.sampleInterval)}, so these are estimates.`}
       </p>
       {rum.windowDays < rum.requestedWindowDays && (
         // Compared against what was REQUESTED (retention-clamped), not the
@@ -113,9 +114,10 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
         // false (it had been collecting for months via edge injection) and is
         // not knowable from this data either way.
         <p className="mt-1 text-xs text-grey/70">
-          {rum.windowDays} of the {rum.requestedWindowDays} retained days have data, starting{" "}
-          {rum.startDay}. Why the earlier days are missing isn't knowable from here — no traffic, or
-          the beacon not yet collecting — so this states the coverage and claims no cause.
+          {rum.daysWithData} {rum.daysWithData === 1 ? "day" : "days"} carry data, spread across the{" "}
+          {rum.windowDays}d since {rum.startDay}, out of {rum.requestedWindowDays}d retained. Days
+          with no rows aren't necessarily days with no traffic — Cloudflare's sampling drops
+          low-volume days from wide windows — so this states coverage and claims no cause.
         </p>
       )}
       {!rum.boundaryKnown && (

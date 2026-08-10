@@ -160,9 +160,20 @@ for (const windowDays of [7, 60]) {
   console.log(
     `  sampleSize total=${samples}   rows missing sampleSize=${missingSampleSize}/${human.length}`,
   );
-  if (samples !== pageloads) {
-    console.log(`  !! sampleSize (${samples}) != pageloads (${pageloads}) — the card's "samples"`);
-    console.log("     figure does not describe the same thing as its visit count.");
+  // sampleSize is the RAW count behind the extrapolated estimate, so the
+  // invariant to check is sampleSize x interval ~= visits — NOT sampleSize vs
+  // pageloads, which an earlier version of this script wrongly flagged.
+  const effectiveInterval = samples > 0 ? visits / samples : 1;
+  console.log(
+    `  sampleSize x interval = ${Math.round(samples * effectiveInterval)} vs visits ${visits} ` +
+      `(implied interval ${effectiveInterval.toFixed(2)})`,
+  );
+  const daysSpan = Math.round((Date.parse(dates.at(-1)) - Date.parse(dates[0])) / 86_400_000) + 1;
+  if (dates.length < daysSpan) {
+    console.log(
+      `  !! only ${dates.length} of the ${daysSpan} days in that span carry rows — coverage is`,
+    );
+    console.log("     sparse, so a caption counting the span as 'days with data' would be false.");
   }
   if (intervals.length === 1 && intervals[0] === 1) {
     console.log("  => unsampled: figures are EXACT counts, so the trend is honest and charts.");

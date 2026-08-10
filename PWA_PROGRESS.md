@@ -3118,12 +3118,28 @@ compared to the wrong quantity in the first place — Cloudflare defines it as
 `pageloads`, not `visits`. Two different quantities placed side by side as
 though comparable.
 
-*Sampling ruled out empirically.* `estimate` equals `sampleSize` on every row
-(4=4, 6=6, 1=1, 1=1), which only happens at `sampleInterval: 1`. So the figures
-are exact counts, not extrapolations — which means, by the split above, the
-trend chart is honest and renders. The suppression branch is unreachable while
-unsampled; it exists for a future where volume triggers Cloudflare's adaptive
-sampling.
+*Sampling depends on the WINDOW, which a 7-day probe hid.* An initial reading
+of a 7-day diagnostic showed `estimate == sampleSize` on every row and concluded
+the data was unsampled. Running both windows disproved it: at 7 days
+`sampleInterval` is 1 and the figures are exact, but at 60 days Cloudflare
+returns intervals of 10 and 16.67 and the figures are extrapolations. Same data,
+same site — the width of the query decides. So the card's own 60-day window is
+sampled, the trend is correctly suppressed, and the earlier "not sampled"
+conclusion was an artefact of probing too narrow a range.
+
+That also settles what `sampleSize` means: `sampleSize x sampleInterval ~= visits`
+(11 x 1 = 11 at 7 days; 12 x 10 = 120 at 60). It is the RAW count behind the
+extrapolated estimate — not a page-load count, and not comparable to `visits`
+directly. An intermediate fix asserting it tracked `pageloads` was wrong too
+(11 vs 23 raw), and its test was corrected rather than left passing on a false
+premise.
+
+*Span is not coverage.* `windowDays` measures from the oldest row to today: on
+the live card a 57-day span carried only **11 days** of rows. A caption reading
+"57 of 60 retained days have data" off that span was false. `daysWithData` now
+counts distinct days that actually returned rows, and the caption states both —
+noting that a day with no rows isn't necessarily a day with no traffic, since
+sampling drops low-volume days from wide windows.
 
 *Two captions asserted causes they couldn't know.* The suppression caption said
 "too few samples (12)" beside "visits: 120" — two numbers with no stated

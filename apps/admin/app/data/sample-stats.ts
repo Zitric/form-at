@@ -15,7 +15,7 @@ export const SAMPLE_RUM_VISITS: RumVisits = {
   intervalValid: true,
   sampleInterval: 1,
   confidenceLevel: 0.95,
-  sampleSize: 564,
+  sampleSize: 214,
   pageloads: 389,
   botPageloads: 175,
   totalPageloads: 564,
@@ -24,6 +24,7 @@ export const SAMPLE_RUM_VISITS: RumVisits = {
   // caption via the honest comparison (data shorter than retention), not via a
   // short retention being mistaken for a late start.
   noDataInWindow: false,
+  daysWithData: 22,
   requestedWindowDays: 45,
   windowDays: 30,
   startDay: "2026-07-09",
