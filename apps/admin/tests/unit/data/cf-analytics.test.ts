@@ -509,7 +509,12 @@ describe("fetchRumVisits", () => {
     expect(result?.sampleInterval).toBe(1);
   });
 
-  it("reports the coarsest sampleInterval, so a sampled stretch can't hide", async () => {
+  it("keeps exactness conservative even when the effective factor says otherwise", async () => {
+    // The two questions can disagree: here a row advertises interval 10 while
+    // its own estimate equals its sample size, so the effective factor across
+    // the window computes to 1. `countsAreExact` must still be FALSE — for
+    // "was any of this extrapolated?" the conservative reading wins, because
+    // understating sampling would chart an artefact as real traffic.
     mockFetchSequence(
       { body: rumSettingsBody(30 * 86_400) },
       {
@@ -522,7 +527,9 @@ describe("fetchRumVisits", () => {
 
     const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-07T12:00:00Z"));
 
-    expect(result?.sampleInterval).toBe(10);
+    expect(result?.countsAreExact).toBe(false);
+    // Effective factor from the actual numbers, not the advertised max.
+    expect(result?.sampleInterval).toBe(1);
   });
 
   it("reports no sample total rather than a fabricated 0 when rows omit sampleSize", async () => {
@@ -591,6 +598,63 @@ describe("fetchRumVisits", () => {
     expect(result?.pageloads).toBe(240);
     // The invariant that makes the figure interpretable at all.
     expect((result?.sampleSize ?? 0) * (result?.sampleInterval ?? 1)).toBe(result?.visits);
+  });
+
+  it("reports the EFFECTIVE extrapolation factor, not the coarsest row's", async () => {
+    // Live data returned rows at both 10 and 16.67 while the window's actual
+    // factor was exactly 10 (120 visits from 12 samples). Reporting the max
+    // would tell a reader "1-in-17" about figures scaled by 10 — the max
+    // describes one row, this describes the number on screen.
+    mockFetchSequence(
+      { body: rumSettingsBody(60 * 86_400) },
+      {
+        body: rumBody([
+          {
+            date: "2026-08-07",
+            count: 120,
+            visits: 60,
+            estimate: 60,
+            sampleSize: 6,
+            sampleInterval: 10,
+          },
+          {
+            date: "2026-08-08",
+            count: 120,
+            visits: 60,
+            estimate: 60,
+            sampleSize: 6,
+            sampleInterval: 16.666666666666668,
+          },
+        ]),
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-08T12:00:00Z"));
+
+    expect(result?.visits).toBe(120);
+    expect(result?.sampleSize).toBe(12);
+    expect(result?.sampleInterval).toBe(10);
+  });
+
+  it("reports the last day with data, not today, as the range end", async () => {
+    // windowDays measures to "now", so a window whose newest row is two days
+    // old overstates coverage by exactly that much. The card shows the date
+    // pair instead.
+    mockFetchSequence(
+      { body: rumSettingsBody(60 * 86_400) },
+      {
+        body: rumBody([
+          { date: "2026-06-15", count: 5, visits: 5 },
+          { date: "2026-08-08", count: 5, visits: 5 },
+        ]),
+      },
+    );
+
+    const result = await fetchRumVisits(TOKEN, "acct", "site", freezeAt("2026-08-10T12:00:00Z"));
+
+    expect(result?.startDay).toBe("2026-06-15");
+    expect(result?.endDay).toBe("2026-08-08");
+    expect(result?.daysWithData).toBe(2);
   });
 
   it("counts days that carry data, not the span they're spread over", async () => {

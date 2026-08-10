@@ -14,6 +14,7 @@ export const SAMPLE_RUM_VISITS: RumVisits = {
   visitsUpper: 237,
   intervalValid: true,
   sampleInterval: 1,
+  countsAreExact: true,
   confidenceLevel: 0.95,
   sampleSize: 214,
   pageloads: 389,
@@ -28,6 +29,7 @@ export const SAMPLE_RUM_VISITS: RumVisits = {
   requestedWindowDays: 45,
   windowDays: 30,
   startDay: "2026-07-09",
+  endDay: "2026-08-05",
   boundaryKnown: true,
 };
 

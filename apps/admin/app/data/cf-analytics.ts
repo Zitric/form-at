@@ -285,10 +285,28 @@ export type RumVisits = {
    *  day, so the AND could never flip true however much traffic grew — a
    *  permanent suppression masquerading as a temporary one. */
   intervalValid: boolean;
-  /** 1 = every event recorded, so the daily figures are exact counts and the
-   *  trend is honest as a SHAPE even when no single day has enough samples to
-   *  characterise an interval. Above 1 the figures are extrapolations and the
-   *  day-to-day shape is an artefact of which events happened to be sampled. */
+  /** True when NO row was sampled — every event recorded, so the daily figures
+   *  are exact counts and the trend is honest as a SHAPE however small the
+   *  numbers. Uses the MAX of Cloudflare's per-row intervals, deliberately: for
+   *  "is any of this extrapolated?" the conservative reading is right, since
+   *  understating sampling would chart an artefact as if it were real traffic. */
+  countsAreExact: boolean;
+  /** EFFECTIVE extrapolation factor across the window — `visits / sampleSize`,
+   *  i.e. how much the reported total was scaled up overall. 1 = every event
+   *  recorded, so the daily figures are exact counts and the trend is honest as
+   *  a SHAPE however small the numbers. Above 1 they're extrapolations.
+   *
+   *  Deliberately NOT the maximum of Cloudflare's per-row `sampleInterval`:
+   *  live data returned rows at both 10 and 16.67 while the window's actual
+   *  factor was exactly 10, so reporting the max would tell a reader "1-in-17"
+   *  about figures that were scaled by 10. The max describes one row; this
+   *  describes the number on screen. Falls back to the max only when no row
+   *  reports a sample size and the ratio can't be derived.
+   *
+   *  Pairs with `countsAreExact`, which asks the DIFFERENT question of whether
+   *  any sampling happened at all — the two disagree when a row advertises an
+   *  interval its own estimate doesn't reflect, and each is right for its own
+   *  question. */
   sampleInterval: number;
   /** Confidence level the interval was computed at, echoed back by the API. */
   confidenceLevel: number;
@@ -324,7 +342,13 @@ export type RumVisits = {
    *  really retention. */
   requestedWindowDays: number;
   windowDays: number;
+  /** ISO dates (YYYY-MM-DD) of the oldest and newest days that returned rows.
+   *  The card shows the PAIR rather than `windowDays`, which measures to TODAY
+   *  and so overstates coverage whenever the most recent days are empty — live
+   *  data ended two days before "now", making a "spread across 57d" caption
+   *  wrong by exactly that much. */
   startDay: string;
+  endDay: string;
   boundaryKnown: boolean;
 };
 
@@ -480,6 +504,7 @@ export async function fetchRumVisits(
       visitsUpper: 0,
       intervalValid: false,
       sampleInterval: 1,
+      countsAreExact: true,
       confidenceLevel: 0,
       sampleSize: null,
       pageloads: 0,
@@ -491,6 +516,7 @@ export async function fetchRumVisits(
       daysWithData: 0,
       windowDays: requestedDays,
       startDay: isoDay(since),
+      endDay: isoDay(since),
       boundaryKnown: fromBoundary,
     };
   }
@@ -531,29 +557,38 @@ export async function fetchRumVisits(
   const lower = conf.reduce((a, c) => a + (c?.lower ?? c?.estimate ?? 0), 0);
   const upper = conf.reduce((a, c) => a + (c?.upper ?? c?.estimate ?? 0), 0);
 
+  const estimateTotal = conf.reduce((a, c) => a + (c?.estimate ?? 0), 0);
+  const sampleTotal = conf.some((c) => typeof c?.sampleSize === "number")
+    ? conf.reduce((a, c) => a + (c?.sampleSize ?? 0), 0)
+    : null;
+  const maxRowInterval = rows.reduce((max, r) => Math.max(max, r.avg?.sampleInterval ?? 1), 1);
+  const effectiveInterval =
+    sampleTotal && sampleTotal > 0 ? estimateTotal / sampleTotal : maxRowInterval;
+  const dayList = human.map((r) => r.dimensions?.date).filter(Boolean) as string[];
+
   return {
-    visits: conf.reduce((a, c) => a + (c?.estimate ?? 0), 0),
+    visits: estimateTotal,
     visitsLower: lower,
     visitsUpper: upper,
     intervalValid: upper > lower,
-    sampleInterval: rows.reduce((max, r) => Math.max(max, r.avg?.sampleInterval ?? 1), 1),
+    sampleInterval: effectiveInterval,
+    countsAreExact: maxRowInterval === 1,
     confidenceLevel:
       human.find((r) => r.confidence?.level)?.confidence?.level ?? RUM_CONFIDENCE_LEVEL,
     // Only report a total when at least one row actually carried the field.
     // Summing `?? 0` over rows that omit it yields a number that looks precise
     // and describes nothing.
-    sampleSize: conf.some((c) => typeof c?.sampleSize === "number")
-      ? conf.reduce((a, c) => a + (c?.sampleSize ?? 0), 0)
-      : null,
+    sampleSize: sampleTotal,
     pageloads: human.reduce((a, r) => a + (r.count ?? 0), 0),
     botPageloads,
     totalPageloads: allPageloads,
     weeklyVisits: bucketByWeek(daily, TREND_BUCKET_DAYS),
     noDataInWindow: false,
     requestedWindowDays: requestedDays,
-    daysWithData: new Set(human.map((r) => r.dimensions?.date).filter(Boolean)).size,
+    daysWithData: new Set(dayList).size,
     windowDays: Math.max(1, spanDays),
     startDay,
+    endDay: dayList.length ? (dayList[dayList.length - 1] as string) : startDay,
     boundaryKnown: fromBoundary,
   };
 }

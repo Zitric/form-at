@@ -3134,6 +3134,25 @@ directly. An intermediate fix asserting it tracked `pageloads` was wrong too
 (11 vs 23 raw), and its test was corrected rather than left passing on a false
 premise.
 
+*Two more corrections from re-running the diagnostic, both understating or
+overstating precision.* The card reported the MAXIMUM per-row `sampleInterval`,
+so with live rows at 10 and 16.67 it would have said "1-in-17" about a total
+that was actually scaled by exactly 10 (120 visits from 12 samples). And the
+window "span" was measured to TODAY, while the newest row was two days older —
+so a "spread across 57d" caption overstated coverage by exactly that gap.
+
+Both fixed by separating questions that had been sharing one number, the same
+pattern as the interval/chart split above:
+- **"Was any of this extrapolated?"** → `countsAreExact`, from the coarsest
+  row. Conservative on purpose: understating sampling would chart an artefact
+  as real traffic. The two can disagree — a row can advertise an interval its
+  own estimate doesn't reflect — and each answer is right for its own question.
+- **"By how much was the number on screen scaled?"** → `sampleInterval`, now
+  the effective factor `visits / sampleSize`. It describes the total a reader
+  is looking at rather than one row.
+- **"What period does the data cover?"** → the `startDay`–`endDay` pair, shown
+  directly instead of a computed span that silently ran to "now".
+
 *Span is not coverage.* `windowDays` measures from the oldest row to today: on
 the live card a 57-day span carried only **11 days** of rows. A caption reading
 "57 of 60 retained days have data" off that span was false. `daysWithData` now

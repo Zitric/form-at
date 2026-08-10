@@ -47,10 +47,11 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
   }
 
   const pct = (n: number) => Math.round(n * 100);
-  // Unsampled figures are exact counts, so the trend is honest as a shape even
-  // when no single day has enough samples for an interval. Only extrapolated
-  // (sampled) figures with no usable interval make the shape an artefact.
-  const countsAreExact = rum.sampleInterval === 1;
+  // Two different questions, deliberately answered by two different numbers:
+  // `countsAreExact` asks "was ANY of this extrapolated?" (conservative, from
+  // the coarsest row), while `sampleInterval` reports the effective factor
+  // behind the total actually on screen.
+  const countsAreExact = rum.countsAreExact;
   const chartIsHonest = countsAreExact || rum.intervalValid;
   const botsExcludedLabel =
     rum.totalPageloads >= MIN_PAGELOADS_FOR_BOT_SHARE
