@@ -249,10 +249,36 @@ catch the sentence that quietly became untrue, which you can't do from memory.
 | `apps/web/scripts/README.md` | a script, flag or setup step changed. |
 | `apps/web/tests/README.md` | test layout or conventions changed. |
 | `apps/web/images-source/README.md` | the image pipeline changed. |
+| `apps/rum-archiver/README.md` | the capture, its schedule, its token scope or its secrets changed. |
 
 **A change that touches none of these needs no doc edit — say so.** Most
 bug fixes and refactors qualify. "No doc changes needed, nothing above became
 untrue" is a complete and correct answer.
+
+### A new workspace needs a README, and the root README needs to know it exists
+
+The rule above only catches text that *became* false. It cannot catch a doc that
+was never written, because nothing existing contradicts an absence — which is how
+`apps/rum-archiver` shipped, ran on a cron in production and was deployed by CI
+while the root README's structure block still listed five workspaces. Nothing was
+stale; the doc was simply incomplete, and no re-read of it would have flagged
+that.
+
+So when a workspace is **added** — not changed — three things are part of that
+work, not follow-up:
+
+1. **A README in the workspace**, if it has any setup, secret, schedule or
+   deploy target a reader can't infer from its source. A package that is purely
+   library code consumed through an import doesn't need one; anything with an
+   operational surface does.
+2. **The root `README.md`'s structure block and its documentation table**, which
+   are the two places an outside reader learns the workspace exists at all.
+3. **The table in §1's workspace map at the top of this file**, plus §4's
+   architecture map if there's a new area to edit.
+
+Same test for a new **script**: `apps/web/scripts/README.md` claims to document
+every script in that folder, so adding one and not listing it makes the README's
+own framing false. Read the folder against the doc, not just the doc.
 
 ---
 
@@ -354,6 +380,7 @@ things you need *at the moment of editing* that no section heading can give you.
 | Push sending | `packages/data/src/webPush.ts` | README → *"The standard Web Push library doesn't run on Workers"* |
 | Admin + auth | `apps/admin/app/routes/`, `utils/verifyAccessJwt.ts` | README → *"Admin auth: no auth code, then auth code anyway"*. The enforcement rule is §1. |
 | RUM archive | `apps/rum-archiver/src/index.ts`, query + upsert in `packages/data/src/rumArchive.ts` | Cloudflare degrades beacon data after 7 days, so a cron captures it first. Pages cannot run cron — hence a standalone Worker. Never remove the upsert's `sample_interval` guard: it stops a late run overwriting exact rows. |
+| RUM history card | `apps/admin/app/data/rum-history.ts` (`coveredDays`/`buildHistory`), `components/VisitsHistoryCard.tsx` | PWA_PROGRESS → *Archiving Cloudflare RUM into D1* → "Real zeros vs days nobody looked at". **Never map an uncovered day to `0`** — `TrendChart` takes `(number \| null)[]` precisely so a gap can render as a gap; a zero there draws an outage as flat traffic. Same `null`-not-`0` rule as §1's metric constraint. |
 | Cloudflare analytics | `apps/admin/app/data/cf-analytics.ts` — the app's only network calls (zone edge traffic + account RUM visits), both deferred in `routes/dashboard.tsx`'s loader. Diagnose an empty card with `pnpm -C apps/admin diagnose-visits` | That file's headers: what each measures, why edge traffic is never "visitors", why RUM rows are bot-filtered client-side, sampling and retention handling, and why every failure is `null`. Naming rule in §3. |
 | Service worker build | `buildServiceWorker` in `apps/web/vite.config.ts` (owns the precache allowlist and revision derivation) | README → *"Technology choices"*, Workbox entry. `vite-plugin-pwa` is **not** a dependency. |
 | Design system | `packages/ui/src/` — one folder per component, `icons/` flat | README → *"Monorepo structure"* (late extraction, no build step) |
@@ -430,9 +457,15 @@ Everything except `check`/`format`/`knip` is a thin Turbo wrapper; `:web`/`:admi
 variants add a `--filter`. For a workspace's own scripts: `pnpm -C apps/web <script>`.
 
 `apps/web` scripts — `send-push`, `optimize-images`, `og`, `sitemap`,
-`screenshots`, `stats`, `deploy` — are documented with every flag in
-`apps/web/scripts/README.md`. `og`, `sitemap` and `optimize-images` run
-automatically inside `pnpm build`.
+`generate-sets-snapshot`, `screenshots`, `stats`, `deploy` — are documented with
+every flag in `apps/web/scripts/README.md`; that doc claims to cover all of them,
+so adding one without listing it makes its own framing false.
+`generate-sets-snapshot`, `optimize-images`, `og` and `sitemap` run automatically
+inside `pnpm build`, in that order — which is why a root `pnpm build` needs
+Cloudflare credentials and `pnpm dev` doesn't.
+
+Other workspaces' scripts: `pnpm -C apps/admin diagnose-visits`, and
+`apps/rum-archiver`'s `deploy`/`capture` (see its README).
 
 **Service-worker behaviour is testable only against a production build.** The dev
 server never registers a SW (Vite's dev transform emits no `sw.js`):
@@ -451,7 +484,7 @@ pnpm build:web && pnpm start:web   # :4173, real service worker
 - `packages/ui/vitest.setup.ts` wires jest-dom and calls `installDialogPolyfill()` — the polyfill itself is `packages/ui/src/domPolyfills.ts` (jsdom implements no `HTMLDialogElement.showModal()`).
 
 ### CI/CD
-- **`ci.yml`** on push (non-main) + PR. Jobs: `static` (per-workspace Biome lint for `apps/web`, `apps/admin`, `packages/ui`, `packages/data`, plus `turbo tsc` across all four, plus a Vite build of both apps), `knip`, `unit` (all four workspaces), `chromatic` (visual regression for `packages/ui`), `e2e` (Playwright on chromium + webkit for both apps).
+- **`ci.yml`** on push (non-main) + PR. Jobs: `static` (per-workspace Biome lint for `apps/web`, `apps/admin`, `packages/ui`, `packages/data`, `apps/rum-archiver`, plus `turbo tsc` across all of them, plus a Vite build of both apps), `knip`, `unit` (all five workspaces), `chromatic` (visual regression for `packages/ui`), `e2e` (Playwright on chromium + webkit for both apps).
 - **`deploy.yml`** on push to `main`, plus manual `workflow_dispatch`. Re-runs `static`/`unit`/`e2e`, then `deploy` and `deploy-admin` only if all pass — a direct push to `main` can't skip the suite. Deliberately **not** `chromatic`, which stays PR-only to avoid roughly doubling snapshot quota.
 - Secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CHROMATIC_PROJECT_TOKEN`.
 

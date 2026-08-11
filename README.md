@@ -15,10 +15,11 @@ Live at **[formatglasgow.com](https://formatglasgow.com)**.
 ## Monorepo structure
 
 ```
-apps/web        public site + audio player      → formatglasgow.com
-apps/admin      internal dashboard              → admin.formatglasgow.com
-packages/ui     design system + Storybook
-packages/data   shared catalogue, queries, push
+apps/web           public site + audio player   → formatglasgow.com
+apps/admin         internal dashboard           → admin.formatglasgow.com
+apps/rum-archiver  daily analytics cron Worker  → form-at-rum-archiver
+packages/ui        design system + Storybook
+packages/data      shared catalogue, queries, push
 packages/tsconfig  shared TS config
 ```
 
@@ -30,9 +31,11 @@ pnpm workspaces + Turborepo. **Apps never import each other** — only `packages
 
 It ships **raw `.tsx`/`.css` with no build step**, consumed straight through the pnpm workspace symlink. One fewer build to configure, and Vite compiles it as if it were app source. The one real cost is that Tailwind's automatic source scanning skips `node_modules`, so `apps/web/app/styles/global.css` needs an explicit `@source` directive pointing at `packages/ui/src` or classes used only inside the package get stripped from the bundle.
 
+**`apps/rum-archiver` is a Worker, not a Pages project**, and that's forced rather than chosen: Cloudflare Pages Functions cannot run cron — they expose only HTTP handlers — so a scheduled job cannot live inside either app. It captures Cloudflare's analytics into D1 daily before they degrade (see [below](#cloudflare-deletes-the-detail-in-its-own-analytics-after-a-week)). It has its own [README](apps/rum-archiver/README.md).
+
 **`packages/data`** holds what both apps genuinely share: the sets catalogue and its types (`sets.ts`), the per-set analytics query (`set-stats.ts`), and Web Push sending (`webPush.ts`). Queries used by only one app deliberately stay in that app — the admin dashboard's aggregate queries live in `apps/admin/app/data/admin-stats.ts` and have never had a second consumer, so they were never promoted.
 
-**What the dashboard shows:** first-party product metrics from D1 — installs, plays, offline saves, push subscribers, per-set breakdowns — plus two live reads of Cloudflare's own analytics through the GraphQL Analytics API (`apps/admin/app/data/cf-analytics.ts`), shown side by side because the gap between them is the point. `edge_traffic` counts HTTP requests at Cloudflare's edge, bots included. `visits` comes from the Web Analytics beacon — which the app injects itself in `apps/web/app/utils/rootHead.ts` rather than relying on Cloudflare's automatic edge injection, after that stopped working with no deploy to explain it — and counts real browsers, with bot-flagged rows removed by us (Cloudflare's RUM records bots too, confirmed in our own data), where a visit is a page load arriving from a different site or a direct link — so internal navigation doesn't add one, and it counts neither sessions nor people (Web Analytics stores no identifier, so it can't count distinct humans at all). Both numbers are correct and they will disagree substantially; the cards say why rather than leaving it to be discovered. They exist at all for a plain reason — two of the three collective members have no Cloudflare account, so a number only visible in Cloudflare's dashboard doesn't exist for them.
+**What the dashboard shows:** first-party product metrics from D1 — installs, plays, offline saves, push subscribers, per-set breakdowns — plus two live reads of Cloudflare's own analytics through the GraphQL Analytics API (`apps/admin/app/data/cf-analytics.ts`), shown side by side because the gap between them is the point. `edge_traffic` counts HTTP requests at Cloudflare's edge, bots included. `visits` comes from the Web Analytics beacon — which the app injects itself in `apps/web/app/utils/rootHead.ts` rather than relying on Cloudflare's automatic edge injection, after that stopped working with no deploy to explain it — and counts real browsers, with bot-flagged rows removed by us (Cloudflare's RUM records bots too, confirmed in our own data), where a visit is a page load arriving from a different site or a direct link — so internal navigation doesn't add one, and it counts neither sessions nor people (Web Analytics stores no identifier, so it can't count distinct humans at all). Both numbers are correct and they will disagree substantially; the cards say why rather than leaving it to be discovered. They exist at all for a plain reason — two of the three collective members have no Cloudflare account, so a number only visible in Cloudflare's dashboard doesn't exist for them. A third card, `visits_history`, reads the D1 archive instead of Cloudflare, and is deliberately a separate card rather than one series stitched from both — the two have different provenance, and a single number spanning them would hide exactly the kind of seam this dashboard has repeatedly got wrong.
 
 ---
 
@@ -47,7 +50,7 @@ The Workers target isn't free. `apps/web/app/server.ts` is a custom server entry
 | | |
 |---|---|
 | **Pages** | hosts both apps as separate projects |
-| **Workers** | the SSR runtime |
+| **Workers** | the SSR runtime — and, separately, a Cron Trigger Worker for the analytics archive, because Pages can't run cron |
 | **D1** (SQLite) | play analytics + the sets catalogue |
 | **R2** | audio files — free egress, which matters when a single play is 100–220MB |
 | **Access** | edge auth for the admin subdomain, so there's no auth code to write |
@@ -128,6 +131,16 @@ Both halves of that matter. Because the snapshot is committed rather than genera
 
 At runtime it's an overlay rather than a simple fallback: the listing merges live D1 rows over the snapshot with **live winning** (`mergeSets` in `packages/data/src/sets.ts`), and degrades to snapshot-only when D1 is unreachable. The single-set lookup uses the same precedence, falling back only on a genuine miss. Checking the snapshot first would be the bug: a direct `UPDATE sets SET … WHERE id = ?` against production is a viable stopgap for fixing a typo, and snapshot-first would leave the detail page serving the old value while the listing already showed the correction. The fallback path is kept in plain functions (`apps/web/app/data/sets.ts`) so tests can drive it with a fake D1.
 
+### Cloudflare deletes the detail in its own analytics after a week
+
+*Constraint: Web Analytics data is exact for 7 days, then aggregated to ~10%.*
+
+That's a property of the data's **age**, not of how wide a query is — a distinction that cost a round of wrong reasoning here, because a 60-day query and a 7-day query returning different sample intervals looks like the query width deciding it. Measured on this site: a 60-day window returned 120 visits extrapolated from **12 real observations**, with only 11 of 55 days carrying any rows at all. Sampling doesn't just blur the numbers, it deletes whole days.
+
+So `apps/rum-archiver` copies each day into D1 while it's still exact. Two guards do the real work. **A failed read writes nothing** — a partial write is indistinguishable from a quiet day afterwards. And because every run re-fetches the trailing 7 days, a day gets written repeatedly, so the upsert carries `WHERE excluded.sample_interval <= rum_daily.sample_interval`: a late run holding a *degraded* copy of a day an earlier run captured exactly is rejected, while degraded→exact upgrades still apply. Without it the archive would slowly overwrite its own good data with Cloudflare's aggregated version.
+
+Reading it back has its own trap. A day with no row means one of two completely different things — captured and genuinely empty, or never captured at all — and drawing both as `0` renders an outage as a week of confident flat traffic. Coverage is reconstructed as the union of each run's trailing window, and only days inside it can be zero; the rest are `null`. `TrendChart` takes `(number | null)[]` specifically so a gap can render as a gap, because mapping unknown to `0` to fit the component would have been the bug itself.
+
 ### Admin auth: no auth code, then auth code anyway
 
 *Constraint: an internal dashboard needs protecting, and hand-rolled auth is where bugs live.*
@@ -152,8 +165,8 @@ pnpm dev          # web on :5173, admin on :5174
 | `pnpm dev` / `pnpm dev:web` / `pnpm dev:admin` | dev servers, all or one |
 | `pnpm build` / `pnpm build:web` / `pnpm build:admin` | production build |
 | `pnpm start` / `pnpm start:web` / `pnpm start:admin` | serve the production build — web `:4173`, admin `:4174` |
-| `pnpm test` | unit tests, all workspaces (~670 across web, admin, ui, data) |
-| `pnpm test:e2e` | Playwright (~85 specs); first run needs `pnpm exec playwright install` |
+| `pnpm test` | unit tests, all workspaces (~720 across web, admin, ui, data, rum-archiver) |
+| `pnpm test:e2e` | Playwright (~100 runs: 68 web across 4 projects, 34 admin across 2); first run needs `pnpm exec playwright install` |
 | `pnpm check` | Biome lint + format, then `turbo tsc` |
 | `pnpm knip` | unused code and dependency scan |
 | `pnpm storybook` | `packages/ui` Storybook on `:6006` |
@@ -166,12 +179,12 @@ Everything except `check`, `format` and `knip` is a thin Turbo wrapper; the `:we
 pnpm build:web && pnpm start:web    # :4173, real service worker
 ```
 
-**What does need credentials:** `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` for `pnpm build` at the repo root (it regenerates the catalogue snapshot from live D1) and for any `wrangler` deploy. Push-sending scripts need a VAPID key pair — copy `apps/web/.env.example` to `.env`. Peaks generation needs `ffmpeg` on `PATH`. The dashboard's `edge_traffic` card needs a `CF_ANALYTICS_TOKEN` Pages secret on `form-at-admin` — not locally, where it falls back to sample data.
+**What does need credentials:** `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` for `pnpm build` at the repo root (it regenerates the catalogue snapshot from live D1) and for any `wrangler` deploy. Push-sending scripts need a VAPID key pair — copy `apps/web/.env.example` to `.env`. Peaks generation needs `ffmpeg` on `PATH`. The dashboard's `edge_traffic` card needs a `CF_ANALYTICS_TOKEN` Pages secret on `form-at-admin` — not locally, where it falls back to sample data. The archiver Worker needs its own `CF_ANALYTICS_TOKEN` (a *separate*, narrower token — see its [README](apps/rum-archiver/README.md)) plus `ARCHIVE_TRIGGER_SECRET` for the manual-run route.
 
 ### CI/CD
 
 - **`ci.yml`** on every push and PR: `static` (Biome + `tsc`), `knip`, `unit`, `chromatic`, `e2e` (Chromium + WebKit).
-- **`deploy.yml`** on push to `main`: re-runs `static`/`unit`/`e2e`, then `deploy` and `deploy-admin` only if all pass, so a direct push to `main` can't skip the suite. Also manually triggerable via `workflow_dispatch`.
+- **`deploy.yml`** on push to `main`: re-runs `static`/`unit`/`e2e`, then `deploy`, `deploy-admin` and `deploy-rum-archiver` only if all pass, so a direct push to `main` can't skip the suite. Also manually triggerable via `workflow_dispatch`.
 
 One CI detail worth knowing before editing it: the two workflows install *different* Playwright browser sets and their caches are keyed on browser set + lockfile hash. They must never share a cache key — first-writer-wins poisoning cost a debugging session already.
 
@@ -191,6 +204,8 @@ The docs in this repo are working engineering artifacts, not decoration. Two are
 | [`CLAUDE.md`](CLAUDE.md) | conventions and architecture rules — coding standards, the comment register, git workflow |
 | [`apps/web/scripts/README.md`](apps/web/scripts/README.md) | every build/ops script, its flags and setup — push sending, image optimisation, OG banners, sitemap, D1 stats |
 | [`apps/web/tests/README.md`](apps/web/tests/README.md) | test conventions and how to add one |
+| [`apps/web/images-source/README.md`](apps/web/images-source/README.md) | the image pipeline — what to drop where, and what gets committed |
+| [`apps/rum-archiver/README.md`](apps/rum-archiver/README.md) | the analytics cron Worker — why it's standalone, its token scope, secrets and manual trigger |
 
 ---
 

@@ -1,10 +1,12 @@
 # Tests
 
 Covers `apps/web`. The other workspaces test themselves the same way and have
-no separate README: `apps/admin` has its own `tests/unit` + `tests/e2e`, and
-`packages/ui` co-locates a `.test.tsx` beside each component (its interaction
-tests run Storybook stories through Vitest via `composeStories`). Run
-everything at once from the repo root with `pnpm test` / `pnpm test:e2e`.
+no separate README: `apps/admin` has its own `tests/unit` + `tests/e2e`,
+`apps/rum-archiver` has `tests/` (Vitest only — a cron Worker has no browser
+surface to drive), and `packages/ui` co-locates a `.test.tsx` beside each
+component (its interaction tests run Storybook stories through Vitest via
+`composeStories`). Run everything at once from the repo root with `pnpm test` /
+`pnpm test:e2e`.
 
 Two layers, both wired into the workspace:
 

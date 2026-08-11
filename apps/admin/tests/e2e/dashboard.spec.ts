@@ -289,6 +289,33 @@ test.describe("admin dashboard", () => {
     await expect(page.getByText("// edge_traffic")).toBeVisible();
   });
 
+  test("visits_history draws uncovered days as gaps, not as zero traffic", async ({ page }) => {
+    await gotoAndHydrate(page, "/dashboard");
+    await expect(page.getByText("// visits_history")).toBeVisible();
+
+    const historyCard = page.getByTestId("dashboard-card").filter({ hasText: "// visits_history" });
+    await expect(historyCard.getByTestId("trend-chart")).toBeVisible();
+
+    // The failure this card exists to prevent: a stretch nobody captured
+    // rendering as a confident flat zero. The fixture's first 3 days are
+    // uncovered, so they must paint as gaps and be excluded from the bar count.
+    await expect(historyCard.getByTestId("chart-gap")).toHaveCount(3);
+    await expect(historyCard.getByTestId("chart-bar")).toHaveCount(7);
+
+    // Coverage stated in text, not left to be inferred from the shading.
+    await expect(historyCard.getByText("days_not_captured")).toBeVisible();
+    await expect(historyCard.getByText(/unknown rather than zero/i)).toBeVisible();
+    // Daily buckets — a weekly caption here would mean the series got bucketed.
+    await expect(historyCard.getByText(/^10 days, /)).toBeVisible();
+  });
+
+  test("visits_history says the staleness warning is pull-only", async ({ page }) => {
+    await gotoAndHydrate(page, "/dashboard");
+    const historyCard = page.getByTestId("dashboard-card").filter({ hasText: "// visits_history" });
+    // Whoever reads this must not assume they'd be told if the capture stopped.
+    await expect(historyCard.getByText(/nothing pushes an alert/i)).toBeVisible();
+  });
+
   test("edge_traffic is labelled as edge requests, never as visitors", async ({ page }) => {
     await gotoAndHydrate(page, "/dashboard");
     await expect(page.getByText("// edge_traffic")).toBeVisible();

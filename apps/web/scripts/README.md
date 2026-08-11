@@ -12,6 +12,8 @@ looks out of date — that file is the source of truth, this doc explains it).
 | `pnpm sitemap` | `generate-sitemap.ts` | Writes `public/sitemap.xml` from every static + dynamic route (DJs, sets, events). Runs automatically as part of `pnpm build`. |
 | `pnpm screenshots` | `capture-screenshots.ts` | Builds the app, boots a preview server, and captures the two PNGs (`public/screenshots/narrow.png` / `wide.png`) Chrome shows in the Android install prompt. Re-run after a visual redesign. |
 | `pnpm stats` | `stats.mjs` | Prints a play-analytics summary from the production D1 database. Add `--raw` to also dump the raw JSON per section. |
+| `pnpm generate-sets-snapshot` | `generate-sets-snapshot.ts` | Regenerates `packages/data/src/sets.generated.ts` — the committed catalogue snapshot the app falls back to offline — from the live `sets` table. Runs first inside `pnpm build`. **Needs Cloudflare credentials**; see below. |
+| `pnpm deploy` | *(no script file)* | `pnpm build` then `wrangler pages deploy dist/client --project-name=form-at-web`. The manual escape hatch — normal deploys go through `deploy.yml` on a push to `main`. |
 
 `pnpm og`, `pnpm sitemap`, and `optimize-images` don't need any setup beyond
 `pnpm install`. `send-push` and `stats` both read from the production
@@ -19,6 +21,19 @@ Cloudflare D1 database and need an authenticated `wrangler` session
 (`npx wrangler login` if you haven't already) — they shell out to
 `wrangler d1 execute --remote` rather than opening their own connection, so
 they reuse whatever account you're already logged into.
+
+`generate-sets-snapshot` is the one that needs real credentials in the
+environment (`CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`), which is why
+`pnpm build` at the repo root does too while `pnpm dev`, `pnpm tsc` and every CI
+job don't — they read the committed snapshot. It **fails loudly on any query
+error rather than emitting an empty array**: silently shipping an empty catalogue
+as the offline fallback is the worst available outcome, so a broken build beats a
+successful one here.
+
+`apps/admin` has one script of its own, `pnpm -C apps/admin diagnose-visits`,
+which probes the Cloudflare Analytics API directly to explain an empty `visits`
+card. `apps/rum-archiver`'s commands are in
+[its own README](../../rum-archiver/README.md).
 
 ---
 

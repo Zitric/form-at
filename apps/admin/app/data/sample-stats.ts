@@ -1,6 +1,42 @@
 import type { SetStats } from "@form-at/data/set-stats";
 import type { AdminDashboardStats } from "./admin-stats";
 import type { EdgeTraffic, RumVisits } from "./cf-analytics";
+import type { RumHistory } from "./rum-history";
+
+// Substituted by `fetchRumHistory` when there's no Cloudflare env.
+//
+// Modelled on the REAL archive after its first capture (2026-08-11), including
+// its awkward shapes rather than an idealised run: only 4 of the 7 covered days
+// carry rows, one day is bot-only, and the counts are single digits. It also
+// includes a deliberate UNCOVERED stretch before the archive started, so local
+// dev and e2e exercise the gap rendering — the case that matters most, since a
+// gap silently drawn as zero is the failure this card exists to prevent.
+const SAMPLE_HISTORY_DAYS: RumHistory["days"] = [
+  // Never captured — the archiver didn't exist yet.
+  { day: "2026-08-02", visits: null, pageLoads: null, botPageLoads: null },
+  { day: "2026-08-03", visits: null, pageLoads: null, botPageLoads: null },
+  { day: "2026-08-04", visits: null, pageLoads: null, botPageLoads: null },
+  // Covered from here. 08-05 and 08-06 were observed and genuinely had nothing.
+  { day: "2026-08-05", visits: 0, pageLoads: 0, botPageLoads: 0 },
+  { day: "2026-08-06", visits: 0, pageLoads: 0, botPageLoads: 0 },
+  { day: "2026-08-07", visits: 4, pageLoads: 10, botPageLoads: 0 },
+  { day: "2026-08-08", visits: 6, pageLoads: 12, botPageLoads: 0 },
+  // Bot-only day: a crawler was the sole page load.
+  { day: "2026-08-09", visits: 0, pageLoads: 0, botPageLoads: 1 },
+  { day: "2026-08-10", visits: 1, pageLoads: 1, botPageLoads: 0 },
+  { day: "2026-08-11", visits: 0, pageLoads: 0, botPageLoads: 0 },
+];
+
+export const SAMPLE_RUM_HISTORY: RumHistory = {
+  days: SAMPLE_HISTORY_DAYS,
+  coverageStart: "2026-08-05",
+  coverageEnd: "2026-08-11",
+  lastCapturedAt: Date.parse("2026-08-11T14:20:00Z"),
+  daysCovered: 7,
+  daysUncovered: 3,
+  totalVisits: 11,
+  isSampleData: true,
+};
 
 // Substituted by `fetchRumVisitStats` when there's no Cloudflare env.
 //

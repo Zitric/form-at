@@ -4,8 +4,10 @@ import { Suspense } from "react";
 import type { AdminDashboardStats } from "~/data/admin-stats";
 import { MIN_PAGELOADS_FOR_BOT_SHARE } from "~/data/cf-analytics";
 import type { EdgeTraffic, RumVisits } from "~/data/cf-analytics";
+import type { RumHistory } from "~/data/rum-history";
 import { DashboardCard } from "./DashboardCard";
 import { TrendChart } from "./TrendChart";
+import { VisitsHistoryCard } from "./VisitsHistoryCard";
 
 interface UsageTabProps {
   stats: AdminDashboardStats;
@@ -14,6 +16,9 @@ interface UsageTabProps {
   edgeTraffic: Promise<EdgeTraffic | null>;
   /** Deferred, and fetched independently of edgeTraffic — see dashboard.tsx. */
   rumVisits: Promise<RumVisits | null>;
+  /** The archived series from D1 — deferred separately from `rumVisits` so a
+   *  slow Cloudflare API can't delay a local database read, and vice versa. */
+  rumHistory: Promise<RumHistory | null>;
 }
 
 // Sits beside edge_traffic so the two numbers can be compared directly: this
@@ -184,7 +189,7 @@ function EdgeTrafficCard({ edge }: { edge: EdgeTraffic | null }) {
 // calendar_add_click carries no set_id/event_id (see trackableEvents.ts), so
 // it's a bare total like app_launches rather than a per-entity breakdown
 // that would need its own tab.
-export function UsageTab({ stats, edgeTraffic, rumVisits }: UsageTabProps) {
+export function UsageTab({ stats, edgeTraffic, rumVisits, rumHistory }: UsageTabProps) {
   return (
     // Two columns above mobile, matching SetsTab. Three columns made each card
     // too narrow for its TerminalRow label/value pairs.
@@ -250,6 +255,16 @@ export function UsageTab({ stats, edgeTraffic, rumVisits }: UsageTabProps) {
         <Label className="mb-2 text-grey tracking-widest">{"// visits"}</Label>
         <Suspense fallback={<Muted className="block text-xs">reading…</Muted>}>
           <Await promise={rumVisits}>{(rum) => <VisitsCard rum={rum} />}</Await>
+        </Suspense>
+      </DashboardCard>
+
+      {/* Sits beside `visits` rather than merging with it: same metric, but one
+          is a live read of the last 7 days and the other is the D1 archive.
+          Two cards keep the provenance visible instead of hiding a seam. */}
+      <DashboardCard>
+        <Label className="mb-2 text-grey tracking-widest">{"// visits_history"}</Label>
+        <Suspense fallback={<Muted className="block text-xs">reading…</Muted>}>
+          <Await promise={rumHistory}>{(h) => <VisitsHistoryCard history={h} />}</Await>
         </Suspense>
       </DashboardCard>
 

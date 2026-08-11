@@ -26,6 +26,7 @@ import {
   fetchEdgeTrafficStats,
   fetchRumVisitStats,
 } from "~/data/admin-stats";
+import { fetchRumHistory } from "~/data/rum-history";
 import { SAMPLE_SET_STATS } from "~/data/sample-stats";
 
 export const Route = createFileRoute("/dashboard")({
@@ -45,6 +46,9 @@ export const Route = createFileRoute("/dashboard")({
     // Independent of edgeTraffic: different scope, different token permission,
     // so one failing must not blank the other.
     rumVisits: defer(fetchRumVisitStats().catch(() => null)),
+    // Deferred independently again: this is a local D1 read, so it shouldn't
+    // wait behind the Cloudflare API calls, nor they behind it.
+    rumHistory: defer(fetchRumHistory().catch(() => null)),
   }),
   head: () => ({ meta: [{ title: "Analytics · Form:at Admin" }] }),
   component: AdminDashboard,
@@ -55,7 +59,7 @@ export const Route = createFileRoute("/dashboard")({
 // lives in GrowthTab/UsageTab/SetsTab (~/components/) — this file exceeded
 // CLAUDE.md's ~150-line extraction threshold once, splitting it out.
 function AdminDashboard() {
-  const { stats, edgeTraffic, rumVisits } = Route.useLoaderData();
+  const { stats, edgeTraffic, rumVisits, rumHistory } = Route.useLoaderData();
   // `usage` is the landing tab — the headline totals answer "how is it doing?"
   // in one glance, which is what the dashboard is opened for. Growth's funnels
   // and Sets' per-set detail are follow-up questions.
@@ -126,7 +130,12 @@ function AdminDashboard() {
           <DashboardTabs active={activeTab} onChange={setActiveTab} />
           {activeTab === "growth" && <GrowthTab stats={stats} />}
           {activeTab === "usage" && (
-            <UsageTab stats={stats} edgeTraffic={edgeTraffic} rumVisits={rumVisits} />
+            <UsageTab
+              stats={stats}
+              edgeTraffic={edgeTraffic}
+              rumVisits={rumVisits}
+              rumHistory={rumHistory}
+            />
           )}
           {activeTab === "sets" && (
             <SetsTab

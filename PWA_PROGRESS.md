@@ -3621,6 +3621,88 @@ restored) entry, confirm the 404; delete a set, upload a new unrelated set
 reusing that same id, then attempt restoring the original deletion,
 confirming the 409 names the conflict rather than failing generically.
 
+---
+
+## Archiving Cloudflare RUM into D1 before it degrades (2026-08)
+
+Cloudflare keeps Web Analytics beacon data exact for 7 days, then aggregates
+it to roughly 10%. That's a property of the data's **age**, not of how wide a
+query is — a distinction that cost a round of wrong reasoning here, because a
+60-day query and a 7-day query returning different `sampleInterval`s looks
+like the query width deciding it. It isn't: the older rows had already
+degraded in place. Past a week the numbers stop being recoverable, so the
+only way to keep an accurate long-run record is to copy each day out while
+it's still exact.
+
+Shipped as four separate reviewed steps: the `rum_daily` table, a standalone
+Worker on a cron, the `visits_history` card reading D1, and the staleness
+disclosure.
+
+**Pages Functions cannot run cron** — only `onRequest*` handlers exist, so
+`apps/admin` could not host the capture no matter how it was written. Hence
+`apps/rum-archiver`, a standalone Worker with `crons = ["17 3 * * *"]`. It
+was worth checking rather than assuming: the alternative design (a scheduled
+GitHub Actions workflow) also carries a trap — **Actions disables a scheduled
+workflow after 60 days without a commit**, and only a commit resets that
+clock, so a quiet repo silently stops capturing.
+
+Two Cloudflare API tokens, deliberately not one: the dashboard's needs
+`Zone Analytics:Read` + `Account Analytics:Read`; the archiver's needs only
+`Account Analytics:Read`, because its writes go through the D1 **binding**
+rather than the API. Reusing one token would hand each job permissions it
+has no use for.
+
+**The upsert guard is the subtle part.** Each run re-fetches the trailing 7
+days, so a day gets written repeatedly — and a late run can see a *degraded*
+version of a day an earlier run captured exactly. Blind upsert would let the
+worse copy overwrite the better one. Hence
+`WHERE excluded.sample_interval <= rum_daily.sample_interval`: equal-quality
+refreshes and degraded→exact upgrades both apply, exact→degraded doesn't.
+Verified against in-memory SQLite rather than reasoned about, because it
+fails silently and only in hindsight.
+
+### Real zeros vs days nobody looked at
+
+The history card's load-bearing distinction. A day with no row means one of
+two completely different things: it was captured and genuinely had no
+traffic, or no capture ever covered it. Rendering both as `0` would draw an
+outage as a week of confident flat traffic — wrong in a way that looks
+entirely normal.
+
+So coverage is reconstructed as a **union of each run's trailing 7-day
+window** (`coveredDays` in `apps/admin/app/data/rum-history.ts`), and only
+days inside that union can be zero; the rest are `null`. `TrendChart` was
+changed to take `(number | null)[]` for this — it previously couldn't express
+a hole at all, and mapping unknown to 0 to fit the component would have been
+the bug itself. Nulls paint as faint grey full-height bands and are excluded
+from latest/peak/all-zero. Two captures a fortnight apart must leave the
+middle uncovered; that case has a direct test, since the failure mode is
+invisible until someone compares against Cloudflare months later.
+
+**Cross-validation worth recording, not just "it passed":** the archiver's
+first live capture and the independently written diagnostic script
+(`apps/admin/scripts/diagnose-visits.mjs`) agreed to the unit — 11 visits, 23
+page loads, 4 days carrying rows (Aug 7–10), 3 human rows and the single
+Aug 9 bot row. Two separately authored query/aggregation paths landing on the
+same numbers is the strongest evidence this integration has that the GraphQL
+query, the bot split and the day bucketing are all right; a single path
+agreeing with itself would have proved nothing.
+
+**Staleness is pull-only, deliberately.** The card reports how long ago the
+last capture ran and warns past 8 days (one unsampled window plus a day of
+slack — inside the window a missed run costs nothing, because the next run
+re-fetches it). Nothing pushes an alert; a stopped cron is discovered by
+someone opening the dashboard. That's an accepted limit for an internal page
+three people read, and the card says so in its own text rather than leaving
+the reader to assume they'd be told. The disclosure renders unconditionally —
+an earlier version showed it only when the archive was fresh, which hid it at
+exactly the moment it mattered.
+
+**Rejected:** stitching the archive and the live Cloudflare read into one
+series. They have different provenance (D1 rows from a cron vs a live API
+call) and one number spanning both would hide precisely the seam this
+dashboard has repeatedly got wrong. Two cards, stated separately.
+
 ## Reference — key design decisions from the PWA work
 
 ### App-gated capability pattern (2026-07-17)
