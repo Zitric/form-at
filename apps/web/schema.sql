@@ -376,4 +376,74 @@ ALTER TABLE admin_deleted_sets ADD COLUMN restored_at INTEGER;
 -- entry restored — see routes/api/sets/restore.ts's restoreSetFromLog):
 --   SELECT * FROM admin_deleted_sets WHERE id = ? AND restored_at IS NULL;
 
+-- Archived daily Web Analytics (RUM) rows — IMPROVEMENTS.md #12.
+--
+-- WHY THIS EXISTS: Cloudflare keeps beacon data unsampled for 7 days, then
+-- aggregates it to around 10% and eventually drops it. Measured on this site:
+-- a 60-day query returned 120 visits extrapolated from 12 real observations,
+-- with only 11 of 55 days carrying rows at all — sampling deletes whole days,
+-- not just precision. Capturing each day while it is still inside the
+-- unsampled window is therefore the ONLY way to hold accurate history past a
+-- week. Same shape as the sets snapshot: a stored copy of something
+-- authoritative elsewhere, kept because the source degrades.
+--
+-- RAW, NOT FILTERED: bot rows are stored too (`is_bot`), not dropped at
+-- capture. The bot share is itself displayed, filtering would discard
+-- information irreversibly for a saving of ~1 row/day, and if the bot
+-- classification ever changes the raw rows can be re-derived.
+--
+-- `sample_interval` is the field that makes a late capture detectable: 1 means
+-- the row was captured inside the unsampled window and is exact; above 1 means
+-- it was already degraded when archived. Stored per row so the reader can
+-- prove provenance instead of assuming it, and so the upsert below can refuse
+-- to overwrite good data with bad.
+--
+-- Not yet applied to the remote database — same "Julian runs it" pattern as
+-- the tables above. Do NOT use `--file=apps/web/schema.sql` (this file also
+-- contains the one-time, non-idempotent `ALTER TABLE plays ADD COLUMN
+-- is_offline` above — running the whole file fails with a duplicate-column
+-- error). Run the isolated statement instead:
+-- npx wrangler d1 execute form-at-analytics --remote --command "CREATE TABLE IF NOT EXISTS rum_daily (day TEXT NOT NULL, is_bot INTEGER NOT NULL, page_loads INTEGER NOT NULL, visits INTEGER NOT NULL, sample_size INTEGER, sample_interval REAL NOT NULL, captured_at INTEGER NOT NULL, PRIMARY KEY (day, is_bot))"
+-- Verify it landed:
+-- npx wrangler d1 execute form-at-analytics --remote --command "PRAGMA table_info(rum_daily)"
+CREATE TABLE IF NOT EXISTS rum_daily (
+  day             TEXT    NOT NULL,  -- YYYY-MM-DD (UTC), Cloudflare's `date` dimension
+  is_bot          INTEGER NOT NULL,  -- 0/1, Cloudflare's `bot` dimension
+  page_loads      INTEGER NOT NULL,  -- the RUM `count` field
+  visits          INTEGER NOT NULL,  -- confidence.sum.visits.estimate
+  sample_size     INTEGER,           -- raw samples behind the estimate; NULL when absent
+  sample_interval REAL    NOT NULL,  -- 1 = exact; >1 = archived after degrading
+  captured_at     INTEGER NOT NULL,  -- unix ms — feeds the staleness disclosure
+  -- Composite key, so re-running a capture for a day replaces exactly its own
+  -- rows and nothing else. This is what makes the upsert idempotent.
+  PRIMARY KEY (day, is_bot)
+);
 
+-- THE UPSERT, and the guard that is the whole point of storing
+-- `sample_interval`. A run that fires late re-fetches days that have already
+-- aged past 7 and come back SAMPLED. Without the WHERE clause, that late run
+-- would overwrite exact rows with extrapolated ones — silently destroying the
+-- very data the archive exists to preserve, irreversibly, and invisibly until
+-- someone compared numbers months later. Never remove it:
+--
+--   INSERT INTO rum_daily (day, is_bot, page_loads, visits, sample_size, sample_interval, captured_at)
+--   VALUES (?, ?, ?, ?, ?, ?, ?)
+--   ON CONFLICT(day, is_bot) DO UPDATE SET
+--     page_loads      = excluded.page_loads,
+--     visits          = excluded.visits,
+--     sample_size     = excluded.sample_size,
+--     sample_interval = excluded.sample_interval,
+--     captured_at     = excluded.captured_at
+--   WHERE excluded.sample_interval <= rum_daily.sample_interval;
+--
+-- Useful queries:
+--
+-- Daily human visits, newest first (what the history card reads):
+--   SELECT day, visits, page_loads, sample_interval FROM rum_daily
+--   WHERE is_bot = 0 ORDER BY day DESC;
+--
+-- Archive freshness (feeds the staleness warning):
+--   SELECT MAX(day) AS newest_day, MAX(captured_at) AS last_capture FROM rum_daily;
+--
+-- Any rows archived late, i.e. already degraded when captured:
+--   SELECT day, sample_interval FROM rum_daily WHERE sample_interval > 1 ORDER BY day;

@@ -45,8 +45,11 @@ Running list of feature/functional improvements. Tick off as we ship.
 
   The `visits` card was therefore narrowed to a 7-day window (see PWA_PROGRESS), which buys exactness at the cost of history. That makes this item the **only** way to have accurate history beyond a week: capture each day into D1 while it is still unsampled, or accept that anything older than 7 days is a 10% extrapolation with gaps. Materially stronger than when this was logged, when the premise was still a guess.
 
-  **One open question remains — don't build until it's answered:**
-  - *What triggers the capture?* Deploy-time is unreliable in the way that matters: a two-week gap between deploys loses exactly the days the archive exists to save. A scheduled GitHub Action works but is a new moving part to keep alive, on a project heading toward maintenance mode. Neither is obviously right. Note the capture would need to run at least weekly to stay inside the unsampled window — that constraint is now a hard number rather than a guess.
+  **Trigger question now SETTLED (2026-08-10) — building.** Cloudflare Pages Functions cannot run cron: their API reference exposes only HTTP handlers (`onRequest*`), with no scheduled handler, and Cloudflare's own guidance is to use a standalone Worker instead. GitHub Actions `schedule` needs no new deploy target but **disables itself after 60 days without a commit** (only commits reset it — tags, issues and PR merges don't), which on a project heading to low activity is precisely the wrong failure mode: it stops quietly, permanently, roughly two months after the last commit.
+
+  So: a standalone Worker with a Cron Trigger, accepted as a third deploy target because it is the only option that keeps running when nobody is committing. Each run re-fetches the trailing 7 days and upserts, so any two successful runs inside a week lose nothing — that absorbs transient failures, though notably it would NOT have rescued the GitHub option, whose failure is permanent rather than transient.
+
+  Table applied as `rum_daily` (see `apps/web/schema.sql`). Build order: table → Worker + cron → history card reading D1 → staleness disclosure.
 
 ## Bigger but worth it
 
