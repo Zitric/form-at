@@ -58,6 +58,10 @@ apps/*/coverage/
 # Chromatic job builds fresh each run
 packages/*/storybook-static/
 
+# Review diffs written by `pnpm dump-diff` — regenerated on every run and
+# wiped first, so they only ever describe the current branch
+.diff-dump/
+
 # Cloudflare Access AUD tag — a public application identifier, not a credential.
 # It says which Access app a JWT was issued for; forging a token still requires
 # Cloudflare's private signing key. verifyAccessJwt.ts reads it to know what to

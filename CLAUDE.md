@@ -195,6 +195,23 @@ pnpm test       # unit tests, all workspaces
 
 Add `pnpm knip` when you changed exports or dependencies.
 
+**`pnpm dump-diff`** writes the branch's changes to `.diff-dump/`, split by area
+(packages, each app, config, docs) with a `summary.txt`. It diffs the working
+tree against the merge-base with `origin/main`, so committed, staged and
+unstaged changes all appear without having to choose between them. Generated
+files (lockfile, `routeTree.gen.ts`, `sets.generated.ts`, build output, binaries)
+are excluded but **named in the summary**, so an exclusion can't hide a real
+change. Output is wiped before each run — a leftover file from a previous branch
+is worse than no file. Gitignored.
+
+### Make changes with the edit tools, not shell commands
+
+Edits made through the file-editing tools render as a reviewable diff in the
+console; the same edit applied with `sed`, `python` or a heredoc shows only that
+some command ran, and the change has to be reconstructed from the file
+afterwards. Reach for a shell one-liner only when it genuinely fits — a
+mechanical rename across many files, say — and say so when you do.
+
 **`pnpm test:e2e` and production builds (`pnpm build`) are slow — minutes, not
 seconds.** Run them when the change actually touches what they cover: routes,
 navigation, the player, service-worker behaviour, or CI config. A docs-only or
@@ -401,6 +418,7 @@ pnpm test:e2e / test:e2e:web / test:e2e:admin
 pnpm check                        # Biome (whole repo) then turbo tsc
 pnpm lint / pnpm tsc / pnpm knip
 pnpm storybook                    # packages/ui Storybook, :6006
+pnpm dump-diff                    # branch diff → .diff-dump/, split by area, for review
 ```
 
 Everything except `check`/`format`/`knip` is a thin Turbo wrapper; `:web`/`:admin`
