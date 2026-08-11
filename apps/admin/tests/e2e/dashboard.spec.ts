@@ -263,7 +263,10 @@ test.describe("admin dashboard", () => {
 
   test("visits card states what a visit is and that bots are excluded", async ({ page }) => {
     await gotoAndHydrate(page, "/dashboard");
-    await expect(page.getByText("// visits")).toBeVisible();
+    // `exact` is load-bearing: "// visits_history" contains "// visits", so a
+    // substring match resolves to both cards and fails strict mode. Same reason
+    // the card filter below matches on an exact child rather than `hasText`.
+    await expect(page.getByText("// visits", { exact: true })).toBeVisible();
     // The definition is the whole disclosure: a visit is an arrival, not a
     // session and not a person.
     await expect(page.getByText(/arriving from a different site or a direct link/i)).toBeVisible();
@@ -280,7 +283,7 @@ test.describe("admin dashboard", () => {
     await expect(
       page
         .getByTestId("dashboard-card")
-        .filter({ hasText: "// visits" })
+        .filter({ has: page.getByText("// visits", { exact: true }) })
         .getByTestId("trend-chart"),
     ).toBeVisible();
     // Full coverage in the fixture (7 of 7 days), so no coverage caption.
