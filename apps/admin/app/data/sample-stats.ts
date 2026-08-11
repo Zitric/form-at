@@ -31,7 +31,11 @@ export const SAMPLE_RUM_HISTORY: RumHistory = {
   days: SAMPLE_HISTORY_DAYS,
   coverageStart: "2026-08-05",
   coverageEnd: "2026-08-11",
-  lastCapturedAt: Date.parse("2026-08-11T14:20:00Z"),
+  // Healthy on both signals — the ordinary state. The two stall cases (cron
+  // stopped; cron firing but every read failing) are covered by unit tests
+  // rather than made permanently visible in local dev.
+  lastRunAt: Date.parse("2026-08-11T14:20:00Z"),
+  lastSuccessAt: Date.parse("2026-08-11T14:20:00Z"),
   daysCovered: 7,
   daysUncovered: 3,
   totalVisits: 11,

@@ -312,11 +312,23 @@ test.describe("admin dashboard", () => {
     await expect(historyCard.getByText(/^10 days, /)).toBeVisible();
   });
 
-  test("visits_history says the staleness warning is pull-only", async ({ page }) => {
+  test("visits_history reports both staleness signals, and says they're pull-only", async ({
+    page,
+  }) => {
     await gotoAndHydrate(page, "/dashboard");
     const historyCard = page.getByTestId("dashboard-card").filter({ hasText: "// visits_history" });
+
+    // "Did the cron fire?" and "did it capture anything?" are different
+    // questions with different fixes — a cron firing daily whose every read
+    // fails is fresh by the first and stale by the second. Both are always
+    // stated, so one can never mask the other.
+    await expect(historyCard.getByText(/cron last ran/i)).toBeVisible();
+    await expect(historyCard.getByText(/last successful capture/i)).toBeVisible();
     // Whoever reads this must not assume they'd be told if the capture stopped.
     await expect(historyCard.getByText(/nothing pushes an alert/i)).toBeVisible();
+    // The fixture is healthy on both, so neither warning should be showing.
+    await expect(historyCard.getByText(/the cron itself has stopped firing/i)).toHaveCount(0);
+    await expect(historyCard.getByText(/every read is failing/i)).toHaveCount(0);
   });
 
   test("edge_traffic is labelled as edge requests, never as visitors", async ({ page }) => {

@@ -30,19 +30,31 @@ Full reasoning, including what the archive is for: `PWA_PROGRESS.md` →
 
 ## What a run does
 
-`captureWindow()` fetches the trailing `RUM_UNSAMPLED_DAYS` (7) and upserts one
-row per `(day, is_bot)` into `rum_daily`. Three behaviours are deliberate:
+`captureWindow()` fetches the trailing `RUM_UNSAMPLED_DAYS` (7), upserts one row
+per `(day, is_bot)` into `rum_daily`, and logs the run itself into
+`rum_capture_runs`. Four behaviours are deliberate:
 
 **Every run re-fetches the whole window**, not just yesterday. A missed run
 therefore costs nothing as long as another lands within the week — the trigger
 doesn't have to be perfectly reliable. It does *not* rescue a trigger that stops
 permanently, which is why the trigger choice above still mattered.
 
-**A failed read writes nothing at all.** `fetchRumGroups` returns `null` for any
+**A failed read writes no data at all.** `fetchRumGroups` returns `null` for any
 failure — bad credentials, permission, timeout, or a GraphQL `errors` array
-inside a 200 — and the run exits without touching D1. A partial write would be
+inside a 200 — and the run stores no rows. A partial write would be
 indistinguishable from a quiet day afterwards, and gaps here are invisible in
 hindsight.
+
+**Every run is logged, including the ones that store nothing.** This is not
+bookkeeping for its own sake: a window with no traffic writes no rows, so
+`rum_daily` keeps no trace that the run happened, and a reader deriving coverage
+from it cannot tell a genuinely quiet week from a week nobody captured — it draws
+seven healthy days as gaps. `rum_capture_runs` records `since`/`until` (per run,
+so changing `RUM_UNSAMPLED_DAYS` can't rewrite history) and `ok`. Only `ok = 1`
+runs count as coverage; `ok = 0` runs aren't coverage but prove the trigger
+fired, which is what lets the dashboard distinguish a dead cron from a live cron
+whose reads are all failing. **Don't stop logging failures, and don't merge the
+two states at read time** — they need different fixes.
 
 **Re-writing a day can only improve it.** `RUM_UPSERT_SQL` carries
 `WHERE excluded.sample_interval <= rum_daily.sample_interval`, so an equal-quality
@@ -95,9 +107,11 @@ sets this from `wrangler.toml`; it needs no dashboard step.
 **5. The D1 binding** is declared in `wrangler.toml` and applied by `wrangler
 deploy` — unlike Pages, no dashboard step either.
 
-The `rum_daily` table itself must already exist. It's defined in
-`apps/web/schema.sql`; apply it one statement at a time with `--command`, never
-`--file` against the existing database.
+The `rum_daily` and `rum_capture_runs` tables must already exist. Both are
+defined in `apps/web/schema.sql`, along with the one-time backfill that seeds
+`rum_capture_runs` from the runs already evidenced by `rum_daily`. Apply them one
+statement at a time with `--command`, never `--file` against the existing
+database.
 
 ## Commands
 
@@ -137,6 +151,18 @@ Check what actually landed:
 npx wrangler d1 execute form-at-analytics --remote \
   --command "SELECT day, is_bot, visits, page_loads, sample_interval FROM rum_daily ORDER BY day DESC LIMIT 14"
 ```
+
+And whether the runs themselves are healthy — the two signals the dashboard
+splits apart:
+
+```bash
+npx wrangler d1 execute form-at-analytics --remote \
+  --command "SELECT MAX(captured_at) AS last_run, MAX(CASE WHEN ok = 1 THEN captured_at END) AS last_success FROM rum_capture_runs"
+```
+
+`last_run` far behind means the cron stopped; `last_run` current with
+`last_success` far behind means it's firing and every read is failing — check the
+token, not the trigger.
 
 ## Verification history
 

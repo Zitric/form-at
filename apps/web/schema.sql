@@ -398,11 +398,10 @@ ALTER TABLE admin_deleted_sets ADD COLUMN restored_at INTEGER;
 -- prove provenance instead of assuming it, and so the upsert below can refuse
 -- to overwrite good data with bad.
 --
--- Not yet applied to the remote database — same "Julian runs it" pattern as
--- the tables above. Do NOT use `--file=apps/web/schema.sql` (this file also
--- contains the one-time, non-idempotent `ALTER TABLE plays ADD COLUMN
--- is_offline` above — running the whole file fails with a duplicate-column
--- error). Run the isolated statement instead:
+-- Applied to the remote database. Do NOT use `--file=apps/web/schema.sql`
+-- (this file also contains the one-time, non-idempotent `ALTER TABLE plays ADD
+-- COLUMN is_offline` above — running the whole file fails with a
+-- duplicate-column error). The isolated statement that created it:
 -- npx wrangler d1 execute form-at-analytics --remote --command "CREATE TABLE IF NOT EXISTS rum_daily (day TEXT NOT NULL, is_bot INTEGER NOT NULL, page_loads INTEGER NOT NULL, visits INTEGER NOT NULL, sample_size INTEGER, sample_interval REAL NOT NULL, captured_at INTEGER NOT NULL, PRIMARY KEY (day, is_bot))"
 -- Verify it landed:
 -- npx wrangler d1 execute form-at-analytics --remote --command "PRAGMA table_info(rum_daily)"
@@ -447,3 +446,60 @@ CREATE TABLE IF NOT EXISTS rum_daily (
 --
 -- Any rows archived late, i.e. already degraded when captured:
 --   SELECT day, sample_interval FROM rum_daily WHERE sample_interval > 1 ORDER BY day;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- rum_capture_runs — one row per archiver run, successful or not.
+--
+-- WHY THIS EXISTS, and why coverage cannot be read off `rum_daily`:
+-- a day with no row in `rum_daily` is ambiguous. It means either "a capture
+-- looked and Cloudflare reported nothing" (a real zero, and real data) or
+-- "nobody ever captured this day" (unknown). The history card must not draw
+-- those the same way — a zero over an uncaptured stretch renders an outage as
+-- flat traffic, which is the one thing this archive exists to make impossible.
+--
+-- Coverage was originally derived from `SELECT DISTINCT captured_at FROM
+-- rum_daily`, which is wrong in a way that only shows up on a quiet week: a run
+-- over a window with NO traffic writes no rows, therefore leaves no
+-- `captured_at`, and is indistinguishable afterwards from a run that never
+-- happened. Seven healthy days rendered as seven "nobody looked" gaps.
+-- Coverage has to be recorded by the writer, not inferred by the reader.
+--
+-- `since`/`until` are stored PER RUN rather than recomputed from `captured_at`
+-- and today's `RUM_UNSAMPLED_DAYS`. Changing that constant must not retroactively
+-- rewrite what past runs are claimed to have observed.
+--
+-- `ok` distinguishes the two failure modes that need different fixes:
+--   ok = 1  the read succeeded — these windows, and only these, are coverage.
+--   ok = 0  the cron fired but the read failed. NOT coverage (we didn't see
+--           those days), but proof the trigger is alive. A cron that fires
+--           daily and fails every time must not read as fresh, and a quiet week
+--           must not read as a stopped cron; the card needs both signals
+--           separately, which is the whole reason failures are logged at all.
+--
+-- Applied with:
+-- npx wrangler d1 execute form-at-analytics --remote --command "CREATE TABLE IF NOT EXISTS rum_capture_runs (captured_at INTEGER PRIMARY KEY, since TEXT NOT NULL, until TEXT NOT NULL, ok INTEGER NOT NULL, rows_fetched INTEGER NOT NULL, rows_written INTEGER NOT NULL, reason TEXT)"
+-- Then backfill from the runs already evidenced by rum_daily, so the card keeps
+-- rendering exactly what it renders today and there's no dual-read path:
+-- npx wrangler d1 execute form-at-analytics --remote --command "INSERT OR IGNORE INTO rum_capture_runs (captured_at, since, until, ok, rows_fetched, rows_written) SELECT DISTINCT captured_at, date(captured_at/1000, 'unixepoch', '-6 days'), date(captured_at/1000, 'unixepoch'), 1, 0, 0 FROM rum_daily"
+-- Verify:
+-- npx wrangler d1 execute form-at-analytics --remote --command "SELECT captured_at, since, until, ok FROM rum_capture_runs ORDER BY captured_at DESC LIMIT 10"
+CREATE TABLE IF NOT EXISTS rum_capture_runs (
+  captured_at  INTEGER PRIMARY KEY,  -- unix ms; matches rum_daily.captured_at for the same run
+  since        TEXT    NOT NULL,     -- first day of the window this run observed
+  until        TEXT    NOT NULL,     -- last day of that window
+  ok           INTEGER NOT NULL,     -- 1 = read succeeded (counts as coverage); 0 = it did not
+  rows_fetched INTEGER NOT NULL,     -- groups Cloudflare returned; 0 on a genuinely quiet window
+  rows_written INTEGER NOT NULL,     -- rows upserted; can be 0 on a successful run
+  reason       TEXT                  -- 'rum-read-failed' / 'no-rows-in-window', else NULL
+);
+--
+-- Useful queries:
+--
+-- Is the cron alive, and is it actually capturing? (the two staleness signals):
+--   SELECT MAX(captured_at) AS last_run,
+--          MAX(CASE WHEN ok = 1 THEN captured_at END) AS last_success
+--   FROM rum_capture_runs;
+--
+-- Recent failures, newest first:
+--   SELECT captured_at, since, until, reason FROM rum_capture_runs
+--   WHERE ok = 0 ORDER BY captured_at DESC LIMIT 20;

@@ -1,4 +1,3 @@
-import { RUM_UNSAMPLED_DAYS } from "@form-at/data/rumArchive";
 import { createServerFn } from "@tanstack/react-start";
 import { SAMPLE_RUM_HISTORY } from "./sample-stats";
 
@@ -15,12 +14,17 @@ import { SAMPLE_RUM_HISTORY } from "./sample-stats";
 // confident flat traffic across an outage — and an outage is precisely what
 // this archive exists to survive, so the chart must not be able to hide one.
 //
-// Coverage is derivable from what's already stored, with no extra bookkeeping:
-// every run writes `captured_at`, and a run at time T re-fetched the whole
-// trailing unsampled window, so it observed every day in
-// [T - (RUM_UNSAMPLED_DAYS - 1), T]. The union of those windows is exactly the
-// set of days somebody looked at. Inside it, a missing row is a genuine zero.
-// Outside it, we simply don't know.
+// Coverage comes from `rum_capture_runs` — one row per run, written by the
+// archiver whether or not that run stored anything. The union of the windows of
+// SUCCESSFUL runs is exactly the set of days somebody looked at. Inside it, a
+// missing row is a genuine zero. Outside it, we simply don't know.
+//
+// It is NOT derived from `rum_daily.captured_at`, which is the obvious shortcut
+// and is wrong on exactly the case that matters: a run over a window with no
+// traffic writes no rows, so it leaves no `captured_at` and is indistinguishable
+// afterwards from a run that never happened. A quiet week then renders as seven
+// "nobody looked" gaps — the zero-vs-unknown conflation this module exists to
+// prevent, arriving through the back door. Never reintroduce that derivation.
 
 /** Longest history the card will draw. Bounds both the query and the chart —
  *  the archive grows a couple of rows a day, so this is about readability
@@ -36,6 +40,20 @@ type RumHistoryDay = {
   botPageLoads: number | null;
 };
 
+/** One archiver run, as recorded by the Worker. */
+export type CaptureRun = {
+  /** Unix ms. */
+  capturedAt: number;
+  /** The window this run observed, stored per run so changing
+   *  `RUM_UNSAMPLED_DAYS` can't rewrite what past runs are claimed to have
+   *  seen. */
+  since: string;
+  until: string;
+  /** Whether the Cloudflare read succeeded. Only successful runs are coverage —
+   *  a failed one saw nothing — but a failed one still proves the cron fired. */
+  ok: boolean;
+};
+
 export type RumHistory = {
   /** Dense, oldest-first, one entry per day across the rendered range —
    *  including uncovered days, which carry nulls rather than being omitted. */
@@ -43,8 +61,20 @@ export type RumHistory = {
   /** Oldest and newest day the archive has ever observed, null when empty. */
   coverageStart: string | null;
   coverageEnd: string | null;
-  /** When the most recent capture ran (unix ms), for the staleness warning. */
-  lastCapturedAt: number | null;
+  /** Two DIFFERENT staleness signals, deliberately not collapsed into one.
+   *
+   *  `lastRunAt` — the newest run of any kind: is the cron firing at all?
+   *  `lastSuccessAt` — the newest run that actually read Cloudflare: is it
+   *  capturing anything?
+   *
+   *  A cron that fires daily and fails every time is fresh by the first and
+   *  stale by the second, and that is precisely the situation the warning
+   *  exists for. Reporting only `lastRunAt` would render it as healthy;
+   *  reporting only `lastSuccessAt` would render a quiet week as a dead cron.
+   *  They are different problems needing different fixes, so the card names
+   *  which one it's seeing. */
+  lastRunAt: number | null;
+  lastSuccessAt: number | null;
   daysCovered: number;
   daysUncovered: number;
   totalVisits: number;
@@ -60,19 +90,21 @@ function addDays(isoDay: string, delta: number): string {
 /**
  * The set of days some capture actually observed.
  *
- * Each `captured_at` represents a run that re-fetched the trailing
- * `windowDays`, so it observed that whole span. The union across runs is the
- * coverage. Two captures a fortnight apart therefore leave the middle days
- * UNCOVERED — which is the case that matters, because those are exactly the
- * days an outage would silently turn into zeroes.
+ * The union of every SUCCESSFUL run's recorded `[since, until]`. Two runs a
+ * fortnight apart therefore leave the middle days UNCOVERED — the case that
+ * matters, because those are exactly the days an outage would otherwise turn
+ * into confident zeroes.
+ *
+ * Failed runs are excluded: the cron fired, but it saw nothing, so it can't
+ * vouch for those days. That's the opposite of the quiet-window case, where the
+ * run DID see the days and found no traffic.
  */
-export function coveredDays(capturedAtMs: number[], windowDays: number): Set<string> {
+export function coveredDays(runs: CaptureRun[]): Set<string> {
   const covered = new Set<string>();
-  for (const ms of capturedAtMs) {
-    if (!Number.isFinite(ms)) continue;
-    const runDay = new Date(ms).toISOString().slice(0, 10);
-    for (let back = 0; back < windowDays; back += 1) {
-      covered.add(addDays(runDay, -back));
+  for (const run of runs) {
+    if (!run.ok || !run.since || !run.until || run.until < run.since) continue;
+    for (let day = run.since; day <= run.until; day = addDays(day, 1)) {
+      covered.add(day);
     }
   }
   return covered;
@@ -88,11 +120,11 @@ type ArchiveRow = { day: string; is_bot: number; visits: number; page_loads: num
  */
 export function buildHistory(
   rows: ArchiveRow[],
-  capturedAtMs: number[],
+  runs: CaptureRun[],
   now: Date,
   maxDays = RUM_HISTORY_MAX_DAYS,
 ): RumHistory {
-  const covered = coveredDays(capturedAtMs, RUM_UNSAMPLED_DAYS);
+  const covered = coveredDays(runs);
   const today = now.toISOString().slice(0, 10);
 
   const byDay = new Map<string, { visits: number; pageLoads: number; botPageLoads: number }>();
@@ -106,6 +138,14 @@ export function buildHistory(
     byDay.set(r.day, entry);
   }
 
+  const runTimes = runs.map((r) => r.capturedAt).filter(Number.isFinite);
+  const successTimes = runs
+    .filter((r) => r.ok)
+    .map((r) => r.capturedAt)
+    .filter(Number.isFinite);
+  const lastRunAt = runTimes.length ? Math.max(...runTimes) : null;
+  const lastSuccessAt = successTimes.length ? Math.max(...successTimes) : null;
+
   const observed = [...covered].sort();
   const coverageStart = observed[0] ?? null;
   const coverageEnd = observed[observed.length - 1] ?? null;
@@ -114,7 +154,11 @@ export function buildHistory(
       days: [],
       coverageStart: null,
       coverageEnd: null,
-      lastCapturedAt: null,
+      // Kept even with no coverage: runs that all FAILED produce exactly this
+      // state, and the card must be able to say "the cron is running but has
+      // never succeeded" rather than "nothing archived yet".
+      lastRunAt,
+      lastSuccessAt,
       daysCovered: 0,
       daysUncovered: 0,
       totalVisits: 0,
@@ -154,7 +198,8 @@ export function buildHistory(
     days,
     coverageStart,
     coverageEnd,
-    lastCapturedAt: capturedAtMs.length ? Math.max(...capturedAtMs) : null,
+    lastRunAt,
+    lastSuccessAt,
     daysCovered,
     daysUncovered: days.length - daysCovered,
     totalVisits,
@@ -184,15 +229,22 @@ export const fetchRumHistory = createServerFn({ method: "GET" }).handler(
           )
           .bind(since.toISOString().slice(0, 10))
           .all<ArchiveRow>(),
-        // Every distinct run, not just those inside the window: a capture just
-        // before the window still proves its trailing days were observed.
+        // Every run, not just those inside the window: a run just before it
+        // still proves its trailing days were observed. Failed runs are fetched
+        // too — they aren't coverage, but they're how the card tells a dead
+        // cron from a cron whose reads are all failing.
         db
-          .prepare("SELECT DISTINCT captured_at FROM rum_daily")
-          .all<{ captured_at: number }>(),
+          .prepare("SELECT captured_at, since, until, ok FROM rum_capture_runs")
+          .all<{ captured_at: number; since: string; until: string; ok: number }>(),
       ]);
       return buildHistory(
         rows.results,
-        captures.results.map((r) => r.captured_at),
+        captures.results.map((r) => ({
+          capturedAt: r.captured_at,
+          since: r.since,
+          until: r.until,
+          ok: r.ok === 1,
+        })),
         new Date(),
       );
     } catch {

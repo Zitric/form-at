@@ -3688,15 +3688,61 @@ same numbers is the strongest evidence this integration has that the GraphQL
 query, the bot split and the day bucketing are all right; a single path
 agreeing with itself would have proved nothing.
 
-**Staleness is pull-only, deliberately.** The card reports how long ago the
-last capture ran and warns past 8 days (one unsampled window plus a day of
-slack — inside the window a missed run costs nothing, because the next run
-re-fetches it). Nothing pushes an alert; a stopped cron is discovered by
-someone opening the dashboard. That's an accepted limit for an internal page
-three people read, and the card says so in its own text rather than leaving
-the reader to assume they'd be told. The disclosure renders unconditionally —
-an earlier version showed it only when the archive was fresh, which hid it at
-exactly the moment it mattered.
+### Coverage has to be recorded, not inferred — `rum_capture_runs`
+
+The first version derived coverage from `SELECT DISTINCT captured_at FROM
+rum_daily`, which was appealing because it needed no extra bookkeeping. It was
+wrong, in exactly the shape this card exists to prevent, and it arrived through
+the back door.
+
+A run over a window with **no traffic** writes no rows — `captureWindow` treats
+`rowsWritten: 0` as a valid outcome — so it leaves no `captured_at` and is
+indistinguishable afterwards from a run that never happened. Reconstructed
+against a healthy cron and a genuinely quiet week, seven observed days rendered
+as seven "nobody looked" gaps. At this volume (single-digit daily visits, days
+that are already zero) a quiet week is entirely plausible, not a thought
+experiment.
+
+Two more defects fell out of the same root: `lastCapturedAt` actually meant
+"last run that *wrote a row*", so a quiet stretch would make the card assert the
+cron had stopped; and `coveredDays` applied *today's* `RUM_UNSAMPLED_DAYS` to
+every historical run, so changing that constant would retroactively rewrite what
+past runs were claimed to have observed.
+
+So the archiver now writes `rum_capture_runs` — one row per run, on every path,
+including failures — and coverage is the union of the windows of runs where
+`ok = 1`. The window is stored per run rather than recomputed. Backfilled from
+the runs already evidenced by `rum_daily`, so the change preserved the existing
+rendering exactly and left no dual-read path behind.
+
+**Rejected alternatives:** a sentinel row in `rum_daily` (say `is_bot = -1`) to
+carry a `captured_at` on empty windows — no new table, but it puts non-data in
+the data table, every future reader needs a filter it can silently forget, and
+it still can't record a failed run distinctly. And materialising explicit zero
+rows for observed days — there's no `sample_interval` to claim for a row
+Cloudflare never returned, it collides with the upsert guard, and the archive
+stops being a faithful copy of the source.
+
+**Staleness needs two signals, not one.** Logging failures and then collapsing
+them back together at read time would waste the distinction. `lastRunAt` answers
+*is the cron firing?*; `lastSuccessAt` answers *is it capturing anything?* A cron
+that fires daily and fails every read is fresh by the first and stale by the
+second — the exact scenario the warning exists for, and one that a single
+"last run" figure would render as perfectly healthy. Conversely a single "last
+successful capture" figure would render a quiet week as a dead cron. The card
+warns on either being too old and **names which**, because "cron last ran today
+but hasn't succeeded in 9 days" (check the token) and "cron hasn't run in 9 days"
+(check the trigger) send you to completely different places.
+
+The threshold is 8 days — one unsampled window plus a day of slack, since inside
+the window a missed run costs nothing because the next one re-fetches it.
+
+**It stays pull-only, deliberately.** Nothing pushes an alert; a stopped cron is
+discovered by someone opening the dashboard. That's an accepted limit for an
+internal page three people read, and the card says so in its own text rather than
+leaving the reader to assume they'd be told. Both figures render
+unconditionally — an earlier version showed the disclosure only when the archive
+was fresh, hiding it at exactly the moment it mattered.
 
 **Rejected:** stitching the archive and the live Cloudflare read into one
 series. They have different provenance (D1 rows from a cron vs a live API

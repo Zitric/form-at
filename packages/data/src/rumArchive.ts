@@ -169,6 +169,24 @@ export const RUM_UPSERT_SQL = `INSERT INTO rum_daily
     captured_at     = excluded.captured_at
   WHERE excluded.sample_interval <= rum_daily.sample_interval`;
 
+/**
+ * The capture-run log behind `rum_capture_runs`.
+ *
+ * Every run writes one of these, INCLUDING a run that stores nothing. That is
+ * the point: coverage cannot be read off `rum_daily`, because a window with no
+ * traffic produces no rows and therefore no `captured_at`, leaving a healthy run
+ * indistinguishable from a run that never happened. The reader then draws a
+ * genuinely quiet week as "nobody looked" — the exact conflation the history
+ * card exists to prevent.
+ *
+ * `since`/`until` are stored rather than recomputed from `captured_at`, so
+ * changing `RUM_UNSAMPLED_DAYS` can't retroactively rewrite what past runs
+ * observed. `OR REPLACE` keeps a same-millisecond re-run idempotent.
+ */
+export const RUM_RUN_LOG_SQL = `INSERT OR REPLACE INTO rum_capture_runs
+    (captured_at, since, until, ok, rows_fetched, rows_written, reason)
+  VALUES (?, ?, ?, ?, ?, ?, ?)`;
+
 /** The bound values for one `RUM_UPSERT_SQL` execution, in order. Exported so
  *  the mapping from a Cloudflare row to a stored row is testable without a
  *  database. */

@@ -32,6 +32,18 @@ export function VisitsHistoryCard({ history }: { history: RumHistory | null }) {
     );
   }
   if (history.days.length === 0) {
+    // No coverage at all splits two ways, and they are not the same news. Runs
+    // that all FAILED mean the cron is working and the reads aren't — a
+    // problem — whereas no runs at all is just a young archive.
+    if (history.lastRunAt !== null) {
+      return (
+        <Muted className="block text-xs text-gold">
+          the capture has run but never succeeded — every attempt failed to read Cloudflare, so
+          nothing has been archived. This is not an empty archive: the cron is firing. Check the
+          Worker's <span className="font-mono">CF_ANALYTICS_TOKEN</span>.
+        </Muted>
+      );
+    }
     return (
       <Muted className="block text-xs">
         nothing archived yet. The capture runs daily and stores the trailing {RUM_UNSAMPLED_DAYS}{" "}
@@ -41,13 +53,21 @@ export function VisitsHistoryCard({ history }: { history: RumHistory | null }) {
     );
   }
 
-  // Clamped at 0: a capture timestamped later today than the render is a clock
+  // Clamped at 0: a capture timestamped later today than the render is clock
   // skew between the Worker and this reader, not negative age.
-  const ageDays =
-    history.lastCapturedAt === null
-      ? null
-      : Math.max(0, Math.floor((Date.now() - history.lastCapturedAt) / 86_400_000));
-  const isStale = ageDays !== null && ageDays >= ARCHIVE_STALE_AFTER_DAYS;
+  const ageInDays = (at: number | null) =>
+    at === null ? null : Math.max(0, Math.floor((Date.now() - at) / 86_400_000));
+
+  // TWO signals, never collapsed. `runAge` answers "is the cron firing?";
+  // `successAge` answers "is it capturing anything?". A cron that fires daily
+  // and fails every read is fresh by the first and stale by the second — the
+  // exact scenario this warning exists for, and one that reporting only the
+  // last run would hide completely. They need different fixes, so the card says
+  // which it is rather than showing one "stale" state for both.
+  const runAge = ageInDays(history.lastRunAt);
+  const successAge = ageInDays(history.lastSuccessAt);
+  const cronStalled = runAge === null || runAge >= ARCHIVE_STALE_AFTER_DAYS;
+  const capturesStalled = successAge === null || successAge >= ARCHIVE_STALE_AFTER_DAYS;
 
   return (
     <>
@@ -86,24 +106,40 @@ export function VisitsHistoryCard({ history }: { history: RumHistory | null }) {
         </p>
       )}
 
-      {isStale && (
+      {/* The two stalls are named separately because they are different faults
+          with different fixes. Checking the cron when the cron is fine and the
+          token is expired sends you to the wrong place entirely. Both share the
+          consequence sentence: days ageing out unarchived is unrecoverable
+          however the capture stopped. */}
+      {cronStalled && (
         <p className="mt-1 text-xs text-gold">
-          archive last updated {ageDays}d ago — the capture has stopped. Days older than{" "}
-          {RUM_UNSAMPLED_DAYS} are ageing out of Cloudflare's exact window unarchived, and that loss
-          can't be recovered. Check the Worker's cron.
+          the capture hasn't run in {runAge === null ? "any recorded run" : `${runAge}d`} — the cron
+          itself has stopped firing. Days older than {RUM_UNSAMPLED_DAYS} are ageing out of
+          Cloudflare's exact window unarchived, and that loss can't be recovered. Check the Worker's
+          cron trigger.
         </p>
       )}
 
-      {/* Unconditional, deliberately — it used to render only on the fresh
+      {!cronStalled && capturesStalled && (
+        <p className="mt-1 text-xs text-gold">
+          the cron last ran {runAge === 0 ? "today" : `${runAge}d ago`} but hasn't captured anything
+          in {successAge === null ? "any recorded run" : `${successAge}d`} — it is firing and every
+          read is failing, which is a different fault from a stopped cron. Days are ageing out
+          unarchived meanwhile. Check the Worker's{" "}
+          <span className="font-mono">CF_ANALYTICS_TOKEN</span> and its logs, not the trigger.
+        </p>
+      )}
+
+      {/* Unconditional, deliberately — it used to render only on the healthy
           branch, so the one fact a reader most needs when the capture HAS
           stopped ("you are only seeing this because you happened to look")
           vanished at exactly the moment it mattered. */}
-      {ageDays !== null && (
-        <p className="mt-1 text-xs text-grey/70">
-          archive last updated {ageDays === 0 ? "today" : `${ageDays}d ago`}. Staleness surfaces
-          only when someone opens the dashboard — nothing pushes an alert if the capture stops.
-        </p>
-      )}
+      <p className="mt-1 text-xs text-grey/70">
+        cron last ran {runAge === null ? "never" : runAge === 0 ? "today" : `${runAge}d ago`}; last
+        successful capture{" "}
+        {successAge === null ? "never" : successAge === 0 ? "today" : `${successAge}d ago`}. Both
+        surface only when someone opens the dashboard — nothing pushes an alert if either stops.
+      </p>
     </>
   );
 }

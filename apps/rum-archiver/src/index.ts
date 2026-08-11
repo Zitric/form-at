@@ -21,6 +21,7 @@
 // the trigger choice above still mattered.
 
 import {
+  RUM_RUN_LOG_SQL,
   RUM_UNSAMPLED_DAYS,
   RUM_UPSERT_SQL,
   fetchRumGroups,
@@ -68,7 +69,23 @@ export async function captureWindow(env: Env, now: Date = new Date()): Promise<C
   const sinceDate = new Date(now);
   sinceDate.setUTCDate(sinceDate.getUTCDate() - (RUM_UNSAMPLED_DAYS - 1));
   const since = isoDay(sinceDate);
-  const empty = { since, until, rowsFetched: 0, rowsWritten: 0, rowsSkipped: 0 };
+  const capturedAt = now.getTime();
+
+  // The run log is written on EVERY path, including a failed read and a window
+  // with no traffic. It is the only record that this run happened: a run that
+  // stores no rows leaves nothing in `rum_daily`, so without this the reader
+  // cannot tell a genuinely quiet week from a week nobody captured, and draws
+  // the healthy one as a gap. Coverage is recorded here, never inferred there.
+  const logRun = (result: CaptureResult) =>
+    env.DB.prepare(RUM_RUN_LOG_SQL).bind(
+      capturedAt,
+      since,
+      until,
+      result.ok ? 1 : 0,
+      result.rowsFetched,
+      result.rowsWritten,
+      result.reason ?? null,
+    );
 
   const rows = await fetchRumGroups({
     token: env.CF_ANALYTICS_TOKEN,
@@ -77,12 +94,20 @@ export async function captureWindow(env: Env, now: Date = new Date()): Promise<C
     since,
     until,
   });
-  // null is "couldn't read" — credentials, permission, timeout, or a GraphQL
-  // error inside a 200. Write nothing; the next run re-covers this window.
-  if (rows === null) return { ok: false, reason: "rum-read-failed", ...empty };
-  if (rows.length === 0) return { ok: true, reason: "no-rows-in-window", ...empty };
 
-  const capturedAt = now.getTime();
+  const empty = { since, until, rowsFetched: 0, rowsWritten: 0, rowsSkipped: 0 };
+
+  // null is "couldn't read" — credentials, permission, timeout, or a GraphQL
+  // error inside a 200. Write no DATA; the next run re-covers this window. The
+  // run is still logged, with ok=0: it doesn't count as coverage, but it proves
+  // the trigger fired, which is what separates "cron is dead" from "cron is
+  // alive and every read is failing". Those need different fixes.
+  if (rows === null) {
+    const result = { ok: false, reason: "rum-read-failed", ...empty };
+    await logRun(result).run();
+    return result;
+  }
+
   const statements: D1PreparedStatement[] = [];
   let skipped = 0;
   for (const row of rows) {
@@ -93,16 +118,23 @@ export async function captureWindow(env: Env, now: Date = new Date()): Promise<C
     }
     statements.push(env.DB.prepare(RUM_UPSERT_SQL).bind(...values));
   }
-  if (statements.length > 0) await env.DB.batch(statements);
 
-  return {
+  // A successful read of an empty window is a real observation, not a
+  // non-event: those days are now known to have had no traffic.
+  const result: CaptureResult = {
     ok: true,
+    ...(rows.length === 0 ? { reason: "no-rows-in-window" } : {}),
     since,
     until,
     rowsFetched: rows.length,
     rowsWritten: statements.length,
     rowsSkipped: skipped,
   };
+  // Batched with the data writes so the log and the rows land together — a run
+  // logged as covering days whose rows failed to write would assert coverage it
+  // doesn't have.
+  await env.DB.batch([...statements, logRun(result)]);
+  return result;
 }
 
 export default {
