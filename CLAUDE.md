@@ -142,6 +142,24 @@ components render unstyled, with no build error.
 top-level import still renders correctly while pulling all of `visx` into
 `_worker.js`. Silent bundle regression, no test failure.
 
+### Never let two workspaces resolve different `vitest` majors
+`@testing-library/jest-dom` does **not** depend on `vitest`, so the
+`import 'vitest'` carrying its matcher augmentation resolves to whichever single
+copy pnpm hoists to `node_modules/.pnpm/node_modules/vitest`. With one version in
+the tree that's unambiguous. Add a workspace on a different major and pnpm hoists
+one of them — if it picks the other one, jest-dom augments a `vitest` module
+nobody type-checks against, and **every** `toBeInTheDocument` / `toHaveClass` /
+`toHaveAttribute` in `packages/ui` fails with `TS2339: Property does not exist on
+type 'Assertion<HTMLElement>'`.
+
+The failure looks nothing like its cause: the errors land in `packages/ui` test
+files that nobody touched, and the hoist can resolve differently on two machines,
+so it reproduces in CI while `pnpm -C packages/ui tsc` passes locally. It cost a
+full diagnostic pass — versions, lockfile, incremental state, filename casing and
+`node_modules` drift all had to be eliminated first. Every workspace is on
+`vitest` `^4.1.5`; keep it that way, and if a new workspace genuinely needs
+another major, expect this and pin the hoist rather than discovering it in CI.
+
 ### Keep these pairs in step
 - `WIDTHS` in `apps/web/scripts/optimize-images.ts` ↔ `apps/web/app/components/Image.tsx`.
   They're `[640, 1080]`. Add a width to one only and the srcset requests variants
