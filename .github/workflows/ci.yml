@@ -37,6 +37,7 @@ jobs:
       - run: pnpm -C apps/admin lint
       - run: pnpm -C packages/ui lint
       - run: pnpm -C packages/data lint
+      - run: pnpm -C apps/rum-archiver lint
       # turbo tsc covers every workspace (apps/web, apps/admin, packages/ui,
       # packages/data) in one task graph.
       - run: pnpm turbo tsc
@@ -82,6 +83,7 @@ jobs:
       - run: pnpm -C apps/admin test:run
       - run: pnpm --filter @form-at/ui test
       - run: pnpm --filter @form-at/data test
+      - run: pnpm -C apps/rum-archiver test:run
 
   # ── Chromatic (Storybook visual regression) ──────────────────────────────
   chromatic:

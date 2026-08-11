@@ -2841,6 +2841,61 @@ no test suite here can prove):
    set's variants (skip-if-exists working against real files, not just the
    unit-tested synthetic case).
 
+### Added 2026-08-11 — RUM archiver: a cron Worker, and why it isn't a Pages Function
+
+Step 2 of IMPROVEMENTS #12. `apps/rum-archiver` is a standalone Worker on a
+daily cron that captures Web Analytics rows into `rum_daily` before Cloudflare
+degrades them.
+
+**Pages cannot run cron — verified, not assumed.** Pages Functions' API
+reference exposes only HTTP handlers (`onRequest`, `onRequestGet`, …) with no
+scheduled handler in the surface at all, and Cloudflare's guidance is to use a
+Worker instead. That's what makes this a third deploy target rather than an
+endpoint on `apps/admin`.
+
+**GitHub Actions was rejected on its failure mode, not its cost.** It needs no
+new target and the secrets already exist — but scheduled workflows are disabled
+after **60 days without a commit**, and only commits reset the clock (tags,
+issues and PR merges don't). On a project heading toward low activity that means
+the archive stops quietly and permanently about two months after the last push,
+which is precisely the scenario it exists to survive. Cloudflare has no notion
+of repository activity.
+
+**Every run re-fetches the whole 7-day unsampled window and upserts.** A missed
+run then costs nothing provided another lands within the week. Worth being
+precise about what that buys: it absorbs TRANSIENT failures — a timeout, a
+missed tick — and would not have rescued the GitHub option, whose failure is
+permanent. It lowered the reliability bar for whichever trigger was chosen; it
+didn't change which one survives neglect.
+
+**The query moved to `packages/data/src/rumArchive.ts`**, shared by the cron and
+the live card. Apps never import each other, but the stronger reason is drift:
+`confidence(level:)` is a required argument whose omission fails inside an HTTP
+200, and that bug ran undetected until a live diagnostic caught it. A second
+copy of the query in the Worker would be a second place for that class of
+mistake to hide.
+
+**Two narrow tokens, not one duplicated.** The Worker's Cloudflare API token
+carries only `Account → Account Analytics → Read`; the dashboard's also carries
+`Zone → Analytics → Read` for `edge_traffic`, which the Worker never touches.
+D1 writes go through a binding, so no D1 permission is needed at all. Better for
+rotation than duplicating: two copies of one token must roll together, while two
+independent narrow tokens roll separately and neither can do the other's job.
+
+**A failed read writes nothing.** In `rum_daily` a missing row and a zero row
+are indistinguishable after the fact, so a partial write would manufacture a gap
+that looks like a quiet week. Locked by a test.
+
+**`CF_ACCOUNT_ID` is not wrangler's deprecated variable.** Wrangler now warns
+that its own `CF_ACCOUNT_ID` env var is superseded by `CLOUDFLARE_ACCOUNT_ID`.
+The repo is unaffected: everything wrangler itself reads (turbo.json,
+deploy.yml, generate-sets-snapshot's error text) already uses the new name, and
+the repo's `CF_ACCOUNT_ID` is a `[vars]` BINDING name we chose, read as
+`env.CF_ACCOUNT_ID` at runtime. The collision is coincidental. Renaming the
+binding to satisfy the warning would break `apps/admin` and the
+`diagnose-visits` script, which reads it out of `wrangler.toml` by regex — so
+both wrangler.toml files carry a comment saying so.
+
 ### Added 2026-08-09 — admin dashboard: a `visits` card from Web Analytics (RUM), beside `edge_traffic`
 
 Built on `feat/rum-visitors-card`. The point of the pairing: `edge_traffic` and
@@ -3061,6 +3116,152 @@ telling a reader to check credentials when the honest answer was "the beacon
 started collecting today". Wrong for this dataset specifically: unlike
 edge_traffic, whose window is never legitimately empty, a beacon starts empty by
 definition.
+
+*First live run — three things settled with data, not inference.*
+
+1. **`estimate` is identical to `sum { visits }`** (12 vs 12), so the plain sum
+   was dropped from the query. One number beats two a reader has to reconcile.
+   It had been serving as a fallback for a row with no confidence block; without
+   it, such a response now returns **null** rather than 0 — there is no visit
+   count to report, and §1 forbids substituting 0 for a metric that didn't load.
+
+2. **`isValid` is false on every day**, and not because of sampling — the
+   samples are simply tiny (n = 4, 6, 1, 1), so the intervals come back
+   degenerate: `[4,4]`, `[6,6]`. The card suppresses bounds and chart, which is
+   the design working rather than failing. The interval machinery stays in place
+   precisely because it self-corrects: it re-appears when volume makes it
+   meaningful, so removing it would only mean rebuilding it later. The
+   suppression caption now says so explicitly, because "too few samples" alone
+   reads like a fault.
+
+3. **RUM records bots — confirmed in our own data**, not just inferred from
+   Cloudflare's docs: the 2026-08-09 rows include a `bot=1` group. The original
+   assumption ("the beacon is JavaScript, so bots won't run it") was wrong twice
+   over — first contradicted by the docs' "Exclude Bots" dimension, then by our
+   own dataset. **The bot exclusion is load-bearing, not precautionary**: without
+   it this card would silently include crawler traffic while claiming to count
+   real browsers.
+
+*The `isValid` AND rule could never unlock — found on the live card.* Validity
+was aggregated as `conf.every(c => c.isValid !== false)` across every daily row.
+Sound-sounding ("a window is only as trustworthy as its least trustworthy day")
+and wrong in practice: over ~57 days there is always a quiet day with n=1, so
+the AND was permanently false and the chart could never appear however much
+traffic grew. A permanent suppression wearing a temporary one's clothes.
+
+Split into two questions that were being conflated:
+- **Does the window total's interval say anything?** Now `upper > lower` on the
+  SUMMED bounds — degenerate bounds carry no information whatever Cloudflare
+  says about them, and one quiet day can't veto the rest. Summing per-day bounds
+  is a conservative containment: if each day's true value lies in its own
+  bounds, the total lies in the sum.
+- **Is the daily trend honest?** That depends on sampling, not on interval
+  width. `avg { sampleInterval }` is queried again for exactly this: at 1 the
+  daily figures are EXACT COUNTS and the shape is real, however small the
+  numbers — smallness makes an interval meaningless, not a count wrong. Only
+  extrapolated figures with no usable interval make the shape an artefact, and
+  only then is the chart withheld.
+
+*The "too few samples (12)" beside "visits: 120" was a real bug, not wording.*
+The two figures reduce over the SAME rows, so they could never disagree by
+window — ruling that out left the data. Two causes, both fixed: `sampleSize` was
+summed with `?? 0`, so rows that omit it contributed silently and produced a
+small, confident, meaningless total (now `null` when no row reports one, and the
+caption omits it rather than printing a fabricated number); and it was being
+compared to the wrong quantity in the first place — Cloudflare defines it as
+"samples that contributed to the estimate", i.e. pageload EVENTS, so it tracks
+`pageloads`, not `visits`. Two different quantities placed side by side as
+though comparable.
+
+*Sampling is a property of the data's AGE, not the query — and the visits
+window is now 7 days because of it.* An initial 7-day probe showed
+`estimate == sampleSize` on every row and was read as "unsampled". A 60-day
+probe returned intervals of 10 and 16.67. The tempting conclusion — "the width
+of the query decides" — is wrong and implies a lever that doesn't exist:
+Cloudflare retains beacon data **unsampled for 7 days, then aggregates it to
+around 10%**, so rows simply degrade as they age. ANY window past a week drags
+in already-degraded data, permanently, and no width recovers it.
+
+So the `visits` window is pinned at `RUM_WINDOW_DAYS = 7`, entirely inside the
+unsampled period. What the 60-day window was actually reporting: 120 visits
+extrapolated from **12 real observations**, with only **11 of 55 days** carrying
+any rows — sampling had deleted whole days. That isn't history worth keeping
+over exactness. At 7 days: exact counts, every day present, a real chart, and no
+extrapolation caveats. `edge_traffic` keeps its 60 days, since zone request data
+isn't sampled this way.
+
+That also settles what `sampleSize` means: `sampleSize x sampleInterval ~= visits`
+(11 x 1 = 11 at 7 days; 12 x 10 = 120 at 60). It is the RAW count behind the
+extrapolated estimate — not a page-load count, and not comparable to `visits`
+directly. An intermediate fix asserting it tracked `pageloads` was wrong too
+(11 vs 23 raw), and its test was corrected rather than left passing on a false
+premise.
+
+*Two more corrections from re-running the diagnostic, both understating or
+overstating precision.* The card reported the MAXIMUM per-row `sampleInterval`,
+so with live rows at 10 and 16.67 it would have said "1-in-17" about a total
+that was actually scaled by exactly 10 (120 visits from 12 samples). And the
+window "span" was measured to TODAY, while the newest row was two days older —
+so a "spread across 57d" caption overstated coverage by exactly that gap.
+
+Both fixed by separating questions that had been sharing one number, the same
+pattern as the interval/chart split above:
+- **"Was any of this extrapolated?"** → `countsAreExact`, from the coarsest
+  row. Conservative on purpose: understating sampling would chart an artefact
+  as real traffic. The two can disagree — a row can advertise an interval its
+  own estimate doesn't reflect — and each answer is right for its own question.
+- **"By how much was the number on screen scaled?"** → `sampleInterval`, now
+  the effective factor `visits / sampleSize`. It describes the total a reader
+  is looking at rather than one row.
+- **"What period does the data cover?"** → the `startDay`–`endDay` pair, shown
+  directly instead of a computed span that silently ran to "now".
+
+*What the narrowing made dormant, and what it deleted.* Nothing sampling-related
+was removed: Cloudflare's query-time sampling is volume-driven as well as
+age-driven, so a high-traffic future could sample even a 7-day window. So
+`countsAreExact`, the `sampleInterval` reporting and the chart-suppression
+branch all stay — currently unreachable, deliberately kept, and covered by unit
+tests rather than by any live path.
+
+What DID go is the RUM retention read. `resolveRumWindowDays` queried the
+account settings node to clamp the window against `notOlderThan`; with a fixed
+7-day window that clamp can never bind, since retention runs to at least 56 days
+(the 60-day probe returned rows from 55 days back). It was a round-trip on every
+dashboard load that could not change the answer. Deleted, along with
+`boundaryKnown`, which existed only to disclose that read failing. `edge_traffic`
+keeps its own boundary read — 60 days genuinely can exceed a zone's retention.
+
+*Span is not coverage.* `windowDays` measures from the oldest row to today: on
+the live card a 57-day span carried only **11 days** of rows. A caption reading
+"57 of 60 retained days have data" off that span was false. `daysWithData` now
+counts distinct days that actually returned rows, and the caption states both —
+noting that a day with no rows isn't necessarily a day with no traffic, since
+sampling drops low-volume days from wide windows.
+
+*Two captions asserted causes they couldn't know.* The suppression caption said
+"too few samples (12)" beside "visits: 120" — two numbers with no stated
+relationship, implying they described the same thing. And the coverage caption
+claimed "the beacon started collecting recently" for a 57-of-60-day window, when
+the beacon had in fact been collecting for months via edge injection and had
+only just stopped. Both now state what is observable and claim no cause: why the
+earlier days are empty is not knowable from this data.
+
+*Small-n honesty for the bot share.* At a dozen page loads, one extra bot moves
+the share from 8% to 17% — a swing that reads as a finding when it's noise. The
+data layer therefore reports raw counts (`botPageloads` / `totalPageloads`) and
+the card only adds a percentage above its own
+`MIN_PAGELOADS_FOR_BOT_SHARE`.
+
+That constant is deliberately separate from `MIN_SAMPLE_FOR_RATE`, despite
+being the same shape of rule. The first instinct was to share it — one
+mechanism, no new threshold to justify — but the two live at different orders
+of magnitude: `MIN_SAMPLE_FOR_RATE`'s 10 is a floor over PROMPT IMPRESSIONS,
+where double digits is a real sample, while page loads accumulate far faster,
+so 10 of them is a fraction of an hour and would stop suppressing long before
+the percentage settles. Sharing the name would also mean tuning one metric
+silently retunes the other. Same reasoning as §1 not taking one entry per
+feature: a shared name implies a shared meaning. 100 is chosen so one extra bot
+moves the figure by about a percentage point rather than eight.
 
 *Credentials.* `CF_ANALYTICS_TOKEN` is a Pages secret. `CF_ZONE_ID` is a plain
 `[vars]` entry in `apps/admin/wrangler.toml`, deliberately NOT a secret: it's a
@@ -3419,6 +3620,134 @@ off `RecentlyDeletedSets`; attempt a second restore on that same (now-
 restored) entry, confirm the 404; delete a set, upload a new unrelated set
 reusing that same id, then attempt restoring the original deletion,
 confirming the 409 names the conflict rather than failing generically.
+
+---
+
+## Archiving Cloudflare RUM into D1 before it degrades (2026-08)
+
+Cloudflare keeps Web Analytics beacon data exact for 7 days, then aggregates
+it to roughly 10%. That's a property of the data's **age**, not of how wide a
+query is — a distinction that cost a round of wrong reasoning here, because a
+60-day query and a 7-day query returning different `sampleInterval`s looks
+like the query width deciding it. It isn't: the older rows had already
+degraded in place. Past a week the numbers stop being recoverable, so the
+only way to keep an accurate long-run record is to copy each day out while
+it's still exact.
+
+Shipped as four separate reviewed steps: the `rum_daily` table, a standalone
+Worker on a cron, the `visits_history` card reading D1, and the staleness
+disclosure.
+
+**Pages Functions cannot run cron** — only `onRequest*` handlers exist, so
+`apps/admin` could not host the capture no matter how it was written. Hence
+`apps/rum-archiver`, a standalone Worker with `crons = ["17 3 * * *"]`. It
+was worth checking rather than assuming: the alternative design (a scheduled
+GitHub Actions workflow) also carries a trap — **Actions disables a scheduled
+workflow after 60 days without a commit**, and only a commit resets that
+clock, so a quiet repo silently stops capturing.
+
+Two Cloudflare API tokens, deliberately not one: the dashboard's needs
+`Zone Analytics:Read` + `Account Analytics:Read`; the archiver's needs only
+`Account Analytics:Read`, because its writes go through the D1 **binding**
+rather than the API. Reusing one token would hand each job permissions it
+has no use for.
+
+**The upsert guard is the subtle part.** Each run re-fetches the trailing 7
+days, so a day gets written repeatedly — and a late run can see a *degraded*
+version of a day an earlier run captured exactly. Blind upsert would let the
+worse copy overwrite the better one. Hence
+`WHERE excluded.sample_interval <= rum_daily.sample_interval`: equal-quality
+refreshes and degraded→exact upgrades both apply, exact→degraded doesn't.
+Verified against in-memory SQLite rather than reasoned about, because it
+fails silently and only in hindsight.
+
+### Real zeros vs days nobody looked at
+
+The history card's load-bearing distinction. A day with no row means one of
+two completely different things: it was captured and genuinely had no
+traffic, or no capture ever covered it. Rendering both as `0` would draw an
+outage as a week of confident flat traffic — wrong in a way that looks
+entirely normal.
+
+So coverage is reconstructed as a **union of each run's trailing 7-day
+window** (`coveredDays` in `apps/admin/app/data/rum-history.ts`), and only
+days inside that union can be zero; the rest are `null`. `TrendChart` was
+changed to take `(number | null)[]` for this — it previously couldn't express
+a hole at all, and mapping unknown to 0 to fit the component would have been
+the bug itself. Nulls paint as faint grey full-height bands and are excluded
+from latest/peak/all-zero. Two captures a fortnight apart must leave the
+middle uncovered; that case has a direct test, since the failure mode is
+invisible until someone compares against Cloudflare months later.
+
+**Cross-validation worth recording, not just "it passed":** the archiver's
+first live capture and the independently written diagnostic script
+(`apps/admin/scripts/diagnose-visits.mjs`) agreed to the unit — 11 visits, 23
+page loads, 4 days carrying rows (Aug 7–10), 3 human rows and the single
+Aug 9 bot row. Two separately authored query/aggregation paths landing on the
+same numbers is the strongest evidence this integration has that the GraphQL
+query, the bot split and the day bucketing are all right; a single path
+agreeing with itself would have proved nothing.
+
+### Coverage has to be recorded, not inferred — `rum_capture_runs`
+
+The first version derived coverage from `SELECT DISTINCT captured_at FROM
+rum_daily`, which was appealing because it needed no extra bookkeeping. It was
+wrong, in exactly the shape this card exists to prevent, and it arrived through
+the back door.
+
+A run over a window with **no traffic** writes no rows — `captureWindow` treats
+`rowsWritten: 0` as a valid outcome — so it leaves no `captured_at` and is
+indistinguishable afterwards from a run that never happened. Reconstructed
+against a healthy cron and a genuinely quiet week, seven observed days rendered
+as seven "nobody looked" gaps. At this volume (single-digit daily visits, days
+that are already zero) a quiet week is entirely plausible, not a thought
+experiment.
+
+Two more defects fell out of the same root: `lastCapturedAt` actually meant
+"last run that *wrote a row*", so a quiet stretch would make the card assert the
+cron had stopped; and `coveredDays` applied *today's* `RUM_UNSAMPLED_DAYS` to
+every historical run, so changing that constant would retroactively rewrite what
+past runs were claimed to have observed.
+
+So the archiver now writes `rum_capture_runs` — one row per run, on every path,
+including failures — and coverage is the union of the windows of runs where
+`ok = 1`. The window is stored per run rather than recomputed. Backfilled from
+the runs already evidenced by `rum_daily`, so the change preserved the existing
+rendering exactly and left no dual-read path behind.
+
+**Rejected alternatives:** a sentinel row in `rum_daily` (say `is_bot = -1`) to
+carry a `captured_at` on empty windows — no new table, but it puts non-data in
+the data table, every future reader needs a filter it can silently forget, and
+it still can't record a failed run distinctly. And materialising explicit zero
+rows for observed days — there's no `sample_interval` to claim for a row
+Cloudflare never returned, it collides with the upsert guard, and the archive
+stops being a faithful copy of the source.
+
+**Staleness needs two signals, not one.** Logging failures and then collapsing
+them back together at read time would waste the distinction. `lastRunAt` answers
+*is the cron firing?*; `lastSuccessAt` answers *is it capturing anything?* A cron
+that fires daily and fails every read is fresh by the first and stale by the
+second — the exact scenario the warning exists for, and one that a single
+"last run" figure would render as perfectly healthy. Conversely a single "last
+successful capture" figure would render a quiet week as a dead cron. The card
+warns on either being too old and **names which**, because "cron last ran today
+but hasn't succeeded in 9 days" (check the token) and "cron hasn't run in 9 days"
+(check the trigger) send you to completely different places.
+
+The threshold is 8 days — one unsampled window plus a day of slack, since inside
+the window a missed run costs nothing because the next one re-fetches it.
+
+**It stays pull-only, deliberately.** Nothing pushes an alert; a stopped cron is
+discovered by someone opening the dashboard. That's an accepted limit for an
+internal page three people read, and the card says so in its own text rather than
+leaving the reader to assume they'd be told. Both figures render
+unconditionally — an earlier version showed the disclosure only when the archive
+was fresh, hiding it at exactly the moment it mattered.
+
+**Rejected:** stitching the archive and the live Cloudflare read into one
+series. They have different provenance (D1 rows from a cron vs a live API
+call) and one number spanning both would hide precisely the seam this
+dashboard has repeatedly got wrong. Two cards, stated separately.
 
 ## Reference — key design decisions from the PWA work
 

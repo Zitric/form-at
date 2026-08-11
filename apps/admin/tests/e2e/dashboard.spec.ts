@@ -263,20 +263,72 @@ test.describe("admin dashboard", () => {
 
   test("visits card states what a visit is and that bots are excluded", async ({ page }) => {
     await gotoAndHydrate(page, "/dashboard");
-    await expect(page.getByText("// visits")).toBeVisible();
+    // `exact` is load-bearing: "// visits_history" contains "// visits", so a
+    // substring match resolves to both cards and fails strict mode. Same reason
+    // the card filter below matches on an exact child rather than `hasText`.
+    await expect(page.getByText("// visits", { exact: true })).toBeVisible();
     // The definition is the whole disclosure: a visit is an arrival, not a
     // session and not a person.
     await expect(page.getByText(/arriving from a different site or a direct link/i)).toBeVisible();
     await expect(page.getByText(/can't count distinct humans/i)).toBeVisible();
-    // The interval is the disclosure, not a sample rate — and it's labelled
-    // with the level it was computed at.
-    await expect(page.getByText(/95% interval/)).toBeVisible();
-    // The fixture's 30d window is shorter than the 60d ask, so the
-    // short-window disclosure must appear — a low count has to read as
-    // "recently started collecting", not "nobody visits".
-    await expect(page.getByText(/only 30d of data exists/i)).toBeVisible();
+    // The fixture models the ORDINARY 7-day state: unsampled, so exact counts
+    // and a real chart, but a degenerate interval at this volume — so the
+    // bounds row is correctly absent rather than showing "41 – 41".
+    await expect(page.getByText(/95% interval/)).toHaveCount(0);
+    await expect(
+      page.getByText(/Unsampled at this volume, so these are exact counts/i),
+    ).toBeVisible();
+    // Exact counts chart even without a usable interval — the split that
+    // replaced an AND rule which could never unlock.
+    await expect(
+      page
+        .getByTestId("dashboard-card")
+        .filter({ has: page.getByText("// visits", { exact: true }) })
+        .getByTestId("trend-chart"),
+    ).toBeVisible();
+    // Full coverage in the fixture (7 of 7 days), so no coverage caption.
+    await expect(page.getByText(/carry data, between/i)).toHaveCount(0);
     // Sits beside edge_traffic so the gap between the two is visible.
     await expect(page.getByText("// edge_traffic")).toBeVisible();
+  });
+
+  test("visits_history draws uncovered days as gaps, not as zero traffic", async ({ page }) => {
+    await gotoAndHydrate(page, "/dashboard");
+    await expect(page.getByText("// visits_history")).toBeVisible();
+
+    const historyCard = page.getByTestId("dashboard-card").filter({ hasText: "// visits_history" });
+    await expect(historyCard.getByTestId("trend-chart")).toBeVisible();
+
+    // The failure this card exists to prevent: a stretch nobody captured
+    // rendering as a confident flat zero. The fixture's first 3 days are
+    // uncovered, so they must paint as gaps and be excluded from the bar count.
+    await expect(historyCard.getByTestId("chart-gap")).toHaveCount(3);
+    await expect(historyCard.getByTestId("chart-bar")).toHaveCount(7);
+
+    // Coverage stated in text, not left to be inferred from the shading.
+    await expect(historyCard.getByText("days_not_captured")).toBeVisible();
+    await expect(historyCard.getByText(/unknown rather than zero/i)).toBeVisible();
+    // Daily buckets — a weekly caption here would mean the series got bucketed.
+    await expect(historyCard.getByText(/^10 days, /)).toBeVisible();
+  });
+
+  test("visits_history reports both staleness signals, and says they're pull-only", async ({
+    page,
+  }) => {
+    await gotoAndHydrate(page, "/dashboard");
+    const historyCard = page.getByTestId("dashboard-card").filter({ hasText: "// visits_history" });
+
+    // "Did the cron fire?" and "did it capture anything?" are different
+    // questions with different fixes — a cron firing daily whose every read
+    // fails is fresh by the first and stale by the second. Both are always
+    // stated, so one can never mask the other.
+    await expect(historyCard.getByText(/cron last ran/i)).toBeVisible();
+    await expect(historyCard.getByText(/last successful capture/i)).toBeVisible();
+    // Whoever reads this must not assume they'd be told if the capture stopped.
+    await expect(historyCard.getByText(/nothing pushes an alert/i)).toBeVisible();
+    // The fixture is healthy on both, so neither warning should be showing.
+    await expect(historyCard.getByText(/the cron itself has stopped firing/i)).toHaveCount(0);
+    await expect(historyCard.getByText(/every read is failing/i)).toHaveCount(0);
   });
 
   test("edge_traffic is labelled as edge requests, never as visitors", async ({ page }) => {

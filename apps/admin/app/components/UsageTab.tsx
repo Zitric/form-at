@@ -2,9 +2,12 @@ import { Label, Muted, TerminalRow } from "@form-at/ui";
 import { Await } from "@tanstack/react-router";
 import { Suspense } from "react";
 import type { AdminDashboardStats } from "~/data/admin-stats";
+import { MIN_PAGELOADS_FOR_BOT_SHARE } from "~/data/cf-analytics";
 import type { EdgeTraffic, RumVisits } from "~/data/cf-analytics";
+import type { RumHistory } from "~/data/rum-history";
 import { DashboardCard } from "./DashboardCard";
 import { TrendChart } from "./TrendChart";
+import { VisitsHistoryCard } from "./VisitsHistoryCard";
 
 interface UsageTabProps {
   stats: AdminDashboardStats;
@@ -13,6 +16,9 @@ interface UsageTabProps {
   edgeTraffic: Promise<EdgeTraffic | null>;
   /** Deferred, and fetched independently of edgeTraffic — see dashboard.tsx. */
   rumVisits: Promise<RumVisits | null>;
+  /** The archived series from D1 — deferred separately from `rumVisits` so a
+   *  slow Cloudflare API can't delay a local database read, and vice versa. */
+  rumHistory: Promise<RumHistory | null>;
 }
 
 // Sits beside edge_traffic so the two numbers can be compared directly: this
@@ -25,8 +31,9 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
       <Muted className="block text-xs">
         couldn't read — the Cloudflare Analytics credentials are missing, the token lacks Account
         Analytics:Read (a different permission from the zone one edge_traffic uses), or the API
-        didn't answer. This is a failed read, NOT "zero visits": an empty window reports itself
-        separately. Deliberately blank rather than 0.
+        didn't answer with the fields this needs. This is a failed read, NOT "zero visits": an empty
+        window reports itself separately. Deliberately blank rather than 0. Run `pnpm -C apps/admin
+        diagnose-visits` to see which.
       </Muted>
     );
   }
@@ -45,6 +52,16 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
   }
 
   const pct = (n: number) => Math.round(n * 100);
+  // Two different questions, deliberately answered by two different numbers:
+  // `countsAreExact` asks "was ANY of this extrapolated?" (conservative, from
+  // the coarsest row), while `sampleInterval` reports the effective factor
+  // behind the total actually on screen.
+  const countsAreExact = rum.countsAreExact;
+  const chartIsHonest = countsAreExact || rum.intervalValid;
+  const botsExcludedLabel =
+    rum.totalPageloads >= MIN_PAGELOADS_FOR_BOT_SHARE
+      ? `${rum.botPageloads} / ${rum.totalPageloads} (${pct(rum.botPageloads / rum.totalPageloads)}%)`
+      : `${rum.botPageloads} / ${rum.totalPageloads}`;
   return (
     <>
       <div className="space-y-1">
@@ -57,22 +74,29 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
           />
         )}
         <TerminalRow label="page_loads" value={String(rum.pageloads)} dimValue />
-        <TerminalRow label="bots_excluded" value={`${pct(rum.botShare)}%`} dimValue />
+        {/* Counts, not a bare percentage: at a denominator of a dozen page
+            loads "17%" swings to "8%" on one bot and reads far more precise
+            than it is. The percentage joins in only above
+            MIN_PAGELOADS_FOR_BOT_SHARE — its own floor, not notify_funnel's:
+            same rule, very different scale. */}
+        <TerminalRow label="bots_excluded" value={botsExcludedLabel} dimValue />
         <TerminalRow label="window" value={`${rum.windowDays}d`} dimValue />
       </div>
-      {rum.intervalValid ? (
+      {chartIsHonest ? (
         <div className="mt-3">
           <Label className="mb-1 block text-xs text-grey">since {rum.startDay}</Label>
           <TrendChart data={rum.weeklyVisits} />
         </div>
       ) : (
-        // Cloudflare's own isValid, not a threshold invented here: with too few
-        // samples the interval is meaningless, so neither bounds nor a curve
-        // are shown — both would read as precision that doesn't exist.
+        // Reached only when the figures are EXTRAPOLATED and the interval is
+        // degenerate. Exact (unsampled) counts always get a chart, however
+        // small — smallness makes an interval meaningless, not a count wrong.
         <p className="mt-3 text-xs text-grey/70">
-          too few samples ({rum.sampleSize}) to characterise — Cloudflare reports the confidence
-          interval as invalid at this volume, so no range and no chart are shown. The visit count
-          above is still its best estimate.
+          no trend shown: these figures are extrapolated from a 1-in-
+          {Math.round(rum.sampleInterval)} sample
+          {rum.sampleSize === null ? "" : ` (${rum.sampleSize} sampled page loads)`}, and the
+          confidence interval is too wide to be useful, so the day-to-day shape would be an artefact
+          of which events happened to be sampled rather than of real traffic.
         </p>
       )}
       <p className="mt-3 text-xs text-grey/70">
@@ -83,26 +107,23 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
       </p>
       <p className="mt-1 text-xs text-grey/70">
         real browsers running the beacon, with Cloudflare's bot-flagged rows removed — which is why
-        this is far below edge_traffic. Adaptively sampled, so it's an estimate
-        {rum.intervalValid ? " with the interval shown above" : ""}.
+        this is far below edge_traffic.{" "}
+        {countsAreExact
+          ? "Unsampled at this volume, so these are exact counts."
+          : `Sampled 1-in-${Math.round(rum.sampleInterval)}, so these are estimates.`}
       </p>
       {rum.windowDays < rum.requestedWindowDays && (
         // Compared against what was REQUESTED (retention-clamped), not the
-        // chart maximum: data shorter than retention allows means the beacon
-        // genuinely started collecting recently, which is the thing worth
-        // saying. Against the maximum this would fire forever whenever
-        // retention is under 60 days and blame collection for retention.
-        // Derived, so it self-corrects and disappears once history fills the
-        // window — same pattern as app_launches' `tracking since`.
+        // chart maximum — against the maximum this fires forever whenever
+        // retention is under 60 days. States COVERAGE only: an earlier version
+        // asserted "the beacon started collecting recently", which was simply
+        // false (it had been collecting for months via edge injection) and is
+        // not knowable from this data either way.
         <p className="mt-1 text-xs text-grey/70">
-          only {rum.windowDays}d of data exists (since {rum.startDay}), out of the{" "}
-          {rum.requestedWindowDays}d available — the beacon started collecting recently, so a low
-          count reflects that rather than low traffic.
-        </p>
-      )}
-      {!rum.boundaryKnown && (
-        <p className="mt-1 text-xs text-grey/70">
-          retention boundary couldn't be read this time, so the full window was requested.
+          {rum.daysWithData} {rum.daysWithData === 1 ? "day" : "days"} carry data, spread across the{" "}
+          {rum.windowDays}d since {rum.startDay}, out of {rum.requestedWindowDays}d retained. Days
+          with no rows aren't necessarily days with no traffic — Cloudflare's sampling drops
+          low-volume days from wide windows — so this states coverage and claims no cause.
         </p>
       )}
     </>
@@ -168,7 +189,7 @@ function EdgeTrafficCard({ edge }: { edge: EdgeTraffic | null }) {
 // calendar_add_click carries no set_id/event_id (see trackableEvents.ts), so
 // it's a bare total like app_launches rather than a per-entity breakdown
 // that would need its own tab.
-export function UsageTab({ stats, edgeTraffic, rumVisits }: UsageTabProps) {
+export function UsageTab({ stats, edgeTraffic, rumVisits, rumHistory }: UsageTabProps) {
   return (
     // Two columns above mobile, matching SetsTab. Three columns made each card
     // too narrow for its TerminalRow label/value pairs.
@@ -234,6 +255,16 @@ export function UsageTab({ stats, edgeTraffic, rumVisits }: UsageTabProps) {
         <Label className="mb-2 text-grey tracking-widest">{"// visits"}</Label>
         <Suspense fallback={<Muted className="block text-xs">reading…</Muted>}>
           <Await promise={rumVisits}>{(rum) => <VisitsCard rum={rum} />}</Await>
+        </Suspense>
+      </DashboardCard>
+
+      {/* Sits beside `visits` rather than merging with it: same metric, but one
+          is a live read of the last 7 days and the other is the D1 archive.
+          Two cards keep the provenance visible instead of hiding a seam. */}
+      <DashboardCard>
+        <Label className="mb-2 text-grey tracking-widest">{"// visits_history"}</Label>
+        <Suspense fallback={<Muted className="block text-xs">reading…</Muted>}>
+          <Await promise={rumHistory}>{(h) => <VisitsHistoryCard history={h} />}</Await>
         </Suspense>
       </DashboardCard>
 

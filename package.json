@@ -18,6 +18,7 @@
     "format": "biome format --write .",
     "check": "biome check --write . && turbo tsc",
     "knip": "knip",
+    "dump-diff": "node scripts/dump-diff.mjs",
     "test": "turbo test:run",
     "test:web": "turbo test:run --filter=@form-at/web",
     "test:admin": "turbo test:run --filter=@form-at/admin",

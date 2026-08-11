@@ -10,7 +10,8 @@ import { niceIntegerTicks } from "~/utils/chartTicks";
 import { bucketStartDates } from "~/utils/trendDates";
 
 interface TrendChartInnerProps {
-  data: number[];
+  /** `null` = not observed, drawn as a shaded gap. See TrendChart.tsx's prop doc. */
+  data: (number | null)[];
   bucketDays: number;
 }
 
@@ -32,19 +33,23 @@ const shortDateFormat = new Intl.DateTimeFormat(undefined, { month: "short", day
 // rendering, no shared code between the two apps.
 export function TrendChartInner({ data, bucketDays }: TrendChartInnerProps) {
   const dates = useMemo(() => bucketStartDates(data.length, bucketDays), [data.length, bucketDays]);
-  const maxValue = Math.max(1, ...data);
-  const latest = data.at(-1) ?? 0;
-  const peak = Math.max(0, ...data);
+  // Unobserved buckets are excluded from every summary figure — a gap must not
+  // drag the peak or the scale toward zero as though it were a low reading.
+  const observed = data.filter((v): v is number => v !== null);
+  const maxValue = Math.max(1, ...observed);
+  const latest = observed.at(-1) ?? 0;
+  const peak = Math.max(0, ...observed);
+  const gapCount = data.length - observed.length;
   // Distinct from the empty-array case below: real buckets exist, every one
   // is genuinely 0. The chart frame stays (a tracked window where nothing
   // happened is a different fact from "never tracked"), but a bare axis
   // frame with no bars reads as broken next to a nonzero total elsewhere on
   // the card — this note makes the flatness read as deliberate.
-  const isAllZero = data.length > 0 && data.every((value) => value === 0);
+  const isAllZero = observed.length > 0 && observed.every((value) => value === 0);
 
   const { tooltipData, tooltipLeft, tooltipTop, tooltipOpen, showTooltip, hideTooltip } =
     useTooltip<{
-      value: number;
+      value: number | null;
       date: Date;
     }>();
 
@@ -101,8 +106,36 @@ export function TrendChartInner({ data, bucketDays }: TrendChartInnerProps) {
                 {data.map((value, i) => {
                   const date = dates[i] ?? new Date();
                   const barWidth = xScale.bandwidth();
-                  const barHeight = innerHeight - yScale(value);
                   const barX = xScale(i) ?? 0;
+                  // null = not observed. Drawn as a faint full-height band
+                  // rather than a bar, because a zero-height bar is visually
+                  // identical to a real 0 — and conflating "nobody looked" with
+                  // "nobody visited" is the whole thing this chart must not do.
+                  // Shaded in grey, never the data colour, so it can't be read
+                  // as a tall value.
+                  if (value === null) {
+                    return (
+                      <rect
+                        key={date.getTime()}
+                        data-testid="chart-gap"
+                        x={barX}
+                        y={0}
+                        width={barWidth}
+                        height={innerHeight}
+                        fill={colors.grey}
+                        opacity={0.12}
+                        onPointerEnter={() =>
+                          showTooltip({
+                            tooltipData: { value: null, date },
+                            tooltipLeft: barX + barWidth / 2,
+                            tooltipTop: 0,
+                          })
+                        }
+                        onPointerLeave={hideTooltip}
+                      />
+                    );
+                  }
+                  const barHeight = innerHeight - yScale(value);
                   const barY = innerHeight - barHeight;
                   return (
                     <rect
@@ -166,14 +199,20 @@ export function TrendChartInner({ data, bucketDays }: TrendChartInnerProps) {
           left={tooltipLeft}
           className="bg-black border border-grey/30 text-white font-mono text-xs px-2 py-1 pointer-events-none"
         >
-          {tooltipData.value} · {shortDateFormat.format(tooltipData.date)}
+          {tooltipData.value === null ? "not captured" : tooltipData.value} ·{" "}
+          {shortDateFormat.format(tooltipData.date)}
         </TooltipWithBounds>
       )}
       {/* Canvas/SVG bars carry no information for screen readers — this
           mirrors the same figures in text so the data exists in the
           accessibility tree either way. */}
+      {/* The unit follows `bucketDays` — it used to be hardcoded "weeks", which
+          read as "30 weeks" on the daily history chart. Gaps are named rather
+          than folded into the count, since "28 days" over a series that only
+          observed 4 of them would overstate what's known. */}
       <p className="sr-only">
-        {data.length} weeks, latest {latest}, peak {peak}
+        {data.length} {bucketDays === 1 ? "days" : "weeks"}, latest {latest}, peak {peak}
+        {gapCount > 0 ? `, ${gapCount} not captured` : ""}
       </p>
       {isAllZero && <Muted className="text-xs -mt-1">no activity in this window</Muted>}
     </div>

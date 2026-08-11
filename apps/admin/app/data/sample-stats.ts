@@ -1,31 +1,76 @@
 import type { SetStats } from "@form-at/data/set-stats";
 import type { AdminDashboardStats } from "./admin-stats";
 import type { EdgeTraffic, RumVisits } from "./cf-analytics";
+import type { RumHistory } from "./rum-history";
+
+// Substituted by `fetchRumHistory` when there's no Cloudflare env.
+//
+// Modelled on the REAL archive after its first capture (2026-08-11), including
+// its awkward shapes rather than an idealised run: only 4 of the 7 covered days
+// carry rows, one day is bot-only, and the counts are single digits. It also
+// includes a deliberate UNCOVERED stretch before the archive started, so local
+// dev and e2e exercise the gap rendering — the case that matters most, since a
+// gap silently drawn as zero is the failure this card exists to prevent.
+const SAMPLE_HISTORY_DAYS: RumHistory["days"] = [
+  // Never captured — the archiver didn't exist yet.
+  { day: "2026-08-02", visits: null, pageLoads: null, botPageLoads: null },
+  { day: "2026-08-03", visits: null, pageLoads: null, botPageLoads: null },
+  { day: "2026-08-04", visits: null, pageLoads: null, botPageLoads: null },
+  // Covered from here. 08-05 and 08-06 were observed and genuinely had nothing.
+  { day: "2026-08-05", visits: 0, pageLoads: 0, botPageLoads: 0 },
+  { day: "2026-08-06", visits: 0, pageLoads: 0, botPageLoads: 0 },
+  { day: "2026-08-07", visits: 4, pageLoads: 10, botPageLoads: 0 },
+  { day: "2026-08-08", visits: 6, pageLoads: 12, botPageLoads: 0 },
+  // Bot-only day: a crawler was the sole page load.
+  { day: "2026-08-09", visits: 0, pageLoads: 0, botPageLoads: 1 },
+  { day: "2026-08-10", visits: 1, pageLoads: 1, botPageLoads: 0 },
+  { day: "2026-08-11", visits: 0, pageLoads: 0, botPageLoads: 0 },
+];
+
+export const SAMPLE_RUM_HISTORY: RumHistory = {
+  days: SAMPLE_HISTORY_DAYS,
+  coverageStart: "2026-08-05",
+  coverageEnd: "2026-08-11",
+  // Healthy on both signals — the ordinary state. The two stall cases (cron
+  // stopped; cron firing but every read failing) are covered by unit tests
+  // rather than made permanently visible in local dev.
+  lastRunAt: Date.parse("2026-08-11T14:20:00Z"),
+  lastSuccessAt: Date.parse("2026-08-11T14:20:00Z"),
+  daysCovered: 7,
+  daysUncovered: 3,
+  totalVisits: 11,
+  isSampleData: true,
+};
 
 // Substituted by `fetchRumVisitStats` when there's no Cloudflare env.
 //
-// A VALID interval so the fixture exercises the chart-and-bounds path; the
-// too-few-samples path is covered by unit tests rather than by making local dev
-// show the degraded card permanently. Visits far below edge requests, and a real
-// bot share, because that gap is the whole reason both cards exist.
+// Modelled on the real 7-day shape: unsampled, exact counts, degenerate
+// interval. That combination is the ORDINARY state at this volume, so the
+// fixture exercises it rather than an idealised one — chart renders, bounds
+// suppressed. Visits far below edge requests, with a real bot share, because
+// that gap is the whole reason both cards exist. The sampled path is covered by
+// unit tests instead of being made permanently visible in local dev.
 export const SAMPLE_RUM_VISITS: RumVisits = {
-  visits: 214,
-  visitsLower: 191,
-  visitsUpper: 237,
-  intervalValid: true,
+  visits: 41,
+  visitsLower: 41,
+  visitsUpper: 41,
+  // Degenerate bounds and no usable interval — the ordinary state at this
+  // volume. The chart still renders, because unsampled counts are exact.
+  intervalValid: false,
+  sampleInterval: 1,
+  countsAreExact: true,
   confidenceLevel: 0.95,
-  sampleSize: 214,
-  pageloads: 389,
-  botShare: 0.31,
-  weeklyVisits: [38, 41, 45, 44, 46],
-  // 30 days of data out of 45 available — exercises the "started recently"
-  // caption via the honest comparison (data shorter than retention), not via a
-  // short retention being mistaken for a late start.
+  sampleSize: 41,
+  pageloads: 96,
+  botPageloads: 7,
+  totalPageloads: 103,
+  weeklyVisits: [41],
   noDataInWindow: false,
-  requestedWindowDays: 45,
-  windowDays: 30,
-  startDay: "2026-07-09",
-  boundaryKnown: true,
+  daysWithData: 7,
+  requestedWindowDays: 7,
+  windowDays: 7,
+  startDay: "2026-08-04",
+  endDay: "2026-08-10",
 };
 
 // Substituted by `fetchEdgeTrafficStats` when there's no Cloudflare env, so

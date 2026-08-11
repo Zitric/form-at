@@ -12,6 +12,7 @@ for the engineering narrative; this file is the operating rules.
 | admin | `apps/admin` | Internal dashboard → `admin.formatglasgow.com`, Cloudflare Access-gated |
 | ui | `packages/ui` | Design system — tokens, primitives, Storybook, Chromatic |
 | data | `packages/data` | Shared catalogue, D1 queries, push sending |
+| rum-archiver | `apps/rum-archiver` | Cron Worker archiving daily RUM rows into D1 → `form-at-rum-archiver` |
 | tsconfig | `packages/tsconfig` | Shared TS config, consumed via `workspace:*` |
 
 **Apps never import each other** — only `packages/*` are shared. New apps go in
@@ -141,6 +142,24 @@ components render unstyled, with no build error.
 top-level import still renders correctly while pulling all of `visx` into
 `_worker.js`. Silent bundle regression, no test failure.
 
+### Never let two workspaces resolve different `vitest` majors
+`@testing-library/jest-dom` does **not** depend on `vitest`, so the
+`import 'vitest'` carrying its matcher augmentation resolves to whichever single
+copy pnpm hoists to `node_modules/.pnpm/node_modules/vitest`. With one version in
+the tree that's unambiguous. Add a workspace on a different major and pnpm hoists
+one of them — if it picks the other one, jest-dom augments a `vitest` module
+nobody type-checks against, and **every** `toBeInTheDocument` / `toHaveClass` /
+`toHaveAttribute` in `packages/ui` fails with `TS2339: Property does not exist on
+type 'Assertion<HTMLElement>'`.
+
+The failure looks nothing like its cause: the errors land in `packages/ui` test
+files that nobody touched, and the hoist can resolve differently on two machines,
+so it reproduces in CI while `pnpm -C packages/ui tsc` passes locally. It cost a
+full diagnostic pass — versions, lockfile, incremental state, filename casing and
+`node_modules` drift all had to be eliminated first. Every workspace is on
+`vitest` `^4.1.5`; keep it that way, and if a new workspace genuinely needs
+another major, expect this and pin the hoist rather than discovering it in CI.
+
 ### Keep these pairs in step
 - `WIDTHS` in `apps/web/scripts/optimize-images.ts` ↔ `apps/web/app/components/Image.tsx`.
   They're `[640, 1080]`. Add a width to one only and the srcset requests variants
@@ -176,6 +195,11 @@ commit; an auto-commit removes that checkpoint.
   files to stage. **Never `git add -A` or `git add .`** — it sweeps up unrelated
   work in progress.
 - **Never** `git commit` (any variant, including `--amend`) or `git push`.
+- **Never `git stash`** (or `git checkout` / `git reset` across branches). Stash
+  mutates the working tree, and a bad `pop` on a branch carrying uncommitted work
+  loses it — the same blast radius as commit and push, so it belongs to the repo
+  owner too. If a task genuinely needs a clean tree to verify something, say so
+  and hand off rather than clearing it yourself.
 - **When a unit of work is done:** stop, say what changed and in which files,
   hand off.
 
@@ -193,6 +217,23 @@ pnpm test       # unit tests, all workspaces
 ```
 
 Add `pnpm knip` when you changed exports or dependencies.
+
+**`pnpm dump-diff`** writes the branch's changes to `.diff-dump/`, split by area
+(packages, each app, config, docs) with a `summary.txt`. It diffs the working
+tree against the merge-base with `origin/main`, so committed, staged and
+unstaged changes all appear without having to choose between them. Generated
+files (lockfile, `routeTree.gen.ts`, `sets.generated.ts`, build output, binaries)
+are excluded but **named in the summary**, so an exclusion can't hide a real
+change. Output is wiped before each run — a leftover file from a previous branch
+is worse than no file. Gitignored.
+
+### Make changes with the edit tools, not shell commands
+
+Edits made through the file-editing tools render as a reviewable diff in the
+console; the same edit applied with `sed`, `python` or a heredoc shows only that
+some command ran, and the change has to be reconstructed from the file
+afterwards. Reach for a shell one-liner only when it genuinely fits — a
+mechanical rename across many files, say — and say so when you do.
 
 **`pnpm test:e2e` and production builds (`pnpm build`) are slow — minutes, not
 seconds.** Run them when the change actually touches what they cover: routes,
@@ -226,10 +267,36 @@ catch the sentence that quietly became untrue, which you can't do from memory.
 | `apps/web/scripts/README.md` | a script, flag or setup step changed. |
 | `apps/web/tests/README.md` | test layout or conventions changed. |
 | `apps/web/images-source/README.md` | the image pipeline changed. |
+| `apps/rum-archiver/README.md` | the capture, its schedule, its token scope or its secrets changed. |
 
 **A change that touches none of these needs no doc edit — say so.** Most
 bug fixes and refactors qualify. "No doc changes needed, nothing above became
 untrue" is a complete and correct answer.
+
+### A new workspace needs a README, and the root README needs to know it exists
+
+The rule above only catches text that *became* false. It cannot catch a doc that
+was never written, because nothing existing contradicts an absence — which is how
+`apps/rum-archiver` shipped, ran on a cron in production and was deployed by CI
+while the root README's structure block still listed five workspaces. Nothing was
+stale; the doc was simply incomplete, and no re-read of it would have flagged
+that.
+
+So when a workspace is **added** — not changed — three things are part of that
+work, not follow-up:
+
+1. **A README in the workspace**, if it has any setup, secret, schedule or
+   deploy target a reader can't infer from its source. A package that is purely
+   library code consumed through an import doesn't need one; anything with an
+   operational surface does.
+2. **The root `README.md`'s structure block and its documentation table**, which
+   are the two places an outside reader learns the workspace exists at all.
+3. **The table in §1's workspace map at the top of this file**, plus §4's
+   architecture map if there's a new area to edit.
+
+Same test for a new **script**: `apps/web/scripts/README.md` claims to document
+every script in that folder, so adding one and not listing it makes the README's
+own framing false. Read the folder against the doc, not just the doc.
 
 ---
 
@@ -280,9 +347,10 @@ by name.
 ### Naming a metric for what it measures
 Where two sources count different things, the label says which. `edge_traffic`
 (`requests`/`page_views`) is Cloudflare edge requests **including bots** — never
-"visitors" or "people", because Cloudflare Web Analytics counts real browsers
-and excludes bots, so the two disagree substantially and a shared label makes
-the smaller number look like a bug. Same reasoning behind `install_to_push`
+"visitors" or "people", because `visits` counts beacon page loads with
+bot-flagged rows removed **by us**, not by Cloudflare (RUM records bots too —
+confirmed in our own data, see PWA_PROGRESS). The two therefore disagree
+substantially, and a shared label makes the smaller number look like a bug. Same reasoning behind `install_to_push`
 being captioned an approximation and `avg_engaged_listening` saying it's
 cumulative. Reasoning per metric lives with the code — `data/cf-analytics.ts`'s
 header for this one.
@@ -329,6 +397,8 @@ things you need *at the moment of editing* that no section heading can give you.
 | Waveform peaks | `scripts/generate-peaks.mjs` (root, needs `ffmpeg` on PATH) | README → *"Waveform peaks are computed with ffmpeg, not in the browser"* |
 | Push sending | `packages/data/src/webPush.ts` | README → *"The standard Web Push library doesn't run on Workers"* |
 | Admin + auth | `apps/admin/app/routes/`, `utils/verifyAccessJwt.ts` | README → *"Admin auth: no auth code, then auth code anyway"*. The enforcement rule is §1. |
+| RUM archive | `apps/rum-archiver/src/index.ts`, query + upsert in `packages/data/src/rumArchive.ts` | Cloudflare degrades beacon data after 7 days, so a cron captures it first. Pages cannot run cron — hence a standalone Worker. Never remove the upsert's `sample_interval` guard: it stops a late run overwriting exact rows. |
+| RUM history card | `apps/admin/app/data/rum-history.ts` (`coveredDays`/`buildHistory`), `components/VisitsHistoryCard.tsx` | PWA_PROGRESS → *Archiving Cloudflare RUM into D1* → "Real zeros vs days nobody looked at" and "Coverage has to be recorded, not inferred". **Never map an uncovered day to `0`** — `TrendChart` takes `(number \| null)[]` precisely so a gap can render as a gap; a zero there draws an outage as flat traffic. Same `null`-not-`0` rule as §1's metric constraint. **Coverage comes from `rum_capture_runs`, never from `rum_daily.captured_at`** — a run over a quiet window writes no rows, so that derivation turns a healthy week into gaps. **Keep `lastRunAt` and `lastSuccessAt` separate**: merged, a cron that fires daily and fails every read reads as healthy. |
 | Cloudflare analytics | `apps/admin/app/data/cf-analytics.ts` — the app's only network calls (zone edge traffic + account RUM visits), both deferred in `routes/dashboard.tsx`'s loader. Diagnose an empty card with `pnpm -C apps/admin diagnose-visits` | That file's headers: what each measures, why edge traffic is never "visitors", why RUM rows are bot-filtered client-side, sampling and retention handling, and why every failure is `null`. Naming rule in §3. |
 | Service worker build | `buildServiceWorker` in `apps/web/vite.config.ts` (owns the precache allowlist and revision derivation) | README → *"Technology choices"*, Workbox entry. `vite-plugin-pwa` is **not** a dependency. |
 | Design system | `packages/ui/src/` — one folder per component, `icons/` flat | README → *"Monorepo structure"* (late extraction, no build step) |
@@ -398,15 +468,22 @@ pnpm test:e2e / test:e2e:web / test:e2e:admin
 pnpm check                        # Biome (whole repo) then turbo tsc
 pnpm lint / pnpm tsc / pnpm knip
 pnpm storybook                    # packages/ui Storybook, :6006
+pnpm dump-diff                    # branch diff → .diff-dump/, split by area, for review
 ```
 
 Everything except `check`/`format`/`knip` is a thin Turbo wrapper; `:web`/`:admin`
 variants add a `--filter`. For a workspace's own scripts: `pnpm -C apps/web <script>`.
 
 `apps/web` scripts — `send-push`, `optimize-images`, `og`, `sitemap`,
-`screenshots`, `stats`, `deploy` — are documented with every flag in
-`apps/web/scripts/README.md`. `og`, `sitemap` and `optimize-images` run
-automatically inside `pnpm build`.
+`generate-sets-snapshot`, `screenshots`, `stats`, `deploy` — are documented with
+every flag in `apps/web/scripts/README.md`; that doc claims to cover all of them,
+so adding one without listing it makes its own framing false.
+`generate-sets-snapshot`, `optimize-images`, `og` and `sitemap` run automatically
+inside `pnpm build`, in that order — which is why a root `pnpm build` needs
+Cloudflare credentials and `pnpm dev` doesn't.
+
+Other workspaces' scripts: `pnpm -C apps/admin diagnose-visits`, and
+`apps/rum-archiver`'s `deploy`/`capture` (see its README).
 
 **Service-worker behaviour is testable only against a production build.** The dev
 server never registers a SW (Vite's dev transform emits no `sw.js`):
@@ -425,7 +502,7 @@ pnpm build:web && pnpm start:web   # :4173, real service worker
 - `packages/ui/vitest.setup.ts` wires jest-dom and calls `installDialogPolyfill()` — the polyfill itself is `packages/ui/src/domPolyfills.ts` (jsdom implements no `HTMLDialogElement.showModal()`).
 
 ### CI/CD
-- **`ci.yml`** on push (non-main) + PR. Jobs: `static` (per-workspace Biome lint for `apps/web`, `apps/admin`, `packages/ui`, `packages/data`, plus `turbo tsc` across all four, plus a Vite build of both apps), `knip`, `unit` (all four workspaces), `chromatic` (visual regression for `packages/ui`), `e2e` (Playwright on chromium + webkit for both apps).
+- **`ci.yml`** on push (non-main) + PR. Jobs: `static` (per-workspace Biome lint for `apps/web`, `apps/admin`, `packages/ui`, `packages/data`, `apps/rum-archiver`, plus `turbo tsc` across all of them, plus a Vite build of both apps), `knip`, `unit` (all five workspaces), `chromatic` (visual regression for `packages/ui`), `e2e` (Playwright on chromium + webkit for both apps).
 - **`deploy.yml`** on push to `main`, plus manual `workflow_dispatch`. Re-runs `static`/`unit`/`e2e`, then `deploy` and `deploy-admin` only if all pass — a direct push to `main` can't skip the suite. Deliberately **not** `chromatic`, which stays PR-only to avoid roughly doubling snapshot quota.
 - Secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CHROMATIC_PROJECT_TOKEN`.
 

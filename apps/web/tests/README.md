@@ -1,10 +1,12 @@
 # Tests
 
 Covers `apps/web`. The other workspaces test themselves the same way and have
-no separate README: `apps/admin` has its own `tests/unit` + `tests/e2e`, and
-`packages/ui` co-locates a `.test.tsx` beside each component (its interaction
-tests run Storybook stories through Vitest via `composeStories`). Run
-everything at once from the repo root with `pnpm test` / `pnpm test:e2e`.
+no separate README: `apps/admin` has its own `tests/unit` + `tests/e2e`,
+`apps/rum-archiver` has `tests/` (Vitest only — a cron Worker has no browser
+surface to drive), and `packages/ui` co-locates a `.test.tsx` beside each
+component (its interaction tests run Storybook stories through Vitest via
+`composeStories`). Run everything at once from the repo root with `pnpm test` /
+`pnpm test:e2e`.
 
 Two layers, both wired into the workspace:
 
@@ -67,6 +69,7 @@ tests/
 
 ## Known quirks
 
+- **A label that is a prefix of another label breaks `getByText` and `hasText`.** Both match on substring, so adding a `// visits_history` card silently made the existing `getByText("// visits")` resolve to two elements and fail strict mode — a passing test broken by a change to a *different* card. Use `{ exact: true }`, and scope a card with `.filter({ has: page.getByText(label, { exact: true }) })` rather than `.filter({ hasText: label })`, which has no exact option.
 - **Playwright runs `workers: 1`** locally — Vite's dev server races on parallel route loads. CI keeps the same setting.
 - **`useFirstLoad`** has a 500 ms StrictMode-replay window: tests that mount the same component twice quickly will both see `isFirstLoad === true`.
 - **Audio in unit tests**: `setup.ts` stubs `HTMLMediaElement.prototype.play/pause/load` with Promise-returning mocks. jsdom doesn't decode audio.

@@ -38,6 +38,11 @@
     },
     "packages/tsconfig": {},
     "packages/ui": {},
-    "packages/data": {}
+    "packages/data": {},
+    "apps/rum-archiver": {
+      "entry": ["src/index.ts!", "tests/**/*.ts"],
+      "project": ["src/**/*.ts", "tests/**/*.ts"],
+      "ignoreBinaries": ["wrangler"]
+    }
   }
 }

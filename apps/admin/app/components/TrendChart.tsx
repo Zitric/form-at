@@ -18,8 +18,15 @@ interface TrendChartProps {
    *  raw daily series doesn't error, it draws a confident wrong picture: 60
    *  daily values render a 413-day span captioned "60 weeks". Producers bucket
    *  first — `bucketByWeek(fillDailyWindow(rows, days), TREND_BUCKET_DAYS)`,
-   *  the shape every trend in admin-stats.ts and cf-analytics.ts returns. */
-  data: number[];
+   *  the shape every trend in admin-stats.ts and cf-analytics.ts returns.
+   *
+   *  `null` means NOT OBSERVED, and is rendered as a shaded gap rather than a
+   *  bar — distinct from `0`, which means observed and empty. Only the RUM
+   *  history card needs this; every other caller passes a dense number[] and is
+   *  unaffected. Never map an unknown to 0 to fit this prop: a chart that draws
+   *  zeroes across an unobserved stretch hides exactly the outage it should
+   *  reveal. */
+  data: (number | null)[];
   bucketDays?: number;
 }
 

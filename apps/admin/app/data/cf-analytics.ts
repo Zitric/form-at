@@ -18,6 +18,12 @@
 // the card renders an explicit empty state — NEVER a zero, which would read as
 // "no traffic" rather than "no data".
 
+import {
+  RUM_CONFIDENCE_LEVEL,
+  type RumGroupRow,
+  fetchRumGroups,
+  isBotRow,
+} from "@form-at/data/rumArchive";
 import { TREND_BUCKET_DAYS, bucketByWeek, fillDailyWindow } from "@form-at/data/set-stats";
 
 const GRAPHQL_ENDPOINT = "https://api.cloudflare.com/client/v4/graphql";
@@ -263,10 +269,13 @@ export type RumVisits = {
    *  pageload, so this is the page-view equivalent — `sum` has no pageViews
    *  field of its own. */
   pageloads: number;
-  /** Share of ALL pageloads (0-1) that Cloudflare flagged as bot, before the
-   *  exclusion above. Shown because it's the concrete evidence for why this
-   *  card and edge_traffic disagree. */
-  botShare: number;
+  /** Bot-flagged page loads excluded from the figures above, and the total
+   *  before exclusion. Raw COUNTS rather than a share: a percentage computed
+   *  from a handful of page loads swings wildly day to day and implies a
+   *  precision the denominator can't support. The card derives a percentage
+   *  only once the denominator justifies one. */
+  botPageloads: number;
+  totalPageloads: number;
   /** Lower/upper bounds of Cloudflare's confidence interval on `visits`. */
   visitsLower: number;
   visitsUpper: number;
@@ -275,12 +284,47 @@ export type RumVisits = {
    *  sample interval". False means the interval is meaningless — so the card
    *  suppresses the chart and the bounds rather than showing numbers nobody
    *  should read. */
+  /** True when the summed bounds actually say something — i.e. they aren't
+   *  degenerate. Deliberately NOT an AND of Cloudflare's per-day `isValid`:
+   *  that flag is per row, and ANDing it across a 60-day window means one quiet
+   *  day (n=1) invalidates all sixty. At this traffic there is always such a
+   *  day, so the AND could never flip true however much traffic grew — a
+   *  permanent suppression masquerading as a temporary one. */
   intervalValid: boolean;
+  /** True when NO row was sampled — every event recorded, so the daily figures
+   *  are exact counts and the trend is honest as a SHAPE however small the
+   *  numbers. Uses the MAX of Cloudflare's per-row intervals, deliberately: for
+   *  "is any of this extrapolated?" the conservative reading is right, since
+   *  understating sampling would chart an artefact as if it were real traffic. */
+  countsAreExact: boolean;
+  /** EFFECTIVE extrapolation factor across the window — `visits / sampleSize`,
+   *  i.e. how much the reported total was scaled up overall. 1 = every event
+   *  recorded, so the daily figures are exact counts and the trend is honest as
+   *  a SHAPE however small the numbers. Above 1 they're extrapolations.
+   *
+   *  Deliberately NOT the maximum of Cloudflare's per-row `sampleInterval`:
+   *  live data returned rows at both 10 and 16.67 while the window's actual
+   *  factor was exactly 10, so reporting the max would tell a reader "1-in-17"
+   *  about figures that were scaled by 10. The max describes one row; this
+   *  describes the number on screen. Falls back to the max only when no row
+   *  reports a sample size and the ratio can't be derived.
+   *
+   *  Pairs with `countsAreExact`, which asks the DIFFERENT question of whether
+   *  any sampling happened at all — the two disagree when a row advertises an
+   *  interval its own estimate doesn't reflect, and each is right for its own
+   *  question. */
+  sampleInterval: number;
   /** Confidence level the interval was computed at, echoed back by the API. */
   confidenceLevel: number;
-  /** Samples behind the estimate — the concrete reason an interval is or isn't
-   *  trustworthy. */
-  sampleSize: number;
+  /** RAW samples behind the visits estimate, before extrapolation. The
+   *  relationship, confirmed against live data across two windows, is
+   *  `sampleSize x sampleInterval ~= visits`: unsampled, 11 samples gave 11
+   *  visits; sampled 1-in-10, 12 samples gave 120. So it is neither a page-load
+   *  count nor comparable to `visits` directly — printing it beside a visit
+   *  total, as an earlier card did ("too few samples (12)" next to
+   *  "visits: 120"), states a false relationship. Null when no row reports one:
+   *  a summed `?? 0` produced a small, confident, meaningless number. */
+  sampleSize: number | null;
   /** Weekly buckets of non-bot visits, oldest first — same shape as every
    *  other trend. Only plotted when `intervalValid`. */
   weeklyVisits: number[];
@@ -291,115 +335,55 @@ export type RumVisits = {
    *  them because its window is never legitimately empty, but a beacon that
    *  started today is empty for an entirely ordinary reason. */
   noDataInWindow: boolean;
+  /** Distinct days that actually returned rows. NOT the same as `windowDays`,
+   *  which is the SPAN from the oldest row to today: a 57-day span can hold as
+   *  few as 11 days of data, and a caption reading "57 of 60 retained days have
+   *  data" off the span alone is simply false. */
+  daysWithData: number;
   /** Days we ASKED for, i.e. min(Cloudflare's retention, our chart window).
-   *  `windowDays` short of this means data genuinely starts later than
-   *  retention allows — the beacon began collecting recently. Comparing
-   *  `windowDays` against the chart maximum instead would fire permanently
-   *  whenever retention is under 60 days, blaming collection for what is
-   *  really retention. */
+   *  Always `RUM_WINDOW_DAYS` now that the window is fixed at 7 days — kept as
+   *  a field rather than inlined so the card's coverage caption compares days
+   *  that HAVE data against days that were ASKED for, without hardcoding the
+   *  number in two places. */
   requestedWindowDays: number;
   windowDays: number;
+  /** ISO dates (YYYY-MM-DD) of the oldest and newest days that returned rows.
+   *  The card shows the PAIR rather than `windowDays`, which measures to TODAY
+   *  and so overstates coverage whenever the most recent days are empty — live
+   *  data ended two days before "now", making a "spread across 57d" caption
+   *  wrong by exactly that much. */
   startDay: string;
-  boundaryKnown: boolean;
+  endDay: string;
 };
 
-const RUM_SETTINGS_QUERY = `
-  query RumRetention($accountTag: String!) {
-    viewer {
-      accounts(filter: { accountTag: $accountTag }) {
-        settings {
-          rumPageloadEventsAdaptiveGroups { notOlderThan }
-        }
-      }
-    }
-  }`;
+// Cloudflare keeps beacon data UNSAMPLED for 7 days, then aggregates it to
+// around 10%. That's a property of the data's AGE, not of the query — so any
+// window past a week permanently drags in already-degraded rows, and no width
+// we pick can recover them. Measured on this site: a 60-day window returned
+// 120 visits extrapolated from 12 real observations, with only 11 of 55 days
+// carrying rows at all — sampling had deleted whole days. A 7-day window sits
+// entirely inside the unsampled period: exact counts, every day present, no
+// extrapolation.
+//
+// The trade is history for accuracy, taken deliberately. `edge_traffic` keeps
+// its 60 days because zone request data isn't sampled this way. Accurate
+// history beyond a week would need capturing each day into D1 while it's still
+// unsampled — see IMPROVEMENTS.md #12.
+export const RUM_WINDOW_DAYS = 7;
 
-type RumSettingsData = {
-  viewer?: {
-    accounts?: { settings?: { rumPageloadEventsAdaptiveGroups?: { notOlderThan?: number } } }[];
-  };
-};
+// `RUM_CONFIDENCE_LEVEL` and the query itself live in
+// @form-at/data/rumArchive, shared with apps/rum-archiver's cron so the two
+// can't drift — see that module's header.
+export { RUM_CONFIDENCE_LEVEL };
 
-/** Account-scoped twin of `resolveWindowDays`. Same fallback rule: an
- *  unreadable boundary means we ask for the full window and render whatever
- *  comes back, with `boundaryKnown: false` so the card can disclose it. */
-export async function resolveRumWindowDays(
-  token: string,
-  accountTag: string,
-): Promise<{ days: number; fromBoundary: boolean }> {
-  const data = await postGraphQL<RumSettingsData>(token, RUM_SETTINGS_QUERY, { accountTag });
-  const seconds =
-    data?.viewer?.accounts?.[0]?.settings?.rumPageloadEventsAdaptiveGroups?.notOlderThan;
-  if (typeof seconds !== "number" || seconds <= 0) {
-    return { days: EDGE_TRAFFIC_MAX_WINDOW_DAYS, fromBoundary: false };
-  }
-  const days = Math.floor(seconds / 86_400);
-  return { days: Math.max(1, Math.min(days, EDGE_TRAFFIC_MAX_WINDOW_DAYS)), fromBoundary: true };
-}
-
-// `confidence` takes a REQUIRED `level` argument — omitting it fails the whole
-// query with `error parsing args for "confidence": level: not a number`, inside
-// an HTTP 200. Pinned rather than left to a default for two reasons: an
-// unstated confidence level makes an interval uninterpretable (a 99% and a 50%
-// interval are very different widths on identical data), and a default that
-// shifted under us would silently change what the card claims. 0.95 is the
-// convention a reader will assume, and the card states it.
-export const RUM_CONFIDENCE_LEVEL = 0.95;
-
-const RUM_QUERY = `
-  query RumVisits($accountTag: String!, $siteTag: String!, $since: String!, $until: String!, $level: Float!) {
-    viewer {
-      accounts(filter: { accountTag: $accountTag }) {
-        rumPageloadEventsAdaptiveGroups(
-          limit: 5000
-          filter: { siteTag: $siteTag, date_geq: $since, date_leq: $until }
-          orderBy: [date_ASC]
-        ) {
-          count
-          dimensions { date bot }
-          sum { visits }
-          confidence(level: $level) {
-            level
-            sum { visits { estimate lower upper isValid sampleSize } }
-          }
-        }
-      }
-    }
-  }`;
-
-type RumData = {
-  viewer?: {
-    accounts?: {
-      rumPageloadEventsAdaptiveGroups?: {
-        count?: number;
-        dimensions?: { date?: string; bot?: unknown };
-        sum?: { visits?: number };
-        confidence?: {
-          level?: number;
-          sum?: {
-            visits?: {
-              estimate?: number;
-              lower?: number;
-              upper?: number;
-              isValid?: boolean;
-              sampleSize?: number;
-            };
-          };
-        };
-      }[];
-    }[];
-  };
-};
-
-/** Cloudflare's `bot` dimension representation isn't documented — it could be
- *  0/1, "0"/"1", or a boolean. Treat anything falsy or an explicit zero-ish
- *  value as human rather than assuming one encoding. */
-function isBotRow(value: unknown): boolean {
-  if (value === true) return true;
-  if (typeof value === "number") return value !== 0;
-  if (typeof value === "string") return value !== "0" && value.toLowerCase() !== "false";
-  return false;
-}
+// Below this many page loads in the window, the card shows bot exclusions as
+// raw counts and no percentage. Deliberately NOT `MIN_SAMPLE_FOR_RATE`
+// (admin-stats.ts), despite being the same shape of rule: that 10 is a floor
+// over PROMPT IMPRESSIONS, where double digits is a real sample, while page
+// loads accumulate orders of magnitude faster. Sharing the constant would also
+// mean tuning one metric silently retunes the other. 100 is chosen so one extra
+// bot moves the figure by about a percentage point instead of eight.
+export const MIN_PAGELOADS_FOR_BOT_SHARE = 100;
 
 /**
  * Live Web Analytics read. Null on every failure path, exactly like
@@ -415,43 +399,50 @@ export async function fetchRumVisits(
 ): Promise<RumVisits | null> {
   if (!token || !accountTag || !siteTag) return null;
 
-  const { days: requestedDays, fromBoundary } = await resolveRumWindowDays(token, accountTag);
+  // Fixed 7-day window, so no retention read: Cloudflare's RUM retention runs
+  // to at least 56 days (a 60-day probe returned rows from 55 days back), so a
+  // clamp against it could never bind here. Dropping it removes a round-trip
+  // that can't change the answer.
+  const requestedDays = RUM_WINDOW_DAYS;
   const until = new Date(now);
   const since = new Date(now);
   since.setUTCDate(since.getUTCDate() - (requestedDays - 1));
 
-  const data = await postGraphQL<RumData>(token, RUM_QUERY, {
+  const rows = await fetchRumGroups({
+    token,
     accountTag,
     siteTag,
     since: isoDay(since),
     until: isoDay(until),
-    level: RUM_CONFIDENCE_LEVEL,
   });
-  const rows = data?.viewer?.accounts?.[0]?.rumPageloadEventsAdaptiveGroups;
-  // `data` present but no rows is a SUCCESSFUL read of an empty window — a real
-  // zero, which §1's never-substitute-0 rule permits and in fact wants
-  // distinguished. Only a failed read (null data) stays null.
-  if (!data) return null;
-  if (!rows?.length) {
+  // null is a FAILED read. An empty array is a successful read of an empty
+  // window — a real zero, which §1's never-substitute-0 rule wants
+  // distinguished rather than collapsed into the failure state.
+  if (rows === null) return null;
+  if (rows.length === 0) {
     return {
       visits: 0,
       visitsLower: 0,
       visitsUpper: 0,
       intervalValid: false,
+      sampleInterval: 1,
+      countsAreExact: true,
       confidenceLevel: 0,
-      sampleSize: 0,
+      sampleSize: null,
       pageloads: 0,
-      botShare: 0,
+      botPageloads: 0,
+      totalPageloads: 0,
       weeklyVisits: [],
       noDataInWindow: true,
       requestedWindowDays: requestedDays,
+      daysWithData: 0,
       windowDays: requestedDays,
       startDay: isoDay(since),
-      boundaryKnown: fromBoundary,
+      endDay: isoDay(since),
     };
   }
 
-  const human = rows.filter((r) => !isBotRow(r.dimensions?.bot));
+  const human: RumGroupRow[] = rows.filter((r) => !isBotRow(r.dimensions?.bot));
   const allPageloads = rows.reduce((a, r) => a + (r.count ?? 0), 0);
   const botPageloads = allPageloads - human.reduce((a, r) => a + (r.count ?? 0), 0);
 
@@ -462,7 +453,7 @@ export async function fetchRumVisits(
   const perDay = new Map<string, number>();
   for (const r of human) {
     const day = r.dimensions?.date ?? "";
-    perDay.set(day, (perDay.get(day) ?? 0) + (r.sum?.visits ?? 0));
+    perDay.set(day, (perDay.get(day) ?? 0) + (r.confidence?.sum?.visits?.estimate ?? 0));
   }
   const daily = fillDailyWindow(
     [...perDay].map(([day, count]) => ({ day, count })),
@@ -474,29 +465,50 @@ export async function fetchRumVisits(
   // least trustworthy day — one invalid day makes the whole total's interval
   // meaningless, and reporting otherwise would launder it.
   const conf = human.map((r) => r.confidence?.sum?.visits);
-  const hasConfidence = conf.some(Boolean);
-  const estimate = conf.reduce((a, c) => a + (c?.estimate ?? 0), 0);
+  // `sum { visits }` is no longer queried: a live run confirmed `estimate` is
+  // identical to it (12 vs 12), and the schema describes the interval as being
+  // "for the corresponding point estimate". Two numbers a reader has to
+  // reconcile is worse than one. Without that fallback, a response carrying no
+  // confidence block at all has no visit count to report — so it's a failed
+  // read, NOT zero visits (§1: never substitute 0 for a metric that didn't load).
+  if (!conf.some(Boolean)) return null;
+
+  // Summing per-day bounds is a conservative containment for the total: if each
+  // day's true value lies in its own bounds, the sum lies in the summed bounds.
+  const lower = conf.reduce((a, c) => a + (c?.lower ?? c?.estimate ?? 0), 0);
+  const upper = conf.reduce((a, c) => a + (c?.upper ?? c?.estimate ?? 0), 0);
+
+  const estimateTotal = conf.reduce((a, c) => a + (c?.estimate ?? 0), 0);
+  const sampleTotal = conf.some((c) => typeof c?.sampleSize === "number")
+    ? conf.reduce((a, c) => a + (c?.sampleSize ?? 0), 0)
+    : null;
+  const maxRowInterval = rows.reduce((max, r) => Math.max(max, r.avg?.sampleInterval ?? 1), 1);
+  const effectiveInterval =
+    sampleTotal && sampleTotal > 0 ? estimateTotal / sampleTotal : maxRowInterval;
+  const dayList = human.map((r) => r.dimensions?.date).filter(Boolean) as string[];
 
   return {
-    // `estimate` IS the point estimate that `sum { visits }` reports — the
-    // schema calls the interval "for the corresponding point estimate". Sum is
-    // still queried and used as the fallback for any row without a confidence
-    // block, so the card never shows a hole; it is never shown alongside the
-    // estimate, because two numbers a reader has to reconcile is worse than one.
-    visits: hasConfidence ? estimate : human.reduce((a, r) => a + (r.sum?.visits ?? 0), 0),
-    visitsLower: conf.reduce((a, c) => a + (c?.lower ?? c?.estimate ?? 0), 0),
-    visitsUpper: conf.reduce((a, c) => a + (c?.upper ?? c?.estimate ?? 0), 0),
-    intervalValid: hasConfidence && conf.every((c) => c?.isValid !== false),
+    visits: estimateTotal,
+    visitsLower: lower,
+    visitsUpper: upper,
+    intervalValid: upper > lower,
+    sampleInterval: effectiveInterval,
+    countsAreExact: maxRowInterval === 1,
     confidenceLevel:
       human.find((r) => r.confidence?.level)?.confidence?.level ?? RUM_CONFIDENCE_LEVEL,
-    sampleSize: conf.reduce((a, c) => a + (c?.sampleSize ?? 0), 0),
+    // Only report a total when at least one row actually carried the field.
+    // Summing `?? 0` over rows that omit it yields a number that looks precise
+    // and describes nothing.
+    sampleSize: sampleTotal,
     pageloads: human.reduce((a, r) => a + (r.count ?? 0), 0),
-    botShare: allPageloads > 0 ? botPageloads / allPageloads : 0,
+    botPageloads,
+    totalPageloads: allPageloads,
     weeklyVisits: bucketByWeek(daily, TREND_BUCKET_DAYS),
     noDataInWindow: false,
     requestedWindowDays: requestedDays,
+    daysWithData: new Set(dayList).size,
     windowDays: Math.max(1, spanDays),
     startDay,
-    boundaryKnown: fromBoundary,
+    endDay: dayList.length ? (dayList[dayList.length - 1] as string) : startDay,
   };
 }

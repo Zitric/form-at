@@ -36,14 +36,23 @@ Running list of feature/functional improvements. Tick off as we ship.
   Not needed yet — same revisit trigger PWA_PROGRESS.md already uses for the deferred manage-offline-sets view: earns its place once the catalogue grows past ~10-15 sets, where scanning every card becomes a chore. At today's 4 sets, scanning is still instant. Placeholder so it isn't lost once the next few batches land.
   **Context update (2026-08-04):** this threshold used to require someone manually running a migration/seed script to add a set. Now that `apps/admin` has a self-serve upload form (PR4, 2026-07), adding a set is a few form fields and a click — the same trigger condition arrives much sooner than when this was written, on whatever cadence Julian actually uploads at rather than an engineering-effort-gated one.
 
-- [ ] **#12 — Archive Cloudflare RUM data into D1 before it degrades** *(idea, not a plan)*
+- [x] **#12 — Archive Cloudflare RUM data into D1 before it degrades** *(shipped 2026-08-11)*
+  Built as planned below, in four steps: `rum_daily` table, `apps/rum-archiver` (standalone Worker, `crons = ["17 3 * * *"]`), the `visits_history` card, and a pull-only staleness disclosure. Full reasoning — the upsert quality guard, the real-zero-vs-uncovered-day distinction, and the archive/diagnostic cross-validation — is in PWA_PROGRESS.md → *Archiving Cloudflare RUM into D1 before it degrades*. The record below is the pre-build reasoning, kept as history.
+
+
   Cloudflare keeps unsampled Web Analytics beacon data for **7 days**, then aggregates it down to ~10%, and retention ends the window entirely after some period. So a live query means yesterday's number is exact, last month's is an extrapolation from a 10% sample, and eventually it's gone. Capturing each day into D1 while it's still unsampled would preserve the accurate version permanently and give history past Cloudflare's retention — a small daily row, not a data pipeline.
 
   **Same shape as the sets-catalogue snapshot** (`packages/data/src/sets.generated.ts`): a stored copy of something authoritative elsewhere, kept because the authoritative source isn't always reachable. There the reason is offline; here it's retention. Worth reusing that framing if this is ever built, rather than inventing a new one.
 
-  **Two open questions, both unresolved — don't build until they are:**
-  - *Does sampling actually bite at this volume?* If the RUM dataset reports `sampleInterval: 1` at tens of visits a day, the live numbers are already exact and the only thing archiving buys is history past retention — which is a much weaker case. The introspection done for the `visitors` card answers this.
-  - *What triggers the capture?* Deploy-time is unreliable in the way that matters: a two-week gap between deploys loses exactly the days the archive exists to save. A scheduled GitHub Action works but is a new moving part to keep alive, on a project heading toward maintenance mode. Neither is obviously right.
+  **First question now SETTLED with live data (2026-08-10), and it strengthens the case.** Sampling genuinely bites, definitively, after 7 days. Measured on this site: a 60-day query returned 120 visits extrapolated from **12 real observations** at an effective 1-in-10, with only **11 of 55 days** carrying any rows — sampling deletes whole days, not just precision. A 7-day query over the same data is exact and complete.
+
+  The `visits` card was therefore narrowed to a 7-day window (see PWA_PROGRESS), which buys exactness at the cost of history. That makes this item the **only** way to have accurate history beyond a week: capture each day into D1 while it is still unsampled, or accept that anything older than 7 days is a 10% extrapolation with gaps. Materially stronger than when this was logged, when the premise was still a guess.
+
+  **Trigger question now SETTLED (2026-08-10) — building.** Cloudflare Pages Functions cannot run cron: their API reference exposes only HTTP handlers (`onRequest*`), with no scheduled handler, and Cloudflare's own guidance is to use a standalone Worker instead. GitHub Actions `schedule` needs no new deploy target but **disables itself after 60 days without a commit** (only commits reset it — tags, issues and PR merges don't), which on a project heading to low activity is precisely the wrong failure mode: it stops quietly, permanently, roughly two months after the last commit.
+
+  So: a standalone Worker with a Cron Trigger, accepted as a third deploy target because it is the only option that keeps running when nobody is committing. Each run re-fetches the trailing 7 days and upserts, so any two successful runs inside a week lose nothing — that absorbs transient failures, though notably it would NOT have rescued the GitHub option, whose failure is permanent rather than transient.
+
+  Table applied as `rum_daily` (see `apps/web/schema.sql`). Build order: table → Worker + cron → history card reading D1 → staleness disclosure.
 
 ## Bigger but worth it
 
