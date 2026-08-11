@@ -177,6 +177,11 @@ commit; an auto-commit removes that checkpoint.
   files to stage. **Never `git add -A` or `git add .`** — it sweeps up unrelated
   work in progress.
 - **Never** `git commit` (any variant, including `--amend`) or `git push`.
+- **Never `git stash`** (or `git checkout` / `git reset` across branches). Stash
+  mutates the working tree, and a bad `pop` on a branch carrying uncommitted work
+  loses it — the same blast radius as commit and push, so it belongs to the repo
+  owner too. If a task genuinely needs a clean tree to verify something, say so
+  and hand off rather than clearing it yourself.
 - **When a unit of work is done:** stop, say what changed and in which files,
   hand off.
 
