@@ -2841,6 +2841,61 @@ no test suite here can prove):
    set's variants (skip-if-exists working against real files, not just the
    unit-tested synthetic case).
 
+### Added 2026-08-11 — RUM archiver: a cron Worker, and why it isn't a Pages Function
+
+Step 2 of IMPROVEMENTS #12. `apps/rum-archiver` is a standalone Worker on a
+daily cron that captures Web Analytics rows into `rum_daily` before Cloudflare
+degrades them.
+
+**Pages cannot run cron — verified, not assumed.** Pages Functions' API
+reference exposes only HTTP handlers (`onRequest`, `onRequestGet`, …) with no
+scheduled handler in the surface at all, and Cloudflare's guidance is to use a
+Worker instead. That's what makes this a third deploy target rather than an
+endpoint on `apps/admin`.
+
+**GitHub Actions was rejected on its failure mode, not its cost.** It needs no
+new target and the secrets already exist — but scheduled workflows are disabled
+after **60 days without a commit**, and only commits reset the clock (tags,
+issues and PR merges don't). On a project heading toward low activity that means
+the archive stops quietly and permanently about two months after the last push,
+which is precisely the scenario it exists to survive. Cloudflare has no notion
+of repository activity.
+
+**Every run re-fetches the whole 7-day unsampled window and upserts.** A missed
+run then costs nothing provided another lands within the week. Worth being
+precise about what that buys: it absorbs TRANSIENT failures — a timeout, a
+missed tick — and would not have rescued the GitHub option, whose failure is
+permanent. It lowered the reliability bar for whichever trigger was chosen; it
+didn't change which one survives neglect.
+
+**The query moved to `packages/data/src/rumArchive.ts`**, shared by the cron and
+the live card. Apps never import each other, but the stronger reason is drift:
+`confidence(level:)` is a required argument whose omission fails inside an HTTP
+200, and that bug ran undetected until a live diagnostic caught it. A second
+copy of the query in the Worker would be a second place for that class of
+mistake to hide.
+
+**Two narrow tokens, not one duplicated.** The Worker's Cloudflare API token
+carries only `Account → Account Analytics → Read`; the dashboard's also carries
+`Zone → Analytics → Read` for `edge_traffic`, which the Worker never touches.
+D1 writes go through a binding, so no D1 permission is needed at all. Better for
+rotation than duplicating: two copies of one token must roll together, while two
+independent narrow tokens roll separately and neither can do the other's job.
+
+**A failed read writes nothing.** In `rum_daily` a missing row and a zero row
+are indistinguishable after the fact, so a partial write would manufacture a gap
+that looks like a quiet week. Locked by a test.
+
+**`CF_ACCOUNT_ID` is not wrangler's deprecated variable.** Wrangler now warns
+that its own `CF_ACCOUNT_ID` env var is superseded by `CLOUDFLARE_ACCOUNT_ID`.
+The repo is unaffected: everything wrangler itself reads (turbo.json,
+deploy.yml, generate-sets-snapshot's error text) already uses the new name, and
+the repo's `CF_ACCOUNT_ID` is a `[vars]` BINDING name we chose, read as
+`env.CF_ACCOUNT_ID` at runtime. The collision is coincidental. Renaming the
+binding to satisfy the warning would break `apps/admin` and the
+`diagnose-visits` script, which reads it out of `wrangler.toml` by regex — so
+both wrangler.toml files carry a comment saying so.
+
 ### Added 2026-08-09 — admin dashboard: a `visits` card from Web Analytics (RUM), beside `edge_traffic`
 
 Built on `feat/rum-visitors-card`. The point of the pairing: `edge_traffic` and

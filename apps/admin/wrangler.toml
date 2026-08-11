@@ -43,4 +43,11 @@ CF_ZONE_ID = "559d86b5a76e8415f83d4c3e0832935c"
 # value under an R2-flavoured name. sets-presign.ts still falls back to the old
 # name; delete that fallback and the secret once this is confirmed live.
 # Where to re-read it: any zone's Overview tab -> API -> Account ID.
+#
+# NOTE: this is a RUNTIME BINDING NAME, read as `env.CF_ACCOUNT_ID` inside the
+# Worker — NOT wrangler's own `CF_ACCOUNT_ID` environment variable, which is
+# deprecated in favour of `CLOUDFLARE_ACCOUNT_ID`. Nothing here relies on the
+# deprecated one, so wrangler's warning is unrelated to this line. Don't rename
+# the binding to silence it: apps/admin reads it, and scripts/diagnose-visits.mjs
+# regex-reads it straight out of this file.
 CF_ACCOUNT_ID = "12c493ef8348bf33e0acc9c38c1d8b20"

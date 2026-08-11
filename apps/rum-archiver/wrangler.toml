@@ -1,0 +1,33 @@
+name = "form-at-rum-archiver"
+main = "src/index.ts"
+compatibility_date = "2026-08-11"
+
+# Daily at 03:17 UTC. Every run re-fetches the trailing 7 days and upserts, so
+# the exact time doesn't matter and a missed run costs nothing provided another
+# lands within the week. An odd minute rather than :00 to sit off the top-of-hour
+# crowd on Cloudflare's scheduler.
+[triggers]
+crons = ["17 3 * * *"]
+
+# Writes go through this binding, which is why the Worker's API token needs no
+# D1 permission. Same database as the Pages projects.
+[[d1_databases]]
+binding = "DB"
+database_name = "form-at-analytics"
+database_id = "d2e6f2f0-b4cd-40c0-98b3-04c060ecbffa"
+
+# Non-secret, same reasoning as apps/admin/wrangler.toml: the account id is
+# published in every R2 endpoint URL, so treating it as a secret would protect
+# nothing. The Web Analytics site tag isn't here at all — it's a committed
+# constant in packages/data/src/webAnalytics.ts, shared with apps/web which
+# renders it into every page.
+#
+# NOTE: `CF_ACCOUNT_ID` here is a RUNTIME BINDING NAME we chose, read as
+# `env.CF_ACCOUNT_ID` inside the Worker. It is NOT wrangler's own
+# `CF_ACCOUNT_ID` environment variable, which is deprecated in favour of
+# `CLOUDFLARE_ACCOUNT_ID`. Nothing in this repo relies on the deprecated one
+# (CI and the scripts all use `CLOUDFLARE_ACCOUNT_ID`), so wrangler's warning
+# is unrelated to this line — don't "fix" it by renaming the binding, which
+# would break apps/admin and the diagnose-visits script.
+[vars]
+CF_ACCOUNT_ID = "12c493ef8348bf33e0acc9c38c1d8b20"

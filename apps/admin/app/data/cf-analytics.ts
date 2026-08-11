@@ -18,6 +18,12 @@
 // the card renders an explicit empty state — NEVER a zero, which would read as
 // "no traffic" rather than "no data".
 
+import {
+  RUM_CONFIDENCE_LEVEL,
+  type RumGroupRow,
+  fetchRumGroups,
+  isBotRow,
+} from "@form-at/data/rumArchive";
 import { TREND_BUCKET_DAYS, bucketByWeek, fillDailyWindow } from "@form-at/data/set-stats";
 
 const GRAPHQL_ENDPOINT = "https://api.cloudflare.com/client/v4/graphql";
@@ -365,12 +371,10 @@ export type RumVisits = {
 // unsampled — see IMPROVEMENTS.md #12.
 export const RUM_WINDOW_DAYS = 7;
 
-// `confidence` takes a REQUIRED `level` argument — omitting it fails the whole
-// query with `error parsing args for "confidence": level: not a number`, inside
-// an HTTP 200. Pinned rather than left to a default: an unstated confidence
-// level makes an interval uninterpretable, and a default that shifted under us
-// would silently change what the card claims.
-export const RUM_CONFIDENCE_LEVEL = 0.95;
+// `RUM_CONFIDENCE_LEVEL` and the query itself live in
+// @form-at/data/rumArchive, shared with apps/rum-archiver's cron so the two
+// can't drift — see that module's header.
+export { RUM_CONFIDENCE_LEVEL };
 
 // Below this many page loads in the window, the card shows bot exclusions as
 // raw counts and no percentage. Deliberately NOT `MIN_SAMPLE_FOR_RATE`
@@ -380,61 +384,6 @@ export const RUM_CONFIDENCE_LEVEL = 0.95;
 // mean tuning one metric silently retunes the other. 100 is chosen so one extra
 // bot moves the figure by about a percentage point instead of eight.
 export const MIN_PAGELOADS_FOR_BOT_SHARE = 100;
-
-const RUM_QUERY = `
-  query RumVisits($accountTag: String!, $siteTag: String!, $since: String!, $until: String!, $level: Float!) {
-    viewer {
-      accounts(filter: { accountTag: $accountTag }) {
-        rumPageloadEventsAdaptiveGroups(
-          limit: 5000
-          filter: { siteTag: $siteTag, date_geq: $since, date_leq: $until }
-          orderBy: [date_ASC]
-        ) {
-          count
-          dimensions { date bot }
-          avg { sampleInterval }
-          confidence(level: $level) {
-            level
-            sum { visits { estimate lower upper isValid sampleSize } }
-          }
-        }
-      }
-    }
-  }`;
-
-type RumData = {
-  viewer?: {
-    accounts?: {
-      rumPageloadEventsAdaptiveGroups?: {
-        count?: number;
-        dimensions?: { date?: string; bot?: unknown };
-        avg?: { sampleInterval?: number };
-        confidence?: {
-          level?: number;
-          sum?: {
-            visits?: {
-              estimate?: number;
-              lower?: number;
-              upper?: number;
-              isValid?: boolean;
-              sampleSize?: number;
-            };
-          };
-        };
-      }[];
-    }[];
-  };
-};
-
-/** Cloudflare's `bot` dimension representation isn't documented — it could be
- *  0/1, "0"/"1", or a boolean. Treat anything falsy or an explicit zero-ish
- *  value as human rather than assuming one encoding. */
-function isBotRow(value: unknown): boolean {
-  if (value === true) return true;
-  if (typeof value === "number") return value !== 0;
-  if (typeof value === "string") return value !== "0" && value.toLowerCase() !== "false";
-  return false;
-}
 
 /**
  * Live Web Analytics read. Null on every failure path, exactly like
@@ -459,19 +408,18 @@ export async function fetchRumVisits(
   const since = new Date(now);
   since.setUTCDate(since.getUTCDate() - (requestedDays - 1));
 
-  const data = await postGraphQL<RumData>(token, RUM_QUERY, {
+  const rows = await fetchRumGroups({
+    token,
     accountTag,
     siteTag,
     since: isoDay(since),
     until: isoDay(until),
-    level: RUM_CONFIDENCE_LEVEL,
   });
-  const rows = data?.viewer?.accounts?.[0]?.rumPageloadEventsAdaptiveGroups;
-  // `data` present but no rows is a SUCCESSFUL read of an empty window — a real
-  // zero, which §1's never-substitute-0 rule permits and in fact wants
-  // distinguished. Only a failed read (null data) stays null.
-  if (!data) return null;
-  if (!rows?.length) {
+  // null is a FAILED read. An empty array is a successful read of an empty
+  // window — a real zero, which §1's never-substitute-0 rule wants
+  // distinguished rather than collapsed into the failure state.
+  if (rows === null) return null;
+  if (rows.length === 0) {
     return {
       visits: 0,
       visitsLower: 0,
@@ -494,7 +442,7 @@ export async function fetchRumVisits(
     };
   }
 
-  const human = rows.filter((r) => !isBotRow(r.dimensions?.bot));
+  const human: RumGroupRow[] = rows.filter((r) => !isBotRow(r.dimensions?.bot));
   const allPageloads = rows.reduce((a, r) => a + (r.count ?? 0), 0);
   const botPageloads = allPageloads - human.reduce((a, r) => a + (r.count ?? 0), 0);
 

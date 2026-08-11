@@ -1,0 +1,23 @@
+{
+  "name": "@form-at/rum-archiver",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "biome check src",
+    "tsc": "tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "deploy": "npx wrangler deploy",
+    "capture": "npx wrangler dev --test-scheduled"
+  },
+  "dependencies": {
+    "@form-at/data": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "@form-at/tsconfig": "workspace:*",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.5"
+  }
+}

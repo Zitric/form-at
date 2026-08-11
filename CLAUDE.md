@@ -12,6 +12,7 @@ for the engineering narrative; this file is the operating rules.
 | admin | `apps/admin` | Internal dashboard → `admin.formatglasgow.com`, Cloudflare Access-gated |
 | ui | `packages/ui` | Design system — tokens, primitives, Storybook, Chromatic |
 | data | `packages/data` | Shared catalogue, D1 queries, push sending |
+| rum-archiver | `apps/rum-archiver` | Cron Worker archiving daily RUM rows into D1 → `form-at-rum-archiver` |
 | tsconfig | `packages/tsconfig` | Shared TS config, consumed via `workspace:*` |
 
 **Apps never import each other** — only `packages/*` are shared. New apps go in
@@ -330,6 +331,7 @@ things you need *at the moment of editing* that no section heading can give you.
 | Waveform peaks | `scripts/generate-peaks.mjs` (root, needs `ffmpeg` on PATH) | README → *"Waveform peaks are computed with ffmpeg, not in the browser"* |
 | Push sending | `packages/data/src/webPush.ts` | README → *"The standard Web Push library doesn't run on Workers"* |
 | Admin + auth | `apps/admin/app/routes/`, `utils/verifyAccessJwt.ts` | README → *"Admin auth: no auth code, then auth code anyway"*. The enforcement rule is §1. |
+| RUM archive | `apps/rum-archiver/src/index.ts`, query + upsert in `packages/data/src/rumArchive.ts` | Cloudflare degrades beacon data after 7 days, so a cron captures it first. Pages cannot run cron — hence a standalone Worker. Never remove the upsert's `sample_interval` guard: it stops a late run overwriting exact rows. |
 | Cloudflare analytics | `apps/admin/app/data/cf-analytics.ts` — the app's only network calls (zone edge traffic + account RUM visits), both deferred in `routes/dashboard.tsx`'s loader. Diagnose an empty card with `pnpm -C apps/admin diagnose-visits` | That file's headers: what each measures, why edge traffic is never "visitors", why RUM rows are bot-filtered client-side, sampling and retention handling, and why every failure is `null`. Naming rule in §3. |
 | Service worker build | `buildServiceWorker` in `apps/web/vite.config.ts` (owns the precache allowlist and revision derivation) | README → *"Technology choices"*, Workbox entry. `vite-plugin-pwa` is **not** a dependency. |
 | Design system | `packages/ui/src/` — one folder per component, `icons/` flat | README → *"Monorepo structure"* (late extraction, no build step) |
