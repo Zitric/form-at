@@ -24,6 +24,16 @@ pnpm --filter @form-at/web optimize-images
 Re-runs only re-process files whose source is newer than its output. Use
 `--force` to regenerate everything.
 
+**Your source must be at least 1080px wide.** The optimizer never upscales, and
+it names each output by the width it *actually* produced — a 1000px source
+yields `name-1000.avif`, not `name-1080.avif`. But `Image.tsx` builds its srcset
+from the fixed `[640, 1080]` list, so it requests a `-1080` file that was never
+written and the browser 404s. Nothing warns you: the script reports success and
+the smaller variant still renders on mobile, so the gap only shows on desktop.
+Check the source with `sips -g pixelWidth <file>` before dropping it in; if it's
+short, upscale it (`sips --resampleWidth 1080 <file>`) rather than shipping a
+missing variant.
+
 **Widths are 640 and 1080 — there is no 1920 variant.** The cap is deliberate:
 some sources (DJ portraits) aren't 1920px wide, the optimizer never upscales,
 and a requested-but-missing variant 404s without Firefox reliably falling back

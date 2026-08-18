@@ -22,7 +22,7 @@ export const events: Event[] = [
     title: "Form:at 003",
     date: "2026-08-28",
     venue: "Southside, Glasgow",
-    lineupIds: ["unreal", "julz-lever", "til"],
+    lineupIds: ["unreal", "iona-violet", "julz-lever", "til"],
     audio: "techno / electro / dub",
     runtime: "23:00 — 05:00",
     status: "upcoming",
