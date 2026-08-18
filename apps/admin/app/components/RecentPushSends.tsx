@@ -5,12 +5,17 @@ interface RecentPushSendsProps {
   sends: RecentPushSend[];
 }
 
+// Locale and timeZone pinned, not left to resolve from the environment — see
+// SetsList.tsx's fmtWhen for why an unpinned format here is a React
+// hydration-mismatch bug (server and browser can default to different
+// locales/timezones for the same SSR'd timestamp), not just a display quirk.
 function fmtSentAt(ms: number): string {
-  return new Date(ms).toLocaleString(undefined, {
+  return new Date(ms).toLocaleString("en-GB", {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Europe/London",
   });
 }
 

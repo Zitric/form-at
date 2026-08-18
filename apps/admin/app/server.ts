@@ -3,15 +3,33 @@ import { isAllowedHost } from "~/utils/hostGuard";
 
 const handler = createStartHandler({ handler: defaultStreamHandler });
 
-// Document CSP — mirrors apps/web/app/server.ts's rationale, minus the
-// audio-host allowances (this app never streams audio). Cloudflare Pages'
-// `_headers` file applies to static assets only, so SSR documents need this
-// set on the response here instead.
+// Document CSP — mirrors apps/web/app/server.ts's rationale, minus the R2
+// audio-host allowances (this app never streams FROM R2, only reads a
+// locally-selected file). Cloudflare Pages' `_headers` file applies to
+// static assets only; apps/admin has none (no offline document needs it),
+// so this is the only place the policy is set — unlike apps/web, which needs
+// both.
+//
+// `media-src blob:` is required, not decorative: UploadSetForm's duration
+// read (readAudioDuration, utils/validateUpload.ts) loads the selected file
+// into an <audio> element via a `blob:` object URL to read its metadata.
+// Without this, default-src's implicit 'self' blocks it, `loadedmetadata`
+// never fires, and every upload reports the selected mp3 as unreadable —
+// discovered against a real, valid file.
+//
+// script-src deliberately does NOT allowlist static.cloudflareinsights.com.
+// Cloudflare's zone-level automatic Web Analytics setup edge-injects that
+// beacon into every hostname in the zone, including this one, and this app's
+// own code never adds it (see @form-at/data/webAnalytics — apps/web injects
+// it deliberately via rootHead.ts; apps/admin does not, and should not: this
+// dashboard's own visits would pollute the public site's traffic numbers).
+// Blocking it here is the intended behaviour, not a gap to close.
 const DOCUMENT_CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
+  "media-src 'self' blob:",
   "font-src 'self'",
   "connect-src 'self'",
   "worker-src 'self'",
