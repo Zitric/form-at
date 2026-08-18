@@ -97,8 +97,11 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
       // identical from here otherwise (see validateUpload.ts). Distinguish
       // it explicitly rather than sending an admin to inspect a perfectly
       // valid mp3. Both messages avoid suggesting "type the duration in
-      // instead" as a fix — canSubmit still gates on !audioError below, so
-      // that wouldn't actually unblock anything.
+      // instead" as a fix — canSubmit still gates on !audioError below, and
+      // deliberately keeps doing so even for the CSP case: not knowing the
+      // duration is not knowing it, whatever the cause, and a typed-in
+      // number the catalogue can't verify against the audio is worse than a
+      // blocked upload. The CSP path is fixed, so this should stay rare.
       setAudioError(
         err instanceof Error && err.message === "AUDIO_BLOCKED_BY_CSP"
           ? "the browser blocked reading this file (security policy) — that's an app bug, not a problem with your file. report it."

@@ -121,7 +121,7 @@ Only the **installed app** plays from IndexedDB. A browser tab always streams fr
 
 So the file never touches the Worker. `apps/admin/app/routes/api/sets-presign.ts` presigns three direct-to-R2 `PUT` URLs (audio, artwork, peaks) and the browser uploads straight to R2.
 
-Worth stating plainly: this is designed and deployed, **not yet exercised by a real upload** — the unit tests cover our own logic, not R2's CORS config or a browser `PUT` of a 220MB file. Tracked as item 23 in [`TECH_DEBT.md`](TECH_DEBT.md), along with the two other paths in the same position.
+Worth stating plainly: the first real upload attempt, 2026-08-18, got no further than selecting the file — `apps/admin`'s CSP had no `media-src` directive, so the duration-read step silently blocked a perfectly valid mp3, and no unit test could have caught it (jsdom enforces no CSP; the header only exists on the real `server.ts` response). Fixed, and that step is now proven. Everything past it — R2's CORS config, the presigned URL surviving a real `PUT`, a browser `PUT` of a 220MB file — is still exactly as unexercised as before, since the upload never got that far. Tracked as item 23a in [`TECH_DEBT.md`](TECH_DEBT.md), along with the two other paths in the same position.
 
 Progress reporting forced a second decision: `fetch()` still has no upload-progress API — no `onUploadProgress`, and the streaming-request-body workaround has inconsistent browser support. `XMLHttpRequest.upload.onprogress` is the mechanism that actually works, which is why `apps/admin/app/utils/uploadWithProgress.ts` uses XHR in an otherwise modern codebase. A deliberate limitation: a dropped connection restarts that file's PUT from zero, since these are single PUTs rather than multipart uploads.
 

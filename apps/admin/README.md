@@ -45,6 +45,26 @@ the edge, not individual endpoint calls, so each writer verifies the Access
 identity server-side. All four do. There is deliberately no dev-mode bypass, and
 only the read-only aggregate queries may skip it.
 
+## The CSP blocks the Web Analytics beacon on purpose
+
+If the console shows `static.cloudflareinsights.com` blocked by CSP here,
+that's intentional — and it isn't this app's own injection to go looking for,
+because there isn't one. `apps/web/app/utils/rootHead.ts` injects the beacon
+deliberately (see `@form-at/data/webAnalytics`'s header for why); `apps/admin`
+never does. Cloudflare's zone-level automatic Web Analytics setup edge-injects
+the same beacon into every hostname in the `formatglasgow.com` zone, admin
+included, and `app/server.ts`'s `DOCUMENT_CSP` doesn't allowlist it — which is
+the point: this dashboard's own visits would otherwise pollute the public
+site's traffic numbers. The actual toggle for that edge injection lives in the
+Cloudflare dashboard's Web Analytics settings, not in this repo.
+
+`media-src 'self' blob:'` **is** required, though. `UploadSetForm`'s duration
+read (`readAudioDuration`, `app/utils/validateUpload.ts`) loads the selected
+file into an `<audio>` element via a `blob:` object URL, and without that
+directive the load is silently blocked, `loadedmetadata` never fires, and
+every upload reports a valid mp3 as unreadable — found against a real upload,
+2026-08-18 (see `TECH_DEBT.md` item 23a).
+
 ## The house rule for numbers
 
 A metric that failed to load is `null`, never `0`. `0` states "no traffic"; `null`

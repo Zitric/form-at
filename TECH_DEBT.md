@@ -7,7 +7,7 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
-- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — three shipped paths never exercised for real), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project)
+- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a partially cleared 2026-08-18, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project)
 - **Deferred, recorded rather than done:** 24 (DJ/event data model still static while sets are in D1), 25 (no-cross-app-imports unenforced), 26 (`PWA_PROGRESS.md` too large to be readable)
 - **Invalid:** 1 (2026-07-22 — premise was wrong, not stale: both flagged functions are load-bearing behind a live multi-provider calendar picker; do not delete, see item for the full re-verification)
 - **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, real trigger is ~10-15 sets in the catalogue, not a calendar date; see item for why that arrives faster now)
@@ -807,10 +807,13 @@ hard-refresh" stops being an acceptable answer.
 
 ## 23. [VERIFICATION DEBT] Three shipped paths have never been exercised for real
 
-Three features are built, reviewed, deployed and covered by unit tests, and have
-**never been run once against real input**. Unit tests here prove our own logic;
-they cannot prove the parts that only a real file, a real device or a real
-service exercises.
+Three features are built, reviewed, deployed and covered by unit tests. Two of
+them — b and c below — have **never been run once against real input**. Unit
+tests here prove our own logic; they cannot prove the parts that only a real
+file, a real device or a real service exercises. The third, a, got its first
+real attempt on 2026-08-18, and it's the case in point for why this item
+exists at all: it failed immediately, on exactly the kind of thing a unit-test
+suite structurally cannot catch (see below).
 
 This item exists because the honest admissions were buried at lines 2820 and
 3475 of a 4,006-line `PWA_PROGRESS.md`, which is the same as not recording them.
@@ -818,13 +821,27 @@ Anyone reading `README.md` or `CLAUDE.md`'s architecture map would reasonably
 conclude all three are proven in service.
 
 **a. Set upload, end to end.** `apps/admin/app/routes/api/sets-presign.ts` →
-direct-to-R2 `PUT` → `api/sets.ts` writing the catalogue row. Never had a real
-file through it. Unverified specifically: whether R2's CORS config accepts a
-browser `PUT` from `admin.formatglasgow.com`, whether the presigned URL's
-signature survives the real upload, and whether `uploadWithProgress.ts`'s XHR
-progress events behave against R2 rather than a stub. A 220MB upload is also the
-only way to learn what a dropped connection actually does, since these are single
-PUTs with no resume.
+direct-to-R2 `PUT` → `api/sets.ts` writing the catalogue row. **Partially
+cleared 2026-08-18.** The first real upload attempt reached only the
+file-selection step before failing there: `apps/admin`'s CSP had no
+`media-src` directive, so `readAudioDuration`'s `blob:` load of the selected
+mp3 into an `<audio>` element (`apps/admin/app/utils/validateUpload.ts`) was
+silently blocked, `loadedmetadata` never fired, and the form reported a
+perfectly valid file as unreadable. No unit test could have caught this —
+jsdom enforces no CSP, and the header is only ever set on the real
+`server.ts` fetch response. Fixed by adding `media-src 'self' blob:'` to
+`DOCUMENT_CSP`; also fixed in the same pass: the error message no longer
+implies the file is bad (it wasn't), and `readAudioDuration` now distinguishes
+a CSP block from a genuinely unplayable file via a `securitypolicyviolation`
+listener, so this specific failure mode won't be misdiagnosed again if it
+ever recurs.
+That proves file selection and the duration read, and nothing past it — the
+attempt never reached presign, so R2's CORS config, whether the presigned
+URL's signature survives a real upload, and whether `uploadWithProgress.ts`'s
+XHR progress events behave against R2 rather than a stub are all still
+exactly as unverified as before. A 220MB upload is also still the only way to
+learn what a dropped connection actually does, since these are single PUTs
+with no resume.
 
 **b. iOS push on a physical device.** The whole `@pushforge/builder` choice
 exists so Web Push can be signed inside a Worker; the platform where push
@@ -843,10 +860,12 @@ applied to production D1 and holds seven rows, one per day, all `ok = 1`, six of
 them written by the cron rather than by hand. That is the capture loop working
 unattended, which is exactly what the table was added to make observable.
 
-**How to clear a, b and c:** upload one short real set through the admin form.
-That single act exercises the presign, the R2 CORS config, the progress
-reporting, the catalogue write, and — on the next deploy — the artwork variant
-generation. Then send one push and open it on an iPhone. Neither needs new code.
+**How to clear the rest of a, plus b and c:** upload one short real set through
+the admin form. With the CSP block cleared, that attempt should now get past
+file selection into the unproven part — the presign, the R2 CORS config, the
+progress reporting, the catalogue write — and on the next deploy, the artwork
+variant generation. Then send one push and open it on an iPhone. Neither
+needs new code.
 
 ---
 
