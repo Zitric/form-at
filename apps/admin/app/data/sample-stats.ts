@@ -199,8 +199,9 @@ export const SAMPLE_ADMIN_DASHBOARD_STATS: AdminDashboardStats = {
     acceptedRate: 12 / 30,
   },
   calendarAdds: {
-    // Genuinely 0 today — collection hasn't been deployed long enough to
-    // accumulate any. Demonstrates the "nothing recorded yet" empty state.
+    // Deliberately 0: this is the fixture's one demonstration of the "nothing
+    // recorded yet" empty state, which every other metric here skips past.
+    // Says nothing about production's current count.
     total: 0,
   },
   installToPushConversion: {

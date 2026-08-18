@@ -1,0 +1,58 @@
+This repository is covered by two different sets of terms. The source code is
+MIT-licensed. The images and artist biographies are not licensed for reuse.
+Read both sections before copying anything out of here.
+
+================================================================================
+1. SOURCE CODE — MIT License
+================================================================================
+
+Applies to all source code, configuration and documentation in this repository,
+EXCEPT the material listed in section 2.
+
+Copyright (c) 2026 Julián Palomo
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================================================================================
+2. IMAGES AND ARTIST BIOGRAPHIES — All rights reserved, not licensed for reuse
+================================================================================
+
+The MIT grant above does NOT apply to any of the following:
+
+  - apps/web/public/images/djs/     — photographs of individual artists
+  - apps/web/public/images/events/  — event flyers and artwork
+  - apps/web/public/images/sets/    — mix artwork
+  - apps/web/public/og/             — generated share banners derived from the above
+  - the `bio` and `photo` fields in apps/web/app/data/djs.ts
+
+These are the property of the artists, photographers and designers who created
+them. They were provided to Form:at for use on formatglasgow.com and for
+promoting the events they relate to. That permission does not extend to anyone
+else, and publishing this repository does not widen it.
+
+You may not copy, redistribute, modify or reuse them, in any medium, including
+as training data for machine-learning systems. They are present in this
+repository only because the site is built from it.
+
+If you want to use one of these images, contact the artist directly. If you are
+an artist pictured here and want your image removed, open an issue or get in
+touch and it will be taken down.
+
+Audio recordings are not in this repository at all; they are served from
+separate storage and are likewise all rights reserved.

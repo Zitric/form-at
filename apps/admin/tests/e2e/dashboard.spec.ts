@@ -17,8 +17,8 @@ test.describe("admin dashboard", () => {
   test("renders the page title and the sample-data marker", async ({ page }) => {
     await gotoAndHydrate(page, "/dashboard");
     await expect(page.getByRole("heading", { name: /analytics/i })).toBeVisible();
-    // Proves we're in the fixture path, not a fluke of real data — also the
-    // literal marker Julian asked for so sample numbers can't be mistaken
+    // Proves we're in the fixture path, not a fluke of real data. The marker is
+    // deliberately literal text on the page so sample numbers can't be mistaken
     // for real ones.
     await expect(page.getByText(/sample data/i)).toBeVisible();
   });

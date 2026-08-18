@@ -1,11 +1,10 @@
+import { isAllowedPushEndpoint } from "@form-at/data/pushEndpoints";
 import { createFileRoute } from "@tanstack/react-router";
 
-// Convention choice: mirrors `api/event.ts` (exported `validate` for unit
-// tests, try/catch-swallow, always-204 response) rather than the older
-// `api/signal.ts` pattern — `push_subscriptions` is a Phase-2 sibling of
-// the deliberately-designed `events` table, not a play-tracking beacon, so
-// it follows the newer/better-practice convention rather than the one that
-// predates "export pure logic for tests."
+// Shares the shape of the other two public writers, `api/event.ts` and
+// `api/signal.ts`: an exported `validate` so the parsing rules are unit-testable
+// without a request, a try/catch that swallows everything, and an unconditional
+// 204 so the response never reveals whether the body was accepted.
 //
 // Wire shape: `endpoint` / `keys.p256dh` / `keys.auth` are NOT our casing
 // choice — that's exactly what the browser's `PushSubscription.toJSON()`
@@ -34,9 +33,14 @@ export function validate(raw: unknown): SubscribeBody | null {
   ) {
     return null;
   }
-  // Push service endpoints are always HTTPS — reject anything else outright
-  // rather than storing (and later POSTing to) an unexpected scheme.
-  if (!r.endpoint.startsWith("https://")) return null;
+  // WHERE the endpoint points, not just that it's a well-formed HTTPS string.
+  // This body is attacker-supplied and whatever lands in the table is later
+  // POSTed to by sendWebPush, so an unrestricted endpoint makes this a public
+  // request-forwarding primitive. `isAllowedPushEndpoint` parses the URL and
+  // matches the real hostname — a prefix check on the raw string would accept
+  // `https://fcm.googleapis.com@evil.example/`. It covers the HTTPS-only rule
+  // too, so there's no separate scheme check to fall out of step with it.
+  if (!isAllowedPushEndpoint(r.endpoint)) return null;
 
   const keys = r.keys as Record<string, unknown> | undefined;
   if (!keys || typeof keys !== "object") return null;

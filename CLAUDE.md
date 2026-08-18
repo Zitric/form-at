@@ -264,6 +264,8 @@ catch the sentence that quietly became untrue, which you can't do from memory.
 | `PWA_PROGRESS.md` | a decision was made whose reasoning is worth preserving, **including what was tried and rejected**. |
 | `TECH_DEBT.md` | a known gap was accepted rather than fixed, or an existing item's premise changed. |
 | `IMPROVEMENTS.md` | something shipped, or was deliberately dropped and shouldn't be re-proposed. |
+| `apps/web/README.md` | that app's layout, its build/dev commands, or one of its silent-failure rules changed. |
+| `apps/admin/README.md` | the dashboard's layout, its security controls, or the `null`-not-`0` rule changed. |
 | `apps/web/scripts/README.md` | a script, flag or setup step changed. |
 | `apps/web/tests/README.md` | test layout or conventions changed. |
 | `apps/web/images-source/README.md` | the image pipeline changed. |
@@ -430,7 +432,9 @@ bridges it to `audio.play()`/`audio.pause()`.
 
 ### API route shape
 
-TanStack Start v1.167 has no `createAPIFileRoute`. Use `createFileRoute` with a
+TanStack Start has no `createAPIFileRoute` as of the version pinned in
+`pnpm-lock.yaml` (1.167 at the time of writing — check there, not here, if the
+API looks different). Use `createFileRoute` with a
 `server: { handlers }` option:
 
 ```ts

@@ -8,6 +8,7 @@
     "./sets": "./src/sets.ts",
     "./set-stats": "./src/set-stats.ts",
     "./webPush": "./src/webPush.ts",
+    "./pushEndpoints": "./src/pushEndpoints.ts",
     "./webAnalytics": "./src/webAnalytics.ts",
     "./rumArchive": "./src/rumArchive.ts"
   },

@@ -154,7 +154,10 @@ export const Route = createFileRoute("/api/send-push")({
 
           if (result.outcome === "sent") {
             sent++;
-          } else if (result.outcome === "dead") {
+          } else if (result.outcome === "dead" || result.outcome === "blocked") {
+            // `blocked` is deleted like `dead` because neither can ever become
+            // valid, and leaving a blocked row would re-refuse it on every send
+            // forever. Grouped in the count too: both mean "row removed".
             deadRemoved++;
             await db
               .prepare("DELETE FROM push_subscriptions WHERE endpoint = ?")

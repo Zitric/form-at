@@ -33,6 +33,32 @@ describe("validate (api/push-subscribe)", () => {
     ).toBeNull();
   });
 
+  it("rejects an endpoint pointing at a host that isn't a push service", () => {
+    // This body is public and unauthenticated, and whatever it stores gets
+    // POSTed to later — so an arbitrary host here is a request-forwarding
+    // primitive, not just bad data. Full host-matching coverage lives in
+    // packages/data's pushEndpoints.test.ts; this asserts the endpoint is
+    // actually wired to it.
+    expect(validate({ ...validBody, endpoint: "https://evil.example/collect" })).toBeNull();
+  });
+
+  it("rejects a host that only starts with a real push service", () => {
+    expect(
+      validate({ ...validBody, endpoint: "https://fcm.googleapis.com.evil.example/fcm/send/x" }),
+    ).toBeNull();
+  });
+
+  it("accepts the other real push services, not just FCM", () => {
+    // Guards against the allowlist being narrowed to whatever the fixture uses
+    // and silently locking out Firefox or Safari subscribers.
+    for (const endpoint of [
+      "https://updates.push.services.mozilla.com/wpush/v2/abc",
+      "https://web.push.apple.com/QRSTUV-abc",
+    ]) {
+      expect(validate({ ...validBody, endpoint })).not.toBeNull();
+    }
+  });
+
   it("rejects a missing endpoint", () => {
     const { endpoint, ...rest } = validBody;
     expect(validate(rest)).toBeNull();

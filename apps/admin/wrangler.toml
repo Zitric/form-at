@@ -39,9 +39,9 @@ CF_ZONE_ID = "559d86b5a76e8415f83d4c3e0832935c"
 # live here — it's a committed constant in packages/data/src/webAnalytics.ts,
 # shared with apps/web, which renders it into every page anyway.
 #
-# CF_ACCOUNT_ID replaces the R2_ACCOUNT_ID Pages secret, which held this same
-# value under an R2-flavoured name. sets-presign.ts still falls back to the old
-# name; delete that fallback and the secret once this is confirmed live.
+# CF_ACCOUNT_ID replaced an older `R2_ACCOUNT_ID` Pages secret holding this same
+# value under an R2-flavoured name. Nothing reads the old name any more — if that
+# secret still exists on the Pages project it is inert and can be deleted.
 # Where to re-read it: any zone's Overview tab -> API -> Account ID.
 #
 # NOTE: this is a RUNTIME BINDING NAME, read as `env.CF_ACCOUNT_ID` inside the

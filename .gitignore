@@ -61,9 +61,3 @@ packages/*/storybook-static/
 # Review diffs written by `pnpm dump-diff` — regenerated on every run and
 # wiped first, so they only ever describe the current branch
 .diff-dump/
-
-# Cloudflare Access AUD tag — a public application identifier, not a credential.
-# It says which Access app a JWT was issued for; forging a token still requires
-# Cloudflare's private signing key. verifyAccessJwt.ts reads it to know what to
-# verify against. See apps/admin/wrangler.toml's own comment.
-da73131d64555b38abb8de17ed09f6c44e33106b:apps/admin/wrangler.toml:generic-api-key:21

@@ -206,9 +206,17 @@ async function main() {
 
     if (result.outcome === "sent") {
       sent++;
-    } else if (result.outcome === "dead") {
+    } else if (result.outcome === "dead" || result.outcome === "blocked") {
       deadRemoved++;
-      console.log(`  dead (${result.status}), removing: ${shortEndpoint}`);
+      // Logged distinctly from a push-service `dead`: a blocked row means either
+      // someone POSTed a foreign endpoint to /api/push-subscribe, or the
+      // allowlist has fallen behind a browser vendor. Both are worth noticing
+      // rather than blending into the routine dead-subscription count.
+      const why =
+        result.outcome === "blocked"
+          ? `blocked (host ${result.host} is not a known push service)`
+          : `dead (${result.status})`;
+      console.log(`  ${why}, removing: ${shortEndpoint}`);
       runD1Command(
         `DELETE FROM push_subscriptions WHERE endpoint = '${escapeSqlString(row.endpoint)}'`,
       );

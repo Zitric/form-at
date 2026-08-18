@@ -40,14 +40,14 @@ describe("isDeadSubscriptionStatus", () => {
 // SendPushResult — the contract callers' delete-vs-retry decision hangs on.
 vi.mock("@pushforge/builder", () => ({
   buildPushHTTPRequest: vi.fn().mockResolvedValue({
-    endpoint: "https://push.example.com/send/abc",
+    endpoint: "https://fcm.googleapis.com/fcm/send/abc",
     headers: { "Content-Encoding": "aesgcm" },
     body: new ArrayBuffer(8),
   }),
 }));
 
 const subscription = {
-  endpoint: "https://push.example.com/send/abc",
+  endpoint: "https://fcm.googleapis.com/fcm/send/abc",
   keys: { p256dh: "p256dh-value", auth: "auth-value" },
 };
 const payload = { title: "t", body: "b" };
@@ -59,6 +59,41 @@ function stubFetchStatus(status: number, statusText = "") {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("sendWebPush refuses endpoints outside the push-service allowlist", () => {
+  // The send path reads DATABASE ROWS, not the output of /api/push-subscribe's
+  // validator — so rows written before the allowlist existed, or by any future
+  // writer that forgets to validate, still reach this function. This is the last
+  // check before an outbound POST, so it has to hold on its own.
+  it("blocks a foreign host and makes no request at all", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const result = await sendWebPush(
+      { ...subscription, endpoint: "https://evil.example/collect" },
+      payload,
+      vapid,
+    );
+
+    expect(result).toEqual({ outcome: "blocked", host: "evil.example" });
+    // The point of the whole exercise: no request leaves the Worker.
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("blocks a lookalike host that a string-prefix check would accept", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const result = await sendWebPush(
+      { ...subscription, endpoint: "https://fcm.googleapis.com.evil.example/fcm/send/x" },
+      payload,
+      vapid,
+    );
+
+    expect(result).toMatchObject({ outcome: "blocked" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe("sendWebPush status→outcome mapping", () => {

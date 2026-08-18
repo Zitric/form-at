@@ -12,6 +12,7 @@
 // (web-push-libs/web-push#718). See PWA_PROGRESS.md's Phase 2 section for the
 // research trail.
 import { buildPushHTTPRequest } from "@pushforge/builder";
+import { isAllowedPushEndpoint } from "./pushEndpoints";
 
 export type PushSubscriptionRecord = {
   endpoint: string;
@@ -50,6 +51,14 @@ export type SendPushResult =
   // notification permission at the OS level, endpoint expired) — the
   // sender must stop sending to it. Callers are expected to delete the row.
   | { outcome: "dead"; status: number }
+  // The stored endpoint doesn't point at a known push service, so we refuse to
+  // send rather than acting as a request forwarder. Distinct from `dead`, which
+  // means the push service itself disowned the subscription: this one is our own
+  // refusal, and no request was made. Callers should delete the row — it can
+  // never become valid — but the two shouldn't be conflated in logs, because a
+  // `blocked` row means either an attacker POSTed to /api/push-subscribe or the
+  // allowlist has fallen behind a browser vendor.
+  | { outcome: "blocked"; host: string }
   | { outcome: "failed"; status: number; statusText: string };
 
 // Exported separately (not inlined into sendWebPush) so the dead-subscription
@@ -68,6 +77,21 @@ export async function sendWebPush(
   payload: PushPayload,
   vapid: VapidCredentials,
 ): Promise<SendPushResult> {
+  // Re-checked here even though /api/push-subscribe validates on the way in.
+  // This function's input is a DATABASE ROW, not that validator's output, and
+  // rows predating the allowlist are still in `push_subscriptions`. This is the
+  // last point before an outbound POST to an attacker-chosen host, so it's the
+  // one that actually has to hold.
+  if (!isAllowedPushEndpoint(subscription.endpoint)) {
+    let host: string;
+    try {
+      host = new URL(subscription.endpoint).hostname;
+    } catch {
+      host = "unparseable";
+    }
+    return { outcome: "blocked", host };
+  }
+
   const { endpoint, headers, body } = await buildPushHTTPRequest({
     privateJWK: vapid.privateJWK,
     subscription,
