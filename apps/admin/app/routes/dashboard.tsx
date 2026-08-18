@@ -3,8 +3,8 @@ import { sets } from "@form-at/data/sets";
 import { PageTitle } from "@form-at/ui";
 // Internal read-only analytics dashboard. NO IN-APP AUTHENTICATION HERE —
 // this is deliberate, not an oversight. Access is restricted at the edge by
-// Cloudflare Access on the admin.formatglasgow.com subdomain itself (Julian
-// configures this outside this repo's scope). A future session finding no
+// Cloudflare Access on the admin.formatglasgow.com subdomain itself, which is
+// configured outside this repo's scope. A future session finding no
 // login check on this route should read this comment before "fixing" it —
 // adding in-app auth here would be solving an already-solved problem with a
 // weaker mechanism (client-side checks are trivially bypassed; Cloudflare

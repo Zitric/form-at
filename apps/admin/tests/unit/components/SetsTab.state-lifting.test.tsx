@@ -14,7 +14,7 @@ const fakeSetStats = { playCount: 5, avgSeconds: 90, weeklyPlays: [] };
 
 // Mirrors AdminDashboard's real shape: fetchSetStats-per-selection state and
 // its effect live in the PARENT, above the tab switch — exactly like
-// dashboard.tsx does. This is the actual risk Julian flagged: if that state
+// dashboard.tsx does. This is the actual risk being guarded: if that state
 // instead lived inside SetsTab, switching away from "sets" and back would
 // unmount it, losing the selection and re-firing the fetch. Using the real
 // SetsTab/DashboardTabs components (not reimplemented stand-ins) so this

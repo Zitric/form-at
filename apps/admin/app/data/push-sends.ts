@@ -5,9 +5,9 @@
 // specifically. Same directly-callable, unit-testable-with-a-fake-D1
 // convention admin-stats.ts already established.
 //
-// Schema: see apps/web/schema.sql's `admin_push_sends` table — NOT yet
-// applied to the remote database (proposed in schema.sql, Julian runs the
-// migration himself, same "Julian runs it" pattern as push_subscriptions).
+// Schema: see apps/web/schema.sql's `admin_push_sends` table. Migrations are
+// applied by hand against the remote database, never by running schema.sql as
+// a file — it holds non-idempotent ALTERs that fail on a second run.
 import { createServerFn } from "@tanstack/react-start";
 import { fetchPushSubscriberStats } from "./admin-stats";
 

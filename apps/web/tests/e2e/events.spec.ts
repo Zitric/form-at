@@ -35,8 +35,8 @@ test.describe("events page", () => {
     page,
   }) => {
     // Asserts against the LIVE description text from events.ts rather than
-    // hardcoded wording — that field is Julian's copy to edit freely; this
-    // test verifies the WIRING (whatever he writes there actually renders),
+    // hardcoded wording — that field is editorial copy, changed freely; this
+    // test verifies the WIRING (whatever is written there actually renders),
     // not a specific choice of words — this has broken CI before, when draft
     // copy a test was written against got rewritten.
     const event = getEvent("seafield-sound");

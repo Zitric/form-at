@@ -35,22 +35,22 @@ test.describe("sets page", () => {
   });
 
   // The offline-click-nav fallback (fetchAllSetsForRoute/fetchSetForRoute in
-  // ~/data/sets) is deliberately NOT e2e-tested here: reproducing real offline
-  // conditions in dev mode also hits an
-  // unrelated, pre-existing gap — SaveForOfflineIconButton's own import
-  // chain (SaveGateModal/useOfflineDownload) fails to load offline in dev
-  // (Vite serves unbundled native ESM per-file; a failed import anywhere in
-  // a route's transitive graph fails the WHOLE route component, not just
-  // that sub-tree), which crashed the entire /sets page regardless of my
-  // fix — confirmed with a throwaway debug script logging
-  // `requestfailed`/`pageerror` events, unrelated to any of this PR's
-  // changes. That's a real, separate bug (flagged to Julian directly, not
-  // silently absorbed here) — but building an e2e test around it would mean
-  // either fixing it too (real scope creep) or narrowing the test until it
-  // stopped testing anything meaningful. The actual client-side-rejection
-  // fix is covered directly instead, in
-  // tests/unit/data/sets.test.ts, by mocking fetchAllSets/
-  // fetchSetForDetailPage to reject and asserting the wrapper still
-  // resolves to the snapshot — reliable, fast, and exercises the exact real
-  // code path without needing dev's module graph to fully cooperate.
+  // ~/data/sets) is deliberately NOT e2e-tested here, because Playwright drives
+  // the DEV server and offline can't be faked there without hitting a
+  // dev-only failure that swamps what's under test.
+  //
+  // The mechanism: Vite dev serves unbundled native ESM, one request per
+  // module, so going offline fails whichever imports haven't loaded yet — and a
+  // failed import anywhere in a route's transitive graph fails the WHOLE route
+  // component, not just that sub-tree. SaveForOfflineIconButton's chain
+  // (SaveGateModal/useOfflineDownload) is enough to take out all of /sets.
+  // Production doesn't behave this way: the service worker precaches the built,
+  // hashed chunks, so the route's graph is already local. It is a limitation of
+  // testing offline against dev, not a bug in the app — see TECH_DEBT.md item
+  // 27 for what it would take to cover this properly.
+  //
+  // Covered instead where it can be exercised honestly: tests/unit/data/
+  // sets.test.ts mocks fetchAllSets/fetchSetForDetailPage to reject and asserts
+  // the wrapper still resolves to the snapshot. Same code path, no dependence
+  // on dev's module graph.
 });

@@ -176,10 +176,13 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 -- email (apps/admin/app/utils/verifyAccessJwt.ts) — never trust a
 -- client-supplied value for this field. apps/web's own scripts/send-push.ts
 -- (the CLI fallback, still available) does not write to this table — it
--- has no D1 binding to write through and remains a Julian-only local tool.
+-- has no D1 binding to write through and remains a local-only operator tool.
 --
--- Not yet applied to the remote database — same "Julian runs it" pattern
--- as `push_subscriptions` above. Do NOT use `--file=apps/web/schema.sql`
+-- Applied to the remote database — the admin send path awaits
+-- `recordPushSend`, so a missing table would fail every send. The `PRAGMA`
+-- below is the authority if you need to confirm; don't trust this line alone,
+-- it records a state that changes. Re-running the CREATE is harmless either
+-- way (`IF NOT EXISTS`). Do NOT use `--file=apps/web/schema.sql`
 -- (this file also contains the one-time, non-idempotent
 -- `ALTER TABLE plays ADD COLUMN is_offline` above — running the whole file
 -- fails with a duplicate-column error). Run the isolated statement instead:
@@ -263,8 +266,11 @@ CREATE TABLE IF NOT EXISTS sets (
 -- (both served fine by the primary key / a full table scan at this table's
 -- realistic size). Add one if a real filtered query need shows up later.
 
--- Not yet applied to the remote database — same "Julian runs it" pattern as
--- every other table in this file. Do NOT use `--file=apps/web/schema.sql`
+-- Applied to the remote database — the set-restore feature reads and writes
+-- this table in production. Confirm with the `PRAGMA` below rather than
+-- trusting this line, which records a state that changes; re-running the
+-- CREATE is harmless either way (`IF NOT EXISTS`).
+-- Do NOT use `--file=apps/web/schema.sql`
 -- (this file also contains the one-time, non-idempotent
 -- `ALTER TABLE plays ADD COLUMN is_offline` above). Run the isolated
 -- statements instead, in order:
@@ -312,9 +318,9 @@ CREATE TABLE IF NOT EXISTS sets (
 -- (apps/admin/app/utils/verifyAccessJwt.ts) — never a client-supplied value,
 -- same rule `admin_push_sends.sent_by_email` already follows.
 --
--- Not yet applied to the remote database — same "Julian runs it" pattern as
--- every other table in this file. Do NOT use `--file=apps/web/schema.sql`.
--- Run the isolated statement instead:
+-- Applied to the remote database — see the note on the table above; confirm
+-- with the `PRAGMA` rather than this line. Do NOT use
+-- `--file=apps/web/schema.sql`. Run the isolated statement instead:
 -- npx wrangler d1 execute form-at-analytics --remote --command "CREATE TABLE IF NOT EXISTS admin_deleted_sets (id INTEGER PRIMARY KEY AUTOINCREMENT, deleted_at INTEGER NOT NULL, deleted_by_email TEXT NOT NULL, set_id TEXT NOT NULL, title TEXT NOT NULL, artist TEXT NOT NULL, date TEXT NOT NULL, venue TEXT, description TEXT, duration TEXT, src TEXT NOT NULL, artwork TEXT, artwork_original_url TEXT, peaks TEXT, size_bytes INTEGER, created_at INTEGER NOT NULL, play_count_at_deletion INTEGER NOT NULL DEFAULT 0)"
 -- Verify it landed:
 -- npx wrangler d1 execute form-at-analytics --remote --command "PRAGMA table_info(admin_deleted_sets)"

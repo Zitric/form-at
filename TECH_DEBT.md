@@ -7,7 +7,8 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
-- **Open:** 8, 12, 13, 15, 22
+- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — three shipped paths never exercised for real), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project)
+- **Deferred, recorded rather than done:** 24 (DJ/event data model still static while sets are in D1), 25 (no-cross-app-imports unenforced), 26 (`PWA_PROGRESS.md` too large to be readable)
 - **Invalid:** 1 (2026-07-22 — premise was wrong, not stale: both flagged functions are load-bearing behind a live multi-provider calendar picker; do not delete, see item for the full re-verification)
 - **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, real trigger is ~10-15 sets in the catalogue, not a calendar date; see item for why that arrives faster now)
 - **Resolved:** 2 (2026-07-22 — knip.json config + parallel CI job; see item for a correction to its own original plan), 3 (2026-07-23 — `__root.tsx` split into `fontCSS.ts` / `HydrateStore.tsx` / `rootHead.ts`), 4 (2026-07-23 — beacon queue + Background Sync, with a page-side fallback for Safari/Firefox), 6 (2026-06-28, `10811a4`), 7 (2026-07-02, `d2bbc36` — offline.html redesign, stamped during the 2026-07-06 docs cleanup), 9 (2026-06-29, `e2b5f57`), 10 (2026-06-29, `da90a12`), 11 (fully resolved 2026-07-01 — initial fix `718ead3` 2026-06-27, same-track branch closed 2026-07-01), 17 (2026-07-02 — gate proven intact via SW-preview experiments; observed bytes were HTTP cache / element buffer, not IDB; silent-blocked-tap toast fixed), 18 (2026-07-02 — not reproducible on current build; all three offline nav modes verified against the SW preview), 5 (absorbed into 19's verification — CORS re-checked on the custom domain 2026-07-06: preflight GET/HEAD + range, ACAO *, Content-Length exposed), 19 (2026-07-06 — audio on cdn.formatglasgow.com, host centralized in `@form-at/data/sets` since item 21's sweep, IDB force-re-download migration in reconcileFromIdb), 20 (2026-07-31 — superseded by the admin dashboard shipping and then moving to its own app, apps/admin), 21 (2026-08-04 — import sweep to `@form-at/data`, four shim files reduced to two deleted + two trimmed to their genuinely-local code)
@@ -804,4 +805,158 @@ hard-refresh" stops being an acceptable answer.
 
 ---
 
-_Last updated: 2026-08-08_
+## 23. [VERIFICATION DEBT] Three shipped paths have never been exercised for real
+
+Three features are built, reviewed, deployed and covered by unit tests, and have
+**never been run once against real input**. Unit tests here prove our own logic;
+they cannot prove the parts that only a real file, a real device or a real
+service exercises.
+
+This item exists because the honest admissions were buried at lines 2820 and
+3475 of a 4,006-line `PWA_PROGRESS.md`, which is the same as not recording them.
+Anyone reading `README.md` or `CLAUDE.md`'s architecture map would reasonably
+conclude all three are proven in service.
+
+**a. Set upload, end to end.** `apps/admin/app/routes/api/sets-presign.ts` →
+direct-to-R2 `PUT` → `api/sets.ts` writing the catalogue row. Never had a real
+file through it. Unverified specifically: whether R2's CORS config accepts a
+browser `PUT` from `admin.formatglasgow.com`, whether the presigned URL's
+signature survives the real upload, and whether `uploadWithProgress.ts`'s XHR
+progress events behave against R2 rather than a stub. A 220MB upload is also the
+only way to learn what a dropped connection actually does, since these are single
+PUTs with no resume.
+
+**b. iOS push on a physical device.** The whole `@pushforge/builder` choice
+exists so Web Push can be signed inside a Worker; the platform where push
+behaviour diverges most has never received one. Unverified: whether Apple's push
+service accepts our VAPID JWT, and whether the notification renders and routes
+correctly from a home-screen-installed PWA. Android has been exercised.
+
+**c. Uploaded-artwork variant generation.** `optimize-images.ts`'s
+`UPLOADED_OUT` path runs on every build and its `sets.filter(s =>
+s.artworkOriginalUrl)` has always matched zero rows, because nothing has been
+uploaded. Blocked on (a) — it cannot be tested independently.
+
+**Not debt, recorded so it isn't re-added:** the archiver run-log path was the
+fourth candidate and **is verified** as of 2026-08-17. `rum_capture_runs` is
+applied to production D1 and holds seven rows, one per day, all `ok = 1`, six of
+them written by the cron rather than by hand. That is the capture loop working
+unattended, which is exactly what the table was added to make observable.
+
+**How to clear a, b and c:** upload one short real set through the admin form.
+That single act exercises the presign, the R2 CORS config, the progress
+reporting, the catalogue write, and — on the next deploy — the artwork variant
+generation. Then send one push and open it on an iPhone. Neither needs new code.
+
+---
+
+## 24. DJs and events are static arrays while sets are in D1
+
+Sets have a D1 table, a committed snapshot (`sets.generated.ts`), live-over-
+snapshot merge, and a self-serve admin upload form. DJs
+(`apps/web/app/data/djs.ts`) and events (`apps/web/app/data/events.ts`) are plain
+TypeScript arrays edited by hand and shipped by deploy.
+
+**Why it's real debt and not just asymmetry:** the seam is visible in the
+product. `apps/admin/app/components/UploadSetForm.tsx:268` instructs the operator
+to go and hand-edit `apps/web/app/data/djs.ts` and redeploy. An admin UI telling
+you to edit a source file is the clearest possible statement that a migration
+stopped halfway.
+
+**Cost of finishing it** (this is why it's deferred, not done): a `djs` table
+plus migration; a committed snapshot and generator, because the app is
+offline-first and a cold offline start cannot query D1 — the exact reason
+`sets.generated.ts` exists; merge and fallback logic; an admin route and form
+with `verifyAccessJwt`; and photo upload to R2 wired into the build-time
+`optimize-images` uploads path, since responsive AVIF/WebP variants cannot be
+generated in a browser.
+
+**The trap that makes it less valuable than it looks:** event lineups are
+`lineupIds: [...]` in `events.ts`. Even with a DJ dashboard you would still edit
+that file to put a new guest on a bill and deploy — at which point you could have
+edited `djs.ts` in the same commit. **A DJ table only pays for itself if events
+move too.** Do both or neither.
+
+**Revisit when:** the lineup changes often enough that a deploy per booking is
+the bottleneck, or when someone other than the repo owner needs to add an artist.
+At the current cadence — a handful of events a year — hand-editing is genuinely
+cheaper than the machinery.
+
+---
+
+## 25. "Apps never import each other" is a convention, not an enforced rule
+
+`README.md` calls it "verified by there being no cross-app import anywhere in
+either app's source", and that is true today — checked 2026-08-17, no
+`apps/web` ↔ `apps/admin` imports exist. But **nothing enforces it**: no Biome
+rule, no knip boundary, no CI check. It is the repo's most-repeated architectural
+claim and one careless import away from being false, at which point the README
+becomes a false statement rather than a stale one.
+
+**Options, cheapest first:** a Biome `noRestrictedImports` rule per app banning
+the other app's path; or a grep-based CI step, which is cruder but has no
+dependency on Biome's rule coverage.
+
+**Why deferred:** the invariant has held for the life of the repo without
+enforcement, and the failure would be caught in review by anyone who knows the
+rule. The reason to do it anyway is that "verified" in the README currently
+implies a mechanism that does not exist — either the check gets built or that
+word gets softened.
+
+---
+
+## 26. `PWA_PROGRESS.md` has outgrown being readable
+
+4,006 lines in one file. It was a good idea — a decision log recording what was
+tried and **rejected**, not just what shipped — and it is genuinely the most
+useful document here for anyone resuming cold. But past a few thousand lines it
+stops functioning as a document: true and important facts inside it become
+invisible, which is precisely how item 23's admissions went unnoticed for weeks
+while `README.md` implied the opposite.
+
+**Not a formatting problem.** Splitting it per feature area, or capping it with
+an archive file for entries older than a release, would keep the value while
+making the current state findable. Any split must preserve the dated entries
+verbatim — they are correct as history and must not be rewritten to match the
+present.
+
+**Deferred because** it is a large, purely-editorial change with real risk of
+losing context in the move, and no deadline forces it. Revisit before the next
+person other than the repo owner has to work in here.
+
+---
+
+## 27. The offline click-through fallback can't be e2e-tested against the dev server
+
+`fetchAllSetsForRoute` / `fetchSetForRoute` in `~/data/sets` exist so that
+clicking through to a route while offline falls back to the committed snapshot
+instead of failing. That behaviour has **unit** coverage
+(`tests/unit/data/sets.test.ts` rejects the D1 fetches and asserts the wrapper
+still resolves) but no end-to-end coverage, and can't get any as things stand.
+
+**Why.** Playwright drives `pnpm dev`. Vite's dev server ships unbundled native
+ESM, one HTTP request per module, so `context.setOffline(true)` fails every
+not-yet-loaded import — and a failed import anywhere in a route's transitive
+graph fails the whole route component. `SaveForOfflineIconButton`'s chain
+(`SaveGateModal` → `useOfflineDownload`) is enough to blank all of `/sets`, which
+swamps whatever the test was actually asserting.
+
+**This is not a production bug.** In production the service worker precaches the
+built, content-hashed chunks, so a route's module graph is already local before
+offline matters. The failure is a property of testing offline against a dev
+server. Recorded because a previous comment in `sets.spec.ts` described it as "a
+real, separate bug" without that qualifier, which reads as an untracked defect.
+
+**What would fix it:** point a Playwright project at the production build
+(`pnpm build:web && pnpm start:web`) rather than the dev server, which is the
+only configuration where the service worker exists at all — the same constraint
+already documented for all SW-dependent behaviour. That means a second
+`webServer` config and a slower job, which is why it hasn't been done for one
+test.
+
+**Revisit when** anything else needs real offline e2e coverage; the cost is
+shared across all of it, and one test doesn't justify a second build in CI.
+
+---
+
+_Last updated: 2026-08-17_

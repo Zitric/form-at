@@ -8,7 +8,7 @@ export function BottomNav() {
   // transition to 1 once the mount effect fires. The previous `animation`
   // approach attached the keyframe *after* first paint, which caused the
   // element to appear at opacity 1, jump to 0 (from-state), then fade back
-  // in — the visible "double fade" Julian spotted on reload. Lives in
+  // in — a visible "double fade" on reload. Lives in
   // __root.tsx so it only mounts once per page load; no useFirstLoad gating
   // needed.
   const [visible, setVisible] = useState(false);

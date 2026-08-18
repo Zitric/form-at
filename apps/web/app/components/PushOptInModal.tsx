@@ -43,7 +43,7 @@ type Props = {
 //   "resuming" — the direct-subscribe path (permission already granted, no
 //     ask was ever shown). Renders nothing (geometry still pinned by
 //     min-h) — there's no honest copy to show before the outcome is known,
-//     and the window is short enough that Julian's call is to not cover it
+//     and the window is short enough that it is deliberately not covered
 //     with loading copy at all.
 type SubscribePhase = "idle" | "busy" | "resuming" | "subscribed" | "denied" | "failed";
 
