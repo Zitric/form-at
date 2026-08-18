@@ -141,4 +141,22 @@ describe("readAudioDuration", () => {
 
     await expect(promise).rejects.toThrow("INVALID_AUDIO_FILE");
   });
+
+  // jsdom has no SecurityPolicyViolationEvent constructor, so a plain Event
+  // stands in — readAudioDuration only reads `violatedDirective` off
+  // whatever it's given, and a real browser's CSP block dispatches this
+  // event on `document` before the audio element's own `error` event fires,
+  // which is exactly the sequence this simulates.
+  it("rejects with a distinct reason when a CSP media-src violation precedes the error event", async () => {
+    const capture = captureNextAudio();
+    const file = new File(["fake mp3 bytes"], "set.mp3", { type: "audio/mpeg" });
+
+    const promise = readAudioDuration(file);
+    const violation = new Event("securitypolicyviolation");
+    Object.assign(violation, { violatedDirective: "media-src 'self'" });
+    document.dispatchEvent(violation);
+    capture.get().dispatchEvent(new Event("error"));
+
+    await expect(promise).rejects.toThrow("AUDIO_BLOCKED_BY_CSP");
+  });
 });

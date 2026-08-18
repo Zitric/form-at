@@ -9,12 +9,22 @@ interface SetsListProps {
   onChanged: () => void;
 }
 
+// Locale and timeZone are pinned rather than left to resolve from the
+// environment (`undefined`) — this renders during SSR, and an unpinned
+// format resolves against whatever locale/timezone that runtime happens to
+// default to (Cloudflare Workers: UTC, typically en-US) versus the admin's
+// browser (Europe/London, en-GB — one hour off UTC for most of the year
+// under BST). Server and client then produce different text for the same
+// timestamp, which is a React hydration-mismatch error (#418), not a
+// display quirk. Pinning both makes the two renders identical regardless of
+// either environment's own settings.
 function fmtWhen(ms: number): string {
-  return new Date(ms).toLocaleString(undefined, {
+  return new Date(ms).toLocaleString("en-GB", {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Europe/London",
   });
 }
 

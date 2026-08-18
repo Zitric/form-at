@@ -91,8 +91,19 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
       // file never fires `loadedmetadata`.
       const seconds = await readAudioDuration(file);
       if (!durationTouched) setDuration(fmtSetDuration(seconds));
-    } catch {
-      setAudioError("could not read this as audio — is it a valid mp3?");
+    } catch (err) {
+      // Failing to fire `loadedmetadata` means the browser couldn't read the
+      // file, not that the file is bad — a CSP block on the blob: load looks
+      // identical from here otherwise (see validateUpload.ts). Distinguish
+      // it explicitly rather than sending an admin to inspect a perfectly
+      // valid mp3. Both messages avoid suggesting "type the duration in
+      // instead" as a fix — canSubmit still gates on !audioError below, so
+      // that wouldn't actually unblock anything.
+      setAudioError(
+        err instanceof Error && err.message === "AUDIO_BLOCKED_BY_CSP"
+          ? "the browser blocked reading this file (security policy) — that's an app bug, not a problem with your file. report it."
+          : "couldn't read this file's audio metadata — that doesn't necessarily mean it's invalid. try re-selecting it, or confirm it plays in another app.",
+      );
     }
   };
 

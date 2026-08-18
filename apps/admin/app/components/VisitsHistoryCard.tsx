@@ -19,7 +19,18 @@ import { TrendChart } from "./TrendChart";
  *  unrecoverable, so that's the moment worth flagging. */
 const ARCHIVE_STALE_AFTER_DAYS = RUM_UNSAMPLED_DAYS + 1;
 
-const dayFormat = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+// Locale AND timeZone pinned, not left to resolve from the environment — see
+// SetsList.tsx's fmtWhen for why `undefined` here is a React
+// hydration-mismatch bug (#418) on SSR'd content, not a display quirk.
+// `timeZone: "UTC"` specifically (not Europe/London, unlike fmtWhen/
+// fmtSentAt there): `iso` names a calendar day from the D1 archive, anchored
+// at UTC midnight, not a wall-clock moment — formatting it in any other zone
+// risks rolling it across a day boundary depending on DST.
+const dayFormat = new Intl.DateTimeFormat("en-GB", {
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
 const fmtDay = (iso: string | null) => (iso ? dayFormat.format(new Date(`${iso}T00:00:00Z`)) : "—");
 
 export function VisitsHistoryCard({ history }: { history: RumHistory | null }) {

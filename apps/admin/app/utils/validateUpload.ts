@@ -45,11 +45,29 @@ export async function validateArtworkFile(file: File): Promise<boolean> {
 // validity check — if the browser can't read `loadedmetadata`, it isn't
 // playable audio. Exported separately so the form's duration-read effect
 // and a standalone validity check share one implementation.
+//
+// A CSP block on the `blob:` load fires the audio element's `error` event
+// exactly like a genuinely unplayable file does — the DOM gives no way to
+// tell the two apart from the `error` event alone. `securitypolicyviolation`
+// is the one signal specific to the CSP case, so it's used here to attach a
+// distinct rejection reason. It fires synchronously when the browser blocks
+// the resource load, before the media element's own `error` event is
+// queued, so the flag it sets is safe to read inside that handler. A blocked
+// `blob:` load reports `blockedURI` as the bare scheme ("blob"), not the
+// full URL — CSP redacts blob/data/filesystem URIs.
 export function readAudioDuration(file: File): Promise<number> {
   return new Promise((resolve, reject) => {
     const audio = new Audio();
     const url = URL.createObjectURL(file);
-    const cleanup = () => URL.revokeObjectURL(url);
+    let blockedByCsp = false;
+    const onCspViolation = (e: SecurityPolicyViolationEvent) => {
+      if (e.violatedDirective.startsWith("media-src")) blockedByCsp = true;
+    };
+    document.addEventListener("securitypolicyviolation", onCspViolation);
+    const cleanup = () => {
+      URL.revokeObjectURL(url);
+      document.removeEventListener("securitypolicyviolation", onCspViolation);
+    };
     audio.preload = "metadata";
     audio.addEventListener(
       "loadedmetadata",
@@ -63,7 +81,7 @@ export function readAudioDuration(file: File): Promise<number> {
       "error",
       () => {
         cleanup();
-        reject(new Error("INVALID_AUDIO_FILE"));
+        reject(new Error(blockedByCsp ? "AUDIO_BLOCKED_BY_CSP" : "INVALID_AUDIO_FILE"));
       },
       { once: true },
     );
