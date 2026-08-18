@@ -121,6 +121,20 @@ it; only the read-only aggregate queries may. There is deliberately no dev-mode
 bypass. Paired with the host-guard rule above — Access covers neither the
 `*.pages.dev` hostname nor individual endpoint calls.
 
+### Never drop `media-src 'self' blob:` from `apps/admin`'s CSP
+`UploadSetForm`'s duration read (`readAudioDuration`,
+`apps/admin/app/utils/validateUpload.ts`) loads the selected file into an
+`<audio>` element via a `blob:` object URL to read its metadata. Without this
+directive, `default-src`'s implicit `'self'` silently blocks the load,
+`loadedmetadata` never fires, and every upload reports a valid mp3 as
+unreadable — found against a real upload, not hypothetically (`TECH_DEBT.md`
+item 23a). No unit test can catch this: jsdom enforces no CSP, and the header
+only exists on the real `server.ts` response. The same block deliberately does
+**not** allowlist `static.cloudflareinsights.com` — see `apps/admin/README.md`'s
+CSP section for why that absence is also intentional (Cloudflare's zone-level
+automatic Web Analytics setup would otherwise mix this dashboard's own visits
+into the public site's traffic numbers), not a gap to close alongside `apps/web`'s.
+
 ### Never substitute `0` for a metric that failed to load
 `AdminDashboardStats.edgeTraffic` is `null` on every failure path — missing
 credentials, 403, a GraphQL `errors` array inside a 200 body, timeout, empty
@@ -257,6 +271,14 @@ against, and it has happened repeatedly here.
 Per §1, read what each doc currently says rather than assuming — the point is to
 catch the sentence that quietly became untrue, which you can't do from memory.
 
+The table below names each doc's most common trigger — a memory aid for the
+test above, not a substitute for it. A change can fail that test without
+matching any row's wording: a new CSP directive is a security-relevant change
+to `apps/admin` even on a day nothing there says "CSP". When a change doesn't
+obviously fit a row, that's a cue to apply the test above directly, not a
+signal that no doc could be affected — the table will always lag behind the
+next kind of change no one has enumerated yet.
+
 | Doc | Re-read it when |
 |---|---|
 | `README.md` | the stack, the architecture, or any claim about how something works changed. The doc an outside reader trusts first, so a stale line here misleads furthest. |
@@ -271,9 +293,11 @@ catch the sentence that quietly became untrue, which you can't do from memory.
 | `apps/web/images-source/README.md` | the image pipeline changed. |
 | `apps/rum-archiver/README.md` | the capture, its schedule, its token scope or its secrets changed. |
 
-**A change that touches none of these needs no doc edit — say so.** Most
-bug fixes and refactors qualify. "No doc changes needed, nothing above became
-untrue" is a complete and correct answer.
+**A change that fails the test above needs no doc edit — say so**, regardless
+of whether it matched one of the table's rows on the way there. Most bug fixes
+and refactors qualify. "No doc changes needed, nothing above became untrue" is
+a complete and correct answer — but it has to follow from checking the test,
+not from the table finding no obvious row.
 
 ### A new workspace needs a README, and the root README needs to know it exists
 
