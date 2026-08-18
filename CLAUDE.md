@@ -121,19 +121,32 @@ it; only the read-only aggregate queries may. There is deliberately no dev-mode
 bypass. Paired with the host-guard rule above — Access covers neither the
 `*.pages.dev` hostname nor individual endpoint calls.
 
-### Never drop `media-src 'self' blob:` from `apps/admin`'s CSP
-`UploadSetForm`'s duration read (`readAudioDuration`,
+### Never drop `media-src blob:` or the R2 `connect-src` allowance from `apps/admin`'s CSP
+Two separate directives, two separate real bugs found back to back against the
+same real upload attempt (`TECH_DEBT.md` item 23a) — no unit test could have
+caught either, since jsdom enforces no CSP and the header only exists on the
+real `server.ts` response.
+
+`media-src 'self' blob:` — `UploadSetForm`'s duration read (`readAudioDuration`,
 `apps/admin/app/utils/validateUpload.ts`) loads the selected file into an
-`<audio>` element via a `blob:` object URL to read its metadata. Without this
-directive, `default-src`'s implicit `'self'` silently blocks the load,
-`loadedmetadata` never fires, and every upload reports a valid mp3 as
-unreadable — found against a real upload, not hypothetically (`TECH_DEBT.md`
-item 23a). No unit test can catch this: jsdom enforces no CSP, and the header
-only exists on the real `server.ts` response. The same block deliberately does
-**not** allowlist `static.cloudflareinsights.com` — see `apps/admin/README.md`'s
-CSP section for why that absence is also intentional (Cloudflare's zone-level
-automatic Web Analytics setup would otherwise mix this dashboard's own visits
-into the public site's traffic numbers), not a gap to close alongside `apps/web`'s.
+`<audio>` element via a `blob:` object URL to read its metadata. Without it,
+`default-src`'s implicit `'self'` silently blocks the load, `loadedmetadata`
+never fires, and every upload reports a valid mp3 as unreadable.
+
+`connect-src 'self' https://*.r2.cloudflarestorage.com` — once the file passes
+the check above, `UploadSetForm`'s three PUTs (`uploadWithProgress.ts`'s XHR)
+go straight from the browser to R2 against a presigned URL from
+`sets-presign.ts` (see `r2Sets.ts`). Without the R2 host, every PUT is
+silently blocked and the form shows "check your connection", which has
+nothing to do with the actual cause. Wildcarded, not the literal
+`<accountId>.r2.cloudflarestorage.com` host, because the account id is only
+known at runtime via env.
+
+The same block deliberately does **not** allowlist `static.cloudflareinsights.com`
+— see `apps/admin/README.md`'s CSP section for why that absence is also
+intentional (Cloudflare's zone-level automatic Web Analytics setup would
+otherwise mix this dashboard's own visits into the public site's traffic
+numbers), not a gap to close alongside `apps/web`'s.
 
 ### Never substitute `0` for a metric that failed to load
 `AdminDashboardStats.edgeTraffic` is `null` on every failure path — missing
