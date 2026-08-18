@@ -835,13 +835,30 @@ implies the file is bad (it wasn't), and `readAudioDuration` now distinguishes
 a CSP block from a genuinely unplayable file via a `securitypolicyviolation`
 listener, so this specific failure mode won't be misdiagnosed again if it
 ever recurs.
-That proves file selection and the duration read, and nothing past it — the
-attempt never reached presign, so R2's CORS config, whether the presigned
-URL's signature survives a real upload, and whether `uploadWithProgress.ts`'s
-XHR progress events behave against R2 rather than a stub are all still
-exactly as unverified as before. A 220MB upload is also still the only way to
-learn what a dropped connection actually does, since these are single PUTs
-with no resume.
+That proved file selection and the duration read, and nothing past it — the
+attempt hadn't yet reached presign.
+
+**Second real attempt, same day, same failure shape.** With the file-selection
+step fixed, the next try reached presign and the actual R2 `PUT`s — and hit a
+second, different CSP gap: `connect-src 'self'` has no allowance for
+`*.r2.cloudflarestorage.com`, the host `uploadWithProgress.ts`'s XHR PUTs
+target directly (a presigned URL from `sets-presign.ts`, see `r2Sets.ts`). All
+three PUTs were silently blocked, and the failure surfaced as the generic
+"upload failed — check your connection and try again" — accurate-sounding but
+wrong; nothing about the connection was at fault. Fixed by adding
+`https://*.r2.cloudflarestorage.com` to `connect-src`. Two real CSP gaps found
+back to back, immediately upon the two things this item names as untested
+(the duration read, then the presigned PUT) — direct confirmation that
+"covered by unit tests" and "exercised for real" are not the same claim, which
+is this item's entire argument.
+
+The `connect-src` fix is deployed but **not yet confirmed** — no successful
+upload has completed yet, so R2's CORS config, whether the presigned URL's
+signature survives a real PUT, and whether `uploadWithProgress.ts`'s XHR
+progress events behave against R2 rather than a stub are all still open, and
+the catalogue write (`api/sets.ts`) hasn't been reached at all. A 220MB upload
+is also still the only way to learn what a dropped connection actually does,
+since these are single PUTs with no resume.
 
 **b. iOS push on a physical device.** The whole `@pushforge/builder` choice
 exists so Web Push can be signed inside a Worker; the platform where push

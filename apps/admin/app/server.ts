@@ -4,11 +4,12 @@ import { isAllowedHost } from "~/utils/hostGuard";
 const handler = createStartHandler({ handler: defaultStreamHandler });
 
 // Document CSP — mirrors apps/web/app/server.ts's rationale, minus the R2
-// audio-host allowances (this app never streams FROM R2, only reads a
-// locally-selected file). Cloudflare Pages' `_headers` file applies to
-// static assets only; apps/admin has none (no offline document needs it),
-// so this is the only place the policy is set — unlike apps/web, which needs
-// both.
+// audio-*playback* allowances (this app never streams FROM R2 for playback,
+// only reads a locally-selected file for the duration check below). It does
+// talk to R2 directly for uploads, though — see connect-src. Cloudflare
+// Pages' `_headers` file applies to static assets only; apps/admin has none
+// (no offline document needs it), so this is the only place the policy is
+// set — unlike apps/web, which needs both.
 //
 // `media-src blob:` is required, not decorative: UploadSetForm's duration
 // read (readAudioDuration, utils/validateUpload.ts) loads the selected file
@@ -16,6 +17,17 @@ const handler = createStartHandler({ handler: defaultStreamHandler });
 // Without this, default-src's implicit 'self' blocks it, `loadedmetadata`
 // never fires, and every upload reports the selected mp3 as unreadable —
 // discovered against a real, valid file.
+//
+// `connect-src` allows `*.r2.cloudflarestorage.com` because UploadSetForm's
+// three PUTs (via uploadWithProgress.ts's XHR) go straight from the browser
+// to R2 against a presigned URL from sets-presign.ts — `https://<accountId>
+// .r2.cloudflarestorage.com/...` (see r2Sets.ts). The account id isn't a
+// secret (it's published in that same URL) but it's only known at runtime
+// via env, not at this module's load time, hence the wildcard rather than
+// the literal host. Without this, every upload's PUTs are silently blocked
+// and the form reports a generic "check your connection" — found against a
+// real upload that got past the media-src fix above and hit this next
+// (`TECH_DEBT.md` item 23a).
 //
 // script-src deliberately does NOT allowlist static.cloudflareinsights.com.
 // Cloudflare's zone-level automatic Web Analytics setup edge-injects that
@@ -31,7 +43,7 @@ const DOCUMENT_CSP = [
   "img-src 'self' data:",
   "media-src 'self' blob:",
   "font-src 'self'",
-  "connect-src 'self'",
+  "connect-src 'self' https://*.r2.cloudflarestorage.com",
   "worker-src 'self'",
   "base-uri 'self'",
   "frame-ancestors 'self'",

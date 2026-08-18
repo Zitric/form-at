@@ -45,7 +45,7 @@ the edge, not individual endpoint calls, so each writer verifies the Access
 identity server-side. All four do. There is deliberately no dev-mode bypass, and
 only the read-only aggregate queries may skip it.
 
-## The CSP blocks the Web Analytics beacon on purpose
+## The CSP: one thing blocked on purpose, two allowed for the upload form
 
 If the console shows `static.cloudflareinsights.com` blocked by CSP here,
 that's intentional — and it isn't this app's own injection to go looking for,
@@ -64,6 +64,17 @@ file into an `<audio>` element via a `blob:` object URL, and without that
 directive the load is silently blocked, `loadedmetadata` never fires, and
 every upload reports a valid mp3 as unreadable — found against a real upload,
 2026-08-18 (see `TECH_DEBT.md` item 23a).
+
+So is `connect-src`'s `https://*.r2.cloudflarestorage.com` allowance. Once the
+duration read gets past `media-src`, `UploadSetForm`'s three PUTs go straight
+from the browser to R2 against a presigned URL (`sets-presign.ts` →
+`r2Sets.ts`) — without this, every PUT is silently blocked and the form shows
+a generic "check your connection" that has nothing to do with the actual
+cause. Found the same day, immediately after the `media-src` fix, by the same
+real upload finally reaching this step (`TECH_DEBT.md` item 23a again). A
+wildcard, not the literal `<accountId>.r2.cloudflarestorage.com` host, because
+the account id is only known at runtime via env, not at this module's load
+time.
 
 ## The house rule for numbers
 
