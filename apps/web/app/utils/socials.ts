@@ -14,6 +14,7 @@ export type SocialKey =
   | "residentadvisor"
   | "bandcamp"
   | "spotify"
+  | "youtube"
   | "linktree"
   | "website";
 
@@ -68,6 +69,14 @@ export const SOCIALS: Record<SocialKey, SocialAdapter> = {
     toUrl: (h) => wrap(h, () => `https://open.spotify.com/artist/${h}`),
     androidPackage: "com.spotify.music",
   },
+  youtube: {
+    // Handles are stored WITH their leading `@` (e.g. "@Iona.Violet"), because
+    // that's what makes youtube.com/@handle resolve. A bare name without it
+    // hits a legacy /user path that 404s for modern channels.
+    label: "youtube",
+    toUrl: (h) => wrap(h, () => `https://youtube.com/${h}`),
+    androidPackage: "com.google.android.youtube",
+  },
   linktree: {
     label: "linktree",
     toUrl: (h) => wrap(h, () => `https://linktr.ee/${h}`),
@@ -85,6 +94,7 @@ export const SOCIAL_ORDER: SocialKey[] = [
   "mixcloud",
   "bandcamp",
   "spotify",
+  "youtube",
   "residentadvisor",
   "facebook",
   "linktree",

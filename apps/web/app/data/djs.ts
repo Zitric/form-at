@@ -22,6 +22,7 @@ export type DJ = {
     residentadvisor?: string;
     bandcamp?: string;
     spotify?: string;
+    youtube?: string;
     linktree?: string;
     website?: string;
   };
@@ -73,6 +74,19 @@ export const djs: DJ[] = [
       instagram: "kike_unreal",
       soundcloud: "unrealmusik",
       residentadvisor: "unreal",
+    },
+  },
+  {
+    id: "iona-violet",
+    name: "Iona Violet",
+    type: "guest",
+    bio: "Iona Violet is a DJ / Producer based in Glasgow. She has been putting in the work with the local scene over the past few years playing clubs and bars in Glasgow and Edinburgh. She is a resident DJ for the femme techno collective EPIKA and also has a residency radio show on Radio Buena Vida. Her love for electronic music enables her to play with sounds but she has a deep passion for all things techno and acid which have strong foothold in her sets.",
+    photo: "djs/iona-violet",
+    socials: {
+      instagram: "iona.violet",
+      soundcloud: "ionaviolet",
+      youtube: "@Iona.Violet",
+      residentadvisor: "iona.violet",
     },
   },
   {
