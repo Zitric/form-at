@@ -137,6 +137,8 @@ So peaks are precomputed offline: `scripts/generate-peaks.mjs` pipes the MP3 thr
 
 Those values aren't bounded to `[0, 1]` — real masters go well above it (1.882 observed on one live set, against an earlier-assumed max of 1.137), and `Waveform.tsx`'s bar-height calculation clamps to 1 before scaling for exactly that reason. An unclamped peak past ~1.11 would make the bar taller than its own canvas and get silently edge-clipped, rendering every loud section as the same flat block instead of its real shape — found against that same live set, 2026-08-18.
 
+Separately, every waveform is also scaled to *its own* loudest peak before that clamp, not a shared reference — peaks are raw amplitude, so a set correctly mastered quieter to match the rest of the catalogue never gets its bars near the top of the container otherwise, even though its own loudest moment is exactly as much a peak for that track as a hotter master's is. Confirmed against real data: an unnormalized quieter set reached only 51% of the container height at its single loudest bar, against 90% for a hotter one — the catalogue's loudness-matching (see the upload section above) was making every re-mastered set's waveform look flat by comparison until this was added, 2026-08-19.
+
 ### The standard Web Push library doesn't run on Workers
 
 *Constraint: `web-push`, the obvious choice, depends on Node's `crypto` and `https`.*
