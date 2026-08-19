@@ -100,7 +100,7 @@ function Sets() {
       {Object.entries(groups).map(([title, groupSets]) => {
         return (
           <section key={title} className="mb-10">
-            <PageTitle>002 : audio_extracted</PageTitle>
+            <PageTitle>{title}</PageTitle>
 
             <ul className="space-y-px">
               {groupSets.map((set, index) => (
