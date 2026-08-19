@@ -15,7 +15,14 @@ interface WaveformProps {
 const BAR_W = 3;
 const BAR_GAP = 1;
 
-function drawBars(canvas: HTMLCanvasElement, w: number, h: number, peaks: number[], color: string) {
+function drawBars(
+  canvas: HTMLCanvasElement,
+  w: number,
+  h: number,
+  peaks: number[],
+  color: string,
+  scale: number,
+) {
   if (!w || !h) return;
   const dpr = window.devicePixelRatio || 1;
 
@@ -33,7 +40,14 @@ function drawBars(canvas: HTMLCanvasElement, w: number, h: number, peaks: number
   ctx.fillStyle = color;
   for (let i = 0; i < count; i++) {
     const peak = peaks[Math.floor((i / count) * peaks.length)] ?? 0;
-    const barH = Math.max(2, peak * h * 0.9);
+    // `scale` rescales this track's OWN loudest moment up to 1 before the
+    // clamp below — see its computation in redraw() for why. Peaks aren't
+    // bounded to [0, 1] even after that (real encoding variance goes up to
+    // 1.882 on at least one live set), so the clamp stays regardless: a
+    // barH past the canvas height gets silently edge-clipped by the canvas
+    // itself, and every bar past that point would render as the same flat,
+    // full-height block instead of its real relative loudness.
+    const barH = Math.max(2, Math.min(peak * scale, 1) * h * 0.9);
     ctx.fillRect(i * step, (h - barH) / 2, BAR_W, barH);
   }
 }
@@ -75,8 +89,20 @@ export function Waveform({ peaks, currentTime, duration, onSeek, disabled }: Wav
     const redraw = () => {
       const w = container.offsetWidth;
       const h = container.offsetHeight;
-      drawBars(bg, w, h, peaks, colors.purple);
-      drawBars(fg, w, h, peaks, colors.gold);
+      // Peaks are raw amplitude, not loudness-relative — a set mastered
+      // quieter (correctly, to match the rest of the catalogue) never gets
+      // its bars near the top of the container even though its own loudest
+      // moment is just as much its peak as a hotter master's is for that
+      // track. Scaling every track to its own max, rather than a shared
+      // absolute reference, keeps how loud a set PLAYS (catalogue-matched
+      // loudness, unrelated to this) separate from how tall its waveform
+      // LOOKS (always uses the full visual range) — confirmed against real
+      // peaks data: an unnormalized quieter set only reached 51% of the
+      // container height at its loudest bar, against 90% for a hotter one.
+      // 0.001 floor avoids a divide-by-zero on all-silent peaks.
+      const scale = 1 / Math.max(...peaks, 0.001);
+      drawBars(bg, w, h, peaks, colors.purple, scale);
+      drawBars(fg, w, h, peaks, colors.gold, scale);
     };
 
     redraw();

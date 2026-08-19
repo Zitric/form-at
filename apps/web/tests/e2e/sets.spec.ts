@@ -2,9 +2,20 @@ import { expect, test } from "@playwright/test";
 import { gotoAndHydrate } from "./_helpers";
 
 test.describe("sets page", () => {
-  test("renders the archive title and at least one card", async ({ page }) => {
+  test("renders a set's title as its group heading, and at least one card", async ({ page }) => {
     await gotoAndHydrate(page, "/sets");
-    await expect(page.getByText(/audio_extracted/i)).toBeVisible();
+    // Sets are grouped by their own `title` field — asserting a real,
+    // stable catalogue title here, not a placeholder. This test used to
+    // assert `/audio_extracted/i`, a hardcoded string that had replaced the
+    // group's actual title in every section's heading; it passed precisely
+    // because the bug was present, not despite it.
+    //
+    // Scoped to the heading role specifically, not getByText: "Form:at 002"
+    // is also a substring of every card's own button label in this group
+    // ("t.i.l. @ Form:at 002", etc.), so getByText matched 9 elements and
+    // failed strict mode — confirmed by actually running it in CI, not
+    // just reasoned about.
+    await expect(page.getByRole("heading", { name: "Form:at 002" })).toBeVisible();
     const setCards = page.locator("ul li").filter({ has: page.getByRole("button") });
     await expect(setCards.first()).toBeVisible();
   });

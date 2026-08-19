@@ -7,7 +7,7 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
-- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a partially cleared 2026-08-18, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project)
+- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a cleared 2026-08-18 except the dropped-connection case, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project)
 - **Deferred, recorded rather than done:** 24 (DJ/event data model still static while sets are in D1), 25 (no-cross-app-imports unenforced), 26 (`PWA_PROGRESS.md` too large to be readable)
 - **Invalid:** 1 (2026-07-22 — premise was wrong, not stale: both flagged functions are load-bearing behind a live multi-provider calendar picker; do not delete, see item for the full re-verification)
 - **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, real trigger is ~10-15 sets in the catalogue, not a calendar date; see item for why that arrives faster now)
@@ -852,13 +852,46 @@ back to back, immediately upon the two things this item names as untested
 "covered by unit tests" and "exercised for real" are not the same claim, which
 is this item's entire argument.
 
-The `connect-src` fix is deployed but **not yet confirmed** — no successful
-upload has completed yet, so R2's CORS config, whether the presigned URL's
-signature survives a real PUT, and whether `uploadWithProgress.ts`'s XHR
-progress events behave against R2 rather than a stub are all still open, and
-the catalogue write (`api/sets.ts`) hasn't been reached at all. A 220MB upload
-is also still the only way to learn what a dropped connection actually does,
-since these are single PUTs with no resume.
+**Third real attempt, same day: confirmed.** With `connect-src` fixed, a real
+134MB set (audio + artwork + peaks) went all the way through — presign, all
+three R2 PUTs, and the catalogue write — and is now live and publicly served
+(`cdn.formatglasgow.com/sets/set-seafield-sound-2026-hubey/...`, verified by
+fetching the real `/sets` page HTML). That proves R2's CORS config accepts a
+browser PUT from `admin.formatglasgow.com`, the presigned URL's signature
+survives a real upload, `uploadWithProgress.ts`'s XHR progress events behave
+correctly against real R2, and the catalogue write is correct. **This item is
+now cleared** except for one specific remaining gap: nothing has tested what a
+*dropped connection* mid-upload actually does, since these are single PUTs
+with no resume — 134MB completing cleanly doesn't exercise that path. A
+220MB upload cut off partway through is the only way to learn it.
+
+The same real audio file surfaced one more defect, unrelated to the upload
+path itself but found the same way: its peaks (`scripts/generate-peaks.mjs`
+output) reach 1.882, well past the 1.137 real-world max
+`apps/admin/app/utils/validateUpload.ts`'s `MAX_PEAK_VALUE` headroom comment
+had on record. `apps/web/app/components/player/Waveform.tsx`'s bar-height
+calculation had no upper clamp, so any peak past ~1.11 made the canvas draw
+call exceed the container's height and get silently edge-clipped — every loud
+bar rendered as the same flat, full-height block instead of showing its real
+relative loudness. Fixed by clamping the peak to 1 before scaling. Another
+case of a real file's real properties breaking an assumption nothing had
+tested against — this one from mastering loudness, not infrastructure.
+
+**Root cause, not a code concern but recorded here so it isn't forgotten.**
+One recording came out of the field recorder already clipping, before any
+editing — confirmed by measuring the raw, untouched capture directly (0.0dB
+peak, flat-factor 4.3, a real clipping signature). The recorder used has **no
+input gain trim of its own**, so whatever level its input feed sends is
+whatever hits the converter, with nothing downstream able to compensate — a
+hotter source than usual on the day is enough to clip at the point of
+capture, with no editing mistake required. `master-set.ts`
+(`apps/web/scripts/`) is the software-side mitigation — it makes a hot
+recording safe and consistent with the catalogue — but it cannot undo
+clipping that already happened at capture; see that script's own header for
+exactly what it can and can't do. **The actual fix is hardware, before the
+next recording, not code**: an in-line attenuator pad between the source and
+the recorder's input, so a hotter feed can't drive the converter past its
+ceiling regardless of what the source's own output level is doing.
 
 **b. iOS push on a physical device.** The whole `@pushforge/builder` choice
 exists so Web Push can be signed inside a Worker; the platform where push
@@ -869,7 +902,13 @@ correctly from a home-screen-installed PWA. Android has been exercised.
 **c. Uploaded-artwork variant generation.** `optimize-images.ts`'s
 `UPLOADED_OUT` path runs on every build and its `sets.filter(s =>
 s.artworkOriginalUrl)` has always matched zero rows, because nothing has been
-uploaded. Blocked on (a) — it cannot be tested independently.
+uploaded. Was blocked on (a) — now unblocked, since (a)'s real upload gives it
+a genuine `artworkOriginalUrl` to run against for the first time. Still
+unverified until the next deploy actually runs it: in the meantime the
+uploaded set's artwork falls back to the plain original (`Image.tsx`'s
+`originalUrl` path — confirmed working correctly by inspecting the live page,
+but the fallback original here is an unusually large 4.5MB PNG, so it's slow
+rather than broken until the optimized variants exist).
 
 **Not debt, recorded so it isn't re-added:** the archiver run-log path was the
 fourth candidate and **is verified** as of 2026-08-17. `rum_capture_runs` is
@@ -877,12 +916,11 @@ applied to production D1 and holds seven rows, one per day, all `ok = 1`, six of
 them written by the cron rather than by hand. That is the capture loop working
 unattended, which is exactly what the table was added to make observable.
 
-**How to clear the rest of a, plus b and c:** upload one short real set through
-the admin form. With the CSP block cleared, that attempt should now get past
-file selection into the unproven part — the presign, the R2 CORS config, the
-progress reporting, the catalogue write — and on the next deploy, the artwork
-variant generation. Then send one push and open it on an iPhone. Neither
-needs new code.
+**How to clear b and c:** send one push and open it on an iPhone for b —
+neither needs new code. For c, the next deploy that includes the now-real
+`artworkOriginalUrl` clears it automatically; check the generated variants
+exist and the `/sets` page loads the fast `<picture>` path instead of the
+4.5MB fallback.
 
 ---
 

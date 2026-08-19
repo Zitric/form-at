@@ -8,9 +8,11 @@
 // Shape verified against a real peaks file from R2 (PWA_PROGRESS.md's PR4 entry
 // has the trace): `{ "peaks": number[] }`, exactly 1000 elements
 // (scripts/generate-peaks.mjs's `const PEAKS = 1000`, not duration-dependent),
-// values NOT bounded to [0, 1] — real max observed was 1.137. `[0, 2]` is
-// deliberate headroom above that: catches garbage/NaN without false-rejecting
-// legitimate encoding variance.
+// values NOT bounded to [0, 1] — real max observed is 1.882 (a louder master
+// than the 1.137 first seen; see TECH_DEBT.md item 23a and Waveform.tsx's
+// bar-height clamp, which real value broke). `[0, 2]` is deliberate headroom
+// above that: catches garbage/NaN without false-rejecting legitimate
+// encoding variance.
 const EXPECTED_PEAKS_LENGTH = 1000;
 const MAX_PEAK_VALUE = 2;
 
