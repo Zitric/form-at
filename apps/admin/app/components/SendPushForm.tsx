@@ -62,7 +62,18 @@ export function SendPushForm({ subscriberCount, onSent }: SendPushFormProps) {
       setImage("");
       onSent();
     } catch {
-      setError("send failed — network error");
+      // A thrown fetch (not a resolved !ok response, handled above) is also
+      // what an expired Cloudflare Access session looks like from here: the
+      // edge intercepts the request before it reaches this app and tries to
+      // redirect the browser to its login page, which CSP correctly blocks
+      // as a connect-src violation from an XHR's perspective — confirmed
+      // against a real one (auth_status "NONE" in the blocked redirect's own
+      // payload). A reload re-authenticates correctly because Access only
+      // breaks this way for background fetches, not full navigations; a
+      // genuine connectivity problem also just needs a reload as the first
+      // thing to try. Can't distinguish the two from here, so the message
+      // covers both rather than guessing.
+      setError("send failed — check your connection or reload the page, then try again");
     } finally {
       setSending(false);
     }

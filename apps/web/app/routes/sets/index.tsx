@@ -41,6 +41,70 @@ export const Route = createFileRoute("/sets/")({
   component: Sets,
 });
 
+// Two hero numbers, not a grid of everything — impact over completeness.
+// Reuses the SAME overallStats promise as OverallMetrics below (no second
+// query); this renders it once large near the top, the full panel still
+// renders it again in full at the bottom, unchanged.
+//
+// plays + listened_for, not reach: checked real production values before
+// picking (2026-08-19) — plays 340, listened_for 55h 43m, reach 5
+// territories. Reach is genuinely thin at that count for a large standalone
+// number ("5 territories" doesn't carry the same weight as "55h 43m"), and
+// it's still visible in the panel below regardless.
+//
+// Not the same query as admin's topSets bug: that split happened because
+// the admin query GROUPED BY denormalized title/artist text that drifted
+// case over time. This query has no GROUP BY on set metadata at all — a
+// single COUNT(*)/SUM(...) over the whole `plays` table — so nothing here
+// can double- or under-count from title-text variance.
+//
+// Same null-safe rule as OverallMetrics: `stats` is null on any failure
+// (network, D1 unreachable, zero rows), and this returns null right back —
+// never a fallback of 0, which would be a genuine wrong fact printed large
+// at the top of the page, not just a missing one. The Suspense fallback
+// below reserves the real content's height (invisible, not blank) so
+// resolution doesn't shift the set list beneath it — same technique
+// OverallMetrics already uses, worth doing here too since this sits above
+// the fold instead of at the page's end.
+function HeroStats({ promise }: { promise: Promise<OverallStats | null> }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="mb-10 grid grid-cols-1 sm:grid-cols-2 gap-6 invisible" aria-hidden="true">
+          <div>
+            <p className="font-display text-4xl sm:text-5xl text-white">—</p>
+            <Label className="mt-1 text-grey tracking-widest">plays</Label>
+          </div>
+          <div>
+            <p className="font-display text-4xl sm:text-5xl text-white">—</p>
+            <Label className="mt-1 text-grey tracking-widest">listened_for</Label>
+          </div>
+        </div>
+      }
+    >
+      <Await promise={promise}>
+        {(stats) => {
+          if (!stats) return null;
+          return (
+            <div className="mb-10 grid grid-cols-1 sm:grid-cols-2 gap-6 animate-fade-in">
+              <div>
+                <p className="font-display text-4xl sm:text-5xl text-white">{stats.totalPlays}</p>
+                <Label className="mt-1 text-grey tracking-widest">plays</Label>
+              </div>
+              <div>
+                <p className="font-display text-4xl sm:text-5xl text-white">
+                  {fmtDuration(stats.totalSeconds)}
+                </p>
+                <Label className="mt-1 text-grey tracking-widest">listened_for</Label>
+              </div>
+            </div>
+          );
+        }}
+      </Await>
+    </Suspense>
+  );
+}
+
 function OverallMetrics({ promise }: { promise: Promise<OverallStats | null> }) {
   return (
     // Fallback mirrors the real layout 1:1 so the page reserves the exact final
@@ -97,6 +161,7 @@ function Sets() {
 
   return (
     <PageLayout>
+      <HeroStats promise={overallStats} />
       {Object.entries(groups).map(([title, groupSets]) => {
         return (
           <section key={title} className="mb-10">

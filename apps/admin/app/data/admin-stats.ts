@@ -302,13 +302,13 @@ export async function fetchPlayStats(db: D1Database): Promise<PlayStats> {
       .first<{ total: number; offline_count: number; online_count: number }>(),
     db
       .prepare(
-        `SELECT set_id, set_title, set_artist, COUNT(*) as play_count
+        `SELECT set_id, COUNT(*) as play_count
          FROM plays
-         GROUP BY set_id, set_title, set_artist
+         GROUP BY set_id
          ORDER BY play_count DESC
          LIMIT 5`,
       )
-      .all<{ set_id: string; set_title: string; set_artist: string; play_count: number }>(),
+      .all<{ set_id: string; play_count: number }>(),
     // `started_at` (unix ms), not `created_at` — `plays` has no created_at
     // column; the play's own start time is the event time here.
     db
@@ -331,12 +331,24 @@ export async function fetchPlayStats(db: D1Database): Promise<PlayStats> {
     onlineCount,
     excludedCount: total - offlineCount - onlineCount,
     weeklyTrend: bucketByWeek(fillDailyWindow(trend.results, TREND_WINDOW_DAYS), TREND_BUCKET_DAYS),
-    topSets: topSets.results.map((r) => ({
-      setId: r.set_id,
-      setTitle: r.set_title,
-      setArtist: r.set_artist,
-      playCount: r.play_count,
-    })),
+    // Title/artist come from the catalogue, not the row — `plays` denormalizes
+    // both onto every play event, captured at play time rather than joined
+    // live, so a set whose title text changed (even just casing — "FORM:AT
+    // 002" vs "Form:at 002" both exist in production) splits its own play
+    // count across multiple GROUP BY buckets if grouped on that text: same
+    // set_id, different `topSets` rows, found against real dashboard data.
+    // Grouping on set_id alone and resolving the label from the catalogue
+    // matches fetchClickStats' identical fix for `events`, which never
+    // denormalized title/artist for exactly this reason.
+    topSets: topSets.results.map((r) => {
+      const set = getSet(r.set_id);
+      return {
+        setId: r.set_id,
+        setTitle: set?.title ?? r.set_id,
+        setArtist: set?.artist ?? "unknown",
+        playCount: r.play_count,
+      };
+    }),
   };
 }
 

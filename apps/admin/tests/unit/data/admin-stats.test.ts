@@ -135,18 +135,21 @@ describe("fetchAppLaunchStats", () => {
 });
 
 describe("fetchPlayStats", () => {
-  it("maps offline/online counts and top sets from snake_case columns", async () => {
+  it("maps offline/online counts, and resolves top sets' title/artist from the catalogue, not the row", async () => {
     const today = new Date().toISOString().slice(0, 10);
     // The trend query also reads FROM plays, so it needs its own route ahead of
     // the general one — routes are matched in order against the SQL text.
+    // No set_title/set_artist in the mocked row: the query no longer selects
+    // them (see fetchPlayStats' own comment for why — plays denormalizes that
+    // text per play event, which split one set's count across multiple rows
+    // when its title text changed). getSet("set-002-til") resolves against
+    // the real committed catalogue, same precedent as fetchClickStats below.
     const { db } = createFakeD1([
       { match: /GROUP BY day/, all: [{ day: today, count: 3 }] },
       {
         match: /FROM plays/,
         first: { total: 100, offline_count: 30, online_count: 70 },
-        all: [
-          { set_id: "set-002", set_title: "Form:at 002", set_artist: "t.i.l.", play_count: 12 },
-        ],
+        all: [{ set_id: "set-002-til", play_count: 12 }],
       },
     ]);
 
@@ -157,7 +160,30 @@ describe("fetchPlayStats", () => {
     expect(result.onlineCount).toBe(70);
     expect(result.excludedCount).toBe(0);
     expect(result.topSets).toEqual([
-      { setId: "set-002", setTitle: "Form:at 002", setArtist: "t.i.l.", playCount: 12 },
+      { setId: "set-002-til", setTitle: "Form:at 002", setArtist: "t.i.l.", playCount: 12 },
+    ]);
+  });
+
+  it("falls back to the raw id and 'unknown' when a played set isn't in the catalogue (e.g. deleted, or not yet in the snapshot)", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const { db } = createFakeD1([
+      { match: /GROUP BY day/, all: [{ day: today, count: 0 }] },
+      {
+        match: /FROM plays/,
+        first: { total: 1, offline_count: 0, online_count: 1 },
+        all: [{ set_id: "set-not-in-catalogue", play_count: 1 }],
+      },
+    ]);
+
+    const result = await fetchPlayStats(db);
+
+    expect(result.topSets).toEqual([
+      {
+        setId: "set-not-in-catalogue",
+        setTitle: "set-not-in-catalogue",
+        setArtist: "unknown",
+        playCount: 1,
+      },
     ]);
   });
 

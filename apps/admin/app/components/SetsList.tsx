@@ -116,7 +116,11 @@ function RestoreConfirmModal({
       }
       onRestored();
     } catch {
-      setError("restore failed — check your connection and try again");
+      // Also what an expired Cloudflare Access session looks like from a
+      // thrown fetch, not just a real connectivity problem — see
+      // SendPushForm.tsx's catch block for the full reasoning; a reload
+      // fixes both, and the two can't be told apart from here.
+      setError("restore failed — check your connection or reload the page, then try again");
     } finally {
       setRestoring(false);
     }
@@ -210,7 +214,11 @@ function DeleteConfirmModal({
       }
       onDeleted();
     } catch {
-      setError("delete failed — check your connection and try again");
+      // Also what an expired Cloudflare Access session looks like from a
+      // thrown fetch, not just a real connectivity problem — see
+      // SendPushForm.tsx's catch block for the full reasoning; a reload
+      // fixes both, and the two can't be told apart from here.
+      setError("delete failed — check your connection or reload the page, then try again");
     } finally {
       setDeleting(false);
     }

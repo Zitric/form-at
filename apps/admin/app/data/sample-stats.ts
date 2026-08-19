@@ -34,8 +34,18 @@ export const SAMPLE_RUM_HISTORY: RumHistory = {
   // Healthy on both signals — the ordinary state. The two stall cases (cron
   // stopped; cron firing but every read failing) are covered by unit tests
   // rather than made permanently visible in local dev.
-  lastRunAt: Date.parse("2026-08-11T14:20:00Z"),
-  lastSuccessAt: Date.parse("2026-08-11T14:20:00Z"),
+  //
+  // Computed relative to whenever this module loads, NOT a hardcoded past
+  // date — VisitsHistoryCard.tsx's staleness check is `Date.now() - at`, so
+  // a fixed timestamp here silently crosses ARCHIVE_STALE_AFTER_DAYS
+  // (RUM_UNSAMPLED_DAYS + 1 = 8 days) as real calendar time passes, with no
+  // code change involved. Confirmed happening: a prior version hardcoded
+  // 2026-08-11, which read as "healthy" for a week and then started failing
+  // dashboard.spec.ts's "reports both staleness signals" e2e test on day 8 —
+  // in CI, on an unrelated PR, 8 days after that date was written. "2 hours
+  // ago" from whenever the test actually runs can't go stale this way.
+  lastRunAt: Date.now() - 2 * 60 * 60 * 1000,
+  lastSuccessAt: Date.now() - 2 * 60 * 60 * 1000,
   daysCovered: 7,
   daysUncovered: 3,
   totalVisits: 11,
