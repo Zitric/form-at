@@ -7,6 +7,7 @@ looks out of date — that file is the source of truth, this doc explains it).
 | Command | Script | What it does |
 |---|---|---|
 | `pnpm send-push -- --title "..." --body "..."` | `send-push.ts` | Sends a push notification to every subscribed device. **Real production mechanism** — see [Notifications](#notifications-sending--configuring) below. |
+| `pnpm master-set analyse <folder-or-file...>` / `pnpm master-set process <...>` | `master-set.ts` | Local mastering pipeline for a freshly-recorded set, run **before** it reaches the admin upload form — declip, loudness-match to the catalogue, true-peak-safe MP3, peaks.json. See [Mastering a new set](#mastering-a-new-set-before-upload) below. |
 | `pnpm optimize-images` | `optimize-images.ts` | Converts originals in `images-source/` into responsive AVIF + WebP variants in `public/images/`, and generates the same for every uploaded set's artwork (fetched from R2) into `public/images/uploads/`. Runs automatically as part of `pnpm build`. See `images-source/README.md`. |
 | `pnpm og` | `generate-og.ts` | Generates social share banners (1200×630) — one global default plus one per DJ/set/event. Runs automatically as part of `pnpm build`. |
 | `pnpm sitemap` | `generate-sitemap.ts` | Writes `public/sitemap.xml` from every static + dynamic route (DJs, sets, events). Runs automatically as part of `pnpm build`. |
@@ -96,3 +97,60 @@ the row.
 For the full design history (why `@pushforge/builder` over `web-push`, the
 device-state machine behind who sees the CTA, on-device test checklists) see
 `PWA_PROGRESS.md`'s Phase 2 section.
+
+---
+
+## Mastering a new set, before upload
+
+**Read this before running it.** `master-set.ts` matches loudness to the
+catalogue and fixes rare, genuine hard-clip instants. That is all it does.
+It does **not** repair sustained clipping, does **not** improve a poor
+recording, and does **not** undo anything already lost at the point of
+capture — audio that clipped when it was recorded is gone; nothing here
+brings it back. If a set came out of the recorder already clipping, this
+makes it safe and consistent to publish — it does not make it sound like it
+never clipped. See `TECH_DEBT.md` item 23a for the fuller technical account,
+including the actual (hardware, not software) prevention.
+
+`master-set.ts` exists because the admin upload form stores exactly what it's
+given and checks none of this — nothing downstream catches a set that's
+louder than the rest of the catalogue, or one that's clipping. Run this
+**before** a set ever reaches `UploadSetForm`, on the WAV exported from
+Audacity, not on an already-published MP3 (re-encoding a file that's already
+been through one lossy pass is a smaller effect than you'd think, but it also
+carries forward whatever gain decisions were made before the problem was
+understood — start from the least-processed source you have).
+
+```bash
+# Report only — writes nothing. Point it at a folder of WAVs (or individual
+# files) and it prints integrated LUFS, true peak, sample rate, bit depth,
+# and whether each one is actually off-target enough to be worth touching.
+pnpm master-set analyse "/path/to/event folder"
+
+# Runs the real chain: normalize format -> declip -> two-pass loudness match
+# -> 320kbps MP3 -> generate-peaks.mjs on the result automatically. Writes
+# <name>.mastered.mp3 and <name>.mastered.json next to each source WAV —
+# never <name>.mp3, so it can never silently overwrite an already-published
+# file that happens to share that basename (confirmed by actually running it
+# against a copy with a fake "published" file present — verified untouched
+# afterward). Skips any file analyse would already call fine, unless you
+# pass --force. Rename the output yourself when you're ready to replace a
+# published file; the script won't do that automatically.
+pnpm master-set process "/path/to/event folder"
+pnpm master-set process --force "/path/to/event folder"       # reprocess anyway
+pnpm master-set process --target -17.0 "/path/to/event folder" # override the catalogue target
+```
+
+**The target (-17.5 LUFS) is measured from the existing catalogue**, not a
+streaming-platform figure — Form:at 002's three published tracks average
+-17.5 LUFS integrated. If the catalogue's own character shifts enough in the
+future to warrant a different number, override with `--target` rather than
+editing the constant and having it silently drift from what's documented.
+
+Every number and design choice in the chain (why -17.5 and not a streaming
+target, why -1.5dBTP and not the conventional -1.0, why there's no separate
+limiter, why `linear=true` is deliberately absent, why format normalization
+runs unconditionally, why `adeclip` never runs above its default threshold,
+why output uses a `.mastered` suffix) is documented in the script's own
+header comment — read that before changing any of the constants, since none
+of it can be re-derived from the commands alone.

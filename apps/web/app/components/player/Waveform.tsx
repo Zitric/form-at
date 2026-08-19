@@ -33,7 +33,16 @@ function drawBars(canvas: HTMLCanvasElement, w: number, h: number, peaks: number
   ctx.fillStyle = color;
   for (let i = 0; i < count; i++) {
     const peak = peaks[Math.floor((i / count) * peaks.length)] ?? 0;
-    const barH = Math.max(2, peak * h * 0.9);
+    // Peaks aren't bounded to [0, 1] — real encoding variance goes up to
+    // 1.882 on at least one live set, well past the 1.137 this scaling was
+    // tuned against (see validateUpload.ts's MAX_PEAK_VALUE headroom, [0, 2]
+    // by design). Unclamped, a peak past ~1.11 makes barH exceed the canvas
+    // height; the canvas silently clips it top and bottom, so every loud bar
+    // renders at the same flat, full-height block instead of showing its
+    // real relative loudness — indistinguishable from every other bar past
+    // that threshold. Clamping the peak to 1 keeps the intended 90%-of-height
+    // ceiling for the loudest bars instead of an arbitrary clipped one.
+    const barH = Math.max(2, Math.min(peak, 1) * h * 0.9);
     ctx.fillRect(i * step, (h - barH) / 2, BAR_W, barH);
   }
 }
