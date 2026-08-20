@@ -104,12 +104,6 @@ function EventDetail() {
         ) : null}
       </div>
 
-      {event.status === "upcoming" && (
-        <div className="mb-10 flex justify-center">
-          <AddToCalendarButton event={event} />
-        </div>
-      )}
-
       {event.flyer && (
         <Image
           src={event.flyer}
@@ -122,6 +116,12 @@ function EventDetail() {
           // detail page with a single hero image, it's acceptable.
           className="w-full max-w-2xl h-auto mb-10 mx-auto rounded-card"
         />
+      )}
+
+      {event.status === "upcoming" && (
+        <div className="mb-10 flex justify-center">
+          <AddToCalendarButton event={event} />
+        </div>
       )}
     </PageLayout>
   );
