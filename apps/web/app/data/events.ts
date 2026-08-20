@@ -26,6 +26,7 @@ export const events: Event[] = [
     audio: "techno / electro / dub",
     runtime: "23:00 — 05:00",
     status: "upcoming",
+    flyer: "events/003",
   },
   {
     id: "seafield-sound",

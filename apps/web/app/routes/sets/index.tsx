@@ -50,12 +50,12 @@ export const Route = createFileRoute("/sets/")({
 // Values: plays, listened, countries — checked real production figures
 // before picking (2026-08-19: 340 / 55h 43m / 5). `countries` names what's
 // being counted directly, rather than the vaguer "reach" (which needed the
-// number for context to mean anything) or "territories" (the word
-// $setId.tsx's own per-set stats use for this same countryCount field —
-// intentionally diverging here, not a drift to fix later: "countries" reads
-// clearer standalone at hero size). Shows the bare count, not "5 countries",
-// so its figure is a plain number like the other two rather than the
-// widest string on the row. `listened` (not "duration") avoids a
+// number for context to mean anything). $setId.tsx's own per-set stats use
+// "countries"/"country" for this same countryCount field too (2026-08-21) —
+// kept in step deliberately, since two words for one number across two
+// pages just makes a reader wonder which is right. Shows the bare count,
+// not "5 countries", so its figure is a plain number like the other two
+// rather than the widest string on the row. `listened` (not "duration") avoids a
 // real collision: $setId.tsx already uses "duration" for a single track's
 // own length, a different figure from this cumulative sum across every play.
 //
