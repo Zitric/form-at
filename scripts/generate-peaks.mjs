@@ -4,6 +4,13 @@
 // Output: a .json file alongside each MP3, ready to upload to R2.
 //
 // Requires ffmpeg on PATH: https://ffmpeg.org/download.html
+//
+// PEAKS = 1000 was tested, not assumed: a set whose waveform looked
+// suspiciously flat was re-measured at 1-second resolution (~3-5x finer than
+// this produces) directly from the raw audio, and the flatness held at that
+// resolution too. So 1000 is not the bottleneck — don't raise it to chase a
+// flat waveform; the cause was capture-time clipping, not bucket count. See
+// TECH_DEBT.md item 23a.
 
 import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";

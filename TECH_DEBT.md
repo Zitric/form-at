@@ -893,6 +893,34 @@ next recording, not code**: an in-line attenuator pad between the source and
 the recorder's input, so a hotter feed can't drive the converter past its
 ceiling regardless of what the source's own output level is doing.
 
+**Flat-looking waveforms on these same sets are a downstream symptom of this
+same clipping, not a separate issue** — confirmed 2026-08-19 by comparing a
+known-clean set against this one, not by reasoning about it. Isolating the
+kick band (ffmpeg `lowpass=f=150`) from the broadband signal at fine (1s)
+resolution shows the kick genuinely dropping out during a breakdown — a real,
+measurable dip, matching what's audible — but broadband amplitude barely
+moves at the same moment, because whatever else is present (crowd, hats,
+distortion products from the overload itself) is already pinned near the
+recorder's ceiling regardless of what the kick is doing. Measured directly on
+the raw, pre-mastering source WAV: broadband level sits above 0dBFS through
+nearly every one of these windows, loud or quiet alike. Low-band-to-broadband
+correlation makes the contrast numeric: **0.976** on a clean, unclipped 002
+set (kick drives the envelope, as expected) versus **0.949** on this one's
+published master and **0.951** on its raw source (broadband decoupled from
+what the kick is doing, in both the processed and the untouched file). This
+was checked against `generate-peaks.mjs` first, at far finer resolution than
+it ships (1-second buckets against its 1000-bucket/~3.35s), and the same
+flatness held there too — ruling out resolution as the cause before landing
+on this one. **Plainly: this is not recoverable.** The recorder wasn't
+clipping on occasional peaks, it was riding at or above the ceiling through
+sustained stretches, so there's no isolated clipped run for `adeclip` (or any
+declipping approach) to interpolate across — the dynamic information was
+destroyed at the converter before any of our processing ever saw the signal.
+These three sets will always look flatter than the 002 sets. Which means the
+attenuator pad above prevents two things, not one: the audible clipping, and
+the flat waveform that follows from it — worth citing both when making the
+case to actually buy it.
+
 **b. iOS push on a physical device.** The whole `@pushforge/builder` choice
 exists so Web Push can be signed inside a Worker; the platform where push
 behaviour diverges most has never received one. Unverified: whether Apple's push

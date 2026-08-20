@@ -56,7 +56,7 @@ function buildStatsRows(stats: SetStats): Array<[string, ReactNode]> {
   if (stats.countryCount > 0)
     rows.push([
       "reach",
-      `${stats.countryCount} ${stats.countryCount === 1 ? "territory" : "territories"}`,
+      `${stats.countryCount} ${stats.countryCount === 1 ? "country" : "countries"}`,
     ]);
   if (stats.topCountries.length > 0) {
     const upper = stats.topCountries.map((c) => c.toUpperCase());
@@ -70,7 +70,7 @@ function buildStatsRows(stats: SetStats): Array<[string, ReactNode]> {
       .join("  ·  ");
     const flagsOnly = upper.map(countryFlag).filter(Boolean).join("  ·  ");
     rows.push([
-      "top_territories",
+      "top_countries",
       <>
         <span key="mobile" className="sm:hidden">
           {flagsWithCodes}
