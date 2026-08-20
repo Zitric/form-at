@@ -3,6 +3,7 @@ import { AppLaunchTracker } from "~/components/AppLaunchTracker";
 import { BeaconQueueFlusher } from "~/components/BeaconQueueFlusher";
 import { BottomNav } from "~/components/BottomNav";
 import { CatalogueSync } from "~/components/CatalogueSync";
+import { DevModeBanner } from "~/components/DevModeBanner";
 import { Header } from "~/components/Header";
 import { HydrateStore } from "~/components/HydrateStore";
 import { InAppBrowserBanner } from "~/components/InAppBrowserBanner";
@@ -32,6 +33,7 @@ function Root() {
         <HeadContent />
       </head>
       <body className="bg-black text-white font-mono antialiased min-h-dvh flex flex-col">
+        <DevModeBanner />
         <HydrateStore />
         <InstallEventsListener />
         <CatalogueSync />

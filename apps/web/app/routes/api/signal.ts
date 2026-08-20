@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { isKnownSetId } from "~/data/sets";
+import { MAX_LISTENED_SECONDS } from "~/utils/playTracking";
 
 type TrackBody = {
   setId: string;
@@ -24,11 +25,13 @@ type TrackBody = {
   sessionId: string | null;
 };
 
-// Defense in depth — the client already filters <3s and caps via Date math,
-// but a bot can hit this endpoint directly with anything. Drop rows that
-// would inflate stats or fill D1 with garbage.
+// Defense in depth — the client already filters <3s and caps at
+// MAX_LISTENED_SECONDS (or the track's own duration, if shorter — see
+// useAudioPlayer.ts's sendPlay), but a bot can hit this endpoint directly
+// with anything, and a stale cached client mid-rollout might predate the
+// client-side cap entirely. Drop rows that would inflate stats or fill D1
+// with garbage.
 const MIN_LISTENED = 3;
-const MAX_LISTENED = 4 * 60 * 60; // 4h — longer than any set
 const MAX_STR = 200;
 
 // Exported, matching `api/event.ts`'s convention. `async` because the setId
@@ -49,7 +52,7 @@ export async function validate(
   // setId must match a known set — blocks fake-ID spam against the stats table
   if (!(await isKnownSetId(db, r.setId))) return null;
   const seconds = Math.floor(r.listenedSeconds);
-  if (seconds < MIN_LISTENED || seconds > MAX_LISTENED) return null;
+  if (seconds < MIN_LISTENED || seconds > MAX_LISTENED_SECONDS) return null;
   const isOffline = typeof r.isOffline === "boolean" ? r.isOffline : null;
   const sessionId =
     typeof r.sessionId === "string" && r.sessionId.length > 0 && r.sessionId.length <= MAX_STR
