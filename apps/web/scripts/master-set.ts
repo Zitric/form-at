@@ -24,6 +24,18 @@
 // account. Root cause is hardware, upstream of this script entirely: fix
 // gain staging before the next recording, don't rely on this to launder it
 // after the fact.
+//
+// It also does NOT fix a flat-looking waveform, and a flat waveform on a set
+// this script has already processed is more likely a symptom of the same
+// capture-time clipping than a rendering or peaks-generation bug — sustained
+// clipping pins broadband amplitude near the ceiling regardless of what's
+// actually playing, so quiet passages stop showing up as quiet even though
+// they're audible. Diagnostic before assuming it's a code problem: isolate
+// the kick band (ffmpeg `lowpass=f=150`) and compare it against the
+// broadband signal at the same timestamps — if the low band dips but
+// broadband doesn't, and the raw source WAV measures above 0dBFS during that
+// window, that's this, not a bug. See TECH_DEBT.md item 23a for how this was
+// confirmed on a real set.
 // ============================================================================
 //
 // It also never touches a file it didn't create: `process` always writes to

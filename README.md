@@ -139,6 +139,8 @@ Those values aren't bounded to `[0, 1]` — real masters go well above it (1.882
 
 Separately, every waveform is also scaled to *its own* loudest peak before that clamp, not a shared reference — peaks are raw amplitude, so a set correctly mastered quieter to match the rest of the catalogue never gets its bars near the top of the container otherwise, even though its own loudest moment is exactly as much a peak for that track as a hotter master's is. Confirmed against real data: an unnormalized quieter set reached only 51% of the container height at its single loudest bar, against 90% for a hotter one — the catalogue's loudness-matching (see the upload section above) was making every re-mastered set's waveform look flat by comparison until this was added, 2026-08-19.
 
+A separately reported flat-looking waveform (some sets' breakdowns don't show as dips at all) turned out to have nothing to do with the 1000-bucket resolution above — tested directly by re-measuring at 1-second resolution against the raw audio, and the flatness held. Root cause was capture-time clipping in the source recording, not this pipeline; see TECH_DEBT.md item 23a for the full diagnosis, including why it isn't recoverable.
+
 ### The standard Web Push library doesn't run on Workers
 
 *Constraint: `web-push`, the obvious choice, depends on Node's `crypto` and `https`.*

@@ -1,4 +1,4 @@
-import { Label, PageTitle, TerminalRow } from "@form-at/ui";
+import { Label, PageTitle } from "@form-at/ui";
 
 import { Await, createFileRoute, defer } from "@tanstack/react-router";
 import { Suspense } from "react";
@@ -16,7 +16,7 @@ import { pageHead } from "~/utils/head";
 // and the snapshot fallback means this never blocks on network the way
 // `overallStats` legitimately can. Overall stats come from D1 separately —
 // return an UN-AWAITED promise so the loader resolves immediately; the
-// OverallMetrics component reads it via <Await> inside Suspense so the
+// HeroStats component reads it via <Await> inside Suspense so the
 // cards never wait on stats.
 export const Route = createFileRoute("/sets/")({
   // `overallStats`'s `.catch(() => null)` degrades the deferred server-fn to
@@ -41,16 +41,28 @@ export const Route = createFileRoute("/sets/")({
   component: Sets,
 });
 
-// Two hero numbers, not a grid of everything — impact over completeness.
-// Reuses the SAME overallStats promise as OverallMetrics below (no second
-// query); this renders it once large near the top, the full panel still
-// renders it again in full at the bottom, unchanged.
+// Three hero numbers in a fixed single row — impact over completeness, and
+// no responsive stacking: this is the ONLY place these figures appear now
+// (archive_metrics below was removed as pure duplication once this covered
+// all three of its rows), so there's no fallback panel to lean on if this
+// wraps awkwardly at narrow widths.
 //
-// plays + listened_for, not reach: checked real production values before
-// picking (2026-08-19) — plays 340, listened_for 55h 43m, reach 5
-// territories. Reach is genuinely thin at that count for a large standalone
-// number ("5 territories" doesn't carry the same weight as "55h 43m"), and
-// it's still visible in the panel below regardless.
+// Values: plays, listened, countries — checked real production figures
+// before picking (2026-08-19: 340 / 55h 43m / 5). `countries` names what's
+// being counted directly, rather than the vaguer "reach" (which needed the
+// number for context to mean anything) or "territories" (the word
+// $setId.tsx's own per-set stats use for this same countryCount field —
+// intentionally diverging here, not a drift to fix later: "countries" reads
+// clearer standalone at hero size). Shows the bare count, not "5 countries",
+// so its figure is a plain number like the other two rather than the
+// widest string on the row. `listened` (not "duration") avoids a
+// real collision: $setId.tsx already uses "duration" for a single track's
+// own length, a different figure from this cumulative sum across every play.
+//
+// Order: listened (the widest value, "55h 43m") sits in the MIDDLE, with
+// the two short, single-token values (a plain count on each side) flanking
+// it — that's a symmetric shape around a wide center, versus ordering by
+// width would put a wide item at one edge and read lopsided.
 //
 // Not the same query as admin's topSets bug: that split happened because
 // the admin query GROUPED BY denormalized title/artist text that drifted
@@ -58,27 +70,20 @@ export const Route = createFileRoute("/sets/")({
 // single COUNT(*)/SUM(...) over the whole `plays` table — so nothing here
 // can double- or under-count from title-text variance.
 //
-// Same null-safe rule as OverallMetrics: `stats` is null on any failure
-// (network, D1 unreachable, zero rows), and this returns null right back —
-// never a fallback of 0, which would be a genuine wrong fact printed large
-// at the top of the page, not just a missing one. The Suspense fallback
-// below reserves the real content's height (invisible, not blank) so
-// resolution doesn't shift the set list beneath it — same technique
-// OverallMetrics already uses, worth doing here too since this sits above
-// the fold instead of at the page's end.
+// Null-safe: `stats` is null on any failure (network, D1 unreachable, zero
+// rows), and this returns null right back — never a fallback of 0, which
+// would be a genuine wrong fact printed at the top of the page, not just a
+// missing one. The Suspense fallback below reserves the real content's
+// height (invisible, not blank) so resolution doesn't shift the set list
+// beneath it.
 function HeroStats({ promise }: { promise: Promise<OverallStats | null> }) {
   return (
     <Suspense
       fallback={
-        <div className="mb-10 grid grid-cols-1 sm:grid-cols-2 gap-6 invisible" aria-hidden="true">
-          <div>
-            <p className="font-display text-4xl sm:text-5xl text-white">—</p>
-            <Label className="mt-1 text-grey tracking-widest">plays</Label>
-          </div>
-          <div>
-            <p className="font-display text-4xl sm:text-5xl text-white">—</p>
-            <Label className="mt-1 text-grey tracking-widest">listened_for</Label>
-          </div>
+        <div className="mb-10 grid grid-cols-3 gap-4 sm:gap-10 invisible" aria-hidden="true">
+          <HeroStat label="plays" value="—" />
+          <HeroStat label="listened" value="—" />
+          <HeroStat label="countries" value="—" />
         </div>
       }
     >
@@ -86,17 +91,17 @@ function HeroStats({ promise }: { promise: Promise<OverallStats | null> }) {
         {(stats) => {
           if (!stats) return null;
           return (
-            <div className="mb-10 grid grid-cols-1 sm:grid-cols-2 gap-6 animate-fade-in">
-              <div>
-                <p className="font-display text-4xl sm:text-5xl text-white">{stats.totalPlays}</p>
-                <Label className="mt-1 text-grey tracking-widest">plays</Label>
+            <div className="mb-10 animate-fade-in">
+              <div className="grid grid-cols-3 gap-4 sm:gap-10">
+                <HeroStat label="plays" value={String(stats.totalPlays)} />
+                <HeroStat label="listened" value={fmtDuration(stats.totalSeconds)} />
+                <HeroStat label="countries" value={String(stats.countryCount)} />
               </div>
-              <div>
-                <p className="font-display text-4xl sm:text-5xl text-white">
-                  {fmtDuration(stats.totalSeconds)}
-                </p>
-                <Label className="mt-1 text-grey tracking-widest">listened_for</Label>
-              </div>
+              {stats.isSampleData && (
+                <span className="mt-3 inline-block text-xs font-mono px-2 py-0.5 border border-gold text-gold">
+                  sample data
+                </span>
+              )}
             </div>
           );
         }}
@@ -105,47 +110,25 @@ function HeroStats({ promise }: { promise: Promise<OverallStats | null> }) {
   );
 }
 
-function OverallMetrics({ promise }: { promise: Promise<OverallStats | null> }) {
+// Label ABOVE the figure (not below) — the small caption reads first, then
+// the number. `whitespace-nowrap` on BOTH: the label because a wrapped
+// label would only happen if the column got too narrow to hold it, and the
+// figure because duration values contain a space ("55h 43m")
+// and would otherwise wrap onto two lines at exactly this row's narrowest
+// width while the plain-number columns stayed on one — that mismatch, not
+// the grid or a baseline difference, was the real cause of the three
+// columns looking unaligned: a wrapped figure pushes nothing below it here
+// (label is above), but a taller cell next to two shorter ones still reads
+// as misaligned. Forcing single-line prevents the wrap outright rather than
+// papering over it with margin.
+function HeroStat({ label, value }: { label: string; value: string }) {
   return (
-    // Fallback mirrors the real layout 1:1 so the page reserves the exact final
-    // height. Without this, the 72px placeholder vs ~100px real content created
-    // a layout shift (CLS) when the promise resolved.
-    <Suspense
-      fallback={
-        <div className="mb-8 invisible" aria-hidden="true">
-          <Label className="mb-2 text-grey tracking-widest">{"// archive_metrics"}</Label>
-          <div className="space-y-1">
-            <TerminalRow label="plays" value="—" />
-            <TerminalRow label="listened_for" value="—" />
-            <TerminalRow label="reach" value="—" />
-          </div>
-        </div>
-      }
-    >
-      <Await promise={promise}>
-        {(stats) => {
-          if (!stats) return null;
-          return (
-            <div className="mb-8 animate-fade-in">
-              <Label className="mb-2 text-grey tracking-widest">{"// archive_metrics"}</Label>
-              <div className="space-y-1">
-                <TerminalRow label="plays" value={String(stats.totalPlays)} dimValue />
-                <TerminalRow
-                  label="listened_for"
-                  value={fmtDuration(stats.totalSeconds)}
-                  dimValue
-                />
-                <TerminalRow
-                  label="reach"
-                  value={`${stats.countryCount} ${stats.countryCount === 1 ? "territory" : "territories"}`}
-                  dimValue
-                />
-              </div>
-            </div>
-          );
-        }}
-      </Await>
-    </Suspense>
+    <div className="flex flex-col items-center justify-center">
+      <Label className="text-grey tracking-widest whitespace-nowrap">{label}</Label>
+      <p className="font-display text-xl sm:text-3xl text-white leading-tight mt-1 whitespace-nowrap">
+        {value}
+      </p>
+    </div>
   );
 }
 
@@ -177,7 +160,6 @@ function Sets() {
           </section>
         );
       })}
-      <OverallMetrics promise={overallStats} />
     </PageLayout>
   );
 }

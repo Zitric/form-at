@@ -137,13 +137,47 @@ jobs:
           # changing.
           key: pw-${{ runner.os }}-chromium-webkit-${{ hashFiles('pnpm-lock.yaml') }}
 
+      # Both install steps below retry up to 3x with a 5-minute cap per
+      # attempt: GitHub's runners are fresh VMs every run, so `install-deps`'
+      # apt-get call happens on EVERY run regardless of the browser cache
+      # above (that cache only restores ~/.cache/ms-playwright's binaries,
+      # never the OS's apt state) — and it hits `azure.archive.ubuntu.com`,
+      # a regional mirror observed hanging for 45+ minutes rather than
+      # falling back to the canonical archive promptly. `timeout` kills a
+      # stuck attempt so the next one gets a fresh connection instead of
+      # grinding on a bad mirror for the whole job; `timeout-minutes` below
+      # is the outer bound in case all three attempts are still slow.
       - name: Install Playwright browsers
         if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: pnpm -C apps/web exec playwright install --with-deps chromium webkit
+        timeout-minutes: 20
+        run: |
+          success=false
+          for i in 1 2 3; do
+            echo "Attempt $i/3..."
+            if timeout 300 pnpm -C apps/web exec playwright install --with-deps chromium webkit; then
+              success=true
+              break
+            fi
+            echo "Attempt $i failed or timed out after 5m (likely a slow apt mirror) — retrying..."
+            sleep 10
+          done
+          $success || exit 1
 
       - name: Install Playwright system deps
         if: steps.pw-cache.outputs.cache-hit == 'true'
-        run: pnpm -C apps/web exec playwright install-deps chromium webkit
+        timeout-minutes: 20
+        run: |
+          success=false
+          for i in 1 2 3; do
+            echo "Attempt $i/3..."
+            if timeout 300 pnpm -C apps/web exec playwright install-deps chromium webkit; then
+              success=true
+              break
+            fi
+            echo "Attempt $i failed or timed out after 5m (likely a slow apt mirror) — retrying..."
+            sleep 10
+          done
+          $success || exit 1
 
       - name: Run Playwright tests (apps/web)
         run: pnpm -C apps/web test:e2e --project=chromium --project=webkit
