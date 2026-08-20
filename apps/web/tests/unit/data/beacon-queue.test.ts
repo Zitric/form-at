@@ -29,6 +29,7 @@ const payload = {
   setArtist: "t.i.l.",
   listenedSeconds: 45,
   isOffline: true,
+  sessionId: "test-session-id",
 };
 
 afterEach(async () => {

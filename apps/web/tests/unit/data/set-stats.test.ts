@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { pickStatsForMissingDb } from "~/data/set-stats";
 import { SAMPLE_OVERALL_STATS } from "~/data/sample-stats";
+import { pickStatsForMissingDb } from "~/data/set-stats";
 
 // Mirrors apps/admin/tests/unit/data/admin-stats.test.ts's identical
 // pickStatsForMissingDb coverage — same distinction, same three cases.

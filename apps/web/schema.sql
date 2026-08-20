@@ -39,6 +39,42 @@ CREATE INDEX IF NOT EXISTS idx_plays_started_at ON plays (started_at);
 -- needs it run once.
 ALTER TABLE plays ADD COLUMN is_offline INTEGER;
 
+-- Client-generated id (crypto.randomUUID(), see useAudioPlayer.ts) shared by
+-- every segment beacon within one continuous engagement with a track — set
+-- once when a track loads, unchanged across pause/resume of that same
+-- track, and regenerated on the next track load (including returning to a
+-- track played earlier). Exists because `plays` has one row per ≥3s
+-- LISTENING SEGMENT (sendPlay fires on pause/track-change/unload), not one
+-- row per play: a listener who pauses three times during one set produces
+-- four rows for one real play. `COUNT(*)` over this table therefore counts
+-- segments, not plays, and inflates visibly at normal pause/resume
+-- behaviour — found 2026-08-20.
+--
+-- The correct count is `COUNT(DISTINCT COALESCE(session_id, 'legacy-' ||
+-- id))` — see the "Useful queries" block below. NULL session_id (every row
+-- from before this column existed, plus any row from a stale cached client
+-- mid-rollout, plus anything that fails validation) falls back via `id`
+-- (the table's own autoincrement PK, globally unique) to counting itself as
+-- its own singleton session — exactly today's behaviour, continued, not a
+-- new number invented for old data. No cutover discontinuity: the same
+-- formula applies to every row and becomes exactly correct the moment a
+-- row carries a real session_id. Never collapse this back to bare
+-- `COUNT(*)` — that silently reintroduces the segment-inflation bug this
+-- column exists to fix.
+--
+-- ⚠️ ONE-TIME MANUAL MIGRATION — same non-idempotent D1 limitation as
+-- `is_offline` above (line 25: no `ADD COLUMN IF NOT EXISTS` support).
+-- Run BEFORE deploying code that inserts into this column, not after — the
+-- INSERT in api/signal.ts names this column explicitly, and a D1 "no such
+-- column" error there is caught by that handler's blanket try/catch (it
+-- always returns 204), so every play would be silently dropped — not
+-- miscounted, not recorded at all — for the whole gap between deploying
+-- and running this migration.
+--
+--   npx wrangler d1 execute form-at-analytics --remote --command "ALTER TABLE plays ADD COLUMN session_id TEXT"
+--   npx wrangler d1 execute form-at-analytics --remote --command "PRAGMA table_info(plays)"
+ALTER TABLE plays ADD COLUMN session_id TEXT;
+
 -- Aggregate/anonymous first-party event tracking (Phase "Analytics 1",
 -- 2026-07-08). Cloudflare Web Analytics stays as-is for page-view metrics;
 -- this table is for discrete product events (install funnel, save/share
@@ -86,19 +122,32 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
 
 -- Useful queries:
 --
--- Play counts per set:
---   SELECT set_title, set_artist, COUNT(*) AS plays, ROUND(AVG(listened_seconds)) AS avg_secs
+-- Play counts per set — COUNT(DISTINCT ...) dedupes the listening-segment
+-- rows sendPlay writes on every pause/track-change/unload back down to real
+-- plays (see session_id's own comment above). avg_secs stays a per-segment
+-- average deliberately — "how long a segment lasts before a pause" is a
+-- different, still-useful number from "how long a play lasts", and turning
+-- it into the latter needs summing per-session first, not asked for here:
+--   SELECT set_title, set_artist,
+--          COUNT(DISTINCT COALESCE(session_id, 'legacy-' || id)) AS plays,
+--          ROUND(AVG(listened_seconds)) AS avg_secs
 --   FROM plays GROUP BY set_id ORDER BY plays DESC;
 --
 -- Listeners by country:
---   SELECT country, COUNT(*) AS plays FROM plays GROUP BY country ORDER BY plays DESC;
+--   SELECT country, COUNT(DISTINCT COALESCE(session_id, 'legacy-' || id)) AS plays
+--   FROM plays GROUP BY country ORDER BY plays DESC;
 --
 -- Plays by day:
---   SELECT DATE(started_at / 1000, 'unixepoch') AS day, COUNT(*) AS plays
+--   SELECT DATE(started_at / 1000, 'unixepoch') AS day,
+--          COUNT(DISTINCT COALESCE(session_id, 'legacy-' || id)) AS plays
 --   FROM plays GROUP BY day ORDER BY day DESC;
 --
--- Offline vs network plays (NULL = pre-is_offline rows, exclude from the ratio):
---   SELECT is_offline, COUNT(*) AS plays FROM plays
+-- Offline vs network SEGMENTS (NULL = pre-is_offline rows, exclude from the
+-- ratio). Deliberately COUNT(*), not deduped by session: this measures
+-- volume of listening activity by delivery mode, not distinct plays, and a
+-- session that crosses connectivity states has no single correct bucket to
+-- collapse into:
+--   SELECT is_offline, COUNT(*) AS segments FROM plays
 --   WHERE is_offline IS NOT NULL GROUP BY is_offline;
 --
 -- Install funnel (shown → accepted / dismissed), last 30 days:

@@ -17,6 +17,7 @@ const validPayload = {
   setArtist: "t.i.l.",
   listenedSeconds: 42,
   isOffline: false,
+  sessionId: "session-abc-123",
 };
 
 describe("validate (api/signal)", () => {
@@ -93,6 +94,26 @@ describe("validate (api/signal)", () => {
   it("passes through isOffline: true", async () => {
     const result = await validate({ ...validPayload, isOffline: true }, undefined);
     expect(result?.isOffline).toBe(true);
+  });
+
+  it("treats a missing/non-string/oversized sessionId as null (pre-fix rows / rollout window / bad input)", async () => {
+    expect(await validate({ ...validPayload, sessionId: undefined }, undefined)).toMatchObject({
+      sessionId: null,
+    });
+    expect(await validate({ ...validPayload, sessionId: 42 }, undefined)).toMatchObject({
+      sessionId: null,
+    });
+    expect(await validate({ ...validPayload, sessionId: "" }, undefined)).toMatchObject({
+      sessionId: null,
+    });
+    expect(
+      await validate({ ...validPayload, sessionId: "x".repeat(201) }, undefined),
+    ).toMatchObject({ sessionId: null });
+  });
+
+  it("passes through a well-formed sessionId", async () => {
+    const result = await validate({ ...validPayload, sessionId: "abc-123" }, undefined);
+    expect(result?.sessionId).toBe("abc-123");
   });
 
   // Validation precedence: snapshot first — free, covers every

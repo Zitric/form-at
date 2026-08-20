@@ -335,8 +335,14 @@ export async function deleteSetWithAudit(
 
   let playCount = 0;
   try {
+    // COUNT(DISTINCT ...), not COUNT(*): `plays` has one row per ≥3s
+    // LISTENING SEGMENT, not one row per play — see schema.sql's
+    // `session_id` comment. The audit log should record the real play
+    // count a set had at deletion, not an inflated segment count.
     const playCountRow = await db
-      .prepare("SELECT COUNT(*) AS n FROM plays WHERE set_id = ?")
+      .prepare(
+        "SELECT COUNT(DISTINCT COALESCE(session_id, 'legacy-' || id)) AS n FROM plays WHERE set_id = ?",
+      )
       .bind(id)
       .first<{ n: number }>();
     playCount = playCountRow?.n ?? 0;

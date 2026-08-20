@@ -39,6 +39,14 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
   const [loading, setLoading] = useState(false);
 
   const playStartRef = useRef<number | null>(null);
+  // One id per continuous engagement with a track — set when the track
+  // effect below loads a NEW track (not on pause/resume of the current
+  // one), unchanged across however many segments that engagement produces,
+  // and regenerated on the next load (including returning to a track played
+  // earlier — that's a new engagement, correctly a new session). Read
+  // directly by `sendPlay` below so every segment beacon for one engagement
+  // carries the same id; see schema.sql's `session_id` comment for why.
+  const sessionIdRef = useRef<string | null>(null);
   const nowPlayingRef = useRef<MusicSet | null>(nowPlaying);
   useEffect(() => {
     nowPlayingRef.current = nowPlaying;
@@ -61,6 +69,7 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
       setArtist: track.artist,
       listenedSeconds: seconds,
       isOffline,
+      sessionId: sessionIdRef.current,
     };
 
     // Known-offline at call time (TECH_DEBT 4) — same `navigator.onLine`
@@ -145,6 +154,10 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     const savedPos = useStore.getState().positions[nowPlaying.id] ?? 0;
     const isRestore = isInitialRestore.current;
     isInitialRestore.current = false;
+
+    // New engagement with this track — fresh session id, not reused even if
+    // this is the same track played earlier (see the ref's own comment).
+    sessionIdRef.current = crypto.randomUUID();
 
     setHasError(false);
 
