@@ -15,5 +15,6 @@ describe("pickStatsForMissingDb", () => {
 
   it("treats a missing flag the same as false — defaults to the sample fixture", () => {
     expect(pickStatsForMissingDb(undefined)).toBe(SAMPLE_OVERALL_STATS);
+    3;
   });
 });
