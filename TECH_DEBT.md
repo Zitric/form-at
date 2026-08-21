@@ -1059,6 +1059,57 @@ test.
 **Revisit when** anything else needs real offline e2e coverage; the cost is
 shared across all of it, and one test doesn't justify a second build in CI.
 
+## 28. Play-tracking segments could exceed the track's own duration — plus what the counting fix couldn't do
+
+Two findings from auditing real production `plays` data, after fixing the
+segment-vs-play counting confusion (see `session_id` in `schema.sql`).
+
+**a. A wall-clock timer with no relation to actual playback.** `sendPlay`
+(`apps/web/app/hooks/useAudioPlayer.ts`) computed elapsed listening as
+`Date.now() - playStartRef.current` — two wall-clock reads, with nothing
+checking the audio element's actual position, duration, or whether it was
+still decoding in between. Production data caught this concretely: one
+segment reached 7945s (2h12m) on a 96-minute set, well under the endpoint's
+old `MAX_LISTENED` guard (4h — sized "safely more than anything", not bounded
+by any real track). The mechanism: a network stall or a backgrounded/
+suspended tab can stop real playback without ever firing `pause` or `ended`
+(no `stalled`/`waiting`/`visibilitychange` handling exists anywhere in this
+codebase), so `playStartRef` sits unchanged until *some* later event — a
+track switch, or `beforeunload` — eventually flushes it, and whatever
+wall-clock gap accumulated in between, active listening or not, gets reported
+as one segment. **Fixed:** `sendPlay` now caps at the track's own decoded
+duration (`playerSlice`'s `durations` cache) when it's already known, and at
+the shared `MAX_LISTENED_SECONDS` (`~/utils/playTracking.ts`, now 2h, down
+from 4h) when it isn't. This caps the *symptom* — structurally, a segment can
+never again exceed its bound — it does not turn the measurement into true
+active-decode-time tracking, which would need a different signal
+(`audio.currentTime` deltas) and carries its own tradeoff against scrubbing/
+seeking. Left as a separate, larger question for if it turns out to matter.
+
+**b. The public plays number is mostly the operator's own testing, and
+nothing in the data can prove how much.** Day-distribution audit: 157 of 373
+rows (42%) landed on five dates in May 2026 during active development, plus a
+further burst the week of this exact investigation. No column in `plays`
+distinguishes operator testing from a real visitor's listen: `country` is
+UK-dominant either way, `is_offline` reflects playback mode not identity,
+`session_id` (once live) ties segments within one tab session together but
+carries no cross-day or cross-person identity, and there is no IP/UA/account/
+cookie by design. **Decision:** leave historical rows untouched — "plays
+since tracking began" is a legitimate framing, and retroactively guessing
+which rows were the operator isn't something the data supports. **Fixed
+going forward:** `~/utils/devMode.ts` — visiting with `?devmode=on` excludes
+that browser's own beacons entirely (skipped, never sent, not
+tagged-and-filtered — see the file's own comment for why skip beats tag
+here: a filter can be forgotten in some future query the way `plays`' own
+segment-count bug was, independently, in five different call sites; a
+beacon that was never sent can't leak into any query, present or future).
+Default off, activated only by that exact URL — never a clickable control
+anywhere in the public UI — with a persistent visible banner while active
+(`DevModeBanner.tsx`) so it can't be forgotten and silently drop a real
+visitor's play instead.
+
+Both parts confirmed against real production D1 data, not assumed.
+
 ---
 
-_Last updated: 2026-08-17_
+_Last updated: 2026-08-20_

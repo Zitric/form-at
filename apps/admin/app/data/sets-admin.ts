@@ -21,10 +21,19 @@ export type SetWithPlayCount = MusicSet & { playCount: number };
 export async function fetchSetsWithPlayCounts(db: D1Database): Promise<SetWithPlayCount[]> {
   const [sets, playCounts] = await Promise.all([
     fetchUploadedSets(db),
-    db.prepare("SELECT set_id, COUNT(*) AS n FROM plays GROUP BY set_id").all<{
-      set_id: string;
-      n: number;
-    }>(),
+    // COUNT(DISTINCT ...), not COUNT(*): `plays` has one row per ≥3s
+    // LISTENING SEGMENT, not one row per play — see schema.sql's
+    // `session_id` comment. This count is the delete-confirmation gate's
+    // "type the exact play count" friction signal, so it needs to be the
+    // real play count, not an inflated segment count.
+    db
+      .prepare(
+        "SELECT set_id, COUNT(DISTINCT COALESCE(session_id, 'legacy-' || id)) AS n FROM plays GROUP BY set_id",
+      )
+      .all<{
+        set_id: string;
+        n: number;
+      }>(),
   ]);
 
   const countsById = new Map(playCounts.results.map((row) => [row.set_id, row.n]));

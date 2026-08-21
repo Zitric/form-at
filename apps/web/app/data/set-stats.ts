@@ -32,9 +32,15 @@ export const fetchOverallStats = createServerFn({ method: "GET" }).handler(async
     const db = cf?.env?.DB;
     if (!db) return pickStatsForMissingDb(cf?.hasCloudflareEnv);
 
+    // COUNT(DISTINCT ...), not COUNT(*): `plays` has one row per ≥3s
+    // LISTENING SEGMENT (sendPlay fires on pause/track-change/unload), not
+    // one row per play — see schema.sql's `session_id` comment for the full
+    // mechanism and why the COALESCE fallback is safe for rows that
+    // predate that column. totalSeconds is untouched — SUM over every
+    // segment is the correct total regardless of how plays are counted.
     const row = await db
       .prepare(
-        `SELECT COUNT(*) as total_plays,
+        `SELECT COUNT(DISTINCT COALESCE(session_id, 'legacy-' || id)) as total_plays,
                 COALESCE(SUM(listened_seconds), 0) as total_seconds,
                 COUNT(DISTINCT country) as country_count
          FROM plays`,
