@@ -25,7 +25,7 @@ export const events: Event[] = [
     lineupIds: ["unreal", "iona-violet", "julz-lever", "til"],
     audio: "techno / electro / dub",
     runtime: "23:00 — 05:00",
-    status: "upcoming",
+    status: "past",
     flyer: "events/003",
   },
   {
