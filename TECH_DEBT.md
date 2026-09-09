@@ -921,6 +921,31 @@ attenuator pad above prevents two things, not one: the audible clipping, and
 the flat waveform that follows from it — worth citing both when making the
 case to actually buy it.
 
+**Form:at 003 update — the fix is holding, but margin is thinner than the
+binary we assumed.** Checked the same way as above (flat factor + low-band/
+broadband correlation against the 002/Seafield reference figures), not
+inferred from the true-peak number alone. Three of 003's four sets (t.i.l.,
+Julz Lever, Unreal — same recorder, same mixer, same night) were measured
+directly: flat factor 0.000000 on all three, correlation 0.983 (Julz Lever)
+and 0.988 (Unreal) — both *better* than the clean 002 reference (0.976), not
+just close to it. None of these three clipped. The fourth, Iona Violet,
+wasn't run through this check — its true peak (-3.0dBFS, the widest margin
+of the four) makes it the least likely candidate, but that's an inference,
+not a measurement, and shouldn't be quoted as one.
+
+True-peak margin across the four still ranged from that comfortable
+-3.0dBFS down to exactly 0.0: Julz Lever and Unreal used essentially their
+entire safety margin — on isolated peaks confirmed clean by the same
+flat-factor/correlation check, not sustained runs like the sets above. Same
+recorder, same mixer, same night: the remaining variable is the DJ's own
+output level, not the chain. Whatever changed since the sets above (an
+attenuator pad, or the mixer's rec-out simply running cooler — still not
+confirmed which) is holding. **This sharpens the case for the pad rather
+than removing it**: not because this night failed — it didn't, nothing
+clipped — but because half the measured sets spent their entire margin
+doing so, and the next performer who runs hotter than either of them has
+nothing left to spend.
+
 **b. iOS push on a physical device.** The whole `@pushforge/builder` choice
 exists so Web Push can be signed inside a Worker; the platform where push
 behaviour diverges most has never received one. Unverified: whether Apple's push
@@ -1112,4 +1137,4 @@ Both parts confirmed against real production D1 data, not assumed.
 
 ---
 
-_Last updated: 2026-08-20_
+_Last updated: 2026-09-08_
