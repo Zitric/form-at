@@ -291,10 +291,21 @@ export async function fetchAppLaunchStats(db: D1Database): Promise<AppLaunchStat
 }
 
 export async function fetchPlayStats(db: D1Database): Promise<PlayStats> {
+  // `total`, `topSets.play_count` and the trend below all use
+  // COUNT(DISTINCT COALESCE(session_id, 'legacy-' || id)), not COUNT(*):
+  // `plays` has one row per ≥3s LISTENING SEGMENT (sendPlay fires on
+  // pause/track-change/unload), not one row per play — see schema.sql's
+  // `session_id` comment for the full mechanism and why the COALESCE
+  // fallback is safe for rows that predate that column.
+  //
+  // offline_count/online_count deliberately stay COUNT(*): that ratio
+  // measures volume of listening ACTIVITY by delivery mode, not distinct
+  // plays, and a session that crosses connectivity states has no single
+  // correct bucket to collapse into.
   const [totals, topSets, trend] = await Promise.all([
     db
       .prepare(
-        `SELECT COUNT(*) as total,
+        `SELECT COUNT(DISTINCT COALESCE(session_id, 'legacy-' || id)) as total,
                 COALESCE(SUM(CASE WHEN is_offline = 1 THEN 1 ELSE 0 END), 0) as offline_count,
                 COALESCE(SUM(CASE WHEN is_offline = 0 THEN 1 ELSE 0 END), 0) as online_count
          FROM plays`,
@@ -302,7 +313,7 @@ export async function fetchPlayStats(db: D1Database): Promise<PlayStats> {
       .first<{ total: number; offline_count: number; online_count: number }>(),
     db
       .prepare(
-        `SELECT set_id, COUNT(*) as play_count
+        `SELECT set_id, COUNT(DISTINCT COALESCE(session_id, 'legacy-' || id)) as play_count
          FROM plays
          GROUP BY set_id
          ORDER BY play_count DESC
@@ -310,10 +321,13 @@ export async function fetchPlayStats(db: D1Database): Promise<PlayStats> {
       )
       .all<{ set_id: string; play_count: number }>(),
     // `started_at` (unix ms), not `created_at` — `plays` has no created_at
-    // column; the play's own start time is the event time here.
+    // column; the play's own start time is the event time here. Same
+    // per-day dedup as `total` above — a session spanning midnight counts
+    // once on each day it touches, which is the right trend semantics.
     db
       .prepare(
-        `SELECT DATE(started_at/1000, 'unixepoch') AS day, COUNT(*) AS count
+        `SELECT DATE(started_at/1000, 'unixepoch') AS day,
+                COUNT(DISTINCT COALESCE(session_id, 'legacy-' || id)) AS count
          FROM plays
          WHERE started_at >= (strftime('%s', 'now', '-${TREND_WINDOW_DAYS} days') * 1000)
          GROUP BY day

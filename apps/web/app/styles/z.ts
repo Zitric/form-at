@@ -28,4 +28,9 @@ export const Z = {
   /** Transient feedback pills — copy success, playback error retry. Top of
    *  the stack (excluding the native dialog top layer used by Modal). */
   toast: "z-50",
+  /** Dev-mode indicator (`?devmode=on` — see utils/devMode.ts). Above even
+   *  toast, deliberately: this exists specifically so it can't be missed or
+   *  visually buried, since the cost of not noticing it's on is real
+   *  listening data silently excluded. */
+  devModeBanner: "z-[60]",
 } as const;

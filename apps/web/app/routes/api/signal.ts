@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { isKnownSetId } from "~/data/sets";
+import { MAX_LISTENED_SECONDS } from "~/utils/playTracking";
 
 type TrackBody = {
   setId: string;
@@ -14,13 +15,23 @@ type TrackBody = {
   // legitimately keep running for a while) — optional by design, not a
   // reason to drop an otherwise-valid play record.
   isOffline: boolean | null;
+  // Client-generated id shared by every segment beacon within one
+  // continuous engagement with a track (see useAudioPlayer.ts's
+  // sessionIdRef and schema.sql's session_id comment) — lets a read-time
+  // COUNT(DISTINCT ...) collapse pause/resume segments back into one real
+  // play. Same optional-by-design tri-state as isOffline: null for rows
+  // predating this field, a stale rollout-window client, or anything that
+  // fails validation below — never a reason to drop the row.
+  sessionId: string | null;
 };
 
-// Defense in depth — the client already filters <3s and caps via Date math,
-// but a bot can hit this endpoint directly with anything. Drop rows that
-// would inflate stats or fill D1 with garbage.
+// Defense in depth — the client already filters <3s and caps at
+// MAX_LISTENED_SECONDS (or the track's own duration, if shorter — see
+// useAudioPlayer.ts's sendPlay), but a bot can hit this endpoint directly
+// with anything, and a stale cached client mid-rollout might predate the
+// client-side cap entirely. Drop rows that would inflate stats or fill D1
+// with garbage.
 const MIN_LISTENED = 3;
-const MAX_LISTENED = 4 * 60 * 60; // 4h — longer than any set
 const MAX_STR = 200;
 
 // Exported, matching `api/event.ts`'s convention. `async` because the setId
@@ -41,14 +52,19 @@ export async function validate(
   // setId must match a known set — blocks fake-ID spam against the stats table
   if (!(await isKnownSetId(db, r.setId))) return null;
   const seconds = Math.floor(r.listenedSeconds);
-  if (seconds < MIN_LISTENED || seconds > MAX_LISTENED) return null;
+  if (seconds < MIN_LISTENED || seconds > MAX_LISTENED_SECONDS) return null;
   const isOffline = typeof r.isOffline === "boolean" ? r.isOffline : null;
+  const sessionId =
+    typeof r.sessionId === "string" && r.sessionId.length > 0 && r.sessionId.length <= MAX_STR
+      ? r.sessionId
+      : null;
   return {
     setId: r.setId,
     setTitle: r.setTitle.slice(0, MAX_STR),
     setArtist: r.setArtist.slice(0, MAX_STR),
     listenedSeconds: seconds,
     isOffline,
+    sessionId,
   };
 }
 
@@ -72,7 +88,7 @@ export const Route = createFileRoute("/api/signal")({
           if (db) {
             await db
               .prepare(
-                "INSERT INTO plays (set_id, set_title, set_artist, country, started_at, listened_seconds, is_offline) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO plays (set_id, set_title, set_artist, country, started_at, listened_seconds, is_offline, session_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
               )
               .bind(
                 body.setId,
@@ -82,6 +98,7 @@ export const Route = createFileRoute("/api/signal")({
                 Date.now(),
                 body.listenedSeconds,
                 body.isOffline === null ? null : body.isOffline ? 1 : 0,
+                body.sessionId,
               )
               .run();
           }

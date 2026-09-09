@@ -450,7 +450,7 @@ describe("deleteSetWithAudit", () => {
   it("deletes the row and logs it to admin_deleted_sets with the identity, timestamp, and play count, atomically via a single db.batch() call", async () => {
     const { db, calls, batch } = createRoutedFakeD1([
       { match: /SELECT \* FROM sets WHERE id/, first: sampleDeletedRow },
-      { match: /SELECT COUNT\(\*\) AS n FROM plays/, first: { n: 342 } },
+      { match: /FROM plays WHERE set_id/, first: { n: 342 } },
     ]);
 
     const outcome = await deleteSetWithAudit(db, "set-002-til", "julian@formatglasgow.com");
@@ -483,7 +483,7 @@ describe("deleteSetWithAudit", () => {
   it("logs a zero play count when the set was never played", async () => {
     const { db, calls } = createRoutedFakeD1([
       { match: /SELECT \* FROM sets WHERE id/, first: sampleDeletedRow },
-      { match: /SELECT COUNT\(\*\) AS n FROM plays/, first: null },
+      { match: /FROM plays WHERE set_id/, first: null },
     ]);
 
     const outcome = await deleteSetWithAudit(db, "set-002-til", "julian@formatglasgow.com");
@@ -497,7 +497,7 @@ describe("deleteSetWithAudit", () => {
   it("a play-count read that throws doesn't abort the delete — logs 0 and continues", async () => {
     const { db, statements } = createRoutedFakeD1([
       { match: /SELECT \* FROM sets WHERE id/, first: sampleDeletedRow },
-      { match: /SELECT COUNT\(\*\) AS n FROM plays/, throwsOnFirst: true },
+      { match: /FROM plays WHERE set_id/, throwsOnFirst: true },
     ]);
 
     const outcome = await deleteSetWithAudit(db, "set-002-til", "julian@formatglasgow.com");
@@ -519,7 +519,7 @@ describe("deleteSetWithAudit", () => {
     const { db, batch } = createRoutedFakeD1(
       [
         { match: /SELECT \* FROM sets WHERE id/, first: sampleDeletedRow },
-        { match: /SELECT COUNT\(\*\) AS n FROM plays/, first: { n: 342 } },
+        { match: /FROM plays WHERE set_id/, first: { n: 342 } },
       ],
       { batchThrows: true },
     );

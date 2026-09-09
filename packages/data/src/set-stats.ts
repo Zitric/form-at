@@ -56,9 +56,14 @@ export const fetchSetStats = createServerFn({ method: "GET" })
       if (!db) return null;
 
       const [row, countries, daily] = await Promise.all([
+        // COUNT(DISTINCT ...), not COUNT(*): `plays` has one row per ≥3s
+        // LISTENING SEGMENT (sendPlay fires on pause/track-change/unload),
+        // not one row per play — see schema.sql's `session_id` comment for
+        // the full mechanism and why the COALESCE fallback is safe for rows
+        // that predate that column.
         db
           .prepare(
-            `SELECT COUNT(*) as play_count,
+            `SELECT COUNT(DISTINCT COALESCE(session_id, 'legacy-' || id)) as play_count,
               COALESCE(SUM(listened_seconds), 0) as total_seconds,
               COALESCE(ROUND(AVG(listened_seconds)), 0) as avg_seconds,
               COUNT(DISTINCT country) as country_count,
@@ -83,9 +88,14 @@ export const fetchSetStats = createServerFn({ method: "GET" })
           )
           .bind(setId)
           .all<{ country: string }>(),
+        // Same COUNT(DISTINCT ...) dedup as play_count above, applied per
+        // day — a session spanning midnight counts once on each day it
+        // touches, which is the right trend semantics (activity happened on
+        // both days), not a double-count within either day.
         db
           .prepare(
-            `SELECT DATE(started_at/1000, 'unixepoch') AS day, COUNT(*) AS count
+            `SELECT DATE(started_at/1000, 'unixepoch') AS day,
+                    COUNT(DISTINCT COALESCE(session_id, 'legacy-' || id)) AS count
              FROM plays
              WHERE set_id = ?
                AND started_at >= (strftime('%s', 'now', '-${TREND_WINDOW_DAYS} days') * 1000)

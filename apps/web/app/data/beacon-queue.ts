@@ -26,6 +26,7 @@ export type QueuedSignalPayload = {
   setArtist: string;
   listenedSeconds: number;
   isOffline: boolean;
+  sessionId: string | null;
 };
 
 export type QueuedSignal = {
