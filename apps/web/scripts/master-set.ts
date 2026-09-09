@@ -123,6 +123,15 @@
 // a real bug this repo has already made once (a mismatched waveform), not a
 // hypothetical.
 //
+// Each output is re-measured independently after mastering (never trusting
+// loudnorm's own self-report) and printed as a one-line verdict — `✓ on
+// target` or `✗ OFF TARGET` with the reason. One file failing outright
+// (a corrupt WAV, ffmpeg running out of disk) is caught per-file and does
+// NOT abort the rest of a multi-file folder; the run ends with a summary
+// line (`N processed (M off target), S skipped, F failed`) so a multi-set
+// run has one line to read instead of one block per file, and exits
+// non-zero if anything failed outright.
+//
 // Two subcommands rather than one command with a mode flag: they share
 // nearly everything (format probe, loudness measurement, the "does this
 // need processing" decision), but one produces a report and mutates
@@ -160,6 +169,15 @@ const LOUDNESS_TOLERANCE_LU = 1.5;
 // wrong. This catches genuine overs (real material measured up to
 // +2.1dBFS) without flagging already-healthy content at a conventional margin.
 const SAFE_TRUE_PEAK_DBFS = -0.3;
+
+// Tighter than LOUDNESS_TOLERANCE_LU (1.5) deliberately: that constant
+// decides whether pre-existing, never-touched material is worth
+// reprocessing at all, where up to 1.5 LU of spread is normal variation
+// between DJs (see its own comment). This one instead checks a file THIS
+// SCRIPT just ran loudnorm against — landing more than half an LU from the
+// exact number it was told to hit is a sign the pipeline itself did
+// something wrong, not healthy variation, so it gets a much narrower band.
+const OUTPUT_TOLERANCE_LU = 0.5;
 
 type FileFormat = { sampleRate: number; bitDepth: string };
 type Loudness = { integrated: number; truePeak: number; lra: number };
@@ -319,13 +337,22 @@ async function analyse(paths: string[], targetI: number) {
 
 // ---------------------------------------------------------------- process --
 
+// "failed" is a thrown error propagating out of the try block below (an
+// ffmpeg step exiting non-zero, a parse failure, disk full, etc.) —
+// processFiles catches that at the call site, not here, so this function's
+// own control flow (and its `finally` cleanup) stays exactly what it was
+// before this had a return type at all. "processed-off-target" still means
+// the file was written and peaks were generated — it's a flag on the
+// result, not a failure to produce one.
+type ProcessOutcome = "processed" | "processed-off-target" | "skipped";
+
 async function processOne(
   input: string,
   targetI: number,
   targetLra: number,
   targetTp: number,
   force: boolean,
-) {
+): Promise<ProcessOutcome> {
   console.log(`\n${input}`);
 
   const format = await probeFormat(input);
@@ -336,7 +363,7 @@ async function processOne(
 
   if (!force && !needsProcessing(before, targetI)) {
     console.log("  already within tolerance — skipping (use --force to reprocess anyway)");
-    return;
+    return "skipped";
   }
 
   // .mastered.mp3, never <name>.mp3 — a folder of fresh WAV exports often
@@ -425,19 +452,25 @@ async function processOne(
 
     console.log("  4/4 verifying independently (not trusting loudnorm's own report)");
     const after = await measureLoudness(outMp3);
+    const lyOff = Math.abs(after.integrated - targetI);
+    const overSafePeak = after.truePeak > SAFE_TRUE_PEAK_DBFS;
+    const offTarget = lyOff > OUTPUT_TOLERANCE_LU || overSafePeak;
     console.log(
-      `       result: ${after.integrated.toFixed(1)} LUFS, ${fmtLU(after.truePeak)} dBFS true peak`,
+      `       ${basename(outMp3)} -> ${after.integrated.toFixed(1)} LUFS, ${fmtLU(after.truePeak)} dBFS  ${offTarget ? "✗ OFF TARGET" : "✓ on target"}`,
     );
-    if (Math.abs(after.integrated - targetI) > 0.5) {
-      console.log(
-        `       ! WARNING: ${Math.abs(after.integrated - targetI).toFixed(1)} LU off target — check manually`,
-      );
+    if (offTarget) {
+      const reasons = [
+        lyOff > OUTPUT_TOLERANCE_LU ? `${lyOff.toFixed(1)} LU off target` : null,
+        overSafePeak ? "true peak over safe ceiling" : null,
+      ].filter(Boolean);
+      console.log(`       ! ${reasons.join(", ")} — check manually`);
     }
 
     console.log("  running generate-peaks.mjs");
     await run("node", [GENERATE_PEAKS, outMp3]);
 
     console.log(`  done: ${outMp3}`);
+    return offTarget ? "processed-off-target" : "processed";
   } finally {
     await Promise.all([rm(prepWav, { force: true }), rm(declipWav, { force: true })]);
   }
@@ -447,21 +480,48 @@ async function processOne(
 // is used throughout main() below, and a same-named local function would
 // shadow it silently rather than error, which is a much worse failure mode
 // to debug than an odd-looking name.
+// One bad file (a corrupt WAV, ffmpeg running out of disk mid-encode) must
+// not take the rest of a multi-file folder down with it — without this
+// try/catch, an uncaught throw from processOne unwinds straight out of this
+// loop, so file 2 of 4 failing meant files 3 and 4 never ran at all, with
+// nothing printed to say so. Returns whether anything failed, so `main` can
+// set a non-zero exit code without this function reaching for `process`
+// itself (see the naming note above for why that's avoided).
 async function processFiles(
   paths: string[],
   targetI: number,
   targetLra: number,
   targetTp: number,
   force: boolean,
-) {
+): Promise<{ anyFailed: boolean }> {
   const files = await findWavFiles(paths);
   if (files.length === 0) {
     console.log("No files found.");
-    return;
+    return { anyFailed: false };
   }
+
+  let processed = 0;
+  let offTarget = 0;
+  let skipped = 0;
+  let failed = 0;
   for (const file of files) {
-    await processOne(file, targetI, targetLra, targetTp, force);
+    try {
+      const outcome = await processOne(file, targetI, targetLra, targetTp, force);
+      if (outcome === "skipped") skipped++;
+      else {
+        processed++;
+        if (outcome === "processed-off-target") offTarget++;
+      }
+    } catch (err) {
+      failed++;
+      console.log(`  ! FAILED: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
+
+  console.log(
+    `\n${files.length} file${files.length === 1 ? "" : "s"}: ${processed} processed${offTarget > 0 ? ` (${offTarget} off target)` : ""}, ${skipped} skipped, ${failed} failed`,
+  );
+  return { anyFailed: failed > 0 };
 }
 
 // --------------------------------------------------------------------- CLI --
@@ -507,7 +567,14 @@ async function main() {
   if (cmd === "analyse") {
     await analyse(paths, targetI);
   } else {
-    await processFiles(paths, targetI, DEFAULT_TARGET_LRA, DEFAULT_TARGET_TP, force);
+    const { anyFailed } = await processFiles(
+      paths,
+      targetI,
+      DEFAULT_TARGET_LRA,
+      DEFAULT_TARGET_TP,
+      force,
+    );
+    if (anyFailed) process.exitCode = 1;
   }
 }
 
