@@ -312,23 +312,27 @@ test.describe("admin dashboard", () => {
     await expect(historyCard.getByText(/^10 days, /)).toBeVisible();
   });
 
-  test("visits_history reports both staleness signals, and says they're pull-only", async ({
+  test("visits_history reports all three staleness signals, and says they're pull-only", async ({
     page,
   }) => {
     await gotoAndHydrate(page, "/dashboard");
     const historyCard = page.getByTestId("dashboard-card").filter({ hasText: "// visits_history" });
 
-    // "Did the cron fire?" and "did it capture anything?" are different
-    // questions with different fixes — a cron firing daily whose every read
-    // fails is fresh by the first and stale by the second. Both are always
-    // stated, so one can never mask the other.
+    // "Did the cron fire?", "did it capture anything?", and "is what it
+    // captured actually finding rows?" are three different questions with
+    // three different fixes — a cron firing daily whose every read succeeds
+    // but finds nothing is fresh by the first two and dry by the third. All
+    // three are always stated, so none can mask another.
     await expect(historyCard.getByText(/cron last ran/i)).toBeVisible();
     await expect(historyCard.getByText(/last successful capture/i)).toBeVisible();
     // Whoever reads this must not assume they'd be told if the capture stopped.
     await expect(historyCard.getByText(/nothing pushes an alert/i)).toBeVisible();
-    // The fixture is healthy on both, so neither warning should be showing.
+    // The fixture is healthy on all three, so none of the three warnings should be showing.
     await expect(historyCard.getByText(/the cron itself has stopped firing/i)).toHaveCount(0);
     await expect(historyCard.getByText(/every read is failing/i)).toHaveCount(0);
+    await expect(
+      historyCard.getByText(/consecutive successful captures have found zero/i),
+    ).toHaveCount(0);
   });
 
   test("edge_traffic is labelled as edge requests, never as visitors", async ({ page }) => {

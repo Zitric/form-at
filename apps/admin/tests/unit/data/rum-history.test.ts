@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { type CaptureRun, buildHistory, coveredDays } from "~/data/rum-history";
+import {
+  type CaptureRun,
+  buildHistory,
+  countConsecutiveEmptySuccessfulRuns,
+  coveredDays,
+} from "~/data/rum-history";
 
 // The load-bearing behaviour here is the zero/unknown distinction. Getting it
 // wrong is silent: an outage would render as a stretch of confident zero
@@ -13,11 +18,20 @@ import { type CaptureRun, buildHistory, coveredDays } from "~/data/rum-history";
 
 const at = (iso: string) => Date.parse(`${iso}T03:17:00Z`);
 
-/** A run over the trailing 7 days ending on `until`. */
-const run = (until: string, ok = true): CaptureRun => {
+/** A run over the trailing 7 days ending on `until`. Defaults to having
+ *  written something on success and nothing on failure, matching the real
+ *  archiver's own shape — pass `rowsWritten` explicitly for the empty-window
+ *  cases this default would otherwise hide. */
+const run = (until: string, ok = true, rowsWritten = ok ? 1 : 0): CaptureRun => {
   const since = new Date(`${until}T00:00:00Z`);
   since.setUTCDate(since.getUTCDate() - 6);
-  return { capturedAt: at(until), since: since.toISOString().slice(0, 10), until, ok };
+  return {
+    capturedAt: at(until),
+    since: since.toISOString().slice(0, 10),
+    until,
+    ok,
+    rowsWritten,
+  };
 };
 
 const row = (day: string, visits: number, pageLoads = visits * 2, isBot = 0) => ({
@@ -74,6 +88,7 @@ describe("coveredDays", () => {
       since: "2026-08-09",
       until: "2026-08-11",
       ok: true,
+      rowsWritten: 1,
     };
     expect(coveredDays([narrow]).size).toBe(3);
   });
@@ -84,6 +99,7 @@ describe("coveredDays", () => {
       since: "2026-08-11",
       until: "2026-08-05",
       ok: true,
+      rowsWritten: 1,
     };
     expect(coveredDays([inverted]).size).toBe(0);
     expect(coveredDays([]).size).toBe(0);
@@ -218,6 +234,77 @@ describe("buildHistory", () => {
       expect(history.coverageStart).toBeNull();
       expect(history.lastRunAt).toBeNull();
       expect(history.lastSuccessAt).toBeNull();
+    });
+  });
+
+  describe("the third state: healthy cron, healthy reads, dry source", () => {
+    // Locks the exact gap a real month-long outage exposed: lastRunAt and
+    // lastSuccessAt both stay fresh here, because the cron IS firing and
+    // every read IS succeeding — this signal is the only one of the three
+    // that can tell "everything working" from "everything working, nothing
+    // to find".
+
+    it("counts consecutive successful runs that wrote nothing, most recent first", () => {
+      const runs = [
+        run("2026-08-18", true, 0),
+        run("2026-08-19", true, 0),
+        run("2026-08-20", true, 0),
+      ];
+      expect(countConsecutiveEmptySuccessfulRuns(runs)).toBe(3);
+    });
+
+    it("is order-independent — sorts internally rather than trusting call order", () => {
+      const runs = [
+        run("2026-08-20", true, 0),
+        run("2026-08-18", true, 0),
+        run("2026-08-19", true, 0),
+      ];
+      expect(countConsecutiveEmptySuccessfulRuns(runs)).toBe(3);
+    });
+
+    it("stops at the most recent successful run that actually found rows", () => {
+      // The dry streak started AFTER 08-17 — a real dry-source outage always
+      // looks like this: some real history, then it stops.
+      const runs = [
+        run("2026-08-16", true, 4),
+        run("2026-08-17", true, 2),
+        run("2026-08-18", true, 0),
+        run("2026-08-19", true, 0),
+      ];
+      expect(countConsecutiveEmptySuccessfulRuns(runs)).toBe(2);
+    });
+
+    it("skips a failed run when walking backward — it neither breaks nor extends the streak", () => {
+      // A failed read in the middle proves nothing about that day either way
+      // — that ambiguity already belongs to lastSuccessAt, not this count.
+      const runs = [
+        run("2026-08-17", true, 0),
+        run("2026-08-18", false, 0),
+        run("2026-08-19", true, 0),
+      ];
+      expect(countConsecutiveEmptySuccessfulRuns(runs)).toBe(2);
+    });
+
+    it("is 0 the moment the most recent run found real rows again", () => {
+      const runs = [
+        run("2026-08-18", true, 0),
+        run("2026-08-19", true, 0),
+        run("2026-08-20", true, 5),
+      ];
+      expect(countConsecutiveEmptySuccessfulRuns(runs)).toBe(0);
+    });
+
+    it("buildHistory surfaces the same count on RumHistory", () => {
+      const history = buildHistory(
+        [],
+        [run("2026-08-18", true, 0), run("2026-08-19", true, 0), run("2026-08-20", true, 0)],
+        new Date("2026-08-20T12:00:00Z"),
+      );
+      // lastRunAt/lastSuccessAt both read as fresh — the exact "everything
+      // healthy" reading that made this outage invisible to them alone.
+      expect(history.lastRunAt).toBe(at("2026-08-20"));
+      expect(history.lastSuccessAt).toBe(at("2026-08-20"));
+      expect(history.consecutiveEmptySuccessfulRuns).toBe(3);
     });
   });
 

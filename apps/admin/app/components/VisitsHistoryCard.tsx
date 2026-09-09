@@ -19,6 +19,18 @@ import { TrendChart } from "./TrendChart";
  *  unrecoverable, so that's the moment worth flagging. */
 const ARCHIVE_STALE_AFTER_DAYS = RUM_UNSAMPLED_DAYS + 1;
 
+/** Three independent successful reads, each covering a trailing
+ *  RUM_UNSAMPLED_DAYS-day window, all reporting zero — roughly 9 real days
+ *  of overlapping-but-distinct observation, not one quiet week. A single
+ *  empty window is already the ordinary, expected state for a genuinely
+ *  quiet site; three in a row is where "quiet" stops being the more likely
+ *  explanation than "the source stopped delivering data". Confirmed
+ *  against a real month-long outage that both `cronStalled` and
+ *  `capturesStalled` read as perfectly healthy throughout, because the
+ *  cron WAS firing and every read WAS succeeding — see TECH_DEBT.md
+ *  item 29. */
+const DRY_SOURCE_THRESHOLD_RUNS = 3;
+
 // Locale AND timeZone pinned, not left to resolve from the environment — see
 // SetsList.tsx's fmtWhen for why `undefined` here is a React
 // hydration-mismatch bug (#418) on SSR'd content, not a display quirk.
@@ -79,6 +91,17 @@ export function VisitsHistoryCard({ history }: { history: RumHistory | null }) {
   const successAge = ageInDays(history.lastSuccessAt);
   const cronStalled = runAge === null || runAge >= ARCHIVE_STALE_AFTER_DAYS;
   const capturesStalled = successAge === null || successAge >= ARCHIVE_STALE_AFTER_DAYS;
+  // A third state the two checks above cannot see by construction: the cron
+  // firing AND every read succeeding AND nothing coming back. Both ages stay
+  // fresh throughout it — correctly, since neither claim ("is it firing",
+  // "is it reading") is false. Gated on neither stall already firing: a dead
+  // cron or a run of failed reads is the more foundational problem, and
+  // whatever this count was before either of those started is stale
+  // information, not a second warning worth showing alongside them.
+  const sourceDry =
+    !cronStalled &&
+    !capturesStalled &&
+    history.consecutiveEmptySuccessfulRuns >= DRY_SOURCE_THRESHOLD_RUNS;
 
   return (
     <>
@@ -141,15 +164,33 @@ export function VisitsHistoryCard({ history }: { history: RumHistory | null }) {
         </p>
       )}
 
+      {sourceDry && (
+        <p className="mt-1 text-xs text-gold">
+          {history.consecutiveEmptySuccessfulRuns} consecutive successful captures have found zero
+          visits. The archiver is working and Cloudflare is returning nothing, so the problem is
+          upstream of this card, not in it — check that the Web Analytics site for this zone still
+          exists in the Cloudflare dashboard (Analytics &amp; Logs → Web Analytics). A beacon
+          reporting to a deleted or deactivated site produces exactly this: a healthy cron, healthy
+          reads, nothing to read.
+        </p>
+      )}
+
       {/* Unconditional, deliberately — it used to render only on the healthy
           branch, so the one fact a reader most needs when the capture HAS
           stopped ("you are only seeing this because you happened to look")
-          vanished at exactly the moment it mattered. */}
+          vanished at exactly the moment it mattered.
+          "Nothing pushes an alert" is not a hypothetical limitation — it has
+          already let a real outage run undetected for as long as nobody
+          opened this card. See PWA_PROGRESS.md's "stays pull-only,
+          deliberately" entry and TECH_DEBT.md item 29 before proposing push/
+          email/Slack alerting as the fix for a future gap: pull-only was
+          reconsidered after that outage, with the cost known, and kept. */}
       <p className="mt-1 text-xs text-grey/70">
         cron last ran {runAge === null ? "never" : runAge === 0 ? "today" : `${runAge}d ago`}; last
         successful capture{" "}
-        {successAge === null ? "never" : successAge === 0 ? "today" : `${successAge}d ago`}. Both
-        surface only when someone opens the dashboard — nothing pushes an alert if either stops.
+        {successAge === null ? "never" : successAge === 0 ? "today" : `${successAge}d ago`}. All
+        three signals on this card surface only when someone opens the dashboard — nothing pushes an
+        alert if any of them fire.
       </p>
     </>
   );

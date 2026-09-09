@@ -1135,6 +1135,51 @@ visitor's play instead.
 
 Both parts confirmed against real production D1 data, not assumed.
 
+## 29. Monitoring had two correct signals and still missed a month-long outage — a third, unenumerated state
+
+**The generalisable lesson, which matters more than the specific fix below.**
+`lastRunAt` and `lastSuccessAt` (`apps/admin/app/data/rum-history.ts`,
+designed in `PWA_PROGRESS.md`'s "Staleness needs two signals, not one") were
+both individually correct throughout a real month-long Web Analytics
+outage — the archiver's cron genuinely was firing daily, and every read
+genuinely was succeeding. Neither signal was wrong. The failure lived in a
+state nobody had enumerated when the two were designed: everything working,
+source empty. Two signals covering "is it running" and "is it succeeding"
+quietly assumed a third possibility couldn't happen — succeeding at reading
+nothing, indefinitely. It can, and did.
+
+Root cause, not yet independently confirmed against the Cloudflare dashboard
+itself (that needs eyes with access, not just code): the beacon on the live
+site carries the correct, committed site tag and is genuinely attempting the
+report POST, but that POST 404s with no CORS header — and an intentionally
+bogus token produces the byte-for-byte identical response, which is
+consistent with the Web Analytics site for this zone no longer being valid
+rather than anything wrong in this repo's code. Timing lines up: the last
+real archived data is from 2026-08-07/08, one to two days before the manual
+beacon-injection switch (`packages/data/src/webAnalytics.ts`, 2026-08-10).
+
+**The fix:** a third field, `RumHistory.consecutiveEmptySuccessfulRuns` —
+how many of the most recent successful runs, in a row, wrote zero rows (the
+archiver's own `rows_written` column already carried this; it just wasn't
+being read by anything). At 3 consecutive successful-but-empty runs
+(`DRY_SOURCE_THRESHOLD_RUNS`, `VisitsHistoryCard.tsx`) — three independent
+reads of a rolling 7-day window, all empty, a materially different claim
+than one quiet week — the card surfaces a warning naming the actual check:
+confirm the Web Analytics site still exists for the zone, not a vague
+"check the beacon". Also fixed: `UsageTab.tsx`'s live 7-day card
+unconditionally asserted the beacon "only started collecting recently, so
+this is expected to stay empty" whenever its own window was empty — true
+when written, false for the entire month of this outage, and actively
+misleading about precisely the state that needed noticing. It now states
+the fact without the unverifiable guess and points at the archive card,
+which has an actual memory to answer from.
+
+**Deliberately not built: push/email/Slack alerting.** See
+PWA_PROGRESS.md's "stays pull-only, deliberately" entry — reconsidered
+after this outage with the real cost now known, and kept pull-only anyway.
+The fix here is a signal that can actually detect the failure, not a new
+delivery channel for the same two signals that already missed it.
+
 ---
 
-_Last updated: 2026-09-08_
+_Last updated: 2026-09-09_

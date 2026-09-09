@@ -46,6 +46,10 @@ export const SAMPLE_RUM_HISTORY: RumHistory = {
   // ago" from whenever the test actually runs can't go stale this way.
   lastRunAt: Date.now() - 2 * 60 * 60 * 1000,
   lastSuccessAt: Date.now() - 2 * 60 * 60 * 1000,
+  // 0, not a healthy-looking number: the sample's own recent runs found real
+  // visits (totalVisits below), so a real fixture value here is 0 anyway —
+  // matching reality rather than picking an arbitrary "safe" placeholder.
+  consecutiveEmptySuccessfulRuns: 0,
   daysCovered: 7,
   daysUncovered: 3,
   totalVisits: 11,
