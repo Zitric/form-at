@@ -16,6 +16,16 @@ const handler = createStartHandler({ handler: defaultStreamHandler });
 //   style-src 'unsafe-inline'  — the inlined critical font CSS + React
 //     style attributes.
 //   img-src data:              — favicon/data URIs.
+//   img-src AUDIO_ORIGIN       — admin-uploaded artwork's fallback. Uploaded
+//     artwork never goes through `optimize-images` (that script only reads
+//     the gitignored local `images-source/`, which an admin upload never
+//     populates), so the build-time `/images/...` optimized variant simply
+//     doesn't exist for it. `Image.tsx` falls back to `artworkOriginalUrl` —
+//     the raw file straight from R2/CDN — for exactly this case, on this
+//     same host. Without this allowance, that fallback is itself CSP-blocked:
+//     a freshly admin-uploaded set renders a blank artwork spot instead of
+//     the raw image, since the one path meant to catch a missing optimized
+//     variant is blocked too.
 //   media-src / connect-src — the <audio> stream and the peaks-JSON /
 //     download fetches from the audio host (see @form-at/data/sets, the
 //     canonical home of the hostname).
@@ -31,7 +41,7 @@ const DOCUMENT_CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
+  `img-src 'self' data: ${AUDIO_ORIGIN}`,
   "font-src 'self'",
   `media-src 'self' ${AUDIO_ORIGIN}`,
   `connect-src 'self' ${AUDIO_ORIGIN} https://cloudflareinsights.com`,
