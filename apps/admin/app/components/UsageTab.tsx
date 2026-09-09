@@ -38,15 +38,19 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
     );
   }
   if (rum.noDataInWindow) {
-    // A successful read of an empty window — the ordinary state for a beacon
-    // that only just started collecting. Saying "0 visits" flatly would be
+    // A successful read of an empty window. Saying "0 visits" flatly would be
     // true but misread as "nobody came"; saying "couldn't read" would be
-    // false. This is neither.
+    // false. This is neither — but this card, on its own, can't say WHY it's
+    // empty: a live 7-day snapshot has no memory of whether that's new or
+    // ongoing. An earlier version guessed "just started collecting, expected
+    // to stay empty" — true when written, then silently false the moment a
+    // real outage made it stay empty for a month for an unrelated reason.
+    // Point at the archive card instead of guessing again.
     return (
       <Muted className="block text-xs">
-        no visits recorded in the last {rum.windowDays}d. The beacon reports from real browsers and
-        only started collecting recently, so this is expected to stay empty until the site gets
-        traffic with it live — it is a successful read of an empty window, not a failure.
+        no visits recorded in the last {rum.windowDays}d — a successful read of an empty window, not
+        a failure. This card can't tell you whether that's new or ongoing; the visits_history card
+        below can, from its longer memory.
       </Muted>
     );
   }

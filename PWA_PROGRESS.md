@@ -3744,6 +3744,19 @@ leaving the reader to assume they'd be told. Both figures render
 unconditionally — an earlier version showed the disclosure only when the archive
 was fresh, hiding it at exactly the moment it mattered.
 
+**Update (2026-09-09): this limit has now cost a real month of data, not a
+hypothetical one.** A Web Analytics misconfiguration (see TECH_DEBT.md item 29)
+went undetected from 2026-08-08 to 2026-09-08 specifically because `lastRunAt`
+and `lastSuccessAt` stayed fresh throughout — the cron genuinely was firing and
+every read genuinely was succeeding, so pull-only monitoring had nothing to
+surface until someone happened to look. The paragraph above was an argument when
+it was written; it's a demonstrated cost now. Kept pull-only anyway — the fix
+built was a third signal that can actually detect this failure mode
+(`consecutiveEmptySuccessfulRuns`, see item 29 and `VisitsHistoryCard.tsx`), not
+a push channel — but the next person weighing whether pull-only is still the
+right call for this page should weigh it against this outage, not against the
+original hypothetical.
+
 **Rejected:** stitching the archive and the live Cloudflare read into one
 series. They have different provenance (D1 rows from a cron vs a live API
 call) and one number spanning both would hide precisely the seam this

@@ -52,6 +52,13 @@ export type CaptureRun = {
   /** Whether the Cloudflare read succeeded. Only successful runs are coverage —
    *  a failed one saw nothing — but a failed one still proves the cron fired. */
   ok: boolean;
+  /** Rows upserted by this run — 0 on a successful run means Cloudflare
+   *  returned nothing at all for the whole trailing window, not that the
+   *  write path skipped anything: the archiver re-fetches and re-upserts
+   *  its entire window every run (see rum-archiver's own header), so a day
+   *  with any real traffic gets rewritten every time regardless of whether
+   *  it was already captured. Feeds `consecutiveEmptySuccessfulRuns`. */
+  rowsWritten: number;
 };
 
 export type RumHistory = {
@@ -75,6 +82,20 @@ export type RumHistory = {
    *  which one it's seeing. */
   lastRunAt: number | null;
   lastSuccessAt: number | null;
+  /** A THIRD state neither signal above can see: the cron firing AND every
+   *  read succeeding AND nothing coming back. `lastRunAt` and
+   *  `lastSuccessAt` are both "fresh" throughout that state — correctly,
+   *  since the archiver genuinely is alive and genuinely is reading
+   *  successfully. The fault is upstream of this whole table: Cloudflare
+   *  itself has stopped returning data (see TECH_DEBT.md item 29 — a
+   *  month-long outage read as perfectly healthy on both signals above for
+   *  exactly this reason). Counts backward from the most recent run: how
+   *  many consecutive SUCCESSFUL runs, in a row, wrote zero rows. Failed
+   *  runs are skipped rather than breaking the streak when walking
+   *  backward — a failed read neither confirms nor denies the window was
+   *  dry, and that ambiguity already belongs to `lastSuccessAt`. Resets to
+   *  0 the moment a successful run finds real rows again. */
+  consecutiveEmptySuccessfulRuns: number;
   daysCovered: number;
   daysUncovered: number;
   totalVisits: number;
@@ -108,6 +129,25 @@ export function coveredDays(runs: CaptureRun[]): Set<string> {
     }
   }
   return covered;
+}
+
+/**
+ * How many of the most recent runs, walking backward from now with no
+ * break, were successful AND wrote zero rows — see `RumHistory.
+ * consecutiveEmptySuccessfulRuns`'s own doc comment for why failed runs are
+ * skipped rather than treated as a break. Exported separately from
+ * `buildHistory`, same reasoning as `coveredDays`: testable without a
+ * database.
+ */
+export function countConsecutiveEmptySuccessfulRuns(runs: CaptureRun[]): number {
+  const sorted = [...runs].sort((a, b) => b.capturedAt - a.capturedAt);
+  let count = 0;
+  for (const run of sorted) {
+    if (!run.ok) continue;
+    if (run.rowsWritten !== 0) break;
+    count += 1;
+  }
+  return count;
 }
 
 type ArchiveRow = { day: string; is_bot: number; visits: number; page_loads: number };
@@ -145,6 +185,7 @@ export function buildHistory(
     .filter(Number.isFinite);
   const lastRunAt = runTimes.length ? Math.max(...runTimes) : null;
   const lastSuccessAt = successTimes.length ? Math.max(...successTimes) : null;
+  const consecutiveEmptySuccessfulRuns = countConsecutiveEmptySuccessfulRuns(runs);
 
   const observed = [...covered].sort();
   const coverageStart = observed[0] ?? null;
@@ -159,6 +200,7 @@ export function buildHistory(
       // never succeeded" rather than "nothing archived yet".
       lastRunAt,
       lastSuccessAt,
+      consecutiveEmptySuccessfulRuns,
       daysCovered: 0,
       daysUncovered: 0,
       totalVisits: 0,
@@ -200,6 +242,7 @@ export function buildHistory(
     coverageEnd,
     lastRunAt,
     lastSuccessAt,
+    consecutiveEmptySuccessfulRuns,
     daysCovered,
     daysUncovered: days.length - daysCovered,
     totalVisits,
@@ -234,8 +277,14 @@ export const fetchRumHistory = createServerFn({ method: "GET" }).handler(
         // too — they aren't coverage, but they're how the card tells a dead
         // cron from a cron whose reads are all failing.
         db
-          .prepare("SELECT captured_at, since, until, ok FROM rum_capture_runs")
-          .all<{ captured_at: number; since: string; until: string; ok: number }>(),
+          .prepare("SELECT captured_at, since, until, ok, rows_written FROM rum_capture_runs")
+          .all<{
+            captured_at: number;
+            since: string;
+            until: string;
+            ok: number;
+            rows_written: number;
+          }>(),
       ]);
       return buildHistory(
         rows.results,
@@ -244,6 +293,7 @@ export const fetchRumHistory = createServerFn({ method: "GET" }).handler(
           since: r.since,
           until: r.until,
           ok: r.ok === 1,
+          rowsWritten: r.rows_written,
         })),
         new Date(),
       );
