@@ -106,6 +106,35 @@ export async function fetchUploadedSets(db: D1Database): Promise<MusicSet[]> {
   return results.map(mapD1RowToMusicSet);
 }
 
+// Backs the tombstone check `mergeSets` and `fetchSetById` use to stop a
+// deleted set's still-committed snapshot copy from outliving the deploy that
+// would otherwise regenerate it (PWA_PROGRESS.md's PR6 entry traces the gap;
+// the "narrower SSR-only case" addendum there is this). Reuses
+// `admin_deleted_sets` — PR6's own delete-audit log — rather than a new
+// table: a row with `restored_at IS NULL` is, precisely, "currently deleted,
+// not since restored", which is exactly what a tombstone needs. Restoring a
+// set already sets `restored_at`, and a later re-delete writes a fresh
+// unrestored row, so this stays correct across any number of delete/restore
+// cycles for the same id with no extra bookkeeping.
+//
+// Never throws — resolves to an empty set on any failure. This read is pure
+// upside when it works and must be safe to lose: a stale snapshot entry
+// still showing is the pre-existing, accepted behaviour; blanking a request
+// because THIS query failed would be a regression this change must not
+// introduce. Callers get today's exact behaviour back for free by treating
+// an empty set as "nothing known to be deleted", not by handling failure
+// specially themselves.
+export async function fetchDeletedSetIds(db: D1Database): Promise<Set<string>> {
+  try {
+    const { results } = await db
+      .prepare("SELECT DISTINCT set_id FROM admin_deleted_sets WHERE restored_at IS NULL")
+      .all<{ set_id: string }>();
+    return new Set(results.map((r) => r.set_id));
+  } catch {
+    return new Set();
+  }
+}
+
 // D1 (live) wins over the static snapshot — the same precedence `mergeSets`
 // below applies, and deliberately consistent with it. Checking the snapshot
 // first would let the list page (via `mergeSets`, live-wins) and this detail
@@ -116,9 +145,25 @@ export async function fetchUploadedSets(db: D1Database): Promise<MusicSet[]> {
 // showed the correction. Falling back to the snapshot only on a genuine D1
 // miss keeps both paths honest about the same fact: D1 is authoritative, the
 // snapshot is the offline/outage fallback.
+//
+// The row query and the tombstone check run in parallel (Promise.all), not
+// sequentially — same latency as before this existed. A row found is always
+// authoritative regardless of tombstone state (the `sets` table itself is
+// the one ground truth; a tombstone is metadata ABOUT it, never a competing
+// source). Only when D1 has no row at all does the tombstone decide the
+// fallback: genuinely deleted → undefined, so the route's existing
+// `if (!set) throw notFound()` fires instead of silently rendering (and, for
+// a set, PLAYING — deletion never touches R2) a copy that shouldn't exist
+// anymore. Anything else missing-and-not-tombstoned still falls back to the
+// snapshot exactly as before.
 export async function fetchSetById(db: D1Database, id: string): Promise<MusicSet | undefined> {
-  const row = await db.prepare("SELECT * FROM sets WHERE id = ?").bind(id).first<SetRow>();
-  return row ? mapD1RowToMusicSet(row) : getSet(id);
+  const [row, deletedIds] = await Promise.all([
+    db.prepare("SELECT * FROM sets WHERE id = ?").bind(id).first<SetRow>(),
+    fetchDeletedSetIds(db),
+  ]);
+  if (row) return mapD1RowToMusicSet(row);
+  if (deletedIds.has(id)) return undefined;
+  return getSet(id);
 }
 
 // Combines a live D1 fetch with the build-time snapshot, deduping by id
@@ -130,11 +175,32 @@ export async function fetchSetById(db: D1Database, id: string): Promise<MusicSet
 // table's current state and `snapshot` reflects an earlier point in time,
 // so anything not yet in the snapshot was necessarily uploaded after it was
 // generated.
-export function mergeSets(live: MusicSet[], snapshot: MusicSet[]): MusicSet[] {
+//
+// `deletedIds` (default empty — today's exact behaviour when omitted or
+// when the caller's own tombstone read failed) filters the SNAPSHOT half
+// only, and only for ids not already contributed by `live`: a live entry
+// always wins regardless of tombstone state, same reasoning as
+// `fetchSetById` above. This is what stops a deleted set's snapshot copy
+// from surviving a union that otherwise has no way to express "this id
+// should no longer exist" — see the PR6 entry in PWA_PROGRESS.md this
+// closes the narrower half of. Callers compute `deletedIds` fresh on every
+// call (`fetchDeletedSetIds`, no caching) — `mergeSets` itself holds no
+// state between calls, so a delete-then-restore-then-delete-again sequence
+// can never leak stale state from one cycle into the next.
+export function mergeSets(
+  live: MusicSet[],
+  snapshot: MusicSet[],
+  deletedIds: ReadonlySet<string> = new Set(),
+): MusicSet[] {
   const seen = new Set<string>();
   const merged: MusicSet[] = [];
-  for (const set of [...live, ...snapshot]) {
+  for (const set of live) {
     if (seen.has(set.id)) continue;
+    seen.add(set.id);
+    merged.push(set);
+  }
+  for (const set of snapshot) {
+    if (seen.has(set.id) || deletedIds.has(set.id)) continue;
     seen.add(set.id);
     merged.push(set);
   }

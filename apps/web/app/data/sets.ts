@@ -5,6 +5,7 @@
 // this file.
 import {
   type MusicSet,
+  fetchDeletedSetIds,
   fetchSetById,
   fetchUploadedSets,
   getSet,
@@ -37,8 +38,11 @@ function getDb(context: unknown): D1Database | undefined {
 export async function getAllSetsWithFallback(db: D1Database | undefined): Promise<MusicSet[]> {
   if (!db) return sets;
   try {
-    const live = await fetchUploadedSets(db);
-    return mergeSets(live, sets);
+    // Parallel, not sequential — fetchDeletedSetIds never throws (see its own
+    // comment), so the only way this whole try block still fails is the live
+    // fetch itself throwing, unchanged from before this existed.
+    const [live, deletedIds] = await Promise.all([fetchUploadedSets(db), fetchDeletedSetIds(db)]);
+    return mergeSets(live, sets, deletedIds);
   } catch {
     return sets;
   }
@@ -74,8 +78,11 @@ export const fetchAllSets = createServerFn({ method: "GET" }).handler(({ context
 // rejection to `.catch()` on instead of a falsely-successful snapshot.
 export async function getAllSetsLive(db: D1Database | undefined): Promise<MusicSet[]> {
   if (!db) throw new Error("NO_D1_BINDING");
-  const live = await fetchUploadedSets(db);
-  return mergeSets(live, sets);
+  // fetchDeletedSetIds never throws, so this still rejects on exactly the
+  // same condition as before (the live fetch itself throwing) — no new way
+  // for this function to silently resolve with a degraded result.
+  const [live, deletedIds] = await Promise.all([fetchUploadedSets(db), fetchDeletedSetIds(db)]);
+  return mergeSets(live, sets, deletedIds);
 }
 
 export const fetchAllSetsLive = createServerFn({ method: "GET" }).handler(({ context }) =>
