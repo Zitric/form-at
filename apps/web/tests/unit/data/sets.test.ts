@@ -69,6 +69,32 @@ describe("getAllSetsWithFallback", () => {
 
     expect(await getAllSetsWithFallback(db)).toEqual(staticSnapshot);
   });
+
+  it("excludes a set that's tombstoned in admin_deleted_sets, even though the snapshot still has it", async () => {
+    const staticSet = staticSnapshot[0];
+    if (!staticSet) throw new Error("snapshot is empty — test fixture assumption broken");
+    const db = createFakeD1([
+      { match: /FROM sets ORDER BY/, all: [] }, // deleted: nothing left in D1's live sets table
+      { match: /admin_deleted_sets/, all: [{ set_id: staticSet.id }] },
+    ]);
+
+    const result = await getAllSetsWithFallback(db);
+
+    expect(result.some((s) => s.id === staticSet.id)).toBe(false);
+  });
+
+  it("degrades to today's behaviour (stale entry may still show) if the tombstone read fails — never blanks the catalogue", async () => {
+    const staticSet = staticSnapshot[0];
+    if (!staticSet) throw new Error("snapshot is empty — test fixture assumption broken");
+    const db = createFakeD1([
+      { match: /FROM sets ORDER BY/, all: [] },
+      { match: /admin_deleted_sets/, throws: true },
+    ]);
+
+    const result = await getAllSetsWithFallback(db);
+
+    expect(result.some((s) => s.id === staticSet.id)).toBe(true);
+  });
 });
 
 // `getAllSetsLive` exists specifically because
@@ -110,6 +136,19 @@ describe("getAllSetsLive", () => {
     expect(result[0]).toMatchObject({ id: "set-999-new", artist: "New Artist" });
     expect(result).toHaveLength(staticSnapshot.length + 1);
   });
+
+  it("excludes a tombstoned set from the live-fetch result too — CatalogueSync's own copy must agree with the SSR page", async () => {
+    const staticSet = staticSnapshot[0];
+    if (!staticSet) throw new Error("snapshot is empty — test fixture assumption broken");
+    const db = createFakeD1([
+      { match: /FROM sets ORDER BY/, all: [] },
+      { match: /admin_deleted_sets/, all: [{ set_id: staticSet.id }] },
+    ]);
+
+    const result = await getAllSetsLive(db);
+
+    expect(result.some((s) => s.id === staticSet.id)).toBe(false);
+  });
 });
 
 describe("getSetByIdWithFallback", () => {
@@ -129,6 +168,21 @@ describe("getSetByIdWithFallback", () => {
 
   it("returns null when there's no D1 binding and the id isn't in the snapshot", async () => {
     expect(await getSetByIdWithFallback(undefined, "set-999-uploaded-only")).toBeNull();
+  });
+
+  // The case that matters most: without this, the detail page for a deleted
+  // set didn't just render stale data, it kept PLAYING — deletion never
+  // touches R2. `null` here is what makes the route's existing
+  // `if (!set) throw notFound()` fire instead.
+  it("returns null (not the stale, still-playable snapshot) for a set that's genuinely deleted and tombstoned", async () => {
+    const staticSet = staticSnapshot[0];
+    if (!staticSet) throw new Error("snapshot is empty — test fixture assumption broken");
+    const db = createFakeD1([
+      { match: /WHERE id = \?/, first: null },
+      { match: /admin_deleted_sets/, all: [{ set_id: staticSet.id }] },
+    ]);
+
+    expect(await getSetByIdWithFallback(db, staticSet.id)).toBeNull();
   });
 });
 

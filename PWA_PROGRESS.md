@@ -3324,6 +3324,28 @@ and closing it needs a real, standalone mechanism this PR doesn't build.
 The delete confirmation modal states the full chain in plain language
 instead (see the UI section below).
 
+**Update (2026-09-20): the SSR-only half of this has since been closed —
+the offline reasoning above still stands, unchanged.** `mergeSets` and
+`fetchSetById` (`packages/data/src/sets.ts`) now take a `deletedIds` set,
+computed fresh on every call by `fetchDeletedSetIds` from — precisely —
+`admin_deleted_sets`, this PR's own audit log, filtered to rows with no
+`restored_at`. This is not the tombstone mechanism declined above: no new
+table, no push channel, no deploy trigger, and it changes nothing about how
+an offline device reconciles — `reconcileFromIdb` still only runs on that
+device's own next successful confirmed boot, exactly as designed here. What
+it does close is the always-online half: `/sets`, the detail page, and (via
+`getAllSetsLive`) `CatalogueSync`'s own live fetch no longer need an
+unrelated deploy to happen before they can show what D1 already knows —
+which, as a side effect, means the next confirmed boot after a delete now
+excludes it from `catalogueSets` immediately, not merely after that boot
+happens to follow a deploy too. The declined mechanism was being weighed as
+if it had to solve both halves of this at once; it didn't, and the half
+that mattered here was already free with infrastructure this PR built.
+Detail-page consequence worth naming since it's more than cosmetic: without
+this, a deleted set's OWN page didn't just keep rendering — it kept
+PLAYING, since delete never touches R2 (item 3 above). That path returns a
+real `notFound()` now.
+
 **Item 1a (new, surfaced during review) — the admin list makes no
 distinction between a set uploaded five minutes ago and one of the 4
 legacy sets with hundreds of real plays.** `fetchUploadedSets` returns

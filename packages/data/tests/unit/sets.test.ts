@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type MusicSet,
+  fetchDeletedSetIds,
   fetchSetById,
   fetchUploadedSets,
   getSet,
@@ -101,6 +102,37 @@ describe("fetchUploadedSets", () => {
   });
 });
 
+describe("fetchDeletedSetIds", () => {
+  it("returns the ids with an outstanding (unrestored) delete", async () => {
+    const db = createFakeD1([
+      { match: /admin_deleted_sets/, all: [{ set_id: "set-a" }, { set_id: "set-b" }] },
+    ]);
+
+    expect(await fetchDeletedSetIds(db)).toEqual(new Set(["set-a", "set-b"]));
+  });
+
+  it("returns an empty set when nothing is currently deleted", async () => {
+    const db = createFakeD1([{ match: /admin_deleted_sets/, all: [] }]);
+
+    expect(await fetchDeletedSetIds(db)).toEqual(new Set());
+  });
+
+  it("never throws — resolves to an empty set on a query failure, the safe direction", async () => {
+    const db = createFakeD1([{ match: /admin_deleted_sets/, throws: true }]);
+
+    await expect(fetchDeletedSetIds(db)).resolves.toEqual(new Set());
+  });
+
+  it("never throws even when nothing matches the query at all (no route registered)", async () => {
+    // Models a caller that only set up fake routes for an unrelated query —
+    // this must degrade the same way a real failure would, not throw an
+    // uncaught "no fake route matched" past this function's own boundary.
+    const db = createFakeD1([{ match: /FROM sets ORDER BY/, all: [] }]);
+
+    await expect(fetchDeletedSetIds(db)).resolves.toEqual(new Set());
+  });
+});
+
 describe("fetchSetById", () => {
   // D1 (live) wins over the static snapshot, same precedence as mergeSets —
   // this is the fix for the bug where the list page (live-wins via
@@ -125,6 +157,51 @@ describe("fetchSetById", () => {
     const result = await fetchSetById(db, staticSet.id);
 
     expect(result).toEqual(staticSet);
+  });
+
+  // The case the operator cares about most: without this, a deleted set's
+  // detail page not only kept rendering the stale snapshot copy, it kept
+  // PLAYING — deletion never touches R2, so the audio was still right there.
+  it("returns undefined (not the stale, still-playable snapshot) when the set is genuinely deleted and tombstoned", async () => {
+    const staticSet = sets[0];
+    if (!staticSet) throw new Error("snapshot is empty — test fixture assumption broken");
+    const db = createFakeD1([
+      { match: /WHERE id = \?/, first: null },
+      { match: /admin_deleted_sets/, all: [{ set_id: staticSet.id }] },
+    ]);
+
+    expect(await fetchSetById(db, staticSet.id)).toBeUndefined();
+  });
+
+  it("still falls back to the snapshot when the row is missing but NOT tombstoned — today's behaviour, unchanged", async () => {
+    const staticSet = sets[0];
+    if (!staticSet) throw new Error("snapshot is empty — test fixture assumption broken");
+    const db = createFakeD1([
+      { match: /WHERE id = \?/, first: null },
+      { match: /admin_deleted_sets/, all: [] },
+    ]);
+
+    expect(await fetchSetById(db, staticSet.id)).toEqual(staticSet);
+  });
+
+  it("degrades to the snapshot fallback if the tombstone query itself fails — never a bare error, never blank", async () => {
+    const staticSet = sets[0];
+    if (!staticSet) throw new Error("snapshot is empty — test fixture assumption broken");
+    const db = createFakeD1([
+      { match: /WHERE id = \?/, first: null },
+      { match: /admin_deleted_sets/, throws: true },
+    ]);
+
+    expect(await fetchSetById(db, staticSet.id)).toEqual(staticSet);
+  });
+
+  it("a live row always wins, even over a stale or inconsistent tombstone entry for the same id", async () => {
+    const db = createFakeD1([
+      { match: /WHERE id = \?/, first: sampleRow },
+      { match: /admin_deleted_sets/, all: [{ set_id: sampleRow.id }] },
+    ]);
+
+    expect(await fetchSetById(db, sampleRow.id)).toEqual(mapD1RowToMusicSet(sampleRow));
   });
 
   it("returns a D1-only row (uploaded since the last deploy, not yet in the snapshot)", async () => {
@@ -161,6 +238,50 @@ describe("mergeSets", () => {
 
   it("returns just the snapshot when live is empty (the D1-unreachable fallback shape)", () => {
     expect(mergeSets([], [a, b, c])).toEqual([a, b, c]);
+  });
+
+  describe("deletedIds (tombstone filtering)", () => {
+    it("excludes a snapshot-only entry whose id is tombstoned", () => {
+      expect(mergeSets([], [a, b], new Set(["a"]))).toEqual([b]);
+    });
+
+    it("does not filter anything when deletedIds is omitted — today's behaviour, unchanged", () => {
+      expect(mergeSets([], [a, b])).toEqual([a, b]);
+    });
+
+    it("does not filter an id that isn't in deletedIds", () => {
+      expect(mergeSets([], [a, b], new Set(["c"]))).toEqual([a, b]);
+    });
+
+    it("a live entry always wins over a tombstone for the same id — the sets table is the one ground truth", () => {
+      // Models data that's inconsistent in principle (an id both live and
+      // carrying an unrestored admin_deleted_sets row) — live must win
+      // regardless, since fetchDeletedSetIds is metadata ABOUT the sets
+      // table, never a competing source.
+      expect(mergeSets([a], [a], new Set(["a"]))).toEqual([a]);
+    });
+
+    it("the restore round trip: gone while tombstoned, back once the tombstone clears", () => {
+      // The snapshot itself never changes here (no deploy happened) — only
+      // deletedIds does, exactly as it would across real requests before
+      // and after a restore, since fetchDeletedSetIds is recomputed fresh
+      // from admin_deleted_sets every time, never cached.
+      expect(mergeSets([], [a, b], new Set())).toEqual([a, b]);
+      expect(mergeSets([], [a, b], new Set(["a"]))).toEqual([b]);
+      expect(mergeSets([], [a, b], new Set())).toEqual([a, b]);
+    });
+
+    it("survives a second delete/restore cycle for the same id — mergeSets holds no state between calls", () => {
+      // The case a stateful tombstone implementation (an in-memory "ever
+      // deleted" cache, say) could get wrong on a second cycle. mergeSets
+      // can't get this wrong by construction: it has no memory of any
+      // previous call, so every call is only ever a function of the
+      // deletedIds it's given THIS time.
+      expect(mergeSets([], [a], new Set(["a"]))).toEqual([]);
+      expect(mergeSets([], [a], new Set())).toEqual([a]);
+      expect(mergeSets([], [a], new Set(["a"]))).toEqual([]);
+      expect(mergeSets([], [a], new Set())).toEqual([a]);
+    });
   });
 });
 

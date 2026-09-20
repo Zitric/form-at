@@ -5,8 +5,12 @@ import { extractAccessToken, verifyAccessJwt } from "~/utils/verifyAccessJwt";
 // Restore-from-log, NOT soft delete: `admin_deleted_sets` stores every column
 // needed to reconstruct a `sets` row, and R2 objects are never deleted — so a
 // restore is just "read the log row, INSERT it back into `sets`, mark the log
-// entry restored." Nothing in `mergeSets`/`fetchUploadedSets`/`fetchSetById`
-// or the snapshot generator needs to know about it.
+// entry restored." This file's own logic needs nothing from
+// `mergeSets`/`fetchUploadedSets`/`fetchSetById` or the snapshot generator —
+// but those now read `admin_deleted_sets` themselves (the SSR-side tombstone
+// check, see `fetchDeletedSetIds`), so setting `restored_at` here IS what
+// tells them a set is live again. One-way: this route writes, it reads —
+// nothing here needs to change for that to keep working.
 //
 // The public site reads `sets` live on every request, so a restored row is
 // visible IMMEDIATELY — which is why the UI confirms plainly rather than
