@@ -1148,15 +1148,25 @@ source empty. Two signals covering "is it running" and "is it succeeding"
 quietly assumed a third possibility couldn't happen — succeeding at reading
 nothing, indefinitely. It can, and did.
 
-Root cause, not yet independently confirmed against the Cloudflare dashboard
-itself (that needs eyes with access, not just code): the beacon on the live
-site carries the correct, committed site tag and is genuinely attempting the
-report POST, but that POST 404s with no CORS header — and an intentionally
-bogus token produces the byte-for-byte identical response, which is
-consistent with the Web Analytics site for this zone no longer being valid
-rather than anything wrong in this repo's code. Timing lines up: the last
-real archived data is from 2026-08-07/08, one to two days before the manual
-beacon-injection switch (`packages/data/src/webAnalytics.ts`, 2026-08-10).
+**Root cause, confirmed against the Cloudflare dashboard directly.** The
+account held TWO Web Analytics sites, not one: `formatglasgow.com`
+(automatic setup) and `form-at-web.pages.dev` (JS snippet installation),
+each with its own independent token. The token committed to
+`WEB_ANALYTICS_SITE_TAG` at the manual-injection switch
+(`packages/data/src/webAnalytics.ts`, 2026-08-10) was copied from a snippet
+without confirming which site it belonged to — it was the `pages.dev`
+site's token, not the real domain's. That produces exactly the symptom
+measured: the beacon on the live site fires correctly and attempts the
+report POST with a token that's genuinely registered to *something*, and
+Cloudflare's own origin check rejects it — indistinguishable in the browser
+from a wholly bogus token, which is why an intentionally-fake token
+produced the byte-for-byte identical 404 during diagnosis. Not a deleted or
+deactivated site, as first suspected — a real, live site, just the wrong
+one. See `packages/data/src/webAnalytics.ts`'s own comment for the trap
+this leaves for next time: a token can look completely valid — right
+shape, genuinely registered, beacon fires without error — while still being
+wrong, because Cloudflare accounts can hold multiple sites per zone and
+nothing about the token's format reveals which one it's for.
 
 **The fix:** a third field, `RumHistory.consecutiveEmptySuccessfulRuns` —
 how many of the most recent successful runs, in a row, wrote zero rows (the
@@ -1182,4 +1192,4 @@ delivery channel for the same two signals that already missed it.
 
 ---
 
-_Last updated: 2026-09-09_
+_Last updated: 2026-09-16_
