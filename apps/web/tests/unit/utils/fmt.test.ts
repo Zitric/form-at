@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fmtDate, fmtDuration } from "~/utils/fmt";
+import { fmtDate, fmtDuration, parseDuration } from "~/utils/fmt";
 
 describe("fmtDuration", () => {
   it("formats seconds under a minute", () => {
@@ -18,6 +18,25 @@ describe("fmtDuration", () => {
     expect(fmtDuration(3600)).toBe("1h");
     expect(fmtDuration(3660)).toBe("1h 1m");
     expect(fmtDuration(7320)).toBe("2h 2m");
+  });
+});
+
+describe("parseDuration", () => {
+  it("parses M:SS", () => {
+    expect(parseDuration("45:18")).toBe(2718);
+    expect(parseDuration("0:05")).toBe(5);
+  });
+
+  it("parses H:MM:SS", () => {
+    expect(parseDuration("1:31:55")).toBe(5515);
+    expect(parseDuration("2:20:51")).toBe(8451);
+  });
+
+  it("returns undefined for anything that isn't 2 or 3 colon-separated numeric parts", () => {
+    expect(parseDuration("")).toBeUndefined();
+    expect(parseDuration("45")).toBeUndefined();
+    expect(parseDuration("1:2:3:4")).toBeUndefined();
+    expect(parseDuration("not:a:duration")).toBeUndefined();
   });
 });
 

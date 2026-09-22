@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { isKnownSetId } from "~/data/sets";
-import { MAX_LISTENED_SECONDS } from "~/utils/playTracking";
+import { resolveKnownSet } from "~/data/sets";
+import { maxListenedSecondsForDuration } from "~/utils/playTracking";
 
 type TrackBody = {
   setId: string;
@@ -25,19 +25,20 @@ type TrackBody = {
   sessionId: string | null;
 };
 
-// Defense in depth — the client already filters <3s and caps at
-// MAX_LISTENED_SECONDS (or the track's own duration, if shorter — see
-// useAudioPlayer.ts's sendPlay), but a bot can hit this endpoint directly
-// with anything, and a stale cached client mid-rollout might predate the
-// client-side cap entirely. Drop rows that would inflate stats or fill D1
-// with garbage.
+// Defense in depth — the client already filters <3s and caps at the
+// track's own duration, or MAX_LISTENED_SECONDS when that isn't cached yet
+// (see useAudioPlayer.ts's sendPlay), but a bot can hit this endpoint
+// directly with anything, and a stale cached client mid-rollout might
+// predate the client-side cap entirely. Drop rows that would inflate stats
+// or fill D1 with garbage — see maxListenedSecondsForDuration
+// (~/utils/playTracking.ts) for the per-set ceiling applied below.
 const MIN_LISTENED = 3;
 const MAX_STR = 200;
 
 // Exported, matching `api/event.ts`'s convention. `async` because the setId
-// existence check is `isKnownSetId`, which
+// existence check is `resolveKnownSet`, which
 // only touches D1 on a snapshot miss (see the precedence comment on
-// `isKnownSetId` in ~/data/sets.ts). `db` is threaded in from the handler
+// `resolveKnownSet` in ~/data/sets.ts). `db` is threaded in from the handler
 // rather than read here, so this stays a plain, directly-testable function.
 export async function validate(
   raw: unknown,
@@ -50,9 +51,11 @@ export async function validate(
   if (typeof r.setArtist !== "string" || r.setArtist.length === 0) return null;
   if (typeof r.listenedSeconds !== "number" || !Number.isFinite(r.listenedSeconds)) return null;
   // setId must match a known set — blocks fake-ID spam against the stats table
-  if (!(await isKnownSetId(db, r.setId))) return null;
+  const knownSet = await resolveKnownSet(db, r.setId);
+  if (!knownSet) return null;
   const seconds = Math.floor(r.listenedSeconds);
-  if (seconds < MIN_LISTENED || seconds > MAX_LISTENED_SECONDS) return null;
+  const maxListened = maxListenedSecondsForDuration(knownSet.duration);
+  if (seconds < MIN_LISTENED || seconds > maxListened) return null;
   const isOffline = typeof r.isOffline === "boolean" ? r.isOffline : null;
   const sessionId =
     typeof r.sessionId === "string" && r.sessionId.length > 0 && r.sessionId.length <= MAX_STR

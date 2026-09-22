@@ -29,7 +29,7 @@ describe("EditSetForm", () => {
     expect(screen.getByLabelText(/^date$/i)).toHaveValue("2026-04-24");
     expect(screen.getByLabelText(/venue/i)).toHaveValue("Find the red door, Glasgow");
     expect(screen.getByLabelText(/description/i)).toHaveValue("Opening transmission.");
-    expect(screen.getByLabelText(/^duration$/i)).toHaveValue("45:18");
+    expect(screen.getByLabelText(/^duration/i)).toHaveValue("45:18");
   });
 
   // The id is the R2 key path, the public URL, and the
@@ -37,9 +37,21 @@ describe("EditSetForm", () => {
   it("shows the id but disables it — the field cannot be edited", () => {
     render(<EditSetForm set={sampleSet} onSaved={vi.fn()} onCancel={vi.fn()} />);
 
-    const idField = screen.getByLabelText(/not editable/i);
+    const idField = screen.getByLabelText(/id \(not editable/i);
     expect(idField).toHaveValue("set-002-til");
     expect(idField).toBeDisabled();
+  });
+
+  // Duration is a property of the audio file, and this form can't touch the
+  // audio — an admin typing a wrong value here would silently break the
+  // per-set listened-seconds ceiling (TECH_DEBT.md item 28c) with no way for
+  // this form to verify it against the real file.
+  it("shows the duration but disables it — the field cannot be edited", () => {
+    render(<EditSetForm set={sampleSet} onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    const durationField = screen.getByLabelText(/duration \(not editable/i);
+    expect(durationField).toHaveValue("45:18");
+    expect(durationField).toBeDisabled();
   });
 
   it("saves via PATCH with the edited fields and the unchanged id", async () => {

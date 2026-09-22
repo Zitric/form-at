@@ -22,13 +22,26 @@ const inputClass =
 // This disabled input is honest UI, not the guarantee — the real enforcement is
 // server-side, where updateSet never includes `id` in its `SET` clause whatever
 // the request body contains.
+//
+// Duration is disabled for the same "honest UI" reason, on a different basis:
+// it's a property of the audio file, not editable metadata, and this form
+// can't touch the audio (see the file-replacement note above). A typed value
+// that doesn't match the real file breaks
+// `maxListenedSecondsForDuration` (apps/web `~/utils/playTracking.ts`) —
+// silently rejecting every full listen of the set (TECH_DEBT.md item 28c).
+// UploadSetForm can enforce a decoded-vs-typed match because it has the file
+// right there; this form only has a remote URL, and fetching real audio into
+// an admin session for a value that already came from a verified decode at
+// upload time isn't worth the CSP surface it would need. If a duration is
+// genuinely wrong, fix it via a fresh upload or a direct D1 statement, not
+// here.
 export function EditSetForm({ set, onSaved, onCancel }: EditSetFormProps) {
   const [title, setTitle] = useState(set.title);
   const [artist, setArtist] = useState(set.artist);
   const [date, setDate] = useState(set.date);
   const [venue, setVenue] = useState(set.venue ?? "");
   const [description, setDescription] = useState(set.description ?? "");
-  const [duration, setDuration] = useState(set.duration ?? "");
+  const duration = set.duration ?? "";
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -146,13 +159,14 @@ export function EditSetForm({ set, onSaved, onCancel }: EditSetFormProps) {
       </div>
       <div>
         <label htmlFor={`edit-duration-${set.id}`} className="block text-xs text-grey mb-1">
-          duration
+          duration (not editable — it's read from the audio file at upload, and this form can't
+          change the audio)
         </label>
         <input
           id={`edit-duration-${set.id}`}
           value={duration}
-          onChange={(e) => setDuration(e.target.value)}
-          className={inputClass}
+          disabled
+          className={`${inputClass} opacity-50 cursor-not-allowed`}
         />
       </div>
 

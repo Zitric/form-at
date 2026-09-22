@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fmtBytes, fmtSetDuration } from "~/utils/fmt";
+import { fmtBytes, fmtSetDuration, parseSetDuration } from "~/utils/fmt";
 
 // Set-upload feature. `fmtSetDuration` matches the `sets.duration`
 // column's real stored format exactly — verified against the actual
@@ -25,6 +25,21 @@ describe("fmtSetDuration", () => {
 
   it("floors a fractional seconds input", () => {
     expect(fmtSetDuration(45.9)).toBe("0:45");
+  });
+});
+
+describe("parseSetDuration", () => {
+  it("is the exact inverse of fmtSetDuration for the real rows above", () => {
+    expect(parseSetDuration("45:18")).toBe(45 * 60 + 18);
+    expect(parseSetDuration("1:31:55")).toBe(91 * 60 + 55);
+    expect(parseSetDuration("2:01:55")).toBe(121 * 60 + 55);
+  });
+
+  it("returns undefined for anything that isn't 2 or 3 colon-separated numeric parts", () => {
+    expect(parseSetDuration("")).toBeUndefined();
+    expect(parseSetDuration("45")).toBeUndefined();
+    expect(parseSetDuration("1:2:3:4")).toBeUndefined();
+    expect(parseSetDuration("not:a:duration")).toBeUndefined();
   });
 });
 

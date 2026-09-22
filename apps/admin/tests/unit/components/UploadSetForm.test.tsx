@@ -161,3 +161,37 @@ describe("UploadSetForm — submit sequence", () => {
     expect(FakeXHR.instances).toHaveLength(3);
   });
 });
+
+// TECH_DEBT.md item 28c: a typed duration shorter than the real audio makes
+// every full listen of that set look like it exceeds
+// maxListenedSecondsForDuration (apps/web `~/utils/playTracking.ts`) and get
+// silently rejected. readAudioDuration is mocked to 2718s ("45:18") above —
+// fillAndSelectFiles's auto-fill already exercises the matching case.
+describe("UploadSetForm — duration mismatch guard", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("disables upload and shows an error when the typed duration doesn't match the decoded audio", async () => {
+    const user = await fillAndSelectFiles();
+
+    await user.clear(screen.getByLabelText("duration"));
+    await user.type(screen.getByLabelText("duration"), "10:00");
+
+    expect(screen.getByText("upload")).toBeDisabled();
+    expect(screen.getByText(/doesn't match the audio file's real length/i)).toBeInTheDocument();
+  });
+
+  it("re-enables upload once the typed duration is corrected back within tolerance", async () => {
+    const user = await fillAndSelectFiles();
+
+    await user.clear(screen.getByLabelText("duration"));
+    await user.type(screen.getByLabelText("duration"), "10:00");
+    expect(screen.getByText("upload")).toBeDisabled();
+
+    await user.clear(screen.getByLabelText("duration"));
+    await user.type(screen.getByLabelText("duration"), "45:18");
+
+    await waitFor(() => expect(screen.getByText("upload")).not.toBeDisabled());
+  });
+});

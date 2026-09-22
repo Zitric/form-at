@@ -1133,6 +1133,23 @@ anywhere in the public UI — with a persistent visible banner while active
 (`DevModeBanner.tsx`) so it can't be forgotten and silently drop a real
 visitor's play instead.
 
+**c. The 2h ceiling from (a) was itself the same kind of hardcoded assumption,
+and it broke the same way.** Confirmed against real Form:at 003 catalogue
+data: `set-003-unreal` runs 8451s (2h20m51s) and `set-002-brandon-lee-vear`
+runs 7315s — both past the 7200s (2h) ceiling `sendPlay` and `signal.ts`'s
+`validate()` shared. The client's own per-track cap can't rescue a listen
+when the ceiling being capped *to* is smaller than the track itself, and
+`validate()` rejected (didn't clamp) anything over it while still returning
+204 — so every uninterrupted full listen of either set was silently
+discarded: the most engaged listeners, specifically, and invisibly. **Fixed:**
+the ceiling `validate()` applies is now derived from the reported set's own
+duration (`maxListenedSecondsForDuration`, `~/utils/playTracking.ts`) plus a
+60s grace margin, so it scales with any future set automatically instead of
+needing to be re-chosen against "today's longest" — the same fix shape as (a)
+itself should have been. `MAX_LISTENED_SECONDS` is now only the fallback for
+when a duration can't be resolved at all (widened back to 4h, since it's no
+longer the primary defense).
+
 Both parts confirmed against real production D1 data, not assumed.
 
 ## 29. Monitoring had two correct signals and still missed a month-long outage — a third, unenumerated state

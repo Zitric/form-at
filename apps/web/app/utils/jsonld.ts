@@ -12,6 +12,7 @@ import type { MusicSet } from "@form-at/data/sets";
 import type { DJ } from "~/data/djs";
 import { djs } from "~/data/djs";
 import type { Event } from "~/data/events";
+import { parseDuration } from "./fmt";
 import { SOCIALS, SOCIAL_ORDER } from "./socials";
 
 const SITE = "https://formatglasgow.com";
@@ -26,13 +27,11 @@ const FORMAT_SAME_AS = ["https://www.instagram.com/form.at_glasgow/"];
 /** "1:39:30" → "PT1H39M30S" · "45:18" → "PT45M18S" · undefined → undefined */
 function durationToISO8601(s: string | undefined): string | undefined {
   if (!s) return undefined;
-  const parts = s.split(":").map(Number);
-  let h = 0;
-  let m = 0;
-  let sec = 0;
-  if (parts.length === 3) [h, m, sec] = parts as [number, number, number];
-  else if (parts.length === 2) [m, sec] = parts as [number, number];
-  else return undefined;
+  const totalSeconds = parseDuration(s);
+  if (totalSeconds === undefined) return undefined;
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const sec = totalSeconds % 60;
   const result = `PT${h ? `${h}H` : ""}${m ? `${m}M` : ""}${sec ? `${sec}S` : ""}`;
   return result === "PT" ? "PT0S" : result;
 }

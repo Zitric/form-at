@@ -93,27 +93,58 @@ export const fetchSetForDetailPage = createServerFn({ method: "GET" })
   .inputValidator((id: string) => id)
   .handler(({ data: id, context }) => getSetByIdWithFallback(getDb(context), id));
 
-// Existence check for `routes/api/event.ts`/`routes/api/signal.ts`'s
-// anti-spam validation — deliberately the OPPOSITE precedence from
-// `getSetByIdWithFallback`/`mergeSets` above. Those are the READ path, where
-// D1 wins because a direct-SQL edit should show up immediately.
-// Validation only cares whether an id EXISTS at all, never which
-// copy is "fresher" — so checking the free, always-available static
-// snapshot FIRST and only touching D1 on a miss is strictly better here: it
-// resolves every set that existed at the last deploy with zero D1 reads
-// (the overwhelming majority of real traffic — this project's `plays`
-// table sits around ~300 rows total), and only pays a D1 read for a set
-// genuinely uploaded since then. Fails CLOSED on a D1 error (reject, don't
-// assume valid) — matching this table's own "reject, don't sanitize"
-// philosophy (trackableEvents.ts): a D1 hiccup should not become a window
-// where arbitrary set_ids get accepted.
-export async function isKnownSetId(db: D1Database | undefined, id: string): Promise<boolean> {
-  if (getSet(id)) return true;
-  if (!db) return false;
+// Existence + duration lookup backing `isKnownSetId` below and
+// `routes/api/signal.ts`'s per-track listened-seconds ceiling — one pass
+// resolves both "does this id exist" and "how long is it", so a request
+// needing both doesn't pay for two separate lookups.
+//
+// Deliberately the OPPOSITE precedence from `getSetByIdWithFallback`/
+// `mergeSets` above. Those are the READ path, where D1 wins because a
+// direct-SQL edit should show up immediately. This only cares whether an id
+// EXISTS (and, secondarily, its duration), never which copy is "fresher" —
+// so checking the free, always-available static snapshot FIRST and only
+// touching D1 on a miss is strictly better here: it resolves every set that
+// existed at the last deploy without the existence-query D1 read (the
+// overwhelming majority of real traffic — this project's `plays` table
+// sits around ~300 rows total), and only pays that read for a set genuinely
+// uploaded since then.
+//
+// The snapshot itself is NOT tombstone-aware, though — it's a build-time
+// copy that a delete doesn't regenerate, so a deleted set's entry keeps
+// reading as "known" from the snapshot alone until the next deploy. That's
+// exactly what let a deleted set (`set-003-til`) keep collecting plays six
+// days after deletion. So the tombstone check (`fetchDeletedSetIds`, the
+// same one `mergeSets` uses) always runs whenever a D1 binding exists,
+// regardless of snapshot hit or miss — one extra, cheap D1 read
+// (`admin_deleted_sets` is tiny) per call. It never throws itself (see its
+// own comment), so a tombstone-read failure falls through to this
+// function's pre-tombstone-check behaviour (snapshot/D1 existence only)
+// rather than rejecting every id while it's down.
+//
+// Fails CLOSED on the existence query itself, unchanged from before
+// (reject, don't assume valid) — matching this table's own "reject, don't
+// sanitize" philosophy (trackableEvents.ts): a D1 hiccup should not become a
+// window where arbitrary set_ids get accepted.
+export async function resolveKnownSet(
+  db: D1Database | undefined,
+  id: string,
+): Promise<{ duration?: string } | null> {
+  const snapshotSet = getSet(id);
+  if (!db) return snapshotSet ? { duration: snapshotSet.duration } : null;
+  const deletedIds = await fetchDeletedSetIds(db);
+  if (deletedIds.has(id)) return null;
+  if (snapshotSet) return { duration: snapshotSet.duration };
   try {
-    const row = await db.prepare("SELECT 1 FROM sets WHERE id = ?").bind(id).first();
-    return row !== null;
+    const row = await db
+      .prepare("SELECT duration FROM sets WHERE id = ?")
+      .bind(id)
+      .first<{ duration: string | null }>();
+    return row ? { duration: row.duration ?? undefined } : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+export async function isKnownSetId(db: D1Database | undefined, id: string): Promise<boolean> {
+  return (await resolveKnownSet(db, id)) !== null;
 }
