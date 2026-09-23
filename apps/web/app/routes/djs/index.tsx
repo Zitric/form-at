@@ -1,8 +1,8 @@
+import { getGuests, getResidents } from "@form-at/data/djs";
 import { Card, PageTitle } from "@form-at/ui";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { CardArtwork } from "~/components/CardArtwork";
 import { PageLayout } from "~/components/PageLayout";
-import { getGuests, getResidents } from "~/data/djs";
 import { pageHead } from "~/utils/head";
 
 export const Route = createFileRoute("/djs/")({

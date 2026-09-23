@@ -1,7 +1,7 @@
+import { getPastEvents, getUpcomingEvents } from "@form-at/data/events";
 import { Card, PageTitle } from "@form-at/ui";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { PageLayout } from "~/components/PageLayout";
-import { getPastEvents, getUpcomingEvents } from "~/data/events";
 import { pageHead } from "~/utils/head";
 
 export const Route = createFileRoute("/events/")({
@@ -68,7 +68,7 @@ function EventCard({
       onClick={() => navigate({ to: "/events/$eventId", params: { eventId: event.id } })}
     >
       <p className="text-sm sm:text-base tracking-tight truncate text-center">
-        {event.title} · {event.date} · Glasgow
+        {event.title} · {event.date} · {event.city}
       </p>
     </Card>
   );

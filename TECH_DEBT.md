@@ -981,14 +981,21 @@ exist and the `/sets` page loads the fast `<picture>` path instead of the
 
 Sets have a D1 table, a committed snapshot (`sets.generated.ts`), live-over-
 snapshot merge, and a self-serve admin upload form. DJs
-(`apps/web/app/data/djs.ts`) and events (`apps/web/app/data/events.ts`) are plain
-TypeScript arrays edited by hand and shipped by deploy.
+(`packages/data/src/djs.ts`) and events (`packages/data/src/events.ts`) are
+plain TypeScript arrays edited by hand and shipped by deploy — adding a new
+DJ or event still needs a code edit and a deploy, exactly as before.
 
-**Why it's real debt and not just asymmetry:** the seam is visible in the
-product. `apps/admin/app/components/UploadSetForm.tsx:268` instructs the operator
-to go and hand-edit `apps/web/app/data/djs.ts` and redeploy. An admin UI telling
-you to edit a source file is the clearest possible statement that a migration
-stopped halfway.
+**2026-09-22 update:** both moved from `apps/web/app/data/` into
+`packages/data/src/` — a location change only, made so `apps/admin` could read
+them too (a set's `djId`/`eventId`, packages/data/src/sets.ts, are foreign
+keys into these arrays' `id`s, chosen from a dropdown in
+UploadSetForm/EditSetForm rather than inferred from free-text `artist`/`venue`
+— see PWA_PROGRESS.md's entry on this). That closes the specific instance of
+"seam visible in the product" this item originally cited (UploadSetForm no
+longer tells the operator to go hand-edit `djs.ts` for a new upload's DJ
+link) but is NOT the migration below — no D1 table, no admin CRUD route, no
+photo upload change. The debt itself (a new DJ/event profile needs a deploy)
+is unchanged.
 
 **Cost of finishing it** (this is why it's deferred, not done): a `djs` table
 plus migration; a committed snapshot and generator, because the app is

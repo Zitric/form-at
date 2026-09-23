@@ -14,6 +14,7 @@ const validBody = {
   title: "Form:at 003",
   artist: "New Artist",
   date: "2026-09-01",
+  djId: "til",
   audioExt: "mp3",
   artworkExt: "jpg",
 } as const;
@@ -25,7 +26,8 @@ describe("validate (api/sets)", () => {
       title: "Form:at 003",
       artist: "New Artist",
       date: "2026-09-01",
-      venue: undefined,
+      djId: "til",
+      eventId: undefined,
       description: undefined,
       duration: undefined,
       sizeBytes: undefined,
@@ -37,17 +39,27 @@ describe("validate (api/sets)", () => {
   it("accepts every optional field populated", () => {
     const full = {
       ...validBody,
-      venue: "Find the red door, Glasgow",
+      eventId: "format-002",
       description: "A description.",
       duration: "45:18",
       sizeBytes: 108_761_280,
     };
     expect(validate(full)).toMatchObject({
-      venue: "Find the red door, Glasgow",
+      eventId: "format-002",
       description: "A description.",
       duration: "45:18",
       sizeBytes: 108_761_280,
     });
+  });
+
+  it("rejects a djId that isn't a known DJ, but accepts it omitted (not every artist has a DJ profile)", () => {
+    expect(validate({ ...validBody, djId: "not-a-real-dj" })).toBeNull();
+    expect(validate({ ...validBody, djId: undefined })).not.toBeNull();
+  });
+
+  it("rejects an eventId that isn't a known event, but accepts it omitted (a standalone mix)", () => {
+    expect(validate({ ...validBody, eventId: "not-a-real-event" })).toBeNull();
+    expect(validate(validBody)).not.toBeNull();
   });
 
   it("rejects non-object / null / primitive payloads", () => {
@@ -75,8 +87,7 @@ describe("validate (api/sets)", () => {
     expect(validate({ ...validBody, date: "2026-9-1" })).toBeNull();
   });
 
-  it("rejects an oversized venue/description/duration", () => {
-    expect(validate({ ...validBody, venue: "a".repeat(201) })).toBeNull();
+  it("rejects an oversized description/duration", () => {
     expect(validate({ ...validBody, description: "a".repeat(2001) })).toBeNull();
     expect(validate({ ...validBody, duration: "a".repeat(21) })).toBeNull();
   });
@@ -99,7 +110,8 @@ const sampleRow = {
   title: "Form:at 003",
   artist: "New Artist",
   date: "2026-09-01",
-  venue: null,
+  djId: "til",
+  eventId: null,
   description: null,
   duration: null,
   src: "https://cdn.formatglasgow.com/sets/set-003-new-artist/audio.mp3",
@@ -258,6 +270,7 @@ const validEditBody = {
   title: "Form:at 002",
   artist: "t.i.l. (corrected)",
   date: "2026-04-24",
+  djId: "til",
 } as const;
 
 describe("validateEdit (api/sets)", () => {
@@ -267,7 +280,8 @@ describe("validateEdit (api/sets)", () => {
       title: "Form:at 002",
       artist: "t.i.l. (corrected)",
       date: "2026-04-24",
-      venue: undefined,
+      djId: "til",
+      eventId: undefined,
       description: undefined,
       duration: undefined,
     });
@@ -276,15 +290,25 @@ describe("validateEdit (api/sets)", () => {
   it("accepts every optional field populated", () => {
     const full = {
       ...validEditBody,
-      venue: "Find the red door, Glasgow",
+      eventId: "format-002",
       description: "A description.",
       duration: "45:18",
     };
     expect(validateEdit(full)).toMatchObject({
-      venue: "Find the red door, Glasgow",
+      eventId: "format-002",
       description: "A description.",
       duration: "45:18",
     });
+  });
+
+  it("rejects a djId that isn't a known DJ, but accepts it omitted", () => {
+    expect(validateEdit({ ...validEditBody, djId: "not-a-real-dj" })).toBeNull();
+    expect(validateEdit({ ...validEditBody, djId: undefined })).not.toBeNull();
+  });
+
+  it("rejects an eventId that isn't a known event, but accepts it omitted", () => {
+    expect(validateEdit({ ...validEditBody, eventId: "not-a-real-event" })).toBeNull();
+    expect(validateEdit(validEditBody)).not.toBeNull();
   });
 
   it("rejects non-object / null / primitive payloads", () => {
@@ -311,8 +335,7 @@ describe("validateEdit (api/sets)", () => {
     expect(validateEdit({ ...validEditBody, date: "04/24/2026" })).toBeNull();
   });
 
-  it("rejects an oversized venue/description/duration", () => {
-    expect(validateEdit({ ...validEditBody, venue: "a".repeat(201) })).toBeNull();
+  it("rejects an oversized description/duration", () => {
     expect(validateEdit({ ...validEditBody, description: "a".repeat(2001) })).toBeNull();
     expect(validateEdit({ ...validEditBody, duration: "a".repeat(21) })).toBeNull();
   });
@@ -341,8 +364,11 @@ describe("updateSet", () => {
 
     expect(capturedSql).toMatch(/^UPDATE sets SET/);
     expect(capturedSql).toMatch(/WHERE id = \?$/);
-    // Exactly one `id = ?` in the whole statement — in the WHERE position.
-    expect(capturedSql.match(/id = \?/g)).toHaveLength(1);
+    // Exactly one bare `id = ?` in the whole statement — in the WHERE
+    // position. Word-boundary anchored: `dj_id = ?` and `event_id = ?` in
+    // the SET clause both end in the substring "id = ?" too, so an
+    // unanchored match would (and did) over-count.
+    expect(capturedSql.match(/\bid = \?/g)).toHaveLength(1);
     // The SET clause specifically (everything between SET and WHERE) has
     // no `id` in it at all — this is the actual proof, not just "id = ?
     // appears once somewhere," since the WHERE clause itself always
@@ -385,6 +411,7 @@ describe("updateSet", () => {
       validEditBody.title,
       validEditBody.artist,
       validEditBody.date,
+      validEditBody.djId,
       null,
       null,
       null,
@@ -397,6 +424,8 @@ const sampleDeletedRow = {
   title: "Form:at 002",
   artist: "t.i.l.",
   date: "2026-04-24",
+  dj_id: "til",
+  event_id: "format-002",
   venue: "Find the red door, Glasgow",
   description: "Opening transmission.",
   duration: "45:18",

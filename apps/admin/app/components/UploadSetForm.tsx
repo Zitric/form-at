@@ -1,3 +1,5 @@
+import { djs } from "@form-at/data/djs";
+import { events } from "@form-at/data/events";
 import { Button, Label, Modal } from "@form-at/ui";
 import { type ChangeEvent, useEffect, useState } from "react";
 import { fmtBytes, fmtSetDuration, parseSetDuration } from "~/utils/fmt";
@@ -44,7 +46,18 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
   const [date, setDate] = useState("");
-  const [venue, setVenue] = useState("");
+  // Foreign keys, not free text — see MusicSet.djId/eventId's own comments
+  // (packages/data/src/sets.ts) for why: matching `artist` back to a DJ id
+  // is fragile (slugify("t.i.l.") produces "t-i-l", not the real id "til"),
+  // and a set's own free-text venue already disagreed with its event's
+  // venue on real data. Both genuinely optional: not every artist has a
+  // Form:at DJ profile (a guest with no page yet), so requiring djId would
+  // make their set impossible to upload without adding them to djs.ts and
+  // deploying first — exactly the deploy-to-upload coupling this feature
+  // exists to avoid. Empty string means "no dj"/"no event" for both.
+  // optional).
+  const [djId, setDjId] = useState("");
+  const [eventId, setEventId] = useState("");
   const [description, setDescription] = useState("");
 
   const [id, setId] = useState("");
@@ -176,7 +189,8 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
     setTitle("");
     setArtist("");
     setDate("");
-    setVenue("");
+    setDjId("");
+    setEventId("");
     setDescription("");
     setId("");
     setIdTouched(false);
@@ -251,7 +265,8 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
           title: title.trim(),
           artist: artist.trim(),
           date,
-          venue: venue.trim() || undefined,
+          djId: djId || undefined,
+          eventId: eventId || undefined,
           description: description.trim() || undefined,
           duration: duration.trim() || undefined,
           sizeBytes: audioFile.size,
@@ -308,8 +323,8 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
             a follow-up PR. The social share banner needs the next deploy to appear.
           </li>
           <li>
-            won't show up on {result.artist}'s DJ page until '{result.id}' is added to their{" "}
-            <code>setIds</code> in <code>apps/web/app/data/djs.ts</code> and deployed.
+            shows up on {result.artist}'s DJ page immediately — same "next full load" caveat as
+            above, no deploy needed.
           </li>
         </ul>
         <Button variant="secondary" onClick={resetForm}>
@@ -358,15 +373,40 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
           />
         </div>
         <div>
-          <label htmlFor="set-venue" className="block text-xs text-grey mb-1">
-            venue (optional)
+          <label htmlFor="set-dj" className="block text-xs text-grey mb-1">
+            dj (optional — leave blank if the artist has no Form:at DJ profile yet)
           </label>
-          <input
-            id="set-venue"
-            value={venue}
-            onChange={(e) => setVenue(e.target.value)}
+          <select
+            id="set-dj"
+            value={djId}
+            onChange={(e) => setDjId(e.target.value)}
             className={inputClass}
-          />
+          >
+            <option value="">— no dj —</option>
+            {djs.map((dj) => (
+              <option key={dj.id} value={dj.id}>
+                {dj.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="set-event" className="block text-xs text-grey mb-1">
+            event (optional — leave blank for a standalone mix not tied to a Form:at night)
+          </label>
+          <select
+            id="set-event"
+            value={eventId}
+            onChange={(e) => setEventId(e.target.value)}
+            className={inputClass}
+          >
+            <option value="">— no event —</option>
+            {events.map((event) => (
+              <option key={event.id} value={event.id}>
+                {event.title} · {event.date}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label htmlFor="set-description" className="block text-xs text-grey mb-1">

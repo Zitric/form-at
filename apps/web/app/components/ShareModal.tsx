@@ -1,3 +1,4 @@
+import { getCityForSet } from "@form-at/data/events";
 import { BracketLabel, Modal, TerminalRow } from "@form-at/ui";
 
 import { useStore } from "~/store";
@@ -35,7 +36,8 @@ export function ShareModal() {
   const currentTime = isCurrent ? Math.floor(getAudioCurrentTime()) : 0;
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const baseUrl = `${origin}/sets/${shareSet.id}`;
-  const text = `Listen to ${shareSet.artist} at ${shareSet.title}, Glasgow.`;
+  const city = getCityForSet(shareSet);
+  const text = `Listen to ${shareSet.artist} at ${shareSet.title}${city ? `, ${city}` : ""}.`;
   const urlAt = (t?: number) => (t && t > 0 ? `${baseUrl}?t=${t}` : baseUrl);
   const url = urlAt();
   // Native share is the only realistic way to reach Instagram (Story / DM) and

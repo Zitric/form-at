@@ -4011,6 +4011,79 @@ silently prevents `hasHydrated` from ever flipping, hiding every
 jsdom's in vitest — `tests/setup.ts` now installs a working in-memory
 Storage, which is what lets persist be tested at all.)
 
+### DJ/event foreign keys replace inferred matching and free-text location (2026-09-22)
+
+Two related display bugs: every set/event card hardcoded "Glasgow" (Seafield
+Sound was Edinburgh), and DJ pages derived their set list from
+`dj.setIds` — a hand-maintained array that had drifted to covering only each
+resident's Form:at 002 set, with guest DJs listing none at all.
+
+**Location, rejected shape: a `city` field on `sets`.** First proposal was a
+short `city` column on `sets`, separate from the existing free-text `venue`.
+Rejected on the evidence that motivated it: `set.venue` ("Find the red door,
+Glasgow") already disagreed with its own event's `venue` in `events.ts`
+("Southside, Glasgow") for the same Form:at 002 night — the same fact typed
+twice, independently, had already drifted. Adding `city` would have been a
+THIRD independently-typed place for the same fact. **Shipped instead:**
+`event_id` on `sets`, a real foreign key into `events.ts`'s `id`s. City,
+venue and date for display all resolve from the linked event
+(`getCityForSet`, `packages/data/src/events.ts`); divergence becomes
+impossible rather than just unlikely, because there's one place the fact
+lives. `event_id` is nullable — a set with no event (a future studio mix) is
+a real case, not a data gap, and every render site drops the location
+segment cleanly when it's absent.
+
+**DJ linking, rejected shape: normalize `artist` and match a DJ slug.**
+Concrete evidence against it, not just the hypothetical fragility: the
+existing `slugify()` (`apps/admin/app/utils/slugifySetId.ts`) turns
+`"t.i.l."` into `"t-i-l"`, not the real DJ id `"til"` — a naive
+`slugify(set.artist) === dj.id` match fails on this catalogue's own resident,
+today, not in some future edge case. **Shipped instead:** `djId` on `sets`,
+same shape as `event_id` — a dropdown pick at upload/edit time, never
+inferred.
+
+**`sets.venue` is now dead code, not a dropped column.** The field is
+removed from `MusicSet`, both admin forms, and the `/api/sets` validation —
+nothing reads or writes it going forward. The physical D1 column is left in
+place undropped: a `DROP COLUMN` carries its own small risk (D1's SQLite
+dialect has previously diverged from what a given SQLite version supports —
+see `schema.sql`'s `ADD COLUMN IF NOT EXISTS` note) for zero functional
+upside, since the historical text isn't read by anything either way.
+
+**Cross-app plumbing:** `djs.ts`/`events.ts` moved from `apps/web/app/data/`
+to `packages/data/src/` so `apps/admin`'s upload/edit forms — and its
+`/api/sets` validation — could read the same id lists apps/web does, without
+violating "apps never import each other." This is a location change only,
+not TECH_DEBT item 24's full migration: no D1 table, no admin CRUD route for
+DJs/events themselves. Item 24's actual debt (a new DJ or event still needs
+a code edit and a deploy) is unchanged — see that item's own updated note.
+
+**`/djs/$djId`'s set list now reads the live catalogue** (`fetchAllSetsForRoute`,
+filtered by `djId`) instead of the snapshot-only `getSet` — same class of fix
+as the delete/tombstone work: a set uploaded since the last deploy used to be
+invisible on its DJ's page until the next deploy regenerated the snapshot.
+
+**Correction (2026-09-23): `djId` shipped required, then had to be made
+optional.** The first pass validated `djId` as non-empty server-side and
+gated the admin forms' submit buttons on it, on the reasoning "every set has
+an artist." Caught in review: "every artist has a DJ page" is a different,
+false claim — Seafield Sound's Rushford, Dimebug and 3SR have no Form:at DJ
+profile. Requiring `djId` would have made uploading their sets impossible
+without first adding them to `djs.ts` and deploying, recreating exactly the
+deploy-to-upload coupling this feature exists to avoid. Fixed to match
+`eventId`'s existing shape: optional, validated against the known list only
+when present, and a set with no `djId` simply appears on no DJ page.
+
+**Noted but not built:** `/sets`'s section grouping (`groups[set.title]`)
+already happens to group by event today, because every set sharing an event
+also shares its title string — but that's incidental (a typo'd title on one
+set from the same event would silently split the group) and its ordering
+still depends on hand-nudged `created_at` timestamps to control which title
+group sorts where. Grouping by `event_id` and ordering by the linked event's
+`date` would remove both the incidental coupling and the `created_at`
+hand-editing, and falls out naturally now that `event_id` exists — left as a
+follow-up, not done here.
+
 ---
 
 ## How to resume

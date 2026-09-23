@@ -20,7 +20,21 @@ export type MusicSet = {
   title: string;
   artist: string;
   date: string;
-  venue?: string;
+  // The DJ who played this set — a foreign key into `./djs`'s `DJ.id`,
+  // chosen from a dropdown at upload (never inferred from `artist`: that
+  // free-text string has no reliable normalization back to a DJ id —
+  // `slugify("t.i.l.")` produces "t-i-l", not the real id "til", confirmed
+  // against this catalogue's own resident). Optional because it's still
+  // nullable server-side for defense in depth, but every real set has one.
+  djId?: string;
+  // The event this set was recorded at — a foreign key into `./events`'s
+  // `Event.id`, chosen from a dropdown at upload. Genuinely nullable: a set
+  // with no event (a future studio mix) is a real case, not a data gap.
+  // `getCityForSet` (./events) is how a set's display location is resolved —
+  // never derive it by matching `date` against an event's `date`, which
+  // isn't enforced anywhere and is exactly the kind of implicit join this
+  // field replaces.
+  eventId?: string;
   description?: string;
   duration?: string;
   src: string;
@@ -61,12 +75,18 @@ export function getSet(id: string): MusicSet | undefined {
 // public `MusicSet` type at all — no call site needs it.
 // `artwork_original_url` IS mapped through (see `artworkOriginalUrl` on
 // `MusicSet`) — `Image.tsx`'s fallback is its consumer.
+//
+// `venue` is deliberately absent here even though the column still exists in
+// D1 (schema.sql) — nothing reads it anymore (see `MusicSet.eventId`'s own
+// comment for why), so it's dead going forward rather than dropped outright;
+// a `SELECT *` still returns it, it's just never mapped through.
 type SetRow = {
   id: string;
   title: string;
   artist: string;
   date: string;
-  venue: string | null;
+  dj_id: string | null;
+  event_id: string | null;
   description: string | null;
   duration: string | null;
   src: string;
@@ -86,7 +106,8 @@ export function mapD1RowToMusicSet(row: SetRow): MusicSet {
     title: row.title,
     artist: row.artist,
     date: row.date,
-    venue: row.venue ?? undefined,
+    djId: row.dj_id ?? undefined,
+    eventId: row.event_id ?? undefined,
     description: row.description ?? undefined,
     duration: row.duration ?? undefined,
     src: row.src,

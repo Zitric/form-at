@@ -310,6 +310,74 @@ CREATE TABLE IF NOT EXISTS sets (
   created_at           INTEGER NOT NULL  -- unix ms
 );
 
+-- dj_id / event_id (2026-09-22) — foreign keys into packages/data/src/djs.ts
+-- and events.ts's `id`s, replacing two things at once: `artist` (free text)
+-- being asked to double as a DJ lookup key, which fails on this catalogue's
+-- own resident (`slugify("t.i.l.")` produces "t-i-l", not the real id
+-- "til"); and `venue` (free text, still above, now unused going forward),
+-- which was caught disagreeing with its own event's venue on real data
+-- ("Find the red door, Glasgow" vs "Southside, Glasgow" for the same
+-- Form:at 002 night). Both are chosen from a dropdown at upload/edit — see
+-- UploadSetForm.tsx / EditSetForm.tsx — never inferred.
+--
+-- ⚠️ DEPLOY ORDER — this ALTER + the backfill below MUST be run against
+-- production BEFORE the code that reads dj_id/event_id is deployed, not
+-- after. Deploying first is silently catastrophic, not just briefly wrong:
+-- every DJ page renders zero sets, because `mergeSets` has live D1 rows WIN
+-- over the committed snapshot, and those live rows have no dj_id yet —
+-- including the four Form:at 002 rows the snapshot itself has hand-set
+-- values for. Worse, `deploy.yml`'s `deploy` job runs
+-- `generate-sets-snapshot.ts` fresh from D1 immediately before the
+-- production build (see that script's own header) — so a deploy that races
+-- ahead of the backfill BAKES the nulls into the newly-committed snapshot
+-- too, and the hand-set values are gone from there as well. Migrate and
+-- backfill first, confirm with the verification query below, then deploy.
+--
+-- `dj_id`/`event_id` are BOTH genuinely optional at the application level,
+-- not just nullable-because-every-ALTER-here-is: not every artist has a
+-- Form:at DJ profile (a Seafield Sound guest with no page yet, say), so
+-- requiring dj_id would make uploading their set impossible without adding
+-- them to djs.ts and deploying first — the exact deploy-coupling this
+-- feature exists to avoid. A set with no dj_id simply appears on no DJ
+-- page; a set with no event_id (a future studio mix) simply shows no
+-- location. A set's display city/location is resolved from its EVENT via
+-- `event_id` (`getCityForSet`, packages/data/src/events.ts) — never from
+-- `event_id`'s own date matched against a set's `date`; nothing enforces
+-- those staying equal, and that's exactly the kind of implicit join this
+-- pair of columns replaces.
+--
+-- ⚠️ ONE-TIME MANUAL MIGRATION — NOT idempotent, same confirmed D1
+-- limitation as every other ALTER in this file (line 25: no
+-- `ADD COLUMN IF NOT EXISTS` support). Do not re-run once applied.
+--
+-- npx wrangler d1 execute form-at-analytics --remote --command "ALTER TABLE sets ADD COLUMN dj_id TEXT"
+-- npx wrangler d1 execute form-at-analytics --remote --command "ALTER TABLE sets ADD COLUMN event_id TEXT"
+-- Verify:
+-- npx wrangler d1 execute form-at-analytics --remote --command "PRAGMA table_info(sets)"
+ALTER TABLE sets ADD COLUMN dj_id TEXT;
+ALTER TABLE sets ADD COLUMN event_id TEXT;
+
+-- Backfill for the 10 sets live at migration time — the mapping is
+-- unambiguous by eye (checked against packages/data/src/djs.ts's ids and
+-- events.ts's ids, not guessed), so this is a hand-verified one-time
+-- correction, the same shape as any other direct-SQL catalogue fix, not an
+-- automated inference. Applied 2026-09-23, before the dj_id/event_id-reading
+-- code was deployed — see the DEPLOY ORDER note above for why that order
+-- matters, not just this run's own record of it:
+--
+-- npx wrangler d1 execute form-at-analytics --remote --command "UPDATE sets SET dj_id = 'til', event_id = 'format-002' WHERE id = 'set-002-til'"
+-- npx wrangler d1 execute form-at-analytics --remote --command "UPDATE sets SET dj_id = 'hubey', event_id = 'format-002' WHERE id = 'set-002-hubey'"
+-- npx wrangler d1 execute form-at-analytics --remote --command "UPDATE sets SET dj_id = 'julz-lever', event_id = 'format-002' WHERE id = 'set-002-julz-lever'"
+-- npx wrangler d1 execute form-at-analytics --remote --command "UPDATE sets SET dj_id = 'brandon-lee-vear', event_id = 'format-002' WHERE id = 'set-002-brandon-lee-vear'"
+-- npx wrangler d1 execute form-at-analytics --remote --command "UPDATE sets SET dj_id = 'iona-violet', event_id = 'format-003' WHERE id = 'set-003-iona-violet'"
+-- npx wrangler d1 execute form-at-analytics --remote --command "UPDATE sets SET dj_id = 'julz-lever', event_id = 'format-003' WHERE id = 'set-003-julz-lever'"
+-- npx wrangler d1 execute form-at-analytics --remote --command "UPDATE sets SET dj_id = 'unreal', event_id = 'format-003' WHERE id = 'set-003-unreal'"
+-- npx wrangler d1 execute form-at-analytics --remote --command "UPDATE sets SET dj_id = 'hubey', event_id = 'seafield-sound' WHERE id = 'set-seafield-sound-2026-hubey'"
+-- npx wrangler d1 execute form-at-analytics --remote --command "UPDATE sets SET dj_id = 'julz-lever', event_id = 'seafield-sound' WHERE id = 'set-seafield-sound-2026-julz-lever'"
+-- npx wrangler d1 execute form-at-analytics --remote --command "UPDATE sets SET dj_id = 'til', event_id = 'seafield-sound' WHERE id = 'set-seafield-sound-2026-til'"
+-- Verify all 10 landed:
+-- npx wrangler d1 execute form-at-analytics --remote --command "SELECT id, dj_id, event_id FROM sets ORDER BY id"
+
 -- No secondary index yet — every query this table serves so far is either
 -- "all rows, newest first" (the public catalogue merge) or "one row by id"
 -- (both served fine by the primary key / a full table scan at this table's
@@ -415,6 +483,19 @@ CREATE TABLE IF NOT EXISTS admin_deleted_sets (
 -- Verify it landed:
 -- npx wrangler d1 execute form-at-analytics --remote --command "PRAGMA table_info(admin_deleted_sets)"
 ALTER TABLE admin_deleted_sets ADD COLUMN restored_at INTEGER;
+
+-- dj_id / event_id (2026-09-22) — mirrors `sets.dj_id`/`sets.event_id` above,
+-- so a delete-then-restore round trip doesn't silently drop a set's DJ/event
+-- link (deleteSetWithAudit copies the live row's values in; restoreSetFromLog
+-- writes them back out — routes/api/sets.ts / routes/api/sets/restore.ts).
+-- Same non-idempotent limitation as every ALTER in this file — do not re-run.
+--
+-- npx wrangler d1 execute form-at-analytics --remote --command "ALTER TABLE admin_deleted_sets ADD COLUMN dj_id TEXT"
+-- npx wrangler d1 execute form-at-analytics --remote --command "ALTER TABLE admin_deleted_sets ADD COLUMN event_id TEXT"
+-- Verify:
+-- npx wrangler d1 execute form-at-analytics --remote --command "PRAGMA table_info(admin_deleted_sets)"
+ALTER TABLE admin_deleted_sets ADD COLUMN dj_id TEXT;
+ALTER TABLE admin_deleted_sets ADD COLUMN event_id TEXT;
 
 -- No secondary index — this table only ever serves "most recent N deletions"
 -- (the admin sets page's recently-deleted list) or a full scan when actually

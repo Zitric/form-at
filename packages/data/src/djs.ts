@@ -1,3 +1,12 @@
+// The DJ roster — a plain, hand-maintained array (TECH_DEBT.md item 24: DJs
+// have no D1 table, no admin UI; a new DJ still needs a code edit + deploy).
+// Lives in this shared package, not apps/web, ONLY so apps/admin can read
+// `{id, name}` pairs for the dj_id dropdown in UploadSetForm/EditSetForm —
+// a set's `djId` (packages/data/src/sets.ts) is a foreign key into this
+// array's `id`s. That's a plumbing move, not the item-24 migration: there's
+// still no way to add or edit a DJ without a deploy, and apps/web is still
+// this data's only reader for anything beyond the id/name pair (bio, photo,
+// socials).
 export type DJ = {
   id: string;
   name: string;
@@ -26,7 +35,6 @@ export type DJ = {
     linktree?: string;
     website?: string;
   };
-  setIds?: string[];
 };
 
 export const djs: DJ[] = [
@@ -37,7 +45,6 @@ export const djs: DJ[] = [
     type: "resident",
     bio: "A DJ and selector since 2004, Julz Lever cut his teeth on Technics turntables across the Spanish club circuit before bringing his raw, hypnotic techno vision to Scotland. Today, he is a central figure in Glasgow's underground architecture as the co-founder and resident of Form:at. A former resident of Edinburgh's Bailando Collective and co-founder of Circuit Control, Julz has left his mark on iconic venues like The Flying Duck and The Poetry Club. Heavily influenced by the hypnotic precision of Rene Wise, Rrose, Border One, Dasha Rush and many more... His sets are built on deep, driving, and uncompromising frequencies.",
     photo: "djs/julz-lever",
-    setIds: ["set-002-julz-lever"],
     socials: { soundcloud: "julz-lever", residentadvisor: "julzlever", linktree: "julzlever" },
   },
 
@@ -47,7 +54,6 @@ export const djs: DJ[] = [
     type: "resident",
     bio: "With a house head and an acid heart, hubey has been dishing out bangers around Glasgow, playing with Luna Roja, OH parties and, of course, as a resident at Form:at. Further afield, she can be found in her home town of Dumfries, and has played at the excellent Eden Festival. Expect house, electro, techno... and a wavey adventure to all the places in between.",
     photo: "djs/hubey",
-    setIds: ["set-002-hubey"],
     socials: {
       soundcloud: "hubeyyy",
       instagram: "_hubey__",
@@ -60,7 +66,6 @@ export const djs: DJ[] = [
     type: "resident",
     bio: "Newly integrated into the Glasgow network, Valdas is a selector whose focus lies in precise curation. Transitioning from radio transmissions to live operations, he made his foundational debut at Form:at 002. A rising operator within the local architecture.",
     photo: "djs/til",
-    setIds: ["set-002-til"],
   },
 
   // Guests

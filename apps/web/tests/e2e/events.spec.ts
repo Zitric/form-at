@@ -1,5 +1,5 @@
+import { getEvent } from "@form-at/data/events";
 import { expect, test } from "@playwright/test";
-import { getEvent } from "~/data/events";
 import { gotoAndHydrate } from "./_helpers";
 
 test.describe("events page", () => {

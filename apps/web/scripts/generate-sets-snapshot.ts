@@ -27,7 +27,8 @@ type SetRow = {
   title: string;
   artist: string;
   date: string;
-  venue: string | null;
+  dj_id: string | null;
+  event_id: string | null;
   description: string | null;
   duration: string | null;
   src: string;

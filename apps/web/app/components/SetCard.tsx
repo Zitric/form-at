@@ -1,3 +1,4 @@
+import { getCityForSet } from "@form-at/data/events";
 import type { MusicSet } from "@form-at/data/sets";
 import { Card } from "@form-at/ui";
 import { useNavigate } from "@tanstack/react-router";
@@ -27,6 +28,10 @@ export function SetCard({ set, index }: Props) {
   const nowPlaying = useStore((s) => s.nowPlaying);
   const isPlaying = useStore((s) => s.isPlaying);
   const isThisPlaying = nowPlaying?.id === set.id && isPlaying;
+  // Resolved via the set's linked event, never `set.venue` (free text, no
+  // longer read — see MusicSet.eventId's own comment) — undefined for a set
+  // with no eventId, in which case the segment below drops cleanly.
+  const city = getCityForSet(set);
 
   return (
     <Card
@@ -69,7 +74,8 @@ export function SetCard({ set, index }: Props) {
         </p>
         <p className="hidden sm:block sm:text-sm text-grey truncate">
           {set.date}
-          {set.date && " · "}Glasgow
+          {set.date && city && " · "}
+          {city}
         </p>
       </div>
     </Card>

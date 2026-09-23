@@ -9,7 +9,8 @@ const sampleSet: SetWithPlayCount = {
   title: "Form:at 002",
   artist: "t.i.l.",
   date: "2026-04-24",
-  venue: "Find the red door, Glasgow",
+  djId: "til",
+  eventId: "format-002",
   description: "Opening transmission.",
   duration: "45:18",
   src: "https://cdn.formatglasgow.com/002/audio.mp3",
@@ -27,7 +28,8 @@ describe("EditSetForm", () => {
     expect(screen.getByLabelText(/^title$/i)).toHaveValue("Form:at 002");
     expect(screen.getByLabelText(/^artist$/i)).toHaveValue("t.i.l.");
     expect(screen.getByLabelText(/^date$/i)).toHaveValue("2026-04-24");
-    expect(screen.getByLabelText(/venue/i)).toHaveValue("Find the red door, Glasgow");
+    expect(screen.getByLabelText(/^dj/i)).toHaveValue("til");
+    expect(screen.getByLabelText(/^event/i)).toHaveValue("format-002");
     expect(screen.getByLabelText(/description/i)).toHaveValue("Opening transmission.");
     expect(screen.getByLabelText(/^duration/i)).toHaveValue("45:18");
   });
@@ -74,7 +76,8 @@ describe("EditSetForm", () => {
           title: "Form:at 002 (corrected)",
           artist: "t.i.l.",
           date: "2026-04-24",
-          venue: "Find the red door, Glasgow",
+          djId: "til",
+          eventId: "format-002",
           description: "Opening transmission.",
           duration: "45:18",
         }),
@@ -116,5 +119,35 @@ describe("EditSetForm", () => {
     await user.clear(screen.getByLabelText(/^title$/i));
 
     expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
+  });
+
+  // A set can be un-linked from a DJ (the artist has no Form:at profile, or
+  // the pick was wrong) without the save button locking up over it.
+  it("save stays enabled and clears djId when the dj is set back to blank", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<EditSetForm set={sampleSet} onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.selectOptions(screen.getByLabelText(/^dj/i), "");
+    expect(screen.getByRole("button", { name: /^save$/i })).not.toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/sets",
+      expect.objectContaining({
+        body: JSON.stringify({
+          id: "set-002-til",
+          title: "Form:at 002",
+          artist: "t.i.l.",
+          date: "2026-04-24",
+          djId: undefined,
+          eventId: "format-002",
+          description: "Opening transmission.",
+          duration: "45:18",
+        }),
+      }),
+    );
   });
 });

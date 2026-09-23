@@ -1,3 +1,5 @@
+import { djs } from "@form-at/data/djs";
+import { events } from "@form-at/data/events";
 import { Button } from "@form-at/ui";
 import { useState } from "react";
 import type { SetWithPlayCount } from "~/data/sets-admin";
@@ -11,10 +13,18 @@ interface EditSetFormProps {
 const inputClass =
   "w-full bg-black border border-grey/30 px-2 py-1 text-white font-mono text-sm focus:border-gold outline-none";
 
-// Metadata-only by design: title/artist/date/venue/description/duration. File
-// replacement is deliberately absent, not unbuilt UI — a same-id file swap is
-// invisible to reconcileFromIdb's catalogue-membership check, which is a real
-// cache-invalidation problem. See PWA_PROGRESS.md's PR6 entry.
+// Metadata-only by design: title/artist/date/djId/eventId/description/duration.
+// File replacement is deliberately absent, not unbuilt UI — a same-id file
+// swap is invisible to reconcileFromIdb's catalogue-membership check, which
+// is a real cache-invalidation problem. See PWA_PROGRESS.md's PR6 entry.
+//
+// No venue field: it used to be free text, independent of both the DJ and
+// the event, and was found disagreeing with the event's own venue on real
+// data ("Find the red door, Glasgow" vs "Southside, Glasgow" for the same
+// Form:at 002 night) — a fact typed twice always eventually drifts. A set's
+// display location now comes from its linked event's `city`
+// (`getCityForSet`, @form-at/data/events) via `eventId` below, not from
+// anything typed on the set itself.
 //
 // The id field is shown but disabled rather than omitted: the admin should see
 // which set they're editing without any way to touch the one field that is the
@@ -39,7 +49,8 @@ export function EditSetForm({ set, onSaved, onCancel }: EditSetFormProps) {
   const [title, setTitle] = useState(set.title);
   const [artist, setArtist] = useState(set.artist);
   const [date, setDate] = useState(set.date);
-  const [venue, setVenue] = useState(set.venue ?? "");
+  const [djId, setDjId] = useState(set.djId ?? "");
+  const [eventId, setEventId] = useState(set.eventId ?? "");
   const [description, setDescription] = useState(set.description ?? "");
   const duration = set.duration ?? "";
 
@@ -60,7 +71,8 @@ export function EditSetForm({ set, onSaved, onCancel }: EditSetFormProps) {
           title: title.trim(),
           artist: artist.trim(),
           date,
-          venue: venue.trim() || undefined,
+          djId: djId || undefined,
+          eventId: eventId || undefined,
           description: description.trim() || undefined,
           duration: duration.trim() || undefined,
         }),
@@ -135,15 +147,40 @@ export function EditSetForm({ set, onSaved, onCancel }: EditSetFormProps) {
         />
       </div>
       <div>
-        <label htmlFor={`edit-venue-${set.id}`} className="block text-xs text-grey mb-1">
-          venue (optional)
+        <label htmlFor={`edit-dj-${set.id}`} className="block text-xs text-grey mb-1">
+          dj (optional — leave blank if the artist has no Form:at DJ profile yet)
         </label>
-        <input
-          id={`edit-venue-${set.id}`}
-          value={venue}
-          onChange={(e) => setVenue(e.target.value)}
+        <select
+          id={`edit-dj-${set.id}`}
+          value={djId}
+          onChange={(e) => setDjId(e.target.value)}
           className={inputClass}
-        />
+        >
+          <option value="">— no dj —</option>
+          {djs.map((dj) => (
+            <option key={dj.id} value={dj.id}>
+              {dj.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label htmlFor={`edit-event-${set.id}`} className="block text-xs text-grey mb-1">
+          event (optional — leave blank for a standalone mix not tied to a Form:at night)
+        </label>
+        <select
+          id={`edit-event-${set.id}`}
+          value={eventId}
+          onChange={(e) => setEventId(e.target.value)}
+          className={inputClass}
+        >
+          <option value="">— no event —</option>
+          {events.map((event) => (
+            <option key={event.id} value={event.id}>
+              {event.title} · {event.date}
+            </option>
+          ))}
+        </select>
       </div>
       <div>
         <label htmlFor={`edit-description-${set.id}`} className="block text-xs text-grey mb-1">

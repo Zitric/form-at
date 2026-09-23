@@ -1,3 +1,5 @@
+import { djs } from "@form-at/data/djs";
+import { events } from "@form-at/data/events";
 import { createFileRoute } from "@tanstack/react-router";
 import { type SetR2Keys, deriveSetR2Keys } from "~/utils/r2Sets";
 import { extractAccessToken, verifyAccessJwt } from "~/utils/verifyAccessJwt";
@@ -16,7 +18,6 @@ const AUDIO_EXTS = ["mp3"] as const;
 const ARTWORK_EXTS = ["jpg", "jpeg", "png"] as const;
 const MAX_TITLE_LEN = 200;
 const MAX_ARTIST_LEN = 200;
-const MAX_VENUE_LEN = 200;
 const MAX_DESCRIPTION_LEN = 2000;
 const MAX_DURATION_LEN = 20;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -26,7 +27,8 @@ type CreateSetBody = {
   title: string;
   artist: string;
   date: string;
-  venue?: string;
+  djId?: string;
+  eventId?: string;
   description?: string;
   duration?: string;
   sizeBytes?: number;
@@ -51,7 +53,23 @@ export function validate(raw: unknown): CreateSetBody | null {
     return null;
   }
   if (typeof r.date !== "string" || !DATE_PATTERN.test(r.date)) return null;
-  if (r.venue !== undefined && (typeof r.venue !== "string" || r.venue.length > MAX_VENUE_LEN)) {
+  // dj_id/event_id are dropdown selections, not free text — membership in
+  // the known list is the whole check (no length cap needed, same reasoning
+  // as `audioExt`/`artworkExt` below). Both are genuinely optional: every
+  // set has an artist, but not every artist has a Form:at DJ profile (a
+  // Seafield Sound guest with no page yet, say) — requiring djId would make
+  // uploading their set impossible without first adding them to djs.ts and
+  // deploying, exactly the deploy-to-upload coupling this feature exists to
+  // avoid. A set with no djId simply appears on no DJ page (see
+  // MusicSet.djId's comment in packages/data) — same clean-drop shape as a
+  // null eventId.
+  if (r.djId !== undefined && (typeof r.djId !== "string" || !djs.some((d) => d.id === r.djId))) {
+    return null;
+  }
+  if (
+    r.eventId !== undefined &&
+    (typeof r.eventId !== "string" || !events.some((e) => e.id === r.eventId))
+  ) {
     return null;
   }
   if (
@@ -87,7 +105,8 @@ export function validate(raw: unknown): CreateSetBody | null {
     title: r.title,
     artist: r.artist,
     date: r.date,
-    venue: r.venue as string | undefined,
+    djId: r.djId as string | undefined,
+    eventId: r.eventId as string | undefined,
     description: r.description as string | undefined,
     duration: r.duration as string | undefined,
     sizeBytes: r.sizeBytes as number | undefined,
@@ -161,7 +180,8 @@ export async function insertSetWithRetry(
     title: string;
     artist: string;
     date: string;
-    venue: string | null;
+    djId: string | null;
+    eventId: string | null;
     description: string | null;
     duration: string | null;
     src: string;
@@ -177,14 +197,15 @@ export async function insertSetWithRetry(
     try {
       await db
         .prepare(
-          "INSERT INTO sets (id, title, artist, date, venue, description, duration, src, artwork, artwork_original_url, peaks, size_bytes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO sets (id, title, artist, date, dj_id, event_id, description, duration, src, artwork, artwork_original_url, peaks, size_bytes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(
           row.id,
           row.title,
           row.artist,
           row.date,
-          row.venue,
+          row.djId,
+          row.eventId,
           row.description,
           row.duration,
           row.src,
@@ -212,7 +233,8 @@ type EditSetBody = {
   title: string;
   artist: string;
   date: string;
-  venue?: string;
+  djId?: string;
+  eventId?: string;
   description?: string;
   duration?: string;
 };
@@ -234,7 +256,15 @@ export function validateEdit(raw: unknown): EditSetBody | null {
     return null;
   }
   if (typeof r.date !== "string" || !DATE_PATTERN.test(r.date)) return null;
-  if (r.venue !== undefined && (typeof r.venue !== "string" || r.venue.length > MAX_VENUE_LEN)) {
+  // Same optionality as validate() above — see its comment for why djId
+  // being required would be a regression, not a tightening.
+  if (r.djId !== undefined && (typeof r.djId !== "string" || !djs.some((d) => d.id === r.djId))) {
+    return null;
+  }
+  if (
+    r.eventId !== undefined &&
+    (typeof r.eventId !== "string" || !events.some((e) => e.id === r.eventId))
+  ) {
     return null;
   }
   if (
@@ -255,7 +285,8 @@ export function validateEdit(raw: unknown): EditSetBody | null {
     title: r.title,
     artist: r.artist,
     date: r.date,
-    venue: r.venue as string | undefined,
+    djId: r.djId as string | undefined,
+    eventId: r.eventId as string | undefined,
     description: r.description as string | undefined,
     duration: r.duration as string | undefined,
   };
@@ -264,7 +295,7 @@ export function validateEdit(raw: unknown): EditSetBody | null {
 // The id is never something this function CAN change, by construction rather
 // than by validation: `id` appears exactly once, in the final `WHERE`, and the
 // `SET` clause's bind params are strictly
-// title/artist/date/venue/description/duration. Keep it that way — the id is
+// title/artist/date/djId/eventId/description/duration. Keep it that way — the id is
 // the R2 key path, the public URL, AND the analytics join key across
 // `plays`/`events`, so changing it would orphan all three.
 //
@@ -276,13 +307,14 @@ export async function updateSet(
 ): Promise<"updated" | "not_found"> {
   const result = await db
     .prepare(
-      "UPDATE sets SET title = ?, artist = ?, date = ?, venue = ?, description = ?, duration = ? WHERE id = ?",
+      "UPDATE sets SET title = ?, artist = ?, date = ?, dj_id = ?, event_id = ?, description = ?, duration = ? WHERE id = ?",
     )
     .bind(
       body.title,
       body.artist,
       body.date,
-      body.venue ?? null,
+      body.djId ?? null,
+      body.eventId ?? null,
       body.description ?? null,
       body.duration ?? null,
       body.id,
@@ -296,6 +328,8 @@ type DeletedSetRow = {
   title: string;
   artist: string;
   date: string;
+  dj_id: string | null;
+  event_id: string | null;
   venue: string | null;
   description: string | null;
   duration: string | null;
@@ -353,8 +387,8 @@ export async function deleteSetWithAudit(
   const insertAudit = db
     .prepare(
       `INSERT INTO admin_deleted_sets
-        (deleted_at, deleted_by_email, set_id, title, artist, date, venue, description, duration, src, artwork, artwork_original_url, peaks, size_bytes, created_at, play_count_at_deletion)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (deleted_at, deleted_by_email, set_id, title, artist, date, dj_id, event_id, venue, description, duration, src, artwork, artwork_original_url, peaks, size_bytes, created_at, play_count_at_deletion)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       Date.now(),
@@ -363,6 +397,8 @@ export async function deleteSetWithAudit(
       row.title,
       row.artist,
       row.date,
+      row.dj_id,
+      row.event_id,
       row.venue,
       row.description,
       row.duration,
@@ -431,7 +467,8 @@ export const Route = createFileRoute("/api/sets")({
           title: body.title,
           artist: body.artist,
           date: body.date,
-          venue: body.venue ?? null,
+          djId: body.djId ?? null,
+          eventId: body.eventId ?? null,
           description: body.description ?? null,
           duration: body.duration ?? null,
           src: keys.publicAudioUrl,

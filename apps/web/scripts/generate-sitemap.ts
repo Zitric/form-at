@@ -9,9 +9,9 @@
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { djs } from "@form-at/data/djs";
+import { events } from "@form-at/data/events";
 import { sets } from "@form-at/data/sets";
-import { djs } from "../app/data/djs";
-import { events } from "../app/data/events";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");

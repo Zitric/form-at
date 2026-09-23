@@ -1,4 +1,4 @@
-import type { Event } from "~/data/events";
+import type { Event } from "@form-at/data/events";
 import { buildAndroidIntent, isAndroid } from "~/utils/deeplink";
 import { eventDateTimes } from "~/utils/jsonld";
 
