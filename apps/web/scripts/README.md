@@ -13,7 +13,7 @@ looks out of date — that file is the source of truth, this doc explains it).
 | `pnpm sitemap` | `generate-sitemap.ts` | Writes `public/sitemap.xml` from every static + dynamic route (DJs, sets, events). Runs automatically as part of `pnpm build`. |
 | `pnpm screenshots` | `capture-screenshots.ts` | Builds the app, boots a preview server, and captures the two PNGs (`public/screenshots/narrow.png` / `wide.png`) Chrome shows in the Android install prompt. The root `README.md` embeds these same two files rather than keeping its own copies, so re-running this updates both. Re-run after a visual redesign. |
 | `pnpm stats` | `stats.mjs` | Prints a play-analytics summary from the production D1 database. Add `--raw` to also dump the raw JSON per section. |
-| `pnpm generate-sets-snapshot` | `generate-sets-snapshot.ts` | Regenerates `packages/data/src/sets.generated.ts` — the committed catalogue snapshot the app falls back to offline — from the live `sets` table. Runs first inside `pnpm build`. **Needs Cloudflare credentials**; see below. |
+| `pnpm generate-sets-snapshot` | `generate-sets-snapshot.ts` | Regenerates `packages/data/src/sets.generated.ts` — the committed catalogue snapshot the app falls back to offline — from the live `sets` table. Runs first inside `pnpm build`, but only against that build's own throwaway checkout; nothing commits the result back to git, so run it **manually and commit the result** after any admin upload — see below. **Needs Cloudflare credentials**; see below. |
 | `pnpm deploy` | *(no script file)* | `pnpm build` then `wrangler pages deploy dist/client --project-name=form-at-web`. The manual escape hatch — normal deploys go through `deploy.yml` on a push to `main`. |
 
 `pnpm og`, `pnpm sitemap`, and `optimize-images` don't need any setup beyond
@@ -30,6 +30,28 @@ job don't — they read the committed snapshot. It **fails loudly on any query
 error rather than emitting an empty array**: silently shipping an empty catalogue
 as the offline fallback is the worst available outcome, so a broken build beats a
 successful one here.
+
+**The committed snapshot is a manually-refreshed baseline, not something kept
+current for you.** `deploy.yml`'s `deploy` job does run this script, but only
+inside that job's own throwaway checkout — it freshens the one build it's
+about to produce and nothing commits the regenerated file back to the repo.
+Confirmed the hard way: this file sat at 4 sets while the real catalogue grew
+to 10 over two months and ~25 successful deploys before anyone noticed (full
+trace in `PWA_PROGRESS.md`). **After uploading or deleting a set through the
+admin panel, run this locally and commit the result:**
+
+```bash
+pnpm generate-sets-snapshot   # needs CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID
+git add packages/data/src/sets.generated.ts
+git commit -m "refresh sets snapshot"
+```
+
+Skipping this doesn't break production (apps/web's own build regenerates
+fresh before every deploy) — it breaks `pnpm dev`, every CI `static`/`unit`/
+`e2e` job, and `admin-stats.ts`'s per-set labels on the dashboard, all of
+which only ever see the committed copy. A CI check in `ci.yml` fails the
+build when the committed snapshot has drifted from live D1, so forgetting
+this step is loud, not silent.
 
 `apps/admin` has one script of its own, `pnpm -C apps/admin diagnose-visits`,
 which probes the Cloudflare Analytics API directly to explain an empty `visits`

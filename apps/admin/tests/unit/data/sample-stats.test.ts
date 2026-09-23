@@ -1,6 +1,6 @@
 import { sets } from "@form-at/data/sets";
 import { describe, expect, it } from "vitest";
-import { SAMPLE_ADMIN_DASHBOARD_STATS, SAMPLE_SET_STATS } from "~/data/sample-stats";
+import { SAMPLE_ADMIN_DASHBOARD_STATS, SAMPLE_SETS, SAMPLE_SET_STATS } from "~/data/sample-stats";
 
 // These assert the specific "awkward shapes" the fixture exists to stress —
 // not just that the fixture has *some* data. If a future edit smooths these
@@ -30,6 +30,19 @@ describe("SAMPLE_ADMIN_DASHBOARD_STATS", () => {
 
   it("installToPushConversion.ratio realistically exceeds 100% (no shared key between the two aggregates)", () => {
     expect(SAMPLE_ADMIN_DASHBOARD_STATS.installToPushConversion.ratio).toBeGreaterThan(1);
+  });
+});
+
+// SetsTab's sample-data-mode picker fixture — kept in its own describe since
+// it stands in for a different real thing (live D1 via fetchSetsPageData,
+// not the build-time snapshot `sets` reimported above for the OTHER
+// fixture's own symmetry check) — see SAMPLE_SETS's own comment for why
+// admin never reads that snapshot at all.
+describe("SAMPLE_SETS", () => {
+  it("has exactly the same ids as SAMPLE_SET_STATS — every picker button has stats to show", () => {
+    const setsIds = SAMPLE_SETS.map((s) => s.id).sort();
+    const statsIds = Object.keys(SAMPLE_SET_STATS).sort();
+    expect(setsIds).toEqual(statsIds);
   });
 });
 

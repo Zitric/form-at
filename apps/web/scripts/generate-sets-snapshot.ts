@@ -4,10 +4,17 @@
  * of the `sets` D1 table, newest upload first. COMMITTED to git (not
  * gitignored): `pnpm dev`, tsc, and every CI job (`static`/`knip`/`unit`/
  * `e2e`) read whatever's currently committed and need no Cloudflare
- * credentials to do so. Only `deploy.yml`'s `deploy` job (apps/web) runs
- * this script fresh, immediately before the production build, so the
- * deployed bundle always reflects the current table — see sets.ts's own
- * comment for the full offline-survival reasoning this exists for.
+ * credentials to do so.
+ *
+ * `deploy.yml`'s `deploy` job (apps/web) runs this script before the
+ * production build, which is why the DEPLOYED BUNDLE always reflects the
+ * current table. It does NOT keep the git-committed file current — that run
+ * happens inside the job's own throwaway checkout, freshens only the build
+ * it's about to produce, and nothing commits the result back. The committed
+ * copy is a manually-refreshed baseline; see the fuller explanation (and
+ * what actually depends on it staying current) on the `sets` export in
+ * packages/data/src/sets.ts, and the refresh step in
+ * apps/web/scripts/README.md.
  *
  * Fails loudly (non-zero exit) on any query failure or unexpected output
  * shape — a broken build here is far better than silently shipping an

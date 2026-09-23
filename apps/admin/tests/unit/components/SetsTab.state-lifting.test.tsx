@@ -42,6 +42,7 @@ function Harness({
       {activeTab === "sets" && (
         <SetsTab
           stats={STATS}
+          sets={[{ id: "set-a", artist: "Fixture Artist" }]}
           selectedSetId={selectedSetId}
           selectedSetStats={selectedSetStats}
           selectedSetLoading={selectedSetLoading}
