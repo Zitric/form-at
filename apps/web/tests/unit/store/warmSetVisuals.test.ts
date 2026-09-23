@@ -9,27 +9,15 @@ import { warmSetVisuals } from "~/store/offlineSlice";
 // save). These tests lock the two warmings together so a future refactor can't
 // silently drop one leg.
 
-// Fixture DJ wired to a fixture set — mirrors the real data/djs.ts shape
-// (id + setIds relationship) without depending on the shipping catalogue.
-vi.mock("~/data/djs", () => ({
-  djs: [
-    {
-      id: "fixture-dj",
-      name: "Fixture DJ",
-      type: "resident" as const,
-      photo: "djs/fixture-dj",
-      setIds: ["fixture-set-linked"],
-    },
-    // A second DJ with no setIds coverage — used to verify the graceful
-    // "no DJ resolves" path (dev-only warn, no photo fetch).
-    {
-      id: "unwired-dj",
-      name: "Unwired DJ",
-      type: "resident" as const,
-      photo: "djs/unwired-dj",
-      setIds: undefined,
-    },
-  ],
+// Fixture DJ resolved via a fixture set's `djId` — mirrors the real
+// packages/data/src/djs.ts's `getDJ` shape (a real foreign key, not the old
+// hand-maintained `dj.setIds` search) without depending on the shipping
+// catalogue.
+vi.mock("@form-at/data/djs", () => ({
+  getDJ: (id: string) =>
+    id === "fixture-dj"
+      ? { id: "fixture-dj", name: "Fixture DJ", type: "resident" as const, photo: "djs/fixture-dj" }
+      : undefined,
 }));
 
 const linkedSet: MusicSet = {
@@ -39,8 +27,12 @@ const linkedSet: MusicSet = {
   date: "2026-01-01",
   src: "https://example.test/linked.mp3",
   artwork: "sets/fixture-artwork",
+  djId: "fixture-dj",
 };
 
+// djId set, but to an id `getDJ` doesn't resolve — used to verify the
+// graceful "no DJ resolves" path (dev-only warn, no photo fetch). A distinct
+// case from a set with no djId at all (bareSet below).
 const unlinkedSet: MusicSet = {
   id: "fixture-set-orphan",
   title: "Orphan Set",
@@ -48,6 +40,7 @@ const unlinkedSet: MusicSet = {
   date: "2026-01-02",
   src: "https://example.test/orphan.mp3",
   artwork: "sets/orphan-artwork",
+  djId: "unwired-dj",
 };
 
 // Every browser test surface we care about (jsdom + real) has fetch. We
@@ -69,7 +62,7 @@ const VARIANTS = ["640.avif", "1080.avif", "640.webp", "1080.webp"];
 const urlsFor = (basePath: string) => VARIANTS.map((v) => `/images/${basePath}-${v}`);
 
 describe("warmSetVisuals", () => {
-  it("warms set artwork + DJ photo when the set is wired into a dj.setIds", async () => {
+  it("warms set artwork + DJ photo when the set's djId resolves to a real DJ", async () => {
     await warmSetVisuals(linkedSet);
 
     const fetchMock = vi.mocked(globalThis.fetch);

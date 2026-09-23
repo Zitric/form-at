@@ -1,4 +1,3 @@
-import type { MusicSet } from "@form-at/data/sets";
 /**
  * Schema.org JSON-LD builders. Each one produces the structured-data payload
  * that goes inside <script type="application/ld+json"> on its route.
@@ -9,9 +8,10 @@ import type { MusicSet } from "@form-at/data/sets";
  *
  * Reference: https://schema.org/docs/full.html
  */
-import type { DJ } from "~/data/djs";
-import { djs } from "~/data/djs";
-import type { Event } from "~/data/events";
+import { type DJ, getDJ } from "@form-at/data/djs";
+import type { Event } from "@form-at/data/events";
+import type { MusicSet } from "@form-at/data/sets";
+import { parseDuration } from "./fmt";
 import { SOCIALS, SOCIAL_ORDER } from "./socials";
 
 const SITE = "https://formatglasgow.com";
@@ -26,13 +26,11 @@ const FORMAT_SAME_AS = ["https://www.instagram.com/form.at_glasgow/"];
 /** "1:39:30" → "PT1H39M30S" · "45:18" → "PT45M18S" · undefined → undefined */
 function durationToISO8601(s: string | undefined): string | undefined {
   if (!s) return undefined;
-  const parts = s.split(":").map(Number);
-  let h = 0;
-  let m = 0;
-  let sec = 0;
-  if (parts.length === 3) [h, m, sec] = parts as [number, number, number];
-  else if (parts.length === 2) [m, sec] = parts as [number, number];
-  else return undefined;
+  const totalSeconds = parseDuration(s);
+  if (totalSeconds === undefined) return undefined;
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const sec = totalSeconds % 60;
   const result = `PT${h ? `${h}H` : ""}${m ? `${m}M` : ""}${sec ? `${sec}S` : ""}`;
   return result === "PT" ? "PT0S" : result;
 }
@@ -104,11 +102,6 @@ function djSameAs(dj: DJ): string[] {
   return out;
 }
 
-/** Find the DJ whose `setIds` includes this set, for the `byArtist` link. */
-function djFromSet(setId: string): DJ | undefined {
-  return djs.find((d) => d.setIds?.includes(setId));
-}
-
 /** Build the absolute image URL from a path like "djs/julz-lever". */
 function imageUrl(path: string | undefined): string | undefined {
   return path ? `${SITE}/images/${path}-1080.webp` : undefined;
@@ -153,7 +146,7 @@ export function djLd(dj: DJ) {
 }
 
 export function setLd(set: MusicSet) {
-  const dj = djFromSet(set.id);
+  const dj = set.djId ? getDJ(set.djId) : undefined;
   return {
     "@context": "https://schema.org",
     "@type": "MusicRecording",
@@ -195,7 +188,7 @@ export function eventLd(event: Event, lineup: ReadonlyArray<DJ | undefined>) {
       name: event.venue,
       address: {
         "@type": "PostalAddress",
-        addressLocality: "Glasgow",
+        addressLocality: event.city,
         addressCountry: "GB",
       },
     },

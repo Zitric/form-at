@@ -1,6 +1,8 @@
+import { djs } from "@form-at/data/djs";
+import { events } from "@form-at/data/events";
 import { Button, Label, Modal } from "@form-at/ui";
 import { type ChangeEvent, useEffect, useState } from "react";
-import { fmtBytes, fmtSetDuration } from "~/utils/fmt";
+import { fmtBytes, fmtSetDuration, parseSetDuration } from "~/utils/fmt";
 import { isValidSetId } from "~/utils/r2Sets";
 import { slugifySetId } from "~/utils/slugifySetId";
 import { uploadWithProgress } from "~/utils/uploadWithProgress";
@@ -22,6 +24,15 @@ function getExt(filename: string): string {
 
 const ZERO_PROGRESS: Progress = { audio: 0, artwork: 0, peaks: 0 };
 
+// The signal-tracking ceiling in ~/utils/playTracking.ts (apps/web) trusts
+// this stored string as the real length of the set — a typed value the admin
+// overwrote to something shorter than the actual audio makes every full
+// listen of that set look like it exceeds the ceiling and get silently
+// rejected (TECH_DEBT.md item 28c). A few seconds covers whole-second
+// rounding between the decoded float and the typed M:SS/H:MM:SS string, not
+// a wrong number.
+const DURATION_MISMATCH_TOLERANCE_SECONDS = 3;
+
 // Mirrors SendPushForm.tsx's double-submit protection exactly, deliberately
 // rather than inventing a different interaction for this form: a
 // hard confirm-modal second step, a `uploading` boolean that disables (and
@@ -35,7 +46,18 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
   const [date, setDate] = useState("");
-  const [venue, setVenue] = useState("");
+  // Foreign keys, not free text — see MusicSet.djId/eventId's own comments
+  // (packages/data/src/sets.ts) for why: matching `artist` back to a DJ id
+  // is fragile (slugify("t.i.l.") produces "t-i-l", not the real id "til"),
+  // and a set's own free-text venue already disagreed with its event's
+  // venue on real data. Both genuinely optional: not every artist has a
+  // Form:at DJ profile (a guest with no page yet), so requiring djId would
+  // make their set impossible to upload without adding them to djs.ts and
+  // deploying first — exactly the deploy-to-upload coupling this feature
+  // exists to avoid. Empty string means "no dj"/"no event" for both.
+  // optional).
+  const [djId, setDjId] = useState("");
+  const [eventId, setEventId] = useState("");
   const [description, setDescription] = useState("");
 
   const [id, setId] = useState("");
@@ -47,6 +69,9 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
 
   const [duration, setDuration] = useState("");
   const [durationTouched, setDurationTouched] = useState(false);
+  // Ground truth from the actual file, independent of what's displayed in
+  // the (editable) duration field — see DURATION_MISMATCH_TOLERANCE_SECONDS.
+  const [decodedDurationSeconds, setDecodedDurationSeconds] = useState<number | null>(null);
 
   const [audioError, setAudioError] = useState<string | null>(null);
   const [artworkError, setArtworkError] = useState<string | null>(null);
@@ -84,12 +109,14 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
     const file = e.target.files?.[0] ?? null;
     setAudioFile(file);
     setAudioError(null);
+    setDecodedDurationSeconds(null);
     if (!file) return;
     try {
       // Cheap — <audio preload="metadata"> reads only the header, not a
       // full decode. Doubles as this file's validity check: an unplayable
       // file never fires `loadedmetadata`.
       const seconds = await readAudioDuration(file);
+      setDecodedDurationSeconds(seconds);
       if (!durationTouched) setDuration(fmtSetDuration(seconds));
     } catch (err) {
       // Failing to fire `loadedmetadata` means the browser couldn't read the
@@ -129,6 +156,16 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
       setPeaksError("doesn't look like a valid peaks.json (expected { peaks: [1000 numbers] })");
   };
 
+  // Only meaningful once the file's been decoded — an admin who overwrites
+  // the auto-filled field with a shorter number would otherwise ship a
+  // duration the real audio can't back up (see
+  // DURATION_MISMATCH_TOLERANCE_SECONDS above).
+  const typedDurationSeconds = duration.trim() ? parseSetDuration(duration.trim()) : undefined;
+  const durationMismatch =
+    decodedDurationSeconds !== null &&
+    typedDurationSeconds !== undefined &&
+    Math.abs(typedDurationSeconds - decodedDurationSeconds) > DURATION_MISMATCH_TOLERANCE_SECONDS;
+
   const canSubmit =
     title.trim().length > 0 &&
     artist.trim().length > 0 &&
@@ -139,7 +176,8 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
     !!artworkFile &&
     !artworkError &&
     !!peaksFile &&
-    !peaksError;
+    !peaksError &&
+    !durationMismatch;
 
   const handleOpenConfirm = () => {
     setResult(null);
@@ -151,7 +189,8 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
     setTitle("");
     setArtist("");
     setDate("");
-    setVenue("");
+    setDjId("");
+    setEventId("");
     setDescription("");
     setId("");
     setIdTouched(false);
@@ -160,6 +199,7 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
     setPeaksFile(null);
     setDuration("");
     setDurationTouched(false);
+    setDecodedDurationSeconds(null);
     setAudioError(null);
     setArtworkError(null);
     setPeaksError(null);
@@ -225,7 +265,8 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
           title: title.trim(),
           artist: artist.trim(),
           date,
-          venue: venue.trim() || undefined,
+          djId: djId || undefined,
+          eventId: eventId || undefined,
           description: description.trim() || undefined,
           duration: duration.trim() || undefined,
           sizeBytes: audioFile.size,
@@ -282,8 +323,8 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
             a follow-up PR. The social share banner needs the next deploy to appear.
           </li>
           <li>
-            won't show up on {result.artist}'s DJ page until '{result.id}' is added to their{" "}
-            <code>setIds</code> in <code>apps/web/app/data/djs.ts</code> and deployed.
+            shows up on {result.artist}'s DJ page immediately — same "next full load" caveat as
+            above, no deploy needed.
           </li>
         </ul>
         <Button variant="secondary" onClick={resetForm}>
@@ -332,15 +373,40 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
           />
         </div>
         <div>
-          <label htmlFor="set-venue" className="block text-xs text-grey mb-1">
-            venue (optional)
+          <label htmlFor="set-dj" className="block text-xs text-grey mb-1">
+            dj (optional — leave blank if the artist has no Form:at DJ profile yet)
           </label>
-          <input
-            id="set-venue"
-            value={venue}
-            onChange={(e) => setVenue(e.target.value)}
+          <select
+            id="set-dj"
+            value={djId}
+            onChange={(e) => setDjId(e.target.value)}
             className={inputClass}
-          />
+          >
+            <option value="">— no dj —</option>
+            {djs.map((dj) => (
+              <option key={dj.id} value={dj.id}>
+                {dj.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="set-event" className="block text-xs text-grey mb-1">
+            event (optional — leave blank for a standalone mix not tied to a Form:at night)
+          </label>
+          <select
+            id="set-event"
+            value={eventId}
+            onChange={(e) => setEventId(e.target.value)}
+            className={inputClass}
+          >
+            <option value="">— no event —</option>
+            {events.map((event) => (
+              <option key={event.id} value={event.id}>
+                {event.title} · {event.date}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label htmlFor="set-description" className="block text-xs text-grey mb-1">
@@ -387,6 +453,13 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
             placeholder="auto-filled from the audio file"
             className={inputClass}
           />
+          {durationMismatch && (
+            <p className="text-xs text-red-400 mt-1">
+              this doesn't match the audio file's real length (
+              {fmtSetDuration(decodedDurationSeconds ?? 0)}) — the ceiling for counting a play
+              relies on this being accurate. fix it or clear it to use the auto-filled value.
+            </p>
+          )}
         </div>
 
         <div>

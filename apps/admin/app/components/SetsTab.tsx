@@ -1,5 +1,4 @@
 import type { SetStats } from "@form-at/data/set-stats";
-import { sets } from "@form-at/data/sets";
 import { Button, Label, Muted, TerminalRow } from "@form-at/ui";
 import type { AdminDashboardStats } from "~/data/admin-stats";
 import { fmtDuration } from "~/utils/fmt";
@@ -8,6 +7,14 @@ import { TrendChart } from "./TrendChart";
 
 interface SetsTabProps {
   stats: AdminDashboardStats;
+  // Picker buttons — live D1 (dashboard.tsx's fetchSetsPageData) or the
+  // SAMPLE_SETS fixture in sample-data mode, NEVER the build-time snapshot
+  // (@form-at/data/sets). Admin is Access-gated and never runs offline, so
+  // there's no offline-survival reason to read a copy that can lag live D1
+  // by however long it's been since the snapshot was last refreshed — see
+  // PWA_PROGRESS.md's entry on that gap, which left 6 of 10 real sets with
+  // no button here at all for a month and a half.
+  sets: Array<{ id: string; artist: string }>;
   selectedSetId: string | undefined;
   selectedSetStats: SetStats | null;
   selectedSetLoading: boolean;
@@ -23,6 +30,7 @@ interface SetsTabProps {
 // this state lived here and got unmounted with the tab.
 export function SetsTab({
   stats,
+  sets,
   selectedSetId,
   selectedSetStats,
   selectedSetLoading,

@@ -228,10 +228,33 @@ export const SAMPLE_ADMIN_DASHBOARD_STATS: AdminDashboardStats = {
   isSampleData: true,
 };
 
+// SetsTab's picker buttons in sample-data mode (no D1 — local `pnpm dev`,
+// Playwright e2e). dashboard.tsx reads live sets from D1
+// (~/data/sets-admin's fetchSetsPageData) everywhere else — this is
+// deliberately NOT the build-time snapshot (@form-at/data/sets), which
+// admin never has a reason to read: it's Access-gated and never runs
+// offline, so a stale committed copy has no upside here, only the downside
+// this fixture replaces (see TECH_DEBT/PWA_PROGRESS on the snapshot's own
+// staleness history). Real ids/artists, not invented ones, and every id here
+// must have a matching SAMPLE_SET_STATS entry below — sample-stats.test.ts
+// asserts the two stay in sync.
+export const SAMPLE_SETS: Array<{ id: string; artist: string }> = [
+  { id: "set-002-til", artist: "t.i.l." },
+  { id: "set-002-hubey", artist: "hubey" },
+  { id: "set-002-brandon-lee-vear", artist: "Brandon Lee Vear" },
+  { id: "set-002-julz-lever", artist: "Julz Lever" },
+  { id: "set-003-unreal", artist: "Unreal" },
+  { id: "set-003-iona-violet", artist: "Iona Violet" },
+  { id: "set-003-julz-lever", artist: "Julz Lever" },
+  { id: "set-seafield-sound-2026-hubey", artist: "hubey" },
+  { id: "set-seafield-sound-2026-julz-lever", artist: "Julz Lever" },
+  { id: "set-seafield-sound-2026-til", artist: "t.i.l." },
+];
+
 // Substitutes for @form-at/data/set-stats's fetchSetStats (a shared,
 // apps/web-consumed function this fixture must not touch) when the
 // dashboard's per-set picker is in sample-data mode. Keyed by the real set
-// IDs from @form-at/data/sets so every picker button has fixture data.
+// IDs above so every picker button has fixture data.
 export const SAMPLE_SET_STATS: Record<string, SetStats> = {
   "set-002-til": {
     playCount: 12,
@@ -280,5 +303,67 @@ export const SAMPLE_SET_STATS: Record<string, SetStats> = {
     lastPlay: null,
     topCountries: ["gb"],
     weeklyPlays: [0, 0, 0, 0, 0, 1, 0, 2, 1],
+  },
+  "set-003-unreal": {
+    playCount: 13,
+    totalSeconds: 41600,
+    avgSeconds: 3200,
+    countryCount: 5,
+    firstPlay: null,
+    lastPlay: null,
+    topCountries: ["gb", "es", "de"],
+    weeklyPlays: [1, 2, 1, 3, 2, 2, 1, 1, 0],
+  },
+  "set-003-iona-violet": {
+    playCount: 8,
+    totalSeconds: 9840,
+    avgSeconds: 1230,
+    countryCount: 3,
+    firstPlay: null,
+    lastPlay: null,
+    topCountries: ["gb", "ie"],
+    weeklyPlays: [0, 1, 1, 2, 1, 1, 1, 1, 0],
+  },
+  "set-003-julz-lever": {
+    playCount: 19,
+    totalSeconds: 15960,
+    avgSeconds: 840,
+    countryCount: 4,
+    firstPlay: null,
+    lastPlay: null,
+    topCountries: ["gb", "nl"],
+    weeklyPlays: [2, 3, 2, 3, 3, 2, 2, 1, 1],
+  },
+  "set-seafield-sound-2026-hubey": {
+    playCount: 6,
+    totalSeconds: 4980,
+    avgSeconds: 830,
+    countryCount: 2,
+    firstPlay: null,
+    lastPlay: null,
+    topCountries: ["gb"],
+    weeklyPlays: [0, 0, 1, 1, 2, 1, 1, 0, 0],
+  },
+  "set-seafield-sound-2026-julz-lever": {
+    playCount: 9,
+    totalSeconds: 10530,
+    avgSeconds: 1170,
+    countryCount: 3,
+    firstPlay: null,
+    lastPlay: null,
+    topCountries: ["gb", "us"],
+    // Empty trend — same "real lifetime plays, none in the visible 60-day
+    // window" case set-002-brandon-lee-vear demonstrates above.
+    weeklyPlays: [],
+  },
+  "set-seafield-sound-2026-til": {
+    playCount: 5,
+    totalSeconds: 3550,
+    avgSeconds: 710,
+    countryCount: 2,
+    firstPlay: null,
+    lastPlay: null,
+    topCountries: ["gb"],
+    weeklyPlays: [0, 0, 0, 1, 1, 1, 1, 1, 0],
   },
 };

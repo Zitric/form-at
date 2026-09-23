@@ -85,6 +85,52 @@ jobs:
       - run: pnpm --filter @form-at/data test
       - run: pnpm -C apps/rum-archiver test:run
 
+  # ── Sets snapshot drift check ─────────────────────────────────────────────
+  # packages/data/src/sets.generated.ts is a MANUALLY-refreshed baseline, not
+  # something any deploy keeps current in git — see the `sets` export's own
+  # comment in packages/data/src/sets.ts for the full story (this file sat 2
+  # months and ~25 deploys behind live D1 with nothing catching it before
+  # this job existed). Regenerates a fresh copy the same way a real deploy
+  # would and diffs it against what's committed — read-only, no push, no
+  # write-scoped token; it just fails loudly instead of leaving drift silent.
+  sets-snapshot:
+    name: Sets snapshot freshness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Compare committed snapshot against live D1
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # A PR from a fork never receives repo secrets for a plain
+          # `pull_request` trigger (this workflow's trigger, not
+          # `pull_request_target`) — that's enforced by GitHub itself, not by
+          # anything in this file. Skip rather than fail: a fork PR can't
+          # reach D1 from here regardless, and that's not the drift this
+          # check exists to catch.
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "No CLOUDFLARE_API_TOKEN available (expected for a fork PR) — skipping."
+            exit 0
+          fi
+          cp packages/data/src/sets.generated.ts /tmp/sets.generated.committed.ts
+          pnpm -C apps/web generate-sets-snapshot
+          if ! diff -q /tmp/sets.generated.committed.ts packages/data/src/sets.generated.ts > /dev/null; then
+            echo "::error::packages/data/src/sets.generated.ts is stale — it no longer matches live D1."
+            echo "Run 'pnpm generate-sets-snapshot' locally, commit the result, and push again."
+            diff /tmp/sets.generated.committed.ts packages/data/src/sets.generated.ts || true
+            exit 1
+          fi
+          echo "Sets snapshot matches live D1."
+
   # ── Chromatic (Storybook visual regression) ──────────────────────────────
   chromatic:
     name: Chromatic

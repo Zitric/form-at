@@ -4011,6 +4011,178 @@ silently prevents `hasHydrated` from ever flipping, hiding every
 jsdom's in vitest — `tests/setup.ts` now installs a working in-memory
 Storage, which is what lets persist be tested at all.)
 
+### DJ/event foreign keys replace inferred matching and free-text location (2026-09-22)
+
+Two related display bugs: every set/event card hardcoded "Glasgow" (Seafield
+Sound was Edinburgh), and DJ pages derived their set list from
+`dj.setIds` — a hand-maintained array that had drifted to covering only each
+resident's Form:at 002 set, with guest DJs listing none at all.
+
+**Location, rejected shape: a `city` field on `sets`.** First proposal was a
+short `city` column on `sets`, separate from the existing free-text `venue`.
+Rejected on the evidence that motivated it: `set.venue` ("Find the red door,
+Glasgow") already disagreed with its own event's `venue` in `events.ts`
+("Southside, Glasgow") for the same Form:at 002 night — the same fact typed
+twice, independently, had already drifted. Adding `city` would have been a
+THIRD independently-typed place for the same fact. **Shipped instead:**
+`event_id` on `sets`, a real foreign key into `events.ts`'s `id`s. City,
+venue and date for display all resolve from the linked event
+(`getCityForSet`, `packages/data/src/events.ts`); divergence becomes
+impossible rather than just unlikely, because there's one place the fact
+lives. `event_id` is nullable — a set with no event (a future studio mix) is
+a real case, not a data gap, and every render site drops the location
+segment cleanly when it's absent.
+
+**DJ linking, rejected shape: normalize `artist` and match a DJ slug.**
+Concrete evidence against it, not just the hypothetical fragility: the
+existing `slugify()` (`apps/admin/app/utils/slugifySetId.ts`) turns
+`"t.i.l."` into `"t-i-l"`, not the real DJ id `"til"` — a naive
+`slugify(set.artist) === dj.id` match fails on this catalogue's own resident,
+today, not in some future edge case. **Shipped instead:** `djId` on `sets`,
+same shape as `event_id` — a dropdown pick at upload/edit time, never
+inferred.
+
+**`sets.venue` is now dead code, not a dropped column.** The field is
+removed from `MusicSet`, both admin forms, and the `/api/sets` validation —
+nothing reads or writes it going forward. The physical D1 column is left in
+place undropped: a `DROP COLUMN` carries its own small risk (D1's SQLite
+dialect has previously diverged from what a given SQLite version supports —
+see `schema.sql`'s `ADD COLUMN IF NOT EXISTS` note) for zero functional
+upside, since the historical text isn't read by anything either way.
+
+**Cross-app plumbing:** `djs.ts`/`events.ts` moved from `apps/web/app/data/`
+to `packages/data/src/` so `apps/admin`'s upload/edit forms — and its
+`/api/sets` validation — could read the same id lists apps/web does, without
+violating "apps never import each other." This is a location change only,
+not TECH_DEBT item 24's full migration: no D1 table, no admin CRUD route for
+DJs/events themselves. Item 24's actual debt (a new DJ or event still needs
+a code edit and a deploy) is unchanged — see that item's own updated note.
+
+**`/djs/$djId`'s set list now reads the live catalogue** (`fetchAllSetsForRoute`,
+filtered by `djId`) instead of the snapshot-only `getSet` — same class of fix
+as the delete/tombstone work: a set uploaded since the last deploy used to be
+invisible on its DJ's page until the next deploy regenerated the snapshot.
+
+**Correction (2026-09-23): `djId` shipped required, then had to be made
+optional.** The first pass validated `djId` as non-empty server-side and
+gated the admin forms' submit buttons on it, on the reasoning "every set has
+an artist." Caught in review: "every artist has a DJ page" is a different,
+false claim — Seafield Sound's Rushford, Dimebug and 3SR have no Form:at DJ
+profile. Requiring `djId` would have made uploading their sets impossible
+without first adding them to `djs.ts` and deploying, recreating exactly the
+deploy-to-upload coupling this feature exists to avoid. Fixed to match
+`eventId`'s existing shape: optional, validated against the known list only
+when present, and a set with no `djId` simply appears on no DJ page.
+
+**Noted but not built:** `/sets`'s section grouping (`groups[set.title]`)
+already happens to group by event today, because every set sharing an event
+also shares its title string — but that's incidental (a typo'd title on one
+set from the same event would silently split the group) and its ordering
+still depends on hand-nudged `created_at` timestamps to control which title
+group sorts where. Grouping by `event_id` and ordering by the linked event's
+`date` would remove both the incidental coupling and the `created_at`
+hand-editing, and falls out naturally now that `event_id` exists — left as a
+follow-up, not done here.
+
+### The sets snapshot was stale for two months, and nothing noticed (2026-09-23)
+
+While regenerating `packages/data/src/sets.generated.ts` for the dj_id/
+event_id migration above, its committed content turned out to still be the
+original 4 legacy sets — Seafield Sound and Form:at 003 (6 sets, uploaded
+across July–August) had never landed in it, despite `deploy.yml`'s `deploy`
+job running `generate-sets-snapshot` before every one of ~25 successful
+deploys since Aug 3. `git log --follow` on the file confirms it: exactly two
+commits, ever, both by hand, both from the file's original PR.
+
+**Root cause: the regeneration was real but ephemeral.** The `deploy` job
+runs the generator inside its own throwaway checkout to freshen the ONE
+build it's about to produce, then tears the runner down — nothing in the
+pipeline ever commits that regenerated file back to git. The deployed
+bundle (apps/web's SSR responses and the offline-first client bundle) has
+therefore always had current data; only the git-committed copy was stuck,
+and that copy is what `pnpm dev`, tsc, and every CI `static`/`unit`/`e2e`
+job actually read. Concretely: `sample-stats.test.ts`'s "has a fixture entry
+for every real set" passed for two months against a catalogue that hadn't
+been real since August, and — worse, still live at the time this was found —
+apps/admin's `SetsTab`/`dashboard.tsx` read this same stale snapshot
+directly (not live D1), so 6 of 10 real sets had **no button in the
+deployed dashboard's per-set picker at all**, not just outdated stats.
+
+**Fixed, three ways, decided together:**
+
+1. **Admin stopped reading the snapshot at all.** `SetsTab`/`dashboard.tsx`
+   now take a `sets` prop sourced from live D1 (`fetchSetsPageData`, the
+   same read `~/data/sets-admin.ts` already used for the sets-management
+   page), falling back to a new `SAMPLE_SETS` fixture only in sample-data
+   mode (no D1 — local dev, Playwright e2e). Admin is Access-gated and never
+   runs offline, so there was never a reason for it to depend on a
+   build-time copy — this closes that gap permanently regardless of
+   whichever freshness policy the public site's snapshot gets.
+   - Found in the same pass, NOT fixed (flagged for a separate decision):
+     `admin-stats.ts`'s `getSet()` lookups for the dashboard's `topSets`/
+     `clicks.perSet` labels still read the snapshot — a stale miss there
+     degrades to the raw set id and "unknown" artist rather than a live D1
+     read. Same bug class, narrower blast radius (a label, not a missing
+     control), left alone pending an explicit decision to touch it.
+   - Side effect: `SAMPLE_SETS` now has two sets both by "t.i.l." (002 and
+     Seafield), which the picker's artist-only button label can't tell
+     apart — `dashboard.spec.ts`'s e2e test had to target `.first()`. The
+     ambiguity is real and pre-existing (the picker has no set/date
+     disambiguation), just never surfaced before because the old 4-set
+     fixture only had one t.i.l. Not fixed — noted for whoever redesigns the
+     picker's labels.
+
+2. **Auto-commit from CI was considered and rejected.** The alternative —
+   have the `deploy` job push the regenerated file back to `main` — needs
+   `contents: write` added to that job (no branch protection exists on
+   `main` today to conflict with it, confirmed via the GitHub API), but a
+   commit pushed from inside a `push: branches: [main]`-triggered workflow
+   re-triggers that same workflow in full (`concurrency` only prevents
+   running in parallel, not from queuing a full re-run), and — the point
+   that actually decided it — `deploy` and `deploy-admin` run in parallel
+   with no dependency between them, so a same-run commit-back wouldn't even
+   reach `deploy-admin`'s already-in-flight checkout; admin would only pick
+   it up on whatever deploy happens next. More moving parts for a project
+   being handed off toward low maintenance, for a fix that's still only
+   partial.
+
+3. **The committed copy is now documented as a manually-refreshed
+   baseline, not an auto-synced one** — `packages/data/src/sets.ts`'s `sets`
+   export comment (previously "Only deploy.yml's deploy job regenerates it,"
+   true and exactly what let this go unnoticed) now says plainly what
+   depends on currency (`pnpm dev`, CI's `static`/`unit`/`e2e`, `getSet()`'s
+   admin-label lookups) and what doesn't (production). Ditto
+   `generate-sets-snapshot.ts`'s header. `apps/web/scripts/README.md` adds
+   the refresh command (`pnpm generate-sets-snapshot`, commit the result) as
+   an explicit step after any admin upload/delete. And since "remember to
+   run a command" is exactly the failure mode that produced two months of
+   silent drift, `ci.yml` gained a `sets-snapshot` job: it re-runs the real
+   generator against live D1 and diffs the result against what's committed,
+   failing the build on any mismatch. Read-only, no new secret — reuses
+   `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID`, already present at repo
+   scope for `deploy.yml`. Skips (doesn't fail) when those aren't present,
+   which is expected for a fork PR under this workflow's plain
+   `pull_request` trigger — GitHub withholds repo secrets from fork PRs
+   itself, not something this file's configuration controls one way or the
+   other. This makes drift LOUD (a failing CI job) rather than merge-
+   blocking: `main` has no required-status-checks configured, so this is
+   currently advisory, not a hard gate, unless that's set up separately in
+   the repo's branch protection settings.
+
+**Open question, deliberately not answered by any of the above:** refreshing
+the snapshot fixes the SYMPTOM that e2e/dev only ever saw 4 sets instead of
+the real catalogue's actual size — going forward they'll see however many
+sets really exist, since the fixture they read is kept current. It does NOT
+mean e2e has deliberate coverage of the shapes this session introduced (a
+set with no `djId`, a set with no `eventId`, an event in a second city,
+the artist-label collision found above) — nothing rewrote existing tests to
+assert on those specifically; the suite just happens to run against more
+realistic data now. Coverage of those specific edge cases, if wanted, needs
+tests written for them — either deliberately, or via a bigger structural
+change (an author-controlled fixture catalogue for e2e, independent of
+whatever the real one happens to contain) — not something snapshot freshness
+alone provides.
+
 ---
 
 ## How to resume

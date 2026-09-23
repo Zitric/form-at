@@ -27,8 +27,9 @@ test.describe("djs page", () => {
     // Click-through from the list, not a direct URL (no existing test in
     // this suite navigates straight to a dynamic detail route — see
     // events.spec.ts's equivalent comment). Targets Julz Lever by name
-    // specifically: not every DJ has `setIds`, and only one with sets
-    // actually renders the audio_logs section this test needs.
+    // specifically: not every DJ has a set whose `djId` resolves to them,
+    // and only one with sets actually renders the audio_logs section this
+    // test needs.
     await gotoAndHydrate(page, "/djs");
     await page.getByRole("button", { name: /julz lever/i }).click();
     await expect(page.getByRole("heading", { name: /audio_logs/i })).toBeVisible();

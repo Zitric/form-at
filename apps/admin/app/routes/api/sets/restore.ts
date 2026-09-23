@@ -26,6 +26,8 @@ type DeletedSetLogRow = {
   title: string;
   artist: string;
   date: string;
+  dj_id: string | null;
+  event_id: string | null;
   venue: string | null;
   description: string | null;
   duration: string | null;
@@ -62,13 +64,15 @@ export async function restoreSetFromLog(db: D1Database, logId: number): Promise<
 
   const insertSet = db
     .prepare(
-      "INSERT INTO sets (id, title, artist, date, venue, description, duration, src, artwork, artwork_original_url, peaks, size_bytes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO sets (id, title, artist, date, dj_id, event_id, venue, description, duration, src, artwork, artwork_original_url, peaks, size_bytes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(
       row.set_id,
       row.title,
       row.artist,
       row.date,
+      row.dj_id,
+      row.event_id,
       row.venue,
       row.description,
       row.duration,

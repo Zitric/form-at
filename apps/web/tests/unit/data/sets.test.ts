@@ -1,5 +1,5 @@
 import { sets as staticSnapshot } from "@form-at/data/sets";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   getAllSetsLive,
   getAllSetsWithFallback,
@@ -187,17 +187,29 @@ describe("getSetByIdWithFallback", () => {
 });
 
 // `isKnownSetId` is the anti-spam existence check used by
-// `routes/api/event.ts`/`.../signal.ts`. Deliberately the OPPOSITE precedence
-// from `getSetByIdWithFallback` above (snapshot-first, D1 only on a miss) —
-// see the comment on `isKnownSetId` in ~/data/sets.ts for why that's correct
-// here even though the read path is D1-first.
+// `routes/api/event.ts`/`.../signal.ts`, now a thin wrapper around
+// `resolveKnownSet` (see ~/data/sets.ts). Deliberately the OPPOSITE
+// precedence from `getSetByIdWithFallback` above (snapshot-first, D1 only on
+// a miss for the EXISTENCE query) — see that function's comment for why
+// that's correct here even though the read path is D1-first. The tombstone
+// check (`fetchDeletedSetIds`) always runs when a D1 binding exists, though,
+// snapshot hit or miss — that's the fix for a deleted set's snapshot copy
+// still reading as "known" until the next deploy regenerates it.
 describe("isKnownSetId", () => {
-  it("resolves a snapshot id as true with zero D1 calls", async () => {
+  it("resolves a snapshot id as true even when the tombstone check errors (fails open, not closed, on that read)", async () => {
     const staticSet = staticSnapshot[0];
     if (!staticSet) throw new Error("snapshot is empty — test fixture assumption broken");
     const db = createFakeD1([{ match: /./, throws: true }]);
 
     expect(await isKnownSetId(db, staticSet.id)).toBe(true);
+  });
+
+  it("rejects a snapshot id that's been tombstoned (deleted, not since restored)", async () => {
+    const staticSet = staticSnapshot[0];
+    if (!staticSet) throw new Error("snapshot is empty — test fixture assumption broken");
+    const db = createFakeD1([{ match: /admin_deleted_sets/, all: [{ set_id: staticSet.id }] }]);
+
+    expect(await isKnownSetId(db, staticSet.id)).toBe(false);
   });
 
   it("falls back to D1 on a snapshot miss and resolves true on a D1 hit", async () => {
@@ -222,13 +234,14 @@ describe("isKnownSetId", () => {
     expect(await isKnownSetId(undefined, "not-a-real-set")).toBe(false);
   });
 
-  it("never calls db.prepare at all on a snapshot hit", async () => {
+  it("skips the sets-existence query on a snapshot hit, even though it still pays the tombstone check", async () => {
     const staticSet = staticSnapshot[0];
     if (!staticSet) throw new Error("snapshot is empty — test fixture assumption broken");
-    const prepare = vi.fn();
-    const db = { prepare } as unknown as D1Database;
+    // No route for `SELECT duration FROM sets WHERE id = ?` at all — if
+    // resolveKnownSet ever reached that query on a snapshot hit, this fake
+    // would throw "No fake D1 route matched SQL" and fail the test.
+    const db = createFakeD1([{ match: /admin_deleted_sets/, all: [] }]);
 
     expect(await isKnownSetId(db, staticSet.id)).toBe(true);
-    expect(prepare).not.toHaveBeenCalled();
   });
 });

@@ -61,7 +61,14 @@ test.describe("admin dashboard", () => {
     // hubey) — picking it proves the click actually changed the selection,
     // not just that something was already selected. Buttons render as
     // "[ t.i.l. ]" (Button wraps children in BracketLabel), hence the regex.
-    await page.getByRole("button", { name: /t\.i\.l\./ }).click();
+    // `.first()`: SAMPLE_SETS (~/data/sample-stats.ts) mirrors the real
+    // catalogue, which now has two t.i.l. sets (002 and Seafield Sound) —
+    // the picker labels buttons by artist alone with no set/date
+    // disambiguation, so either one proves the same thing this test checks.
+    await page
+      .getByRole("button", { name: /t\.i\.l\./ })
+      .first()
+      .click();
     await expect(page.getByText(/avg_engaged_listening is cumulative/i)).toBeVisible();
 
     await page.getByRole("tab", { name: /growth/i }).click();

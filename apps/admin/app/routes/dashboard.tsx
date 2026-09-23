@@ -1,5 +1,4 @@
 import { type SetStats, fetchSetStats } from "@form-at/data/set-stats";
-import { sets } from "@form-at/data/sets";
 import { PageTitle } from "@form-at/ui";
 // Internal read-only analytics dashboard. NO IN-APP AUTHENTICATION HERE —
 // this is deliberate, not an oversight. Access is restricted at the edge by
@@ -27,7 +26,8 @@ import {
   fetchRumVisitStats,
 } from "~/data/admin-stats";
 import { fetchRumHistory } from "~/data/rum-history";
-import { SAMPLE_SET_STATS } from "~/data/sample-stats";
+import { SAMPLE_SETS, SAMPLE_SET_STATS } from "~/data/sample-stats";
+import { fetchSetsPageData } from "~/data/sets-admin";
 
 export const Route = createFileRoute("/dashboard")({
   // `stats` is awaited directly, not deferred — it IS the entire page, so
@@ -42,6 +42,14 @@ export const Route = createFileRoute("/dashboard")({
   // would reject the loader and take out the page it's meant to stay out of.
   loader: async () => ({
     stats: await fetchAdminDashboardStats(),
+    // Awaited directly, not deferred — SetsTab's picker needs this list to
+    // render its buttons at all, not as a supplementary card, so there's no
+    // meaningful "show the tab before this resolves" state to defer into.
+    // Live D1 (same read the admin sets-management page uses), never the
+    // build-time snapshot: admin is Access-gated and never runs offline, so
+    // a copy that can lag D1 by however long since it was last refreshed has
+    // no upside here. Degrades to empty on no D1 binding, same as `stats`.
+    setsPageData: await fetchSetsPageData(),
     edgeTraffic: defer(fetchEdgeTrafficStats().catch(() => null)),
     // Independent of edgeTraffic: different scope, different token permission,
     // so one failing must not blank the other.
@@ -59,11 +67,17 @@ export const Route = createFileRoute("/dashboard")({
 // lives in GrowthTab/UsageTab/SetsTab (~/components/) — this file exceeded
 // CLAUDE.md's ~150-line extraction threshold once, splitting it out.
 function AdminDashboard() {
-  const { stats, edgeTraffic, rumVisits, rumHistory } = Route.useLoaderData();
+  const { stats, setsPageData, edgeTraffic, rumVisits, rumHistory } = Route.useLoaderData();
   // `usage` is the landing tab — the headline totals answer "how is it doing?"
   // in one glance, which is what the dashboard is opened for. Growth's funnels
   // and Sets' per-set detail are follow-up questions.
   const [activeTab, setActiveTab] = useState<DashboardTabId>("usage");
+
+  // Sample-data mode substitutes the fixture list for the same reason
+  // selectedSetStats does below: fetchSetsPageData returns an empty list
+  // with no D1 binding, and the picker needs SOMETHING to show in that
+  // mode (local dev, Playwright e2e) rather than rendering no buttons at all.
+  const pickerSets = stats?.isSampleData ? SAMPLE_SETS : setsPageData.sets;
 
   // Reuses fetchSetStats from @form-at/data (the same createServerFn
   // /sets/$setId calls in apps/web) rather than duplicating its query shape.
@@ -75,7 +89,9 @@ function AdminDashboard() {
   // activeTab === "sets", so owning it there would unmount it on a tab switch,
   // losing the selection and re-firing fetchSetStats on return.
   const topSetId = stats?.plays.topSets[0]?.setId;
-  const [selectedSetId, setSelectedSetId] = useState<string | undefined>(topSetId ?? sets[0]?.id);
+  const [selectedSetId, setSelectedSetId] = useState<string | undefined>(
+    topSetId ?? pickerSets[0]?.id,
+  );
   const [selectedSetStats, setSelectedSetStats] = useState<SetStats | null>(null);
   const [selectedSetLoading, setSelectedSetLoading] = useState(false);
 
@@ -140,6 +156,7 @@ function AdminDashboard() {
           {activeTab === "sets" && (
             <SetsTab
               stats={stats}
+              sets={pickerSets}
               selectedSetId={selectedSetId}
               selectedSetStats={selectedSetStats}
               selectedSetLoading={selectedSetLoading}

@@ -1,8 +1,8 @@
+import { events } from "@form-at/data/events";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AddToCalendarButton } from "~/components/AddToCalendarButton";
-import { events } from "~/data/events";
 
 // calendar_add_click: all
 // three destinations must fire the same event, carrying no set_id — same

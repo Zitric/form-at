@@ -981,14 +981,21 @@ exist and the `/sets` page loads the fast `<picture>` path instead of the
 
 Sets have a D1 table, a committed snapshot (`sets.generated.ts`), live-over-
 snapshot merge, and a self-serve admin upload form. DJs
-(`apps/web/app/data/djs.ts`) and events (`apps/web/app/data/events.ts`) are plain
-TypeScript arrays edited by hand and shipped by deploy.
+(`packages/data/src/djs.ts`) and events (`packages/data/src/events.ts`) are
+plain TypeScript arrays edited by hand and shipped by deploy — adding a new
+DJ or event still needs a code edit and a deploy, exactly as before.
 
-**Why it's real debt and not just asymmetry:** the seam is visible in the
-product. `apps/admin/app/components/UploadSetForm.tsx:268` instructs the operator
-to go and hand-edit `apps/web/app/data/djs.ts` and redeploy. An admin UI telling
-you to edit a source file is the clearest possible statement that a migration
-stopped halfway.
+**2026-09-22 update:** both moved from `apps/web/app/data/` into
+`packages/data/src/` — a location change only, made so `apps/admin` could read
+them too (a set's `djId`/`eventId`, packages/data/src/sets.ts, are foreign
+keys into these arrays' `id`s, chosen from a dropdown in
+UploadSetForm/EditSetForm rather than inferred from free-text `artist`/`venue`
+— see PWA_PROGRESS.md's entry on this). That closes the specific instance of
+"seam visible in the product" this item originally cited (UploadSetForm no
+longer tells the operator to go hand-edit `djs.ts` for a new upload's DJ
+link) but is NOT the migration below — no D1 table, no admin CRUD route, no
+photo upload change. The debt itself (a new DJ/event profile needs a deploy)
+is unchanged.
 
 **Cost of finishing it** (this is why it's deferred, not done): a `djs` table
 plus migration; a committed snapshot and generator, because the app is
@@ -1132,6 +1139,23 @@ Default off, activated only by that exact URL — never a clickable control
 anywhere in the public UI — with a persistent visible banner while active
 (`DevModeBanner.tsx`) so it can't be forgotten and silently drop a real
 visitor's play instead.
+
+**c. The 2h ceiling from (a) was itself the same kind of hardcoded assumption,
+and it broke the same way.** Confirmed against real Form:at 003 catalogue
+data: `set-003-unreal` runs 8451s (2h20m51s) and `set-002-brandon-lee-vear`
+runs 7315s — both past the 7200s (2h) ceiling `sendPlay` and `signal.ts`'s
+`validate()` shared. The client's own per-track cap can't rescue a listen
+when the ceiling being capped *to* is smaller than the track itself, and
+`validate()` rejected (didn't clamp) anything over it while still returning
+204 — so every uninterrupted full listen of either set was silently
+discarded: the most engaged listeners, specifically, and invisibly. **Fixed:**
+the ceiling `validate()` applies is now derived from the reported set's own
+duration (`maxListenedSecondsForDuration`, `~/utils/playTracking.ts`) plus a
+60s grace margin, so it scales with any future set automatically instead of
+needing to be re-chosen against "today's longest" — the same fix shape as (a)
+itself should have been. `MAX_LISTENED_SECONDS` is now only the fallback for
+when a duration can't be resolved at all (widened back to 4h, since it's no
+longer the primary defense).
 
 Both parts confirmed against real production D1 data, not assumed.
 

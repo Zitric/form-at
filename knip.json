@@ -3,7 +3,7 @@
   "workspaces": {
     ".": {
       "entry": ["turbo.json", "scripts/*.{ts,mjs,js}"],
-      "ignoreBinaries": ["vite", "playwright", "wrangler", "ffmpeg"]
+      "ignoreBinaries": ["vite", "playwright", "wrangler", "ffmpeg", "generate-sets-snapshot"]
     },
     "apps/web": {
       "entry": [

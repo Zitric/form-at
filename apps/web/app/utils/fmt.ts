@@ -17,6 +17,24 @@ export function fmtDuration(s: number): string {
   return rm > 0 ? `${h}h ${rm}m` : `${h}h`;
 }
 
+// Inverse of the `MusicSet.duration` string ("1:39:30" or "45:18") — NOT the
+// inverse of `fmtDuration` above, which formats a coarser, different shape.
+// Returns undefined for anything that isn't exactly 2 or 3 colon-separated
+// numeric parts, so a missing or malformed duration reads as "unknown" to
+// callers rather than as `0` (a caller treating 0 as a real duration would
+// reject every real listen against it — see playTracking.ts's use of this).
+export function parseDuration(s: string): number | undefined {
+  const parts = s.split(":").map(Number);
+  if (parts.length !== 2 && parts.length !== 3) return undefined;
+  if (parts.some((n) => !Number.isFinite(n))) return undefined;
+  if (parts.length === 3) {
+    const [h, m, sec] = parts as [number, number, number];
+    return h * 3600 + m * 60 + sec;
+  }
+  const [m, sec] = parts as [number, number];
+  return m * 60 + sec;
+}
+
 export function fmtDate(ms: number): string {
   return new Date(ms).toISOString().split("T")[0] ?? "";
 }

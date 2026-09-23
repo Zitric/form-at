@@ -1,5 +1,6 @@
 import { Button, Label, PageTitle, PauseIcon, PlayIcon, TerminalRow } from "@form-at/ui";
 
+import { getCityForSet } from "@form-at/data/events";
 import { type SetStats, fetchSetStats } from "@form-at/data/set-stats";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -39,9 +40,12 @@ export const Route = createFileRoute("/sets/$setId")({
   head: ({ loaderData }) => {
     const set = loaderData?.set;
     if (!set) return {};
+    const city = getCityForSet(set);
     return pageHead({
       title: `${set.artist} — ${set.title} · ${set.date}`,
-      description: set.description ?? `Recorded set from ${set.artist} at ${set.title}, Glasgow.`,
+      description:
+        set.description ??
+        `Recorded set from ${set.artist} at ${set.title}${city ? `, ${city}` : ""}.`,
       path: `/sets/${set.id}`,
       // Per-set banner generated at build by scripts/generate-og.ts (artwork
       // + artist + title composition). Falls back to /og-image.png if missing.

@@ -1,12 +1,12 @@
 import { PageTitle, TerminalRow } from "@form-at/ui";
 
+import { getDJ } from "@form-at/data/djs";
+import { getEvent } from "@form-at/data/events";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { AddToCalendarButton } from "~/components/AddToCalendarButton";
 import { Image } from "~/components/Image";
 import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
-import { getDJ } from "~/data/djs";
-import { getEvent } from "~/data/events";
 import { pageHead } from "~/utils/head";
 import { eventLd } from "~/utils/jsonld";
 

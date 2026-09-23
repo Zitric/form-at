@@ -1,4 +1,5 @@
-import { getSet } from "@form-at/data/sets";
+import { getDJ } from "@form-at/data/djs";
+import { events } from "@form-at/data/events";
 import { BracketLabel, Card, PageTitle, TerminalRow } from "@form-at/ui";
 import { Link, createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { BrandTitle } from "~/components/BrandTitle";
@@ -8,19 +9,27 @@ import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
 import { SetCard } from "~/components/SetCard";
 import { SocialLink } from "~/components/SocialLink";
-import { getDJ } from "~/data/djs";
-import { events } from "~/data/events";
+import { fetchAllSetsForRoute } from "~/data/setsForRoute";
 import { useTypedOnce } from "~/hooks/useTypedOnce";
 import { pageHead } from "~/utils/head";
 import { djLd } from "~/utils/jsonld";
 import { SOCIALS, SOCIAL_ORDER, type SocialKey } from "~/utils/socials";
 
 export const Route = createFileRoute("/djs/$djId")({
-  loader: ({ params }) => {
+  // Async + fetchAllSetsForRoute (the same merged live-D1 + snapshot read
+  // /sets/index.tsx uses), not `getSet` against the bare snapshot — a set
+  // uploaded since the last deploy used to be invisible on its DJ's page
+  // until the next deploy regenerated the snapshot. Filters by `djId`, a
+  // real foreign key (see MusicSet.djId's comment in packages/data/src/sets.ts)
+  // rather than `dj.setIds`, a hand-maintained array that had drifted to
+  // covering only each resident's Form:at 002 set and nothing for guests at
+  // all.
+  loader: async ({ params }) => {
     const dj = getDJ(params.djId);
     if (!dj) throw notFound();
     const djEvents = events.filter((e) => e.lineupIds.includes(params.djId));
-    const sets = (dj.setIds ?? []).map((id) => getSet(id)).filter(Boolean);
+    const allSets = await fetchAllSetsForRoute();
+    const sets = allSets.filter((s) => s.djId === params.djId);
     return { dj, djEvents, sets };
   },
   head: ({ loaderData }) => {
@@ -105,14 +114,11 @@ function DJDetail() {
           <section className="mb-12">
             <PageTitle className="mb-4 text-grey tracking-widest">audio_logs</PageTitle>
             <ul className="space-y-px">
-              {sets.map((set, index) => {
-                if (!set) return null;
-                return (
-                  <li key={set.id}>
-                    <SetCard set={set} index={index} />
-                  </li>
-                );
-              })}
+              {sets.map((set, index) => (
+                <li key={set.id}>
+                  <SetCard set={set} index={index} />
+                </li>
+              ))}
             </ul>
           </section>
         )}
@@ -131,7 +137,7 @@ function DJDetail() {
                     }
                   >
                     <p className="text-sm sm:text-base tracking-tight truncate">
-                      {event.title} · {event.date} · Glasgow
+                      {event.title} · {event.date} · {event.city}
                     </p>
                   </Card>
                 </li>

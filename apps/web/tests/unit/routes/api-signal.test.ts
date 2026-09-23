@@ -1,15 +1,24 @@
 import { sets } from "@form-at/data/sets";
 import { describe, expect, it, vi } from "vitest";
 import { validate } from "~/routes/api/signal";
+import { MAX_LISTENED_SECONDS, maxListenedSecondsForDuration } from "~/utils/playTracking";
 
 // Precedence coverage for this endpoint's `validate`, matching
-// api-event.test.ts's. `validate` is `async` — set_id existence goes through
-// `isKnownSetId`, snapshot-first then D1-fallback-on-miss. `undefined` here
-// means "no D1 binding at all" (matches local `vite dev`), same convention
-// as api-event.test.ts.
+// api-event.test.ts's. `validate` is `async` — set_id existence (and
+// duration, for the per-track ceiling below) goes through
+// `resolveKnownSet`, snapshot-first then D1-fallback-on-miss. `undefined`
+// here means "no D1 binding at all" (matches local `vite dev`), same
+// convention as api-event.test.ts.
 
-const realSetId = sets[0]?.id;
-if (!realSetId) throw new Error("test needs at least one set in the catalogue");
+const realSet = sets[0];
+if (!realSet) throw new Error("test needs at least one set in the catalogue");
+const realSetId = realSet.id;
+if (!realSet.duration) throw new Error("test needs sets[0] to have a duration");
+// Derived from the real fixture via the actual function under test, not
+// hardcoded — so a future change to sets[0]'s duration or to the grace
+// margin fails this test loudly instead of silently testing the wrong
+// ceiling.
+const realSetCeiling = maxListenedSecondsForDuration(realSet.duration);
 
 const validPayload = {
   setId: realSetId,
@@ -76,15 +85,55 @@ describe("validate (api/signal)", () => {
     expect(await validate({ ...validPayload, listenedSeconds: 2 }, undefined)).toBeNull();
   });
 
-  it("rejects listenedSeconds above the 2h maximum (MAX_LISTENED_SECONDS)", async () => {
+  it("rejects listenedSeconds above the reported set's own duration-derived ceiling", async () => {
     expect(
-      await validate({ ...validPayload, listenedSeconds: 2 * 60 * 60 + 1 }, undefined),
+      await validate({ ...validPayload, listenedSeconds: realSetCeiling + 1 }, undefined),
     ).toBeNull();
   });
 
-  it("accepts listenedSeconds right at the 2h maximum", async () => {
-    const result = await validate({ ...validPayload, listenedSeconds: 2 * 60 * 60 }, undefined);
-    expect(result?.listenedSeconds).toBe(2 * 60 * 60);
+  it("accepts listenedSeconds right at the set's own duration-derived ceiling", async () => {
+    const result = await validate({ ...validPayload, listenedSeconds: realSetCeiling }, undefined);
+    expect(result?.listenedSeconds).toBe(realSetCeiling);
+  });
+
+  it("accepts a full uninterrupted listen of a set longer than the old fixed 2h ceiling (the Unreal bug)", async () => {
+    const longSet = { duration: "2:20:51" }; // 8451s — set-003-unreal's real duration
+    const db = {
+      prepare: () => ({ bind: () => ({ first: async () => ({ duration: longSet.duration }) }) }),
+    } as unknown as D1Database;
+
+    const result = await validate(
+      { ...validPayload, setId: "uploaded-since-last-deploy", listenedSeconds: 8451 },
+      db,
+    );
+
+    expect(result?.listenedSeconds).toBe(8451);
+  });
+
+  it("falls back to MAX_LISTENED_SECONDS when a known set's duration can't be resolved", async () => {
+    const db = {
+      prepare: () => ({ bind: () => ({ first: async () => ({ duration: null }) }) }),
+    } as unknown as D1Database;
+
+    const atFallback = await validate(
+      {
+        ...validPayload,
+        setId: "uploaded-since-last-deploy",
+        listenedSeconds: MAX_LISTENED_SECONDS,
+      },
+      db,
+    );
+    expect(atFallback?.listenedSeconds).toBe(MAX_LISTENED_SECONDS);
+
+    const overFallback = await validate(
+      {
+        ...validPayload,
+        setId: "uploaded-since-last-deploy",
+        listenedSeconds: MAX_LISTENED_SECONDS + 1,
+      },
+      db,
+    );
+    expect(overFallback).toBeNull();
   });
 
   it("treats a missing/non-boolean isOffline as null (pre-2026-07-08 rows / rollout window)", async () => {
@@ -121,10 +170,12 @@ describe("validate (api/signal)", () => {
     expect(result?.sessionId).toBe("abc-123");
   });
 
-  // Validation precedence: snapshot first — free, covers every
-  // set that existed at last deploy — D1 only on a miss. Same coverage as
-  // api-event.test.ts, since both endpoints share `isKnownSetId`.
-  it("snapshot-hit setId never touches D1", async () => {
+  // Validation precedence: snapshot first for the existence/duration
+  // query — D1 only on a miss. Same coverage as api-event.test.ts's
+  // isKnownSetId tests, since both endpoints' existence checks share
+  // `resolveKnownSet` (signal.ts uses it directly for the duration too;
+  // event.ts goes through the `isKnownSetId` wrapper).
+  it("snapshot-hit setId never queries the sets table for existence/duration", async () => {
     const first = vi.fn();
     const fakeDb = { prepare: () => ({ bind: () => ({ first }) }) } as unknown as D1Database;
 

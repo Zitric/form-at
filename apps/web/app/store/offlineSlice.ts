@@ -1,6 +1,6 @@
+import { getDJ } from "@form-at/data/djs";
 import type { MusicSet } from "@form-at/data/sets";
 import type { StateCreator } from "zustand";
-import { djs } from "~/data/djs";
 import {
   type OfflineAudioEntry,
   deleteOfflineSetEntries,
@@ -154,9 +154,10 @@ async function streamWithProgress(
 // SWR-caches the photo anyway, but a direct-to-offline first visit finds no
 // entry and renders a broken image.
 //
-// Set-to-DJ resolution via `dj.setIds`. A set wired into no DJ resolves none
-// and skips the photo warm — graceful, but flagged in dev so a data-authoring
-// gap stays visible.
+// Set-to-DJ resolution via `musicSet.djId` (packages/data/src/sets.ts) — a
+// real foreign key, not a hand-maintained `dj.setIds` search. A set with no
+// djId, or one that doesn't resolve to a real DJ, skips the photo warm —
+// graceful, but flagged in dev so a data-authoring gap stays visible.
 //
 // Best-effort: errors swallowed per-URL so one 404 can't fail the batch (the
 // call site also catches). TECH_DEBT 16 covers orphan-on-removal.
@@ -164,10 +165,10 @@ async function streamWithProgress(
 // Exported for unit tests — the DJ-photo-warmed-with-set invariant regresses
 // invisibly without a test keeping the two coupled.
 export async function warmSetVisuals(musicSet: MusicSet): Promise<void> {
-  const dj = djs.find((d) => d.setIds?.includes(musicSet.id));
+  const dj = musicSet.djId ? getDJ(musicSet.djId) : undefined;
   if (!dj && process.env.NODE_ENV === "development") {
     console.warn(
-      `[offline] warmSetVisuals: no DJ resolves to set '${musicSet.id}' — the artist's /djs/… page won't be warmed for offline. Wire it into a dj.setIds in data/djs.ts.`,
+      `[offline] warmSetVisuals: no DJ resolves to set '${musicSet.id}' — the artist's /djs/… page won't be warmed for offline. Set its dj_id via the admin panel.`,
     );
   }
 

@@ -31,3 +31,21 @@ export function fmtSetDuration(totalSeconds: number): string {
   if (hours > 0) return `${hours}:${min.toString().padStart(2, "0")}:${secStr}`;
   return `${min}:${secStr}`;
 }
+
+// Inverse of fmtSetDuration above — UploadSetForm's duration-mismatch guard
+// needs to compare what an admin typed against the decoded audio in the same
+// units. Returns undefined for anything that isn't exactly 2 or 3
+// colon-separated numeric parts, so a malformed string reads as "can't
+// compare" rather than as `0` (which would read as a huge, false mismatch
+// against any real duration).
+export function parseSetDuration(s: string): number | undefined {
+  const parts = s.split(":").map(Number);
+  if (parts.length !== 2 && parts.length !== 3) return undefined;
+  if (parts.some((n) => !Number.isFinite(n))) return undefined;
+  if (parts.length === 3) {
+    const [h, m, sec] = parts as [number, number, number];
+    return h * 3600 + m * 60 + sec;
+  }
+  const [m, sec] = parts as [number, number];
+  return m * 60 + sec;
+}

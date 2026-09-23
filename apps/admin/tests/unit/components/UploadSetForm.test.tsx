@@ -48,6 +48,7 @@ async function fillAndSelectFiles() {
   await user.type(screen.getByLabelText("title"), "Form:at 003");
   await user.type(screen.getByLabelText("artist"), "New Artist");
   fireEvent.change(screen.getByLabelText("date"), { target: { value: "2026-09-01" } });
+  await user.selectOptions(screen.getByLabelText(/^dj/i), "til");
 
   await user.upload(
     screen.getByLabelText(/audio \(mp3\)/i),
@@ -159,5 +160,68 @@ describe("UploadSetForm — submit sequence", () => {
 
     await waitFor(() => expect(screen.getByText(/couldn't be found on R2/i)).toBeInTheDocument());
     expect(FakeXHR.instances).toHaveLength(3);
+  });
+});
+
+// TECH_DEBT.md item 28c: a typed duration shorter than the real audio makes
+// every full listen of that set look like it exceeds
+// maxListenedSecondsForDuration (apps/web `~/utils/playTracking.ts`) and get
+// silently rejected. readAudioDuration is mocked to 2718s ("45:18") above —
+// fillAndSelectFiles's auto-fill already exercises the matching case.
+describe("UploadSetForm — duration mismatch guard", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("disables upload and shows an error when the typed duration doesn't match the decoded audio", async () => {
+    const user = await fillAndSelectFiles();
+
+    await user.clear(screen.getByLabelText("duration"));
+    await user.type(screen.getByLabelText("duration"), "10:00");
+
+    expect(screen.getByText("upload")).toBeDisabled();
+    expect(screen.getByText(/doesn't match the audio file's real length/i)).toBeInTheDocument();
+  });
+
+  it("re-enables upload once the typed duration is corrected back within tolerance", async () => {
+    const user = await fillAndSelectFiles();
+
+    await user.clear(screen.getByLabelText("duration"));
+    await user.type(screen.getByLabelText("duration"), "10:00");
+    expect(screen.getByText("upload")).toBeDisabled();
+
+    await user.clear(screen.getByLabelText("duration"));
+    await user.type(screen.getByLabelText("duration"), "45:18");
+
+    await waitFor(() => expect(screen.getByText("upload")).not.toBeDisabled());
+  });
+});
+
+// A set can be uploaded for an artist with no Form:at DJ profile yet (a
+// Seafield Sound guest, say) — requiring djId would make that upload
+// impossible without first adding them to djs.ts and deploying, exactly the
+// deploy-to-upload coupling this feature exists to avoid.
+describe("UploadSetForm — dj is optional", () => {
+  it("enables upload with no dj selected at all", async () => {
+    const user = userEvent.setup();
+    render(<UploadSetForm onCreated={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("title"), "Seafield Sound 2026");
+    await user.type(screen.getByLabelText("artist"), "Rushford");
+    fireEvent.change(screen.getByLabelText("date"), { target: { value: "2026-07-24" } });
+    await user.upload(
+      screen.getByLabelText(/audio \(mp3\)/i),
+      new File(["a"], "set.mp3", { type: "audio/mpeg" }),
+    );
+    await user.upload(
+      screen.getByLabelText(/artwork \(jpg\/png\)/i),
+      new File(["b"], "artwork.jpg", { type: "image/jpeg" }),
+    );
+    await user.upload(
+      screen.getByLabelText(/peaks \(json\)/i),
+      new File(["c"], "peaks.json", { type: "application/json" }),
+    );
+
+    await waitFor(() => expect(screen.getByText("upload")).not.toBeDisabled());
   });
 });

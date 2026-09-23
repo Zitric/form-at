@@ -1,7 +1,7 @@
 import { BracketLabel, Button, Modal, TerminalRow } from "@form-at/ui";
 
+import type { Event } from "@form-at/data/events";
 import { useState } from "react";
-import type { Event } from "~/data/events";
 import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { isAndroid } from "~/utils/deeplink";
 import { buildGoogleCalendarTargetUrl, buildIcs, buildOutlookCalendarTargetUrl } from "~/utils/ics";
