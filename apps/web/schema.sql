@@ -116,9 +116,10 @@ CREATE INDEX IF NOT EXISTS idx_events_type_created_at ON events (event_type, cre
 -- Separate single-column index for "everything in a date range regardless
 -- of type" queries (mirrors `idx_plays_started_at`'s role for `plays`).
 CREATE INDEX IF NOT EXISTS idx_events_created_at ON events (created_at);
--- No `set_id` index: only 2 of the 6 current event_types carry one, and
--- there's no known query needing "all save_clicks for set X" yet. Add one
--- if/when that report becomes real — premature otherwise.
+-- No `set_id` index: only set-level actions carry one (the allowlist in
+-- `app/utils/trackableEvents.ts` says which), and there's no known query
+-- needing "all save_clicks for set X" yet. Add one if/when that report
+-- becomes real — premature otherwise.
 
 -- Useful queries:
 --

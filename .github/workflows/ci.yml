@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -242,4 +245,50 @@ jobs:
           path: |
             apps/web/playwright-report/
             apps/admin/playwright-report/
+          retention-days: 7
+
+  # ── Story video recording (macOS) ──────────────────────────────────────────
+  # The Linux Chromium in the e2e job above can't record H.264 + AAC MP4 (no
+  # encoders), so the one test that records runs here on macOS, where
+  # Chromium uses the system encoders. The Linux jobs skip it by name; this
+  # job fails, rather than skips, if the codecs ever go missing here too.
+  # Free on GitHub-hosted runners because the repo is public. Not in
+  # deploy.yml: it guards merges, not deploys.
+  e2e-story-video:
+    name: E2E story video (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v5
+        with:
+          # macOS keeps Playwright's browsers here, not ~/.cache. Own key, per
+          # the rule on the e2e job's cache above: no other job may share it.
+          path: ~/Library/Caches/ms-playwright
+          key: pw-${{ runner.os }}-chromium-story-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Playwright Chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 15
+        run: pnpm -C apps/web exec playwright install chromium
+
+      - name: Run story video recording test
+        run: pnpm -C apps/web test:e2e tests/e2e/story-video.spec.ts --project=chromium
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-report-story-video
+          path: apps/web/playwright-report/
           retention-days: 7

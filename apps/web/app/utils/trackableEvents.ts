@@ -36,6 +36,15 @@ export const TRACKABLE_EVENT_TYPES = [
   // context of one event per page load — adding an id column is a separate,
   // not-yet-needed schema decision.
   "calendar_add_click",
+  // Instagram Story video, both with the set's id.
+  // `story_video_created` is a finished recording, a File in hand.
+  // `story_video_shared` means `navigator.share` resolved, i.e. the visitor
+  // picked a share target. It does NOT mean the story was published: nothing
+  // reports back from Instagram, and the visitor can still back out of its
+  // composer. Deliberately separate types rather than a method on
+  // share_click, which stays one undifferentiated count.
+  "story_video_created",
+  "story_video_shared",
 ] as const;
 
 export type TrackableEventType = (typeof TRACKABLE_EVENT_TYPES)[number];

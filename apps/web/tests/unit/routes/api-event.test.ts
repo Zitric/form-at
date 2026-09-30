@@ -49,6 +49,24 @@ describe("validate (api/event)", () => {
     expect(TRACKABLE_EVENT_TYPES).toContain("calendar_add_click");
   });
 
+  // Both story events carry the set's id, so they must pass validation with
+  // a real one, not just without.
+  it("accepts the story video events with a real set_id", async () => {
+    for (const eventType of ["story_video_created", "story_video_shared"] as const) {
+      expect(TRACKABLE_EVENT_TYPES).toContain(eventType);
+      expect(
+        await validate(
+          { event_type: eventType, set_id: realSetId, is_standalone: false },
+          undefined,
+        ),
+      ).toEqual({
+        eventType,
+        setId: realSetId,
+        isStandalone: false,
+      });
+    }
+  });
+
   it("rejects a missing event_type", async () => {
     expect(await validate({ is_standalone: true }, undefined)).toBeNull();
   });
