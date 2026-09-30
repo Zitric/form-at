@@ -1,0 +1,505 @@
+<!doctype html>
+<!--
+  Device test for the Instagram Story share feature. Not part of any app and
+  never deployed: nothing under spikes/ is in a Pages build output.
+
+  Answers, on one screen, what only a real device can: which MediaRecorder
+  types it accepts, whether canvas + Web Audio records to a playable file,
+  what container that file really is, whether navigator.canShare accepts it,
+  and which share targets appear.
+
+  Serve it privately — it needs a secure context (MediaRecorder, share):
+    Android over USB (reachable only through the cable):
+      adb reverse tcp:8787 tcp:8787
+      python3 -m http.server 8787 -d spikes/instagram-story
+      → open http://localhost:8787 in Chrome on the phone
+    iOS: no adb equivalent — see TECH_DEBT item 30 for how to serve it there.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>IG story device test</title>
+<style>
+  :root { --bg: #161615; --fg: #cbcbcb; --gold: #c58538; --ok: #7fb069; --bad: #d9534f; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 13px/1.5 ui-monospace, Menlo, monospace; }
+  h1 { font-size: 15px; color: var(--gold); margin: 0 0 12px; }
+  h2 { font-size: 13px; color: var(--gold); margin: 20px 0 6px; border-top: 1px solid #333; padding-top: 12px; }
+  .row { display: flex; gap: 8px; word-break: break-all; }
+  .row b { font-weight: normal; min-width: 1.2em; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .info { color: var(--fg); }
+  button, a.btn { font: inherit; background: none; color: var(--gold); border: 1px solid var(--gold); padding: 8px 10px; margin: 4px 4px 4px 0; cursor: pointer; text-decoration: none; display: inline-block; }
+  button:disabled { opacity: .35; }
+  input, select { font: inherit; background: #222; color: var(--fg); border: 1px solid #444; padding: 6px; max-width: 100%; }
+  label { display: block; margin: 6px 0; }
+  canvas, video { width: 100%; max-width: 270px; aspect-ratio: 9 / 16; background: #000; display: block; margin: 8px 0; }
+  textarea { width: 100%; height: 220px; background: #111; color: var(--fg); font: 11px/1.4 ui-monospace, monospace; border: 1px solid #444; }
+</style>
+</head>
+<body>
+<h1>// ig_story device test</h1>
+
+<h2>1. environment</h2>
+<div id="env"></div>
+
+<h2>2. MediaRecorder types accepted</h2>
+<div id="mimes"></div>
+
+<h2>3. WebCodecs (fallback path)</h2>
+<div id="codecs"></div>
+
+<h2>4. audio source: real set excerpt via Range</h2>
+<label>set url <input id="url" size="40" value="https://cdn.formatglasgow.com/sets/set-003-iona-violet/audio.mp3"></label>
+<label>start (seconds) <input id="start" type="number" value="1800" min="0"></label>
+<label>length <select id="len"><option value="5">5s</option><option value="20">20s</option></select></label>
+<button id="load">load excerpt</button><button id="audition" disabled>play excerpt</button>
+<div id="excerpt"></div>
+
+<h2>5. record canvas + audio</h2>
+<label>type <select id="mime"></select></label>
+<label><input type="checkbox" id="monitor" checked> hear it while recording</label>
+<label><input type="checkbox" id="autoShare"> share straight after recording, no extra tap (tests user-activation expiry)</label>
+<button id="record">record</button> <span id="recState"></span>
+<canvas id="canvas" width="1080" height="1920"></canvas>
+<div id="result"></div>
+<video id="video" controls playsinline></video>
+<div id="playback"></div>
+
+<h2>6. share</h2>
+<div id="canShare"></div>
+<button id="shareFiles" disabled>share file only</button>
+<button id="shareFilesText" disabled>share file + text + url</button>
+<a id="download" class="btn" style="display:none">download</a>
+<div id="shareLog"></div>
+
+<h2>7. what appeared in the share sheet (tick by hand)</h2>
+<label><input type="checkbox" class="seen" value="Instagram: Stories"> Instagram Stories</label>
+<label><input type="checkbox" class="seen" value="Instagram: Feed"> Instagram Feed</label>
+<label><input type="checkbox" class="seen" value="Instagram: Reels"> Instagram Reels</label>
+<label><input type="checkbox" class="seen" value="Instagram: Chats/Direct"> Instagram Chats / Direct</label>
+<label><input type="checkbox" class="seen" value="Instagram: single entry, choice inside app"> One Instagram entry, choice made inside Instagram</label>
+<label><input type="checkbox" class="seen" value="Story composer opened with the video"> Story composer opened with the video in it</label>
+<label><input type="checkbox" class="seen" value="Story posted (or reached post button) without error"> Reached the Story post button without an error</label>
+<label>notes <input id="notes" size="40"></label>
+
+<h2>8. report</h2>
+<button id="copy">copy report</button>
+<textarea id="report" readonly></textarea>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const lines = [];
+const row = (target, label, value, status = "info") => {
+  const mark = status === "ok" ? "✓" : status === "bad" ? "✗" : "·";
+  const el = document.createElement("div");
+  el.className = `row ${status}`;
+  el.innerHTML = `<b>${mark}</b><span></span>`;
+  el.querySelector("span").textContent = `${label}: ${value}`;
+  $(target).appendChild(el);
+  lines.push(`[${target}] ${mark} ${label}: ${value}`);
+  refreshReport();
+};
+const yes = (v) => (v ? "yes" : "no");
+const flag = (target, label, v) => row(target, label, yes(v), v ? "ok" : "bad");
+const errText = (e) => `${e?.name ?? "Error"}: ${e?.message ?? e}`;
+
+function refreshReport() {
+  const seen = [...document.querySelectorAll(".seen:checked")].map((c) => c.value);
+  const notes = $("notes")?.value;
+  $("report").value = [
+    `ig_story device test — ${new Date().toISOString()}`,
+    ...lines,
+    `[sheet] ${seen.length ? seen.join("; ") : "(nothing ticked)"}`,
+    notes ? `[notes] ${notes}` : "",
+  ].join("\n");
+}
+document.addEventListener("change", (e) => {
+  if (e.target.classList.contains("seen") || e.target.id === "notes") refreshReport();
+});
+
+// ---- 1. environment ----
+const AC = window.AudioContext || window.webkitAudioContext;
+row("env", "user agent", navigator.userAgent);
+row("env", "display mode", matchMedia("(display-mode: standalone)").matches ? "standalone" : "browser tab");
+flag("env", "secure context", window.isSecureContext);
+flag("env", "MediaRecorder", "MediaRecorder" in window);
+flag("env", "canvas.captureStream", "captureStream" in HTMLCanvasElement.prototype);
+flag("env", "AudioContext", Boolean(AC));
+flag("env", "createMediaStreamDestination", Boolean(AC && "createMediaStreamDestination" in AC.prototype));
+flag("env", "HTMLMediaElement.captureStream (not used by the design)", "captureStream" in HTMLMediaElement.prototype);
+flag("env", "navigator.share", "share" in navigator);
+flag("env", "navigator.canShare", "canShare" in navigator);
+flag("env", "VideoEncoder", "VideoEncoder" in window);
+flag("env", "AudioEncoder", "AudioEncoder" in window);
+row("env", "navigator.audioSession", "audioSession" in navigator ? "present" : "absent");
+
+// ---- 2. MediaRecorder types ----
+const CANDIDATES = [
+  'video/mp4;codecs="avc1.640028,mp4a.40.2"',
+  'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
+  "video/mp4;codecs=avc1,mp4a.40.2",
+  "video/mp4;codecs=avc1,opus",
+  "video/mp4;codecs=avc1",
+  "video/mp4",
+  "video/webm;codecs=h264,opus",
+  "video/webm;codecs=vp9,opus",
+  "video/webm;codecs=vp8,opus",
+  "video/webm",
+  "video/x-matroska;codecs=avc1,opus",
+];
+const supported = [];
+if ("MediaRecorder" in window) {
+  for (const type of CANDIDATES) {
+    const ok = MediaRecorder.isTypeSupported(type);
+    if (ok) supported.push(type);
+    row("mimes", type, yes(ok), ok ? "ok" : "bad");
+  }
+} else {
+  row("mimes", "MediaRecorder", "absent — nothing to list", "bad");
+}
+for (const type of [...supported, ""]) {
+  const opt = document.createElement("option");
+  opt.value = type;
+  opt.textContent = type || "(browser default — no mimeType passed)";
+  $("mime").appendChild(opt);
+}
+
+// ---- 3. WebCodecs ----
+(async () => {
+  const video = [
+    ["avc1.640028 (High L4.0) 1080x1920", "avc1.640028"],
+    ["avc1.4d0028 (Main L4.0) 1080x1920", "avc1.4d0028"],
+  ];
+  for (const [label, codec] of video) {
+    try {
+      const { supported: ok } = await VideoEncoder.isConfigSupported({
+        codec, width: 1080, height: 1920, bitrate: 6_000_000, framerate: 30,
+      });
+      row("codecs", `VideoEncoder ${label}`, yes(ok), ok ? "ok" : "bad");
+    } catch (e) {
+      row("codecs", `VideoEncoder ${label}`, errText(e), "bad");
+    }
+  }
+  for (const [label, codec] of [["AAC-LC mp4a.40.2", "mp4a.40.2"], ["Opus", "opus"]]) {
+    try {
+      const { supported: ok } = await AudioEncoder.isConfigSupported({
+        codec, sampleRate: 48000, numberOfChannels: 2, bitrate: 192_000,
+      });
+      row("codecs", `AudioEncoder ${label}`, yes(ok), ok ? "ok" : "bad");
+    } catch (e) {
+      row("codecs", `AudioEncoder ${label}`, errText(e), "bad");
+    }
+  }
+})();
+
+// ---- 4. excerpt via Range ----
+let ac;
+const audioCtx = () => {
+  ac ??= new AC();
+  if (ac.state === "suspended") ac.resume();
+  return ac;
+};
+let excerpt = null; // { buffer, offset, duration }
+
+const MPEG1_L3_KBPS = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0];
+const MPEG1_RATES = [44100, 48000, 32000, 0];
+
+async function rangeFetch(url, from, to) {
+  const res = await fetch(url, { headers: { Range: `bytes=${from}-${to}` } });
+  const buf = new Uint8Array(await res.arrayBuffer());
+  return { status: res.status, buf };
+}
+
+function parseHeader(b, i) {
+  if (b[i] !== 0xff || (b[i + 1] & 0xe0) !== 0xe0) return null;
+  const version = (b[i + 1] >> 3) & 3;
+  const layer = (b[i + 1] >> 1) & 3;
+  if (version !== 3 || layer !== 1) return null; // MPEG-1 Layer III only
+  const kbps = MPEG1_L3_KBPS[b[i + 2] >> 4];
+  const rate = MPEG1_RATES[(b[i + 2] >> 2) & 3];
+  if (!kbps || !rate) return null;
+  const padding = (b[i + 2] >> 1) & 1;
+  return { kbps, rate, frameLen: Math.floor((144 * kbps * 1000) / rate) + padding };
+}
+
+$("load").addEventListener("click", async () => {
+  $("excerpt").replaceChildren();
+  excerpt = null;
+  $("audition").disabled = true;
+  const url = $("url").value.trim();
+  const t = Number($("start").value);
+  const len = Number($("len").value);
+  const t0 = performance.now();
+  try {
+    const ctx = audioCtx();
+    const head = await rangeFetch(url, 0, 9);
+    row("excerpt", "ID3 probe status", head.status, head.status === 206 ? "ok" : "bad");
+    const b = head.buf;
+    let id3End = 0;
+    if (b[0] === 0x49 && b[1] === 0x44 && b[2] === 0x33) {
+      id3End = 10 + ((b[6] << 21) | (b[7] << 14) | (b[8] << 7) | b[9]) + (b[5] & 0x10 ? 10 : 0);
+    }
+    row("excerpt", "ID3 tag ends at byte", id3End);
+    const first = await rangeFetch(url, id3End, id3End + 2047);
+    const hdr = parseHeader(first.buf, 0);
+    if (!hdr) throw new Error("no MPEG-1 Layer III frame header after the ID3 tag");
+    const ascii = new TextDecoder("latin1").decode(first.buf.subarray(0, hdr.frameLen));
+    const tag = ascii.includes("Xing") ? "Xing (VBR)" : ascii.includes("Info") ? "Info (CBR)" : "none";
+    row("excerpt", "encoding", `${hdr.kbps}kbps ${hdr.rate}Hz, tag ${tag}`, tag === "Info (CBR)" ? "ok" : "bad");
+    const audioStart = tag === "none" ? id3End : id3End + hdr.frameLen;
+    const bytesPerFrame = (144 * hdr.kbps * 1000) / hdr.rate;
+    const frameDur = 1152 / hdr.rate;
+    // Two frames of preroll: Layer III's bit reservoir lets a frame borrow bits
+    // from earlier frames, so decoding from the exact target frame loses audio.
+    const PREROLL = 2;
+    const n = Math.floor(t / frameDur);
+    const startFrame = Math.max(0, n - PREROLL);
+    const count = Math.ceil(len / frameDur) + (n - startFrame) + 2;
+    const from = audioStart + Math.floor(startFrame * bytesPerFrame);
+    const to = from + Math.ceil(count * bytesPerFrame) + 4096;
+    const body = await rangeFetch(url, from, to);
+    row("excerpt", "excerpt fetch", `status ${body.status}, ${body.buf.length} bytes (${from}-${to})`, body.status === 206 ? "ok" : "bad");
+    let sync = 0;
+    while (sync < 4096 && !parseHeader(body.buf, sync)) sync++;
+    row("excerpt", "frame sync found at offset", sync, sync === 0 ? "ok" : "info");
+    const encoded = body.buf.slice(sync).buffer;
+    const buffer = await new Promise((resolve, reject) => ctx.decodeAudioData(encoded, resolve, reject));
+    const expected = ((body.buf.length - sync) / bytesPerFrame) * frameDur;
+    row("excerpt", "decoded", `${buffer.duration.toFixed(3)}s @ ${buffer.sampleRate}Hz, ${buffer.numberOfChannels}ch`, "ok");
+    row("excerpt", "decoded minus expected (decoder delay/padding)", `${((buffer.duration - expected) * 1000).toFixed(1)}ms`);
+    const offset = (n - startFrame) * frameDur + (t - n * frameDur);
+    excerpt = { buffer, offset, duration: len };
+    row("excerpt", "ready", `starts ${offset.toFixed(3)}s into buffer, ${(performance.now() - t0).toFixed(0)}ms total`, "ok");
+    $("audition").disabled = false;
+  } catch (e) {
+    row("excerpt", "failed", `${errText(e)} — recording will fall back to a test tone`, "bad");
+  }
+});
+
+let auditionNode = null;
+$("audition").addEventListener("click", () => {
+  if (auditionNode) {
+    auditionNode.stop();
+    return;
+  }
+  const ctx = audioCtx();
+  auditionNode = ctx.createBufferSource();
+  auditionNode.buffer = excerpt.buffer;
+  auditionNode.connect(ctx.destination);
+  auditionNode.onended = () => {
+    auditionNode = null;
+    $("audition").textContent = "play excerpt";
+  };
+  auditionNode.start(0, excerpt.offset, excerpt.duration);
+  $("audition").textContent = "stop";
+});
+
+// ---- 5. record ----
+let file = null;
+
+function listBoxes(bytes) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const out = [];
+  let i = 0;
+  while (i + 8 <= bytes.length && out.length < 400) {
+    let size = view.getUint32(i);
+    const type = String.fromCharCode(...bytes.subarray(i + 4, i + 8));
+    if (size === 1 && i + 16 <= bytes.length) size = Number(view.getBigUint64(i + 8));
+    if (size === 0) size = bytes.length - i;
+    if (size < 8 || !/^[\x20-\x7e]{4}$/.test(type)) {
+      out.push(`?unparseable@${i}`);
+      break;
+    }
+    out.push(type);
+    i += size;
+  }
+  const counts = [];
+  for (const type of out) {
+    const last = counts[counts.length - 1];
+    if (last && last[0] === type) last[1]++;
+    else counts.push([type, 1]);
+  }
+  return counts.map(([type, c]) => (c > 1 ? `${type}×${c}` : type)).join(", ");
+}
+
+function draw(g, analyser, bins, elapsed, total, frame) {
+  g.fillStyle = "#161615";
+  g.fillRect(0, 0, 1080, 1920);
+  analyser.getByteFrequencyData(bins);
+  const bars = 48;
+  const w = 1080 / bars;
+  g.fillStyle = "#c58538";
+  for (let i = 0; i < bars; i++) {
+    const h = (bins[i * 2] / 255) * 700;
+    g.fillRect(i * w + 3, 1100 - h, w - 6, h);
+  }
+  g.fillStyle = "#43437a";
+  g.fillRect(90, 1300, 900, 12);
+  g.fillStyle = "#c58538";
+  g.fillRect(90, 1300, (900 * Math.min(elapsed, total)) / total, 12);
+  g.fillStyle = "#cbcbcb";
+  g.font = "48px ui-monospace, Menlo, monospace";
+  g.fillText("form:at // device test", 90, 400);
+  g.fillText(`${elapsed.toFixed(2)}s / ${total}s  frame ${frame}`, 90, 1420);
+}
+
+$("record").addEventListener("click", async () => {
+  $("result").replaceChildren();
+  $("playback").replaceChildren();
+  $("canShare").replaceChildren();
+  $("shareLog").replaceChildren();
+  $("shareFiles").disabled = $("shareFilesText").disabled = true;
+  $("download").style.display = "none";
+  $("record").disabled = true;
+  const autoShare = $("autoShare").checked;
+  try {
+    const ctx = audioCtx();
+    if (navigator.audioSession) navigator.audioSession.type = "playback";
+    const total = excerpt ? excerpt.duration : Number($("len").value);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    const bins = new Uint8Array(analyser.frequencyBinCount);
+    const dest = ctx.createMediaStreamDestination();
+    analyser.connect(dest);
+    if ($("monitor").checked) analyser.connect(ctx.destination);
+
+    let source;
+    if (excerpt) {
+      source = ctx.createBufferSource();
+      source.buffer = excerpt.buffer;
+      source.connect(analyser);
+      row("result", "audio source", "decoded set excerpt");
+    } else {
+      source = ctx.createOscillator();
+      source.frequency.value = 220;
+      const gain = ctx.createGain();
+      gain.gain.value = 0.2;
+      source.connect(gain).connect(analyser);
+      row("result", "audio source", "test tone (no excerpt loaded)");
+    }
+
+    const canvas = $("canvas");
+    const g = canvas.getContext("2d");
+    draw(g, analyser, bins, 0, total, 0);
+    const stream = new MediaStream([
+      ...canvas.captureStream(30).getVideoTracks(),
+      ...dest.stream.getAudioTracks(),
+    ]);
+    row("result", "tracks", `${stream.getVideoTracks().length} video, ${stream.getAudioTracks().length} audio`);
+    const mimeType = $("mime").value;
+    const options = { videoBitsPerSecond: 6_000_000, audioBitsPerSecond: 192_000 };
+    if (mimeType) options.mimeType = mimeType;
+    const rec = new MediaRecorder(stream, options);
+    const chunks = [];
+    rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    const stopped = new Promise((resolve, reject) => {
+      rec.onstop = resolve;
+      rec.onerror = (e) => reject(e.error ?? e);
+    });
+
+    let frame = 0;
+    let raf = 0;
+    const startedAt = performance.now();
+    const tick = () => {
+      const elapsed = (performance.now() - startedAt) / 1000;
+      draw(g, analyser, bins, elapsed, total, ++frame);
+      $("recState").textContent = `recording ${elapsed.toFixed(1)}s`;
+      if (elapsed < total) raf = requestAnimationFrame(tick);
+    };
+    rec.start(1000);
+    if (excerpt) source.start(0, excerpt.offset, total);
+    else source.start();
+    raf = requestAnimationFrame(tick);
+    await new Promise((r) => setTimeout(r, total * 1000 + 150));
+    cancelAnimationFrame(raf);
+    try { source.stop(); } catch {}
+    rec.stop();
+    const watchdog = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("MediaRecorder stop event never fired (5s)")), 5000),
+    );
+    await Promise.race([stopped, watchdog]);
+    const wall = (performance.now() - startedAt) / 1000;
+    stream.getTracks().forEach((t) => t.stop());
+
+    const type = rec.mimeType || chunks[0]?.type || "";
+    const blob = new Blob(chunks, { type });
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    row("result", "requested type", mimeType || "(default)");
+    row("result", "recorder.mimeType", rec.mimeType || "(empty)", rec.mimeType.startsWith("video/mp4") ? "ok" : "bad");
+    row("result", "size", `${(blob.size / 1024).toFixed(0)} KB in ${chunks.length} chunks`, blob.size > 0 ? "ok" : "bad");
+    row("result", "frames drawn", `${frame} in ${wall.toFixed(2)}s (${(frame / total).toFixed(1)} fps)`);
+    if (type.includes("mp4")) {
+      const boxes = listBoxes(bytes);
+      row("result", "MP4 top-level boxes", boxes);
+      row("result", "fragmented MP4 (moof present)", yes(boxes.includes("moof")), boxes.includes("moof") ? "bad" : "ok");
+      const brand = String.fromCharCode(...bytes.subarray(8, 12));
+      row("result", "ftyp major brand", brand);
+    } else {
+      row("result", "first bytes", [...bytes.subarray(0, 4)].map((x) => x.toString(16).padStart(2, "0")).join(" "));
+    }
+
+    const ext = type.includes("mp4") ? "mp4" : type.includes("webm") ? "webm" : "bin";
+    const bareType = type.split(";")[0] || "application/octet-stream";
+    file = new File([blob], `formatglasgow-test.${ext}`, { type: bareType });
+    row("result", "File", `${file.name}, type ${file.type}`);
+
+    const url = URL.createObjectURL(file);
+    const video = $("video");
+    video.onloadedmetadata = () => {
+      const d = video.duration;
+      row("playback", "duration", Number.isFinite(d) ? `${d.toFixed(2)}s` : String(d), Number.isFinite(d) ? "ok" : "bad");
+      row("playback", "dimensions", `${video.videoWidth}x${video.videoHeight}`, video.videoWidth === 1080 ? "ok" : "bad");
+    };
+    video.onerror = () => row("playback", "video element error", `code ${video.error?.code} ${video.error?.message ?? ""}`, "bad");
+    video.src = url;
+    const a = $("download");
+    a.href = url;
+    a.download = file.name;
+    a.style.display = "inline-block";
+
+    const canFile = navigator.canShare?.({ files: [file] }) ?? false;
+    const canFileText = navigator.canShare?.({ files: [file], text: "t", url: "https://formatglasgow.com" }) ?? false;
+    flag("canShare", "canShare({ files })", canFile);
+    flag("canShare", "canShare({ files, text, url })", canFileText);
+    $("shareFiles").disabled = !("share" in navigator);
+    $("shareFilesText").disabled = !("share" in navigator);
+    if (autoShare) share({ files: [file] }, "auto (no fresh tap)");
+  } catch (e) {
+    row("result", "recording failed", errText(e), "bad");
+  } finally {
+    $("record").disabled = false;
+    $("recState").textContent = "";
+  }
+});
+
+// ---- 6. share ----
+async function share(data, label) {
+  try {
+    await navigator.share(data);
+    row("shareLog", `share ${label}`, "resolved — a target was picked", "ok");
+  } catch (e) {
+    const meaning = e?.name === "AbortError" ? " (cancelled, or target refused)" : e?.name === "NotAllowedError" ? " (no user activation / permission)" : "";
+    row("shareLog", `share ${label}`, errText(e) + meaning, "bad");
+  }
+}
+$("shareFiles").addEventListener("click", () => share({ files: [file] }, "file only"));
+$("shareFilesText").addEventListener("click", () =>
+  share({ files: [file], text: "form:at device test", url: "https://formatglasgow.com" }, "file + text + url"),
+);
+
+$("copy").addEventListener("click", async () => {
+  refreshReport();
+  try {
+    await navigator.clipboard.writeText($("report").value);
+    $("copy").textContent = "copied";
+  } catch {
+    $("report").select();
+    $("copy").textContent = "select-all done — copy manually";
+  }
+});
+</script>
+</body>
+</html>
