@@ -7,7 +7,7 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
-- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a cleared 2026-08-18 except the dropped-connection case, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project)
+- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a cleared 2026-08-18 except the dropped-connection case, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project), 30 (Instagram Story device test — Android pending, iOS waits on the same device access as 12/23b)
 - **Deferred, recorded rather than done:** 24 (DJ/event data model still static while sets are in D1), 25 (no-cross-app-imports unenforced), 26 (`PWA_PROGRESS.md` too large to be readable)
 - **Invalid:** 1 (2026-07-22 — premise was wrong, not stale: both flagged functions are load-bearing behind a live multi-provider calendar picker; do not delete, see item for the full re-verification)
 - **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, real trigger is ~10-15 sets in the catalogue, not a calendar date; see item for why that arrives faster now)
@@ -1216,4 +1216,58 @@ delivery channel for the same two signals that already missed it.
 
 ---
 
-_Last updated: 2026-09-20_
+## 30. [VERIFICATION DEBT] Instagram Story video — device results, iOS still untested
+
+**Status: open, not blocking.** The proposed feature (share a visitor-chosen 20s
+passage as a Story video, made in the browser) waits on real-device answers.
+`spikes/instagram-story/index.html` is the standalone test page for that: it
+lists the MediaRecorder types the device accepts, records canvas + a decoded
+set excerpt, reports the container actually produced (top-level MP4 boxes,
+fragmented or not), plays it back, and offers `navigator.share` plus a
+download. It also has a copy-report button so results can be pasted in here.
+Nothing under `spikes/` is deployed.
+
+**The design deliberately avoids `HTMLMediaElement.captureStream()`**, the API
+Safari lacks. The excerpt is fetched separately by byte range, decoded with
+`decodeAudioData` and played through `AudioBufferSourceNode` →
+`MediaStreamAudioDestinationNode`. The player's `<audio>` element, the SW's
+Range path, IDB playback and the media session are never touched. Routing the
+player itself through Web Audio is **not** an option: the element is no-cors,
+and WebKit outputs silence for a cross-origin element without CORS.
+
+**Exact-timestamp seeking relies on CBR.** All 13 source sets probed 320kbps /
+48kHz CBR (LAME `Info` tag, constant 960-byte frames), and frame sync on the
+CDN copy lands exactly on the computed offset through minute 75. So
+`byte = audioStart + floor(t / 0.024) × 960` is exact to one 24ms frame. A VBR
+upload would make it approximate: the error is unbounded and grows with depth,
+since the average bitrate only holds over the whole file. The admin upload does
+not enforce CBR, so the feature must read the tag and treat a `Xing` (VBR) set
+as unsupported, not seek it approximately. Range + CORS on
+`cdn.formatglasgow.com` re-checked 2026-09-30: 206 with `ACAO *`, and the
+preflight allows `range`.
+
+**Desktop smoke run (headless Playwright, 2026-09-30) — not a phone result.**
+Chromium 147 and WebKit (Safari 26.4 UA) both recorded 1080×1920
+`video/mp4` with AAC (`mp4a.40.2`) that played back with a finite duration.
+Both produced **fragmented** MP4 (`moof` boxes). Whether Instagram accepts
+fragmented MP4 is one of the open questions below.
+
+**Still open:**
+- **Android (Chrome):** mime list, AAC vs Opus, fragmented or not, canShare,
+  and which Instagram targets the share sheet shows (Stories / Feed / Chats).
+- **iOS (Safari, installed PWA and tab):** the same questions, plus whether
+  the `AudioContext` path records audio at all and whether the silent switch
+  mutes the recording. Waits on the same iPhone access as items 12 and 23b.
+  An iOS phone can't use `adb reverse`, so serve the page over HTTPS some
+  other way, e.g. a throwaway `cloudflared tunnel --url http://localhost:8787`
+  quick tunnel (no account resources, random URL, gone on exit). Run it
+  yourself; it isn't something to provision from a session.
+- **Instagram accepting the file:** whether the Story composer opens with it
+  and lets you post.
+
+If iOS can't record, the feature degrades to a clear message on that device,
+never a button that fails.
+
+---
+
+_Last updated: 2026-09-30_
