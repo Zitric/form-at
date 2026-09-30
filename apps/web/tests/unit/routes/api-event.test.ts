@@ -52,7 +52,11 @@ describe("validate (api/event)", () => {
   // Both story events carry the set's id, so they must pass validation with
   // a real one, not just without.
   it("accepts the story video events with a real set_id", async () => {
-    for (const eventType of ["story_video_created", "story_video_shared"] as const) {
+    for (const eventType of [
+      "story_video_created",
+      "story_video_shared",
+      "story_install_gate_shown",
+    ] as const) {
       expect(TRACKABLE_EVENT_TYPES).toContain(eventType);
       expect(
         await validate(

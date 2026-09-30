@@ -21,3 +21,18 @@ export function detectFormFactor(ua = navigator.userAgent): FormFactor {
   if (!ua) return "desktop";
   return /Mobi|Android/i.test(ua) ? "mobile" : "desktop";
 }
+
+/**
+ * A phone or Android tablet held in the hand: a mobile UA AND a coarse
+ * primary pointer. The pointer check drops what the UA alone lets through
+ * without a touchscreen (a desktop browser spoofing a phone UA); the UA check
+ * drops touch laptops, whose primary pointer can be coarse. iPads report a
+ * desktop Mac UA, so they read as not mobile. So does Android Chrome's
+ * "request desktop site" mode, which swaps the UA.
+ */
+export function isHandheldTouch(
+  ua = navigator.userAgent,
+  matchMedia: (query: string) => { matches: boolean } = window.matchMedia.bind(window),
+): boolean {
+  return detectFormFactor(ua) === "mobile" && matchMedia("(pointer: coarse)").matches;
+}

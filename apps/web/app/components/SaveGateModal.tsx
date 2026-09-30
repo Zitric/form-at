@@ -1,14 +1,54 @@
 import { Button, Modal, TextButton } from "@form-at/ui";
+import type { ReactNode } from "react";
 
 import { IosInstallSteps, ManualInstallHint } from "~/components/InstallInstructions";
 import { type SaveGate, useTriggerInstallPrompt } from "~/hooks/useSaveGate";
 import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";
 
-type Props = { open: boolean; onClose: () => void; gate: SaveGate };
+/**
+ * The words for one feature that lives in the installed app. The branching —
+ * native prompt, manual hint, iOS steps, both escape hatches — stays shared,
+ * so a second installed-only feature reuses it with its own copy.
+ */
+export type InstallGateCopy = {
+  ariaLabel: string;
+  /** The terminal-style title, e.g. `save_for_offline`. */
+  label: string;
+  /** Chromium with a native prompt; followed by the [ install ] button. */
+  prompt: ReactNode;
+  /** Chromium without one; followed by ManualInstallHint. */
+  manual: ReactNode;
+  /** iOS Safari; followed by IosInstallSteps. */
+  ios: ReactNode;
+  openApp: ReactNode;
+  cannotInstall: ReactNode;
+};
 
-// Renders the guidance the user needs when tapping `save_for_offline` in a
-// browser tab (where downloads are deliberately disabled). Branches on the
+const SAVE_COPY: InstallGateCopy = {
+  ariaLabel: "Form:at — save sets for offline listening",
+  label: "save_for_offline",
+  prompt:
+    "saving sets offline lives in the Form:at app. install it to your home screen — fullscreen, no browser chrome — then come back here to save.",
+  manual: "saving sets offline lives in the Form:at app — ",
+  ios: "saving sets offline lives in the Form:at app. iOS Safari only installs from the share menu — two taps:",
+  openApp:
+    "Form:at is already on your device — open it from your home screen to save sets for offline listening. this tab streams from the network, the app keeps the bytes.",
+  cannotInstall: (
+    <>
+      saving sets offline needs <span className="text-white">Chrome on Android</span> or{" "}
+      <span className="text-white">Safari on iOS</span> — open{" "}
+      <span className="text-white">formatglasgow.com</span> there to install the app. this browser
+      streams sets fine, but can't keep them offline.
+    </>
+  ),
+};
+
+type Props = { open: boolean; onClose: () => void; gate: SaveGate; copy?: InstallGateCopy };
+
+// Renders the guidance the user needs when tapping a feature that only the
+// installed app has — `save_for_offline` (the default copy) or
+// `instagram_story` (StoryInstallGate passes its own) — from a browser tab. Branches on the
 // `gate.reason` discriminant from <useSaveGate>:
 //
 //   needs-install  — case (a): browser CAN install + we don't know the PWA is
@@ -27,7 +67,7 @@ type Props = { open: boolean; onClose: () => void; gate: SaveGate };
 //
 // Never instantiated for `allow: true` or `reason: "pending"` — consumer
 // buttons skip the modal entirely in those states.
-export function SaveGateModal({ open, onClose, gate }: Props) {
+export function SaveGateModal({ open, onClose, gate, copy = SAVE_COPY }: Props) {
   const triggerInstall = useTriggerInstallPrompt();
   const setPwaInstalled = useStore((s) => s.setPwaInstalled);
   const setPwaInstallDismissed = useStore((s) => s.setPwaInstallDismissed);
@@ -82,10 +122,10 @@ export function SaveGateModal({ open, onClose, gate }: Props) {
     <Modal
       open={open}
       onClose={handleClose}
-      ariaLabel="Form:at — save sets for offline listening"
+      ariaLabel={copy.ariaLabel}
       title={
         <div className="text-xs text-grey tracking-widest truncate">
-          › <span className="text-white">save_for_offline</span>
+          › <span className="text-white">{copy.label}</span>
         </div>
       }
     >
@@ -94,25 +134,20 @@ export function SaveGateModal({ open, onClose, gate }: Props) {
           {gate.platform === "chromium" ? (
             gate.canPrompt ? (
               <>
-                <p className="text-sm text-grey leading-relaxed">
-                  saving sets offline lives in the Form:at app. install it to your home screen —
-                  fullscreen, no browser chrome — then come back here to save.
-                </p>
+                <p className="text-sm text-grey leading-relaxed">{copy.prompt}</p>
                 <Button variant="secondary" onClick={handleNativeInstall} className="text-left">
                   install
                 </Button>
               </>
             ) : (
               <p className="text-sm text-grey leading-relaxed">
-                saving sets offline lives in the Form:at app — <ManualInstallHint />
+                {copy.manual}
+                <ManualInstallHint />
               </p>
             )
           ) : (
             <>
-              <p className="text-sm text-grey leading-relaxed">
-                saving sets offline lives in the Form:at app. iOS Safari only installs from the
-                share menu — two taps:
-              </p>
+              <p className="text-sm text-grey leading-relaxed">{copy.ios}</p>
               <IosInstallSteps />
             </>
           )}
@@ -129,10 +164,7 @@ export function SaveGateModal({ open, onClose, gate }: Props) {
 
       {gate.allow === false && gate.reason === "open-app" && (
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-grey leading-relaxed">
-            Form:at is already on your device — open it from your home screen to save sets for
-            offline listening. this tab streams from the network, the app keeps the bytes.
-          </p>
+          <p className="text-sm text-grey leading-relaxed">{copy.openApp}</p>
           <TextButton
             onClick={(e) => {
               e.stopPropagation();
@@ -145,12 +177,7 @@ export function SaveGateModal({ open, onClose, gate }: Props) {
       )}
 
       {gate.allow === false && gate.reason === "cannot-install" && (
-        <p className="text-sm text-grey leading-relaxed">
-          saving sets offline needs <span className="text-white">Chrome on Android</span> or{" "}
-          <span className="text-white">Safari on iOS</span> — open{" "}
-          <span className="text-white">formatglasgow.com</span> there to install the app. this
-          browser streams sets fine, but can't keep them offline.
-        </p>
+        <p className="text-sm text-grey leading-relaxed">{copy.cannotInstall}</p>
       )}
     </Modal>
   );

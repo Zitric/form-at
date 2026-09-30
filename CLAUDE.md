@@ -164,10 +164,16 @@ Tailwind v4's automatic source scanning excludes `node_modules`, and
 inside the design system and **silently strips them from the bundle** — the
 components render unstyled, with no build error.
 
-### Never flatten `TrendChart`'s `lazy(() => import(...))` into a static import
-`ClientOnly` is a render guard, not a code-splitting mechanism. A static
-top-level import still renders correctly while pulling all of `visx` into
-`_worker.js`. Silent bundle regression, no test failure.
+### Never flatten a `lazy(() => import(...))` into a static import
+Two exist: `apps/admin`'s `TrendChart` and `apps/web`'s `StoryVideoFlow`
+(`components/story/StoryFlowHost.tsx`). `ClientOnly` is a render guard, not a
+code-splitting mechanism. A static top-level import still renders correctly
+while pulling all of `visx` into admin's `_worker.js`, or the Story video's MP3
+reader, spectrum, renderer and recorder into every visitor's main bundle.
+Silent bundle regression, no test failure. The same goes for importing
+anything under `utils/storyVideo/` from always-loaded code: the entry's
+capability check lives in `capability.ts` precisely so ShareModal doesn't
+import `recorder.ts`.
 
 ### Never let two workspaces resolve different `vitest` majors
 `@testing-library/jest-dom` does **not** depend on `vitest`, so the

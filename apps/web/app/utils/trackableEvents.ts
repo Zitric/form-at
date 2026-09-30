@@ -45,6 +45,12 @@ export const TRACKABLE_EVENT_TYPES = [
   // share_click, which stays one undifferentiated count.
   "story_video_created",
   "story_video_shared",
+  // The install gate shown to a mobile tab user who tapped
+  // [ instagram_story ]: stories need the installed app. Paired with
+  // install_accepted over the same window, it says whether stories drive
+  // installs; the two rows aren't linkable, so it's a rate, not a per-visitor
+  // conversion.
+  "story_install_gate_shown",
 ] as const;
 
 export type TrackableEventType = (typeof TRACKABLE_EVENT_TYPES)[number];

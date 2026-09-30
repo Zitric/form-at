@@ -1,9 +1,6 @@
 import { expect, test } from "@playwright/test";
-import type {
-  StoryRecordingDiagnostics,
-  pickStoryMimeType,
-  recordStory,
-} from "../../app/utils/storyVideo/recorder";
+import type { pickStoryMimeType } from "../../app/utils/storyVideo/capability";
+import type { StoryRecordingDiagnostics, recordStory } from "../../app/utils/storyVideo/recorder";
 import type {
   StoryFrameInput,
   loadStoryAssets,
@@ -61,15 +58,17 @@ test.describe("story video recording", () => {
         path: string,
       ) => Promise<Record<string, never>>;
       const run = async (): Promise<Outcome> => {
+        const capability = (await importModule(
+          "/app/utils/storyVideo/capability.ts",
+        )) as unknown as { pickStoryMimeType: typeof pickStoryMimeType };
         const recorder = (await importModule("/app/utils/storyVideo/recorder.ts")) as unknown as {
-          pickStoryMimeType: typeof pickStoryMimeType;
           recordStory: typeof recordStory;
         };
         const renderer = (await importModule("/app/utils/storyVideo/renderer.ts")) as unknown as {
           loadStoryAssets: typeof loadStoryAssets;
           prepareStoryFrame: typeof prepareStoryFrame;
         };
-        if (!recorder.pickStoryMimeType())
+        if (!capability.pickStoryMimeType())
           return { ok: false, unsupported: true, error: "no H.264 + AAC MP4 recording" };
 
         const context = new AudioContext();

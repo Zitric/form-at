@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectFormFactor } from "~/utils/deviceFormFactor";
+import { detectFormFactor, isHandheldTouch } from "~/utils/deviceFormFactor";
 
 // Real production UA strings, same convention as inAppBrowser.test.ts and
 // installCapability.test.ts — don't invent UAs, copy what real browsers send.
@@ -81,5 +81,27 @@ describe("detectFormFactor", () => {
     it("falls back to desktop on an empty UA", () => {
       expect(detectFormFactor("")).toBe("desktop");
     });
+  });
+});
+
+describe("isHandheldTouch", () => {
+  const coarse = () => ({ matches: true });
+  const fine = () => ({ matches: false });
+
+  it("is true for a phone UA with a coarse pointer", () => {
+    expect(isHandheldTouch(UA.androidChromePhone, coarse)).toBe(true);
+    expect(isHandheldTouch(UA.iPhoneSafari, coarse)).toBe(true);
+  });
+
+  it("is false for a phone UA without a touch pointer (a spoofed desktop)", () => {
+    expect(isHandheldTouch(UA.androidChromePhone, fine)).toBe(false);
+  });
+
+  it("is false for a desktop UA even with a coarse pointer (a touch laptop)", () => {
+    expect(isHandheldTouch(UA.desktopChromeWindows, coarse)).toBe(false);
+  });
+
+  it("counts an Android tablet as handheld, like the install copy does", () => {
+    expect(isHandheldTouch(UA.androidChromeTablet, coarse)).toBe(true);
   });
 });

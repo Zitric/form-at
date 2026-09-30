@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { STORY_MIME_TYPES, pickStoryMimeType } from "~/utils/storyVideo/recorder";
+import { STORY_MIME_TYPES, canRecordStory, pickStoryMimeType } from "~/utils/storyVideo/capability";
 
 // Recording itself needs a real browser: tests/e2e/story-video.spec.ts.
 
@@ -33,5 +33,11 @@ describe("pickStoryMimeType", () => {
 
   it("is null where MediaRecorder doesn't exist", () => {
     expect(pickStoryMimeType()).toBeNull(); // jsdom has no MediaRecorder
+  });
+});
+
+describe("canRecordStory", () => {
+  it("is false without MediaRecorder (jsdom), whatever else exists", () => {
+    expect(canRecordStory()).toBe(false);
   });
 });
