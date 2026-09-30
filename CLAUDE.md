@@ -543,7 +543,7 @@ pnpm build:web && pnpm start:web   # :4173, real service worker
 - `packages/ui/vitest.setup.ts` wires jest-dom and calls `installDialogPolyfill()` — the polyfill itself is `packages/ui/src/domPolyfills.ts` (jsdom implements no `HTMLDialogElement.showModal()`).
 
 ### CI/CD
-- **`ci.yml`** on push (non-main) + PR. Jobs: `static` (per-workspace Biome lint for `apps/web`, `apps/admin`, `packages/ui`, `packages/data`, `apps/rum-archiver`, plus `turbo tsc` across all of them, plus a Vite build of both apps), `knip`, `unit` (all five workspaces), `chromatic` (visual regression for `packages/ui`), `e2e` (Playwright on chromium + webkit for both apps).
+- **`ci.yml`** on push (non-main) + PR. Jobs: `static` (per-workspace Biome lint for `apps/web`, `apps/admin`, `packages/ui`, `packages/data`, `apps/rum-archiver`, plus `turbo tsc` across all of them, plus a Vite build of both apps), `knip`, `unit` (all five workspaces), `sets-snapshot` (regenerates `sets.generated.ts` from live D1 and fails on drift from the committed copy), `chromatic` (visual regression for `packages/ui`), `e2e` (Playwright on chromium + webkit for both apps), `e2e-story-video` (the one test that records H.264 + AAC MP4, on `macos-latest`: Linux Chromium has no such encoders, so the Linux jobs skip it by name).
 - **`deploy.yml`** on push to `main`, plus manual `workflow_dispatch`. Re-runs `static`/`unit`/`e2e`, then `deploy` and `deploy-admin` only if all pass — a direct push to `main` can't skip the suite. Deliberately **not** `chromatic`, which stays PR-only to avoid roughly doubling snapshot quota.
 - Secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CHROMATIC_PROJECT_TOKEN`.
 

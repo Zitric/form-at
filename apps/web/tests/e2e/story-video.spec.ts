@@ -44,6 +44,13 @@ test.describe("story video recording", () => {
       testInfo.project.name !== "chromium",
       "MediaRecorder MP4 is exercised on desktop Chromium only",
     );
+    // CI's Linux Chromium has no H.264 / AAC encoders, so it can never pass
+    // there. ci.yml's `e2e-story-video` job runs this test on macOS instead.
+    // Don't remove that job without replacing it.
+    test.skip(
+      !!process.env.CI && process.platform === "linux",
+      "runs in ci.yml's e2e-story-video job on macOS",
+    );
     test.setTimeout(60_000);
     await page.goto(HARNESS);
 
