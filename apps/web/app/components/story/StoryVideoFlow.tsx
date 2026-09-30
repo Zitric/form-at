@@ -22,6 +22,7 @@ import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";
 import { getAudioCurrentTime } from "~/store/playerSlice";
 import { withAppContext } from "~/utils/audioUrl";
+import { isDevModeActive } from "~/utils/devMode";
 import { fmtTimestamp, parseDuration } from "~/utils/fmt";
 import {
   type CreateAction,
@@ -144,6 +145,15 @@ function artworkUrls(set: MusicSet): string[] {
   ].filter((u): u is string => u !== null);
 }
 
+// For the devmode line under a failed slice. An HTTP failure's status is in
+// its message ("HTTP 416", "expected 206 … got 200"); a CORS block is a bare
+// "TypeError: Failed to fetch".
+function describeError(e: unknown): string {
+  if (e instanceof Mp3ExcerptError) return `${e.name}(${e.failure}): ${e.message}`;
+  if (e instanceof Error) return `${e.name}: ${e.message}`;
+  return String(e);
+}
+
 type AudioSessionNavigator = Navigator & { audioSession?: { type: string } };
 
 // What the create tap takes hold of, released when the recording ends for any
@@ -224,7 +234,12 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
             setRefused(true);
             setLoadError(`can't clip this set — ${e.message}`);
           } else {
-            setLoadError("couldn't load this part of the set — check your connection");
+            const generic = "couldn't load this part of the set — check your connection";
+            setLoadError(
+              isDevModeActive()
+                ? `${generic} [devmode: ${describeError(e)} · slice ${fmtTimestamp(span.start)}–${fmtTimestamp(span.end)} of ${fmtTimestamp(setSeconds)} (${knownDuration ? "player" : "catalogue"} length)]`
+                : generic,
+            );
           }
         }
       },

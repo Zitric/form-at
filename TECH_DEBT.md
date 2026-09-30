@@ -1325,6 +1325,39 @@ Two more findings from the same run:
   so saved sets are served from IDB. Verified on a production build with the
   real SW in desktop Chromium (network cut mid-pick → 206 from the SW);
   not on a phone.
+- **Unexplained, probably avoided: a blank zoom strip online.** On the
+  phone, only for `set-003-julz-lever`: saved, and the set that had been
+  playing. It happened **online**, with the generic "couldn't load this part
+  of the set — check your connection", not the CBR refusal. The full-set
+  strip and the player's waveform were fine, and other sets (saved or not)
+  worked. Before this change, that fetch was a CORS Range request for the
+  bare URL, from the network. What was checked:
+  - **The file itself is fine.** A Range request with `Origin` gets 206,
+    `Content-Range … /206353004`, `ACAO *`, `Vary: Origin`. The first frame
+    is 320kbps with a LAME `Info` (CBR) tag, same as `set-003-unreal`. R2
+    `last-modified` is 8 Sep 2026 22:00, after the 28 Aug event, so the
+    file may be a re-upload. Git can't tell; `sets.created_at` in D1 can.
+  - **CORS cache reuse didn't reproduce in desktop Chromium.** A no-cors
+    `<audio>` played the bare URL from 23:20, and then a CORS Range fetch
+    over that same region got a fresh 206 with `ACAO *`. That test says
+    nothing about Android Chrome, whose installed app shares its HTTP cache
+    with the browser's tabs.
+  - **Open hypothesis: a stale saved copy.** The player plays the IDB copy
+    and measures its length into `durations`, and the picker positions the
+    slice with that length and the playback position. If the set was
+    re-uploaded after it was saved, the old fetch read a different file
+    than the one the length came from. Near the end of a longer old copy,
+    that becomes a 416 or a bad frame sync, shown as the generic line.
+    Unverified.
+
+  With `withAppContext`, a saved set's slice comes from the same IDB copy
+  the player plays, never from the network or the HTTP cache. That avoids
+  all three causes but proves none of them. In devmode the error line now
+  shows the underlying error (name, `Mp3ExcerptError` failure, message with
+  the HTTP status) plus the slice, the set length and where that length
+  came from. It shows up if the error comes back. A save doesn't notice a
+  re-upload at the same URL (the offline guard compares URLs, not ETags),
+  which is a gap of its own if the re-upload is confirmed.
 
 **Still open:**
 - **Android (Chrome):** the share path is verified (above). Still open: a
