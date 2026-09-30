@@ -49,6 +49,8 @@ tests/
 │   ├── djs.spec.ts         # Residents/guests sections
 │   ├── player.spec.ts      # Audio + controls (mocks R2 with silent MP3)
 │   ├── navigation.spec.ts  # Top/bottom nav routing
+│   ├── csp-violations.spec.ts # Zero CSP violations on the golden path; allowed hosts reachable
+│   ├── story-video.spec.ts # Story video recorder in a real browser (harness page, no UI)
 │   └── _helpers.ts         # shared gotoAndHydrate helper, not a spec
 └── setup.ts          # jest-dom matchers, jsdom HTMLMediaElement stubs
 ```
@@ -60,6 +62,7 @@ tests/
 - **Assert what the user sees** — visible text, ARIA labels, URLs.
 - **No snapshot tests.** They rot fast and don't catch regressions worth catching.
 - **Mock the network in E2E**, never the implementation. See `player.spec.ts` for the R2 audio route stub pattern.
+- **Browser-only modules with no UI yet** (canvas, MediaRecorder, Web Audio) are tested through a harness page that `page.route` answers on the dev server's origin, importing the real modules from Vite by path. The app gains no test route. See `story-video.spec.ts`.
 
 ## Adding a test
 

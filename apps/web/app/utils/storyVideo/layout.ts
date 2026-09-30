@@ -30,8 +30,12 @@ export const COLORS = {
   hairline: "rgba(203, 203, 203, 0.3)",
 } as const;
 
+// The site's own Space Mono (/fonts, preloaded by rootHead.ts); the fallbacks
+// only show if it failed to load, which renderer.ts reports.
+export const FONT_FAMILY = '"Space Mono", ui-monospace, monospace';
 export const TEXT_XS = scaled(12);
 export const TEXT_SM = scaled(14);
+export const TRACKING_WIDEST = 0.1; // em, Tailwind's tracking-widest
 
 // Top to bottom. Baselines are for text; y is a top edge.
 export const BRAND = {
@@ -65,7 +69,13 @@ export const EXCERPT_BARS = {
 } as const;
 
 // "start / total" pill, centred on the timeline marker, clamped to the margins.
-export const PILL = { bottomY: 1456, height: 40, fontSize: 26, paddingX: 14 } as const;
+export const PILL = {
+  bottomY: 1456,
+  height: 40,
+  fontSize: 26,
+  paddingX: 14,
+  borderWidth: 2,
+} as const;
 
 export const TIMELINE = {
   y: 1472,
