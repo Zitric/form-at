@@ -388,7 +388,11 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
         })
         .catch(() => {});
     }
+    // Copied now, while this tap's activation is fresh: 20s later Safari may
+    // refuse the write. If it's refused anyway, the screens after recording
+    // offer [ copy_link ] for a fresh tap.
     setLinkCopied(false);
+    void copyLink();
     dispatch({ type: "create" });
   };
 
@@ -422,7 +426,6 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
   const onRecorded = (file: File, canShare: boolean) => {
     if (flowRef.current.phase !== "recording") return; // cancelled meanwhile
     dispatch({ type: "recorded", file, canShare });
-    void copyLink();
   };
 
   const share = () => {

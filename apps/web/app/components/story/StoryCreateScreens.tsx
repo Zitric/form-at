@@ -111,8 +111,9 @@ function LinkNote({ linkCopied, onCopyLink }: Pick<FileScreenProps, "linkCopied"
       <p className={noteClass}>the set link is on your clipboard — add it as a link sticker.</p>
     );
   }
-  // The automatic copy can fail once the tap that started recording is 20s
-  // old (Safari wants a fresh one); this is that fresh tap.
+  // The link is copied in the create tap, but the browser can still refuse
+  // the write (no clipboard permission, page not focused); this is a fresh tap
+  // to try again.
   return (
     <Button variant="secondary" className="self-start" onClick={onCopyLink}>
       copy_link
