@@ -1,5 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { previewSpectrumLevels } from "~/utils/storyVideo/renderer";
+import { corsImageUrl, previewSpectrumLevels } from "~/utils/storyVideo/renderer";
+
+describe("corsImageUrl", () => {
+  const page = "https://formatglasgow.com";
+
+  // The CDN's plain (no-Origin) answer has no CORS headers and is cached, so
+  // a CORS load of the same URL must not share its cache entry.
+  it("gives a cross-origin URL its own cache entry", () => {
+    expect(corsImageUrl("https://cdn.formatglasgow.com/sets/x/artwork.png", page)).toBe(
+      "https://cdn.formatglasgow.com/sets/x/artwork.png?cors=1",
+    );
+  });
+
+  it("leaves same-origin URLs, relative or absolute, as they are", () => {
+    expect(corsImageUrl("/images/uploads/x-1080.webp", page)).toBe("/images/uploads/x-1080.webp");
+    expect(corsImageUrl(`${page}/images/x.webp`, page)).toBe(`${page}/images/x.webp`);
+  });
+});
 
 // A two-channel excerpt: silence for the first half, a 1kHz tone for the second.
 function halfSilentHalfTone(rate = 48000, seconds = 4) {

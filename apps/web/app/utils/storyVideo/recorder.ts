@@ -43,7 +43,7 @@ type StoryRecordingFailure =
   | "stop-timeout"
   | "empty";
 
-class StoryRecordingError extends Error {
+export class StoryRecordingError extends Error {
   constructor(
     readonly failure: StoryRecordingFailure,
     message: string,
