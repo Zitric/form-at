@@ -29,6 +29,9 @@ const handler = createStartHandler({ handler: defaultStreamHandler });
 //   media-src / connect-src — the <audio> stream and the peaks-JSON /
 //     download fetches from the audio host (see @form-at/data/sets, the
 //     canonical home of the hostname).
+//   media-src blob: — the Instagram Story share screen previews the recorded
+//     MP4 in a <video> from a blob: object URL. Without it the preview is
+//     silently blocked and shows an empty frame; the file itself is fine.
 //   static.cloudflareinsights.com (script-src) + cloudflareinsights.com
 //     (connect-src) — Cloudflare Web Analytics. BOTH are required and neither
 //     is redundant: the first loads the beacon `rootHead.ts` injects, the
@@ -43,7 +46,7 @@ const DOCUMENT_CSP = [
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' data: ${AUDIO_ORIGIN}`,
   "font-src 'self'",
-  `media-src 'self' ${AUDIO_ORIGIN}`,
+  `media-src 'self' blob: ${AUDIO_ORIGIN}`,
   `connect-src 'self' ${AUDIO_ORIGIN} https://cloudflareinsights.com`,
   "worker-src 'self'",
   "manifest-src 'self'",

@@ -42,13 +42,29 @@ function context2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
   return g;
 }
 
-interface StoryAssets {
+export interface StoryAssets {
   /** null when every URL failed: the frame draws a placeholder instead. */
   artwork: HTMLImageElement | null;
   /** Which URL the artwork came from, for diagnostics. */
   artworkUrl: string | null;
   /** false means text will render in a fallback face. */
   fontsLoaded: boolean;
+}
+
+/**
+ * A cross-origin URL gets its own cache entry for the CORS load. The CDN only
+ * adds `Access-Control-Allow-Origin` (and `Vary: Origin`) when the request
+ * carries an Origin, and caches the plain answer for 4 hours. So once the
+ * page's own <img> (Image.tsx's fallback to the uploaded original) has
+ * fetched the same URL without CORS, the browser reuses that cached copy for
+ * this CORS request and blocks it. R2 serves by path and ignores the query.
+ * Same-origin URLs need no CORS and are left alone.
+ */
+export function corsImageUrl(url: string, pageOrigin: string): string {
+  const parsed = new URL(url, pageOrigin);
+  if (parsed.origin === pageOrigin) return url;
+  parsed.searchParams.set("cors", "1");
+  return parsed.href;
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -59,7 +75,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
     img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error(`failed to load ${url}`));
-    img.src = url;
+    img.src = corsImageUrl(url, window.location.origin);
   });
 }
 

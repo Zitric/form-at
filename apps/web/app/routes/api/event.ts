@@ -36,8 +36,9 @@ export async function validate(
   if (typeof r.event_type !== "string" || !isTrackableEventType(r.event_type)) return null;
   if (typeof r.is_standalone !== "boolean") return null;
 
-  // set_id is optional — only save_click/share_click carry one today, but
-  // validation doesn't hard-couple which event_types are allowed to send
+  // set_id is optional — only set-level actions send one (save_click,
+  // share_click and the story_* events; the allowlist's comments say which),
+  // but validation doesn't hard-couple which event_types are allowed to send
   // it; any event_type MAY include a set_id, and if it does, it must
   // resolve to a real set (same anti-spam rule as `api/signal.ts`).
   let setId: string | null = null;

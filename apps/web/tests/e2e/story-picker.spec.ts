@@ -177,6 +177,133 @@ test.describe("instagram story entry (mobile, ?story=on)", () => {
   });
 });
 
+// ── Create → record → share, in the installed app ────────────────────────
+// The share sheet can't be driven from a test, so navigator.share/canShare
+// are stubbed everywhere. The recording is real where the browser has H.264 +
+// AAC encoders (ci.yml's macOS `e2e-story-video` job, and local Macs), and
+// checked for size and duration there. CI's Linux Chromium has neither
+// encoder, so there MediaRecorder is replaced by a fake that hands back a
+// tiny MP4-typed blob: the flow, its screens and its events are still real.
+// Either way the recording takes the real 20 seconds.
+// STORY_FAKE_RECORDER=1 runs the Linux path on any machine.
+const fakeRecorder = process.platform === "linux" || !!process.env.STORY_FAKE_RECORDER;
+
+async function stubShareAndRecorder(page: Page) {
+  await page.addInitScript((fake: boolean) => {
+    const w = window as unknown as {
+      __events: string[];
+      __shared: File[];
+      MediaRecorder: unknown;
+    };
+    w.__events = [];
+    w.__shared = [];
+    const beacon = navigator.sendBeacon.bind(navigator);
+    navigator.sendBeacon = (url, data) => {
+      if (String(url).includes("/api/event") && data instanceof Blob) {
+        void data.text().then((t) => w.__events.push(JSON.parse(t).event_type));
+      }
+      return beacon(url, data);
+    };
+    navigator.canShare = () => true;
+    navigator.share = async (data) => {
+      w.__shared.push(...(data?.files ?? []));
+    };
+    if (!fake) return;
+    class FakeMediaRecorder {
+      static isTypeSupported = (type: string) => type.startsWith("video/mp4");
+      mimeType: string;
+      state = "inactive";
+      ondataavailable: ((e: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor(_stream: MediaStream, options?: { mimeType?: string }) {
+        this.mimeType = options?.mimeType ?? "video/mp4";
+      }
+      start() {
+        this.state = "recording";
+      }
+      stop() {
+        this.state = "inactive";
+        // An `ftyp` box, so the diagnostics' box scan has something to read.
+        const bytes = new Uint8Array([
+          0, 0, 0, 16, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 0, 0,
+        ]);
+        const data = new Blob([bytes], { type: this.mimeType });
+        setTimeout(() => {
+          this.ondataavailable?.({ data });
+          this.onstop?.();
+        }, 0);
+      }
+    }
+    w.MediaRecorder = FakeMediaRecorder;
+  }, fakeRecorder);
+  // The story frame's artwork. In the dev server the optimised /images/
+  // variant doesn't exist, so the renderer falls back to the CDN original.
+  await page.route(/cdn\.formatglasgow\.com\/.*artwork\.png/, (route) =>
+    route.fulfill({
+      headers: cors,
+      contentType: "image/png",
+      body: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    }),
+  );
+}
+
+test("creates a 20s story in the installed app and hands it to the share sheet", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "phone emulation runs in the chromium project");
+  test.setTimeout(90_000);
+  await stubNetworkAndCodecs(page);
+  await stubShareAndRecorder(page);
+  await emulateStandalone(page);
+  await openShare(page, `${SET_PATH}?story=on`);
+  await page.getByRole("button", { name: /instagram_story/ }).click();
+
+  const flow = page.getByRole("dialog", { name: "Pick 20 seconds for an Instagram story" });
+  const create = flow.getByRole("button", { name: /create_story/ });
+  await expect(create).toBeEnabled({ timeout: 15_000 });
+  await create.click();
+
+  await expect(flow.getByText(/recording… \d+s \/ 20s/)).toBeVisible();
+  await expect(flow.getByText("your story is ready")).toBeVisible({ timeout: 40_000 });
+
+  if (!fakeRecorder) {
+    // A real recording: the preview <video> reads the file's own metadata.
+    const video = flow.getByLabel("Your story video");
+    await expect
+      .poll(() => video.evaluate((v: HTMLVideoElement) => v.readyState), { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(1);
+    const meta = await video.evaluate((v: HTMLVideoElement) => [
+      v.videoWidth,
+      v.videoHeight,
+      v.duration,
+    ]);
+    expect(meta.slice(0, 2)).toEqual([1080, 1920]);
+    expect(meta[2]).toBeGreaterThan(19);
+    expect(meta[2]).toBeLessThan(21.5);
+  }
+
+  await flow.getByRole("button", { name: "share", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByText("shared — add the link sticker in instagram")).toBeVisible();
+
+  const shared = await page.evaluate(() =>
+    (window as unknown as { __shared: File[] }).__shared.map((f) => [f.name, f.type]),
+  );
+  expect(shared).toEqual([["formatglasgow-set-003-unreal-46-57.mp4", "video/mp4"]]);
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __events: string[] }).__events))
+    .toEqual(expect.arrayContaining(["story_video_created", "story_video_shared"]));
+  const events = await page.evaluate(() => (window as unknown as { __events: string[] }).__events);
+  expect(events.filter((e) => e.startsWith("story_video_"))).toEqual([
+    "story_video_created",
+    "story_video_shared",
+  ]);
+});
+
 test("desktop never shows the entry, even with the flag", async ({ browser }, testInfo) => {
   test.skip(testInfo.project.name !== "chromium", "chromium project only");
   const context = await browser.newContext(devices["Desktop Chrome"]);

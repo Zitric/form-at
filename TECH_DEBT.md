@@ -1288,11 +1288,21 @@ Instagram's re-encode. **Fragmented MP4 is therefore NOT resolved.** Reaching
 the send screen shows the composer accepted the file, not that the published
 story is correct.
 
-**Layout approved (2026-09-30).** It lives in the spike: its header comment
-is the single reference, and its constants are the source of truth. The
+**Layout approved (2026-09-30).** The spike's header comment is the design
+reference; since PR 1 the feature draws from `apps/web/app/utils/storyVideo/layout.ts`,
+kept in step with it until the spike is deleted. The
 published-story test is being done with a **Mac-recorded** file. So Android
 Chrome's own MediaRecorder output (codec, fragmentation, frame pacing) stays
 unverified until the feature runs on a phone.
+
+**Android, installed app, the shipped picker (2026-09-30, PR 3a).**
+- The `?story=on` flag set in a Chrome tab carried into the installed app,
+  so the two **share localStorage** for the origin.
+- The install gate is correct in a tab.
+- In the app: the picker, dragging, strip taps, and preview play / stop /
+  play to the end all work. A new slice takes **~2s** to load.
+
+Recording and sharing (PR 3b) haven't run on a phone yet.
 
 **Still open:**
 - **Android (Chrome):** the share path is verified (above). Still open: a
@@ -1301,7 +1311,12 @@ unverified until the feature runs on a phone.
   recorder output — paste its copy-report here.
 - **iOS (Safari, installed PWA and tab):** the same questions, plus whether
   the `AudioContext` path records audio at all and whether the silent switch
-  mutes the recording. Waits on the same iPhone access as items 12 and 23b.
+  mutes the recording (PR 3b sets `navigator.audioSession.type = "playback"`
+  for the recording, unverified). Waits on the same iPhone access as items 12
+  and 23b. **It also needs an in-app way to set `?story=on` first**: the iOS
+  home-screen app has no URL bar, is believed not to share storage with
+  Safari, and links from other apps open in Safari, so the Android route
+  (set it in a browser tab) shouldn't work there.
   An iOS phone can't use `adb reverse`, so serve the page over HTTPS some
   other way, e.g. a throwaway `cloudflared tunnel --url http://localhost:8787`
   quick tunnel (no account resources, random URL, gone on exit). Run it

@@ -1,19 +1,34 @@
+import { getDJ } from "@form-at/data/djs";
 import type { MusicSet } from "@form-at/data/sets";
 import { Button, Modal, TerminalRow } from "@form-at/ui";
 import { colors } from "@form-at/ui/tokens";
 import {
   type KeyboardEvent,
   type PointerEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useRef,
   useState,
 } from "react";
 
+import {
+  FailedScreen,
+  FallbackScreen,
+  RecordingScreen,
+  ShareScreen,
+} from "~/components/story/StoryCreateScreens";
+import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";
 import { getAudioCurrentTime } from "~/store/playerSlice";
 import { withAppContext } from "~/utils/audioUrl";
 import { fmtTimestamp, parseDuration } from "~/utils/fmt";
+import {
+  type CreateAction,
+  type CreateState,
+  storyFileName,
+  transition,
+} from "~/utils/storyVideo/createFlow";
 import {
   NUDGE_SECONDS,
   type Span,
@@ -30,12 +45,15 @@ import {
 } from "~/utils/storyVideo/excerptWindow";
 import { EXCERPT_SECONDS } from "~/utils/storyVideo/layout";
 import { Mp3ExcerptError, fetchExcerpt } from "~/utils/storyVideo/mp3Excerpt";
+import { type StoryAssets, loadStoryAssets } from "~/utils/storyVideo/renderer";
 
-// The Instagram Story excerpt picker. A fixed 20s window sits in the middle
-// of a zoomed strip and the waveform slides under it; a full-set strip above
-// jumps anywhere; ±5s nudges fine-tune. Preview plays the decoded audio
-// through Web Audio, never the player's <audio>, which is paused meanwhile
-// and resumed after.
+// The Instagram Story flow. First the excerpt picker: a fixed 20s window sits
+// in the middle of a zoomed strip and the waveform slides under it; a
+// full-set strip above jumps anywhere; ±5s nudges fine-tune. Preview plays
+// the decoded audio through Web Audio, never the player's <audio>, which is
+// paused meanwhile and resumed after. Then [ create_story ] records the
+// window from the same decoded slice (no second download) and hands the file
+// to the share sheet. The phases and their analytics live in createFlow.ts.
 //
 // Lazy-loaded by StoryFlowHost; the default export is what lazy() needs.
 
@@ -117,11 +135,32 @@ function drawZoomStrip(
   }
 }
 
+// The artwork the story frame draws: the optimised 1080 webp Image.tsx serves
+// (`/images/${src}-${w}.webp`), then the uploaded original.
+function artworkUrls(set: MusicSet): string[] {
+  return [
+    set.artwork ? `/images/${set.artwork}-1080.webp` : null,
+    set.artworkOriginalUrl ?? null,
+  ].filter((u): u is string => u !== null);
+}
+
+type AudioSessionNavigator = Navigator & { audioSession?: { type: string } };
+
+// What the create tap takes hold of, released when the recording ends for any
+// reason: the player's state, iOS's audio session type, and the wake lock.
+type Session = {
+  wasPlaying: boolean;
+  audioSessionType: string | null;
+  wakeLock: WakeLockSentinel | null;
+};
+
 type Props = { set: MusicSet; onClose: () => void };
 
 export default function StoryVideoFlow({ set, onClose }: Props) {
   const isCurrent = useStore((s) => s.nowPlaying?.id === set.id);
   const setIsPlaying = useStore((s) => s.setIsPlaying);
+  const setToast = useStore((s) => s.setToast);
+  const trackEvent = useTrackEvent();
   const knownDuration = useStore((s) => s.durations[set.id]);
   const cachedPeaks = useStore((s) => s.peaksCache[set.id]);
   const setPeaks = useStore((s) => s.setPeaks);
@@ -274,14 +313,160 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
     return () => cancelAnimationFrame(raf);
   }, [previewing]);
 
-  // Leaving the picker stops the preview (resuming the player) and releases
-  // the AudioContext.
+  // ── Create: record the window, then share ──
+  const [flow, setFlow] = useState<CreateState>({ phase: "picking" });
+  // The machine's state is read synchronously by tap handlers and recorder
+  // callbacks, so it lives in a ref as well as in React state; each
+  // transition's events are tracked exactly once, here.
+  const flowRef = useRef(flow);
+  const dispatch = useCallback(
+    (action: CreateAction) => {
+      const next = transition(flowRef.current, action);
+      flowRef.current = next.state;
+      setFlow(next.state);
+      for (const event of next.events) trackEvent(event, set.id);
+    },
+    [trackEvent, set.id],
+  );
+
+  // Fonts and artwork load while the visitor picks, so [ create_story ]
+  // starts at once.
+  const [assets, setAssets] = useState<StoryAssets | null>(null);
+  useEffect(() => {
+    let live = true;
+    void loadStoryAssets(artworkUrls(set)).then((loaded) => {
+      if (live) setAssets(loaded);
+    });
+    return () => {
+      live = false;
+    };
+  }, [set]);
+
+  const session = useRef<Session | null>(null);
+  const endSession = useCallback(() => {
+    const held = session.current;
+    if (!held) return;
+    session.current = null;
+    void held.wakeLock?.release().catch(() => {});
+    const nav = navigator as AudioSessionNavigator;
+    if (nav.audioSession && held.audioSessionType !== null) {
+      nav.audioSession.type = held.audioSessionType;
+    }
+    if (held.wasPlaying) setIsPlaying(true);
+  }, [setIsPlaying]);
+
+  // Everything here runs synchronously in the tap: resume() and the audio
+  // session only take effect within a user activation.
+  const createStory = () => {
+    if (!windowDecoded || !assets || flowRef.current.phase !== "picking") return;
+    stopPreview();
+    contextRef.current ??= new AudioContext();
+    void contextRef.current.resume();
+    const held: Session = {
+      wasPlaying: useStore.getState().isPlaying,
+      audioSessionType: null,
+      wakeLock: null,
+    };
+    // iOS: "playback" plays through the silent switch, like the player does.
+    // Only Safari has navigator.audioSession.
+    const nav = navigator as AudioSessionNavigator;
+    if (nav.audioSession) {
+      held.audioSessionType = nav.audioSession.type;
+      nav.audioSession.type = "playback";
+    }
+    if (held.wasPlaying) setIsPlaying(false);
+    session.current = held;
+    // Keep the screen on for the 20s: if it dims and locks, the page hides
+    // and the recording aborts. Where unsupported or refused, recording just
+    // goes ahead without it.
+    if ("wakeLock" in navigator) {
+      navigator.wakeLock
+        .request("screen")
+        .then((lock) => {
+          if (session.current === held) held.wakeLock = lock;
+          else void lock.release();
+        })
+        .catch(() => {});
+    }
+    setLinkCopied(false);
+    dispatch({ type: "create" });
+  };
+
+  // Leaving the recording phase, however it happened, gives everything back.
+  useEffect(() => {
+    if (flow.phase !== "recording") endSession();
+  }, [flow.phase, endSession]);
+
+  const [linkCopied, setLinkCopied] = useState(false);
+  // The link opens the set at the clip's start, like ShareModal's copy @.
+  const storyLink = `${window.location.origin}/sets/${set.id}?t=${Math.floor(start)}`;
+  const copyLink = () =>
+    navigator.clipboard.writeText(storyLink).then(
+      () => {
+        setLinkCopied(true);
+        setToast("link copied — add it as a link sticker");
+      },
+      () => setLinkCopied(false),
+    );
+
+  const onRecordingProgress = (progress: number) => {
+    // A second's step is enough for the bar and the counter; per-frame
+    // updates would re-render the dialog 60 times a second.
+    const stepped = Math.floor(progress * EXCERPT_SECONDS) / EXCERPT_SECONDS;
+    const current = flowRef.current;
+    if (current.phase === "recording" && current.progress !== stepped) {
+      dispatch({ type: "progress", progress: stepped });
+    }
+  };
+
+  const onRecorded = (file: File, canShare: boolean) => {
+    if (flowRef.current.phase !== "recording") return; // cancelled meanwhile
+    dispatch({ type: "recorded", file, canShare });
+    void copyLink();
+  };
+
+  const share = () => {
+    const current = flowRef.current;
+    if (current.phase !== "ready") return;
+    dispatch({ type: "share" });
+    // Called synchronously in the tap: share() needs this fresh activation.
+    navigator.share({ files: [current.file] }).then(
+      () => dispatch({ type: "share-resolved" }),
+      (e: unknown) =>
+        dispatch({
+          type:
+            (e as { name?: string } | null)?.name === "AbortError"
+              ? "share-aborted"
+              : "share-failed",
+        }),
+    );
+  };
+
+  useEffect(() => {
+    if (flow.phase !== "done") return;
+    setToast("shared — add the link sticker in instagram");
+    onClose();
+  }, [flow.phase, setToast, onClose]);
+
+  // The recording reuses the decoded slice; no second download.
+  const windowExcerpt =
+    slice && windowDecoded
+      ? {
+          audio: slice.audio,
+          offsetSeconds: slice.offsetSeconds + (start - slice.span.start),
+          durationSeconds: EXCERPT_SECONDS,
+        }
+      : null;
+
+  // Leaving the flow stops the preview and any recording (RecordingScreen
+  // aborts on unmount), gives back the session, and releases the AudioContext.
   useEffect(
     () => () => {
       stopPreview();
+      endSession();
       void contextRef.current?.close();
     },
-    [stopPreview],
+    [stopPreview, endSession],
   );
 
   // ── Strips ──
@@ -289,23 +474,26 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
   const fullRef = useRef<HTMLCanvasElement>(null);
   const zoomRef = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(0);
+  // The strips unmount while a later screen shows; coming back remounts them,
+  // so measuring and drawing re-run on `picking` too.
+  const picking = flow.phase === "picking";
 
   useEffect(() => {
     const el = stripsRef.current;
-    if (!el) return;
+    if (!picking || !el) return;
     const measure = () => setWidth(el.clientWidth);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [picking]);
 
   useEffect(() => {
-    if (!width) return;
+    if (!picking || !width) return;
     if (fullRef.current)
       drawFullStrip(fullRef.current, width, cachedPeaks ?? [], start, setSeconds);
     if (zoomRef.current) drawZoomStrip(zoomRef.current, width, slice, start, setSeconds);
-  }, [width, cachedPeaks, slice, start, setSeconds]);
+  }, [picking, width, cachedPeaks, slice, start, setSeconds]);
 
   const moveTo = (next: number) => {
     stopPreview();
@@ -334,6 +522,7 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
 
   const close = () => {
     stopPreview();
+    endSession();
     onClose();
   };
 
@@ -346,6 +535,51 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
     : needsSlice
       ? "loading this part of the set…"
       : "drag the waveform, tap the full set, or nudge";
+
+  const backToPicker = () => dispatch({ type: "back" });
+  const fileScreenProps = {
+    windowLabel,
+    linkCopied,
+    onCopyLink: () => void copyLink(),
+    onBack: backToPicker,
+  };
+  let createScreen: ReactNode = null;
+  if (flow.phase === "recording" && windowExcerpt && assets && contextRef.current) {
+    createScreen = (
+      <RecordingScreen
+        context={contextRef.current}
+        input={{
+          djName: (set.djId && getDJ(set.djId)?.name) || set.artist,
+          title: set.title,
+          date: set.date,
+          startSeconds: start,
+          setSeconds,
+          excerpt: windowExcerpt,
+          setPeaks: cachedPeaks ?? [],
+          artwork: assets.artwork,
+        }}
+        fileName={storyFileName(set.id, start)}
+        progress={flow.progress}
+        onProgress={onRecordingProgress}
+        onRecorded={onRecorded}
+        onFailed={(message) => dispatch({ type: "record-failed", message })}
+        onCancel={() => dispatch({ type: "cancel" })}
+      />
+    );
+  } else if (flow.phase === "ready" || flow.phase === "sharing") {
+    createScreen = (
+      <ShareScreen
+        {...fileScreenProps}
+        file={flow.file}
+        onShare={share}
+        sharing={flow.phase === "sharing"}
+      />
+    );
+  } else if (flow.phase === "fallback") {
+    createScreen = <FallbackScreen {...fileScreenProps} file={flow.file} />;
+  } else if (flow.phase === "failed") {
+    createScreen = <FailedScreen message={flow.message} onBack={backToPicker} />;
+  }
 
   return (
     <Modal
@@ -360,7 +594,9 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
     >
       <TerminalRow label="set" value={`${set.artist} @ ${set.title}`} className="mb-5" />
 
-      {setSeconds <= 0 ? (
+      {!picking ? (
+        createScreen
+      ) : setSeconds <= 0 ? (
         <p className="text-sm text-grey leading-relaxed">
           this set's length isn't known yet — play it for a moment, then try again.
         </p>
@@ -438,6 +674,15 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
               +{NUDGE_SECONDS}s
             </Button>
           </div>
+
+          <Button
+            variant="primary"
+            className="mt-5"
+            disabled={!windowDecoded || !assets}
+            onClick={createStory}
+          >
+            create_story
+          </Button>
 
           <p className="text-xs text-grey/60 tracking-widest leading-relaxed mt-5">{status}</p>
           {loadError && !refused && (

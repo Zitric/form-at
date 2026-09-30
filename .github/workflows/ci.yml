@@ -249,8 +249,9 @@ jobs:
 
   # ── Story video recording (macOS) ──────────────────────────────────────────
   # The Linux Chromium in the e2e job above can't record H.264 + AAC MP4 (no
-  # encoders), so the one test that records runs here on macOS, where
-  # Chromium uses the system encoders. The Linux jobs skip it by name; this
+  # encoders), so the tests that record for real run here on macOS, where
+  # Chromium uses the system encoders. On Linux, story-video.spec.ts skips by
+  # name and story-picker.spec.ts's create flow fakes MediaRecorder; this
   # job fails, rather than skips, if the codecs ever go missing here too.
   # Free on GitHub-hosted runners because the repo is public. Not in
   # deploy.yml: it guards merges, not deploys.
@@ -282,8 +283,11 @@ jobs:
         timeout-minutes: 15
         run: pnpm -C apps/web exec playwright install chromium
 
-      - name: Run story video recording test
-        run: pnpm -C apps/web test:e2e tests/e2e/story-video.spec.ts --project=chromium
+      # story-picker.spec.ts also runs in the Linux e2e job, where its
+      # create-flow test fakes MediaRecorder; only here does that test record
+      # for real and check the file's size and duration.
+      - name: Run story video recording tests
+        run: pnpm -C apps/web test:e2e tests/e2e/story-video.spec.ts tests/e2e/story-picker.spec.ts --project=chromium
 
       - name: Upload report on failure
         if: failure()

@@ -180,4 +180,25 @@ test.describe("CSP violations", () => {
     expect(violations).toHaveLength(1);
     expect(violations[0]).toMatchObject({ violatedDirective: "img-src" });
   });
+
+  // The Instagram Story share screen previews the recorded MP4 in a <video>
+  // from a blob: object URL, which needs `media-src blob:`. The blob's bytes
+  // don't have to be a playable video: CSP is checked when the element loads
+  // the URL, before any decoding.
+  test("a blob: video (the story share screen's preview) produces no CSP violation", async ({
+    page,
+  }) => {
+    await installViolationListener(page);
+    await gotoAndHydrate(page, "/");
+
+    await page.evaluate(() => {
+      const video = document.createElement("video");
+      video.muted = true;
+      video.src = URL.createObjectURL(new Blob([new Uint8Array(64)], { type: "video/mp4" }));
+      document.body.appendChild(video);
+    });
+    await page.waitForTimeout(1000);
+
+    expect(await getViolations(page)).toEqual([]);
+  });
 });
