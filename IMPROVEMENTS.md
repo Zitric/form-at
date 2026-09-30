@@ -54,6 +54,12 @@ Running list of feature/functional improvements. Tick off as we ship.
 
   Table applied as `rum_daily` (see `apps/web/schema.sql`). Build order: table → Worker + cron → history card reading D1 → staleness disclosure.
 
+- [ ] **#13 — Instagram Story video: follow-ups deliberately left out of v1**
+  v1 is being built behind `?story=on` (design and device results: TECH_DEBT.md item 30, `spikes/instagram-story/`). Deferred on purpose:
+  - **CBR warning at admin upload.** The Story excerpt seeks by byte offset, which is exact only for CBR MP3s; v1 refuses a VBR (`Xing`) set at clip time. Add a *warning* (not a block) to the admin upload's validation (`apps/admin/app/utils/validateUpload.ts`) when the file has a `Xing`/`VBRI` header or no `Info` tag. All 10 catalogue sets are CBR today.
+  - **Offline clipping in the installed app.** v1 is online-only; offline shows a clear message. The likely future path: fetch the excerpt with `withAppContext` so the SW's audio route answers the Range request from the IDB copy via `createPartialResponse`. Unverified — needs a production-build test on a device. Browser tabs stay online-only regardless (tabs never read the offline library).
+  - **Artwork / DJ photo choice in the picker.** DJ photos (`dj.photo`, `/images/djs/<id>-{640,1080}.webp`, `ACAO *`) come in mixed aspect ratios — 3:4 for most, 1:1, 2:3, ~1:1 — so unlike the square artwork, a fixed slot means cropping or letterboxing. Artwork stays the default.
+
 ## Bigger but worth it
 
 - [ ] **#8 — Full PWA (install + share routing + offline + polish)**
