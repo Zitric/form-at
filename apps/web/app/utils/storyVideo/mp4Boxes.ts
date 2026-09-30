@@ -39,6 +39,25 @@ export function topLevelBoxes(bytes: Uint8Array): Mp4BoxScan {
   return { boxes, invalidAt: null };
 }
 
+/**
+ * The movie duration mvhd declares, in seconds; null without a moov/mvhd.
+ * MediaRecorder's fragmented files declare 0 here, however long they are.
+ */
+export function movieDurationSeconds(bytes: Uint8Array): number | null {
+  const moov = topLevelBoxes(bytes).boxes.find((b) => b.type === "moov");
+  if (!moov) return null;
+  const inner = topLevelBoxes(bytes.subarray(moov.offset + 8, moov.offset + moov.size)).boxes;
+  const mvhd = inner.find((b) => b.type === "mvhd");
+  if (!mvhd) return null;
+  const at = moov.offset + 8 + mvhd.offset + 8; // version + flags start here
+  const view = new DataView(bytes.buffer, bytes.byteOffset + at, mvhd.size - 8);
+  const version = view.getUint8(0);
+  // v0: creation(4) modification(4) timescale(4) duration(4); v1: 8/8/4/8.
+  const timescale = view.getUint32(version === 1 ? 20 : 12);
+  const duration = version === 1 ? Number(view.getBigUint64(24)) : view.getUint32(16);
+  return timescale ? duration / timescale : null;
+}
+
 /** Fragmented MP4: media in moof/mdat fragments rather than one moov-indexed mdat. */
 export function isFragmented(boxes: readonly Mp4Box[]): boolean {
   return boxes.some((box) => box.type === "moof");

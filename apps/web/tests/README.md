@@ -42,6 +42,7 @@ tests/
 │   ├── data/          # beacon-queue, sets, setsForRoute (the D1-fallback logic)
 │   ├── routes/        # API handlers — api-signal, api-event, api-push-subscribe
 │   └── scripts/       # build scripts (optimize-images)
+├── fixtures/          # binary test inputs (mediarecorder-fragmented.mp4: a real Chrome recording, cut after 2 fragments)
 ├── e2e/
 │   ├── home.spec.ts        # Manifesto, CTA, social links
 │   ├── sets.spec.ts        # List + info → detail flow

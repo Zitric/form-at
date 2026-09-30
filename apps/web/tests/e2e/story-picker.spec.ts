@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import { type Page, type Route, devices, expect, test } from "@playwright/test";
+import { movieDurationSeconds, topLevelBoxes } from "../../app/utils/storyVideo/mp4Boxes";
 import { gotoAndHydrate } from "./_helpers";
 
 // The Instagram Story entry and excerpt picker, behind `?story=on`, on a
@@ -147,21 +149,21 @@ test.describe("instagram story entry (mobile, ?story=on)", () => {
     await openShare(page, `${SET_PATH}?story=on`);
     await page.getByRole("button", { name: /instagram_story/ }).click();
 
-    const picker = page.getByRole("dialog", { name: "Pick 20 seconds for an Instagram story" });
+    const picker = page.getByRole("dialog", { name: "Pick 15 seconds for an Instagram story" });
     await expect(picker).toBeVisible();
     // A third of 8451s is 2817s: 46:57.
-    await expect(pickerLabel(page)).toHaveText("46:57 → 47:17");
+    await expect(pickerLabel(page)).toHaveText("46:57 → 47:12");
     await expect(picker.getByText("drag the waveform, tap the full set, or nudge")).toBeVisible();
 
     // Dragging the waveform right goes back in time.
-    const strip = picker.getByRole("slider", { name: "20-second excerpt start" });
+    const strip = picker.getByRole("slider", { name: "15-second excerpt start" });
     const box = await strip.boundingBox();
     if (!box) throw new Error("zoomed strip has no box");
     await page.mouse.move(box.x + box.width * 0.5, box.y + box.height / 2);
     await page.mouse.down();
     await page.mouse.move(box.x + box.width * 0.9, box.y + box.height / 2, { steps: 8 });
     await page.mouse.up();
-    await expect(pickerLabel(page)).not.toHaveText("46:57 → 47:17");
+    await expect(pickerLabel(page)).not.toHaveText("46:57 → 47:12");
     await expect(picker.getByText("drag the waveform, tap the full set, or nudge")).toBeVisible();
 
     await picker.getByRole("button", { name: "Forward 5 seconds" }).click();
@@ -171,8 +173,8 @@ test.describe("instagram story entry (mobile, ?story=on)", () => {
     const fullBox = await full.boundingBox();
     if (!fullBox) throw new Error("full strip has no box");
     await page.mouse.click(fullBox.x + fullBox.width - 1, fullBox.y + fullBox.height / 2);
-    // 8451s − 20 = 8431s: 140:31.
-    await expect(pickerLabel(page)).toHaveText("140:31 → 140:51");
+    // 8451s − 15 = 8436s: 140:36.
+    await expect(pickerLabel(page)).toHaveText("140:36 → 140:51");
     await expect(picker.getByText("drag the waveform, tap the full set, or nudge")).toBeVisible();
   });
 });
@@ -182,61 +184,68 @@ test.describe("instagram story entry (mobile, ?story=on)", () => {
 // are stubbed everywhere. The recording is real where the browser has H.264 +
 // AAC encoders (ci.yml's macOS `e2e-story-video` job, and local Macs), and
 // checked for size and duration there. CI's Linux Chromium has neither
-// encoder, so there MediaRecorder is replaced by a fake that hands back a
-// tiny MP4-typed blob: the flow, its screens and its events are still real.
-// Either way the recording takes the real 20 seconds.
+// encoder, so there MediaRecorder is replaced by a fake that hands back a real
+// Chrome recording (the unit tests' fragmented fixture): the flow, the remux,
+// the screens and the events are still real. Either way the recording takes
+// the real EXCERPT_SECONDS.
 // STORY_FAKE_RECORDER=1 runs the Linux path on any machine.
 const fakeRecorder = process.platform === "linux" || !!process.env.STORY_FAKE_RECORDER;
+const FRAGMENTED_FIXTURE = readFileSync(
+  new URL("../fixtures/mediarecorder-fragmented.mp4", import.meta.url),
+).toString("base64");
+// ffprobe on that fixture.
+const FIXTURE_SECONDS = 6.7566;
 
 async function stubShareAndRecorder(page: Page) {
-  await page.addInitScript((fake: boolean) => {
-    const w = window as unknown as {
-      __events: string[];
-      __shared: File[];
-      MediaRecorder: unknown;
-    };
-    w.__events = [];
-    w.__shared = [];
-    const beacon = navigator.sendBeacon.bind(navigator);
-    navigator.sendBeacon = (url, data) => {
-      if (String(url).includes("/api/event") && data instanceof Blob) {
-        void data.text().then((t) => w.__events.push(JSON.parse(t).event_type));
+  await page.addInitScript(
+    ({ fake, fixture }: { fake: boolean; fixture: string }) => {
+      const w = window as unknown as {
+        __events: string[];
+        __shared: File[];
+        MediaRecorder: unknown;
+      };
+      w.__events = [];
+      w.__shared = [];
+      const beacon = navigator.sendBeacon.bind(navigator);
+      navigator.sendBeacon = (url, data) => {
+        if (String(url).includes("/api/event") && data instanceof Blob) {
+          void data.text().then((t) => w.__events.push(JSON.parse(t).event_type));
+        }
+        return beacon(url, data);
+      };
+      navigator.canShare = () => true;
+      navigator.share = async (data) => {
+        w.__shared.push(...(data?.files ?? []));
+      };
+      if (!fake) return;
+      class FakeMediaRecorder {
+        static isTypeSupported = (type: string) => type.startsWith("video/mp4");
+        mimeType: string;
+        state = "inactive";
+        ondataavailable: ((e: { data: Blob }) => void) | null = null;
+        onstop: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        constructor(_stream: MediaStream, options?: { mimeType?: string }) {
+          this.mimeType = options?.mimeType ?? "video/mp4";
+        }
+        start() {
+          this.state = "recording";
+        }
+        stop() {
+          this.state = "inactive";
+          // A genuine fragmented recording, so the remux has real work to do.
+          const bytes = Uint8Array.from(atob(fixture), (c) => c.charCodeAt(0));
+          const data = new Blob([bytes], { type: this.mimeType });
+          setTimeout(() => {
+            this.ondataavailable?.({ data });
+            this.onstop?.();
+          }, 0);
+        }
       }
-      return beacon(url, data);
-    };
-    navigator.canShare = () => true;
-    navigator.share = async (data) => {
-      w.__shared.push(...(data?.files ?? []));
-    };
-    if (!fake) return;
-    class FakeMediaRecorder {
-      static isTypeSupported = (type: string) => type.startsWith("video/mp4");
-      mimeType: string;
-      state = "inactive";
-      ondataavailable: ((e: { data: Blob }) => void) | null = null;
-      onstop: (() => void) | null = null;
-      onerror: (() => void) | null = null;
-      constructor(_stream: MediaStream, options?: { mimeType?: string }) {
-        this.mimeType = options?.mimeType ?? "video/mp4";
-      }
-      start() {
-        this.state = "recording";
-      }
-      stop() {
-        this.state = "inactive";
-        // An `ftyp` box, so the diagnostics' box scan has something to read.
-        const bytes = new Uint8Array([
-          0, 0, 0, 16, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 0, 0,
-        ]);
-        const data = new Blob([bytes], { type: this.mimeType });
-        setTimeout(() => {
-          this.ondataavailable?.({ data });
-          this.onstop?.();
-        }, 0);
-      }
-    }
-    w.MediaRecorder = FakeMediaRecorder;
-  }, fakeRecorder);
+      w.MediaRecorder = FakeMediaRecorder;
+    },
+    { fake: fakeRecorder, fixture: FRAGMENTED_FIXTURE },
+  );
   // The story frame's artwork. In the dev server the optimised /images/
   // variant doesn't exist, so the renderer falls back to the CDN original.
   await page.route(/cdn\.formatglasgow\.com\/.*artwork\.png/, (route) =>
@@ -251,7 +260,7 @@ async function stubShareAndRecorder(page: Page) {
   );
 }
 
-test("creates a 20s story in the installed app and hands it to the share sheet", async ({
+test("creates a story in the installed app and hands a non-fragmented MP4 to the share sheet", async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "chromium", "phone emulation runs in the chromium project");
@@ -262,12 +271,13 @@ test("creates a 20s story in the installed app and hands it to the share sheet",
   await openShare(page, `${SET_PATH}?story=on`);
   await page.getByRole("button", { name: /instagram_story/ }).click();
 
-  const flow = page.getByRole("dialog", { name: "Pick 20 seconds for an Instagram story" });
+  const flow = page.getByRole("dialog", { name: "Pick 15 seconds for an Instagram story" });
   const create = flow.getByRole("button", { name: /create_story/ });
   await expect(create).toBeEnabled({ timeout: 15_000 });
   await create.click();
 
-  await expect(flow.getByText(/recording… \d+s \/ 20s/)).toBeVisible();
+  await expect(flow.getByText(/recording… \d+s \/ 15s/)).toBeVisible();
+  await expect(flow.getByText("keep the screen on")).toBeVisible();
   await expect(flow.getByText("your story is ready")).toBeVisible({ timeout: 40_000 });
 
   if (!fakeRecorder) {
@@ -282,8 +292,8 @@ test("creates a 20s story in the installed app and hands it to the share sheet",
       v.duration,
     ]);
     expect(meta.slice(0, 2)).toEqual([1080, 1920]);
-    expect(meta[2]).toBeGreaterThan(19);
-    expect(meta[2]).toBeLessThan(21.5);
+    expect(meta[2]).toBeGreaterThan(14);
+    expect(meta[2]).toBeLessThan(16.5);
   }
 
   await flow.getByRole("button", { name: "share", exact: true }).click();
@@ -294,6 +304,25 @@ test("creates a 20s story in the installed app and hands it to the share sheet",
     (window as unknown as { __shared: File[] }).__shared.map((f) => [f.name, f.type]),
   );
   expect(shared).toEqual([["formatglasgow-set-003-unreal-46-57.mp4", "video/mp4"]]);
+
+  // The file Instagram gets: one moov before the media, no fragments, and an
+  // mvhd that declares the whole length. MediaRecorder's own output fails all
+  // three, which is what truncated stories on the phone.
+  const sharedBytes = new Uint8Array(
+    await page.evaluate(async () =>
+      Array.from(
+        new Uint8Array(await (window as unknown as { __shared: File[] }).__shared[0].arrayBuffer()),
+      ),
+    ),
+  );
+  expect(topLevelBoxes(sharedBytes).boxes.map((b) => b.type)).toEqual(["ftyp", "moov", "mdat"]);
+  const declared = movieDurationSeconds(sharedBytes) ?? 0;
+  if (fakeRecorder) {
+    expect(declared).toBeCloseTo(FIXTURE_SECONDS, 2);
+  } else {
+    expect(declared).toBeGreaterThan(14);
+    expect(declared).toBeLessThan(16.5);
+  }
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __events: string[] }).__events))
     .toEqual(expect.arrayContaining(["story_video_created", "story_video_shared"]));

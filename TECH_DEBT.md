@@ -1218,7 +1218,7 @@ delivery channel for the same two signals that already missed it.
 
 ## 30. [VERIFICATION DEBT] Instagram Story video — device results, iOS still untested
 
-**Status: open, not blocking.** The proposed feature (share a visitor-chosen 20s
+**Status: open, not blocking.** The proposed feature (share a visitor-chosen 15s
 passage as a Story video, made in the browser) waits on real-device answers.
 `spikes/instagram-story/index.html` is the standalone test page for that: it
 lists the MediaRecorder types the device accepts, records canvas + a decoded
@@ -1302,7 +1302,29 @@ unverified until the feature runs on a phone.
 - In the app: the picker, dragging, strip taps, and preview play / stop /
   play to the end all work. A new slice takes **~2s** to load.
 
-Recording and sharing (PR 3b) haven't run on a phone yet.
+**Android, installed app, record + share (2026-09-30, PR 3b).** Shared
+straight from the app, **Instagram kept only ~5s** of a 20s story. Cause,
+verified on a real Chrome recording (`ftyp, moov, moof, mdat` × 6): MediaRecorder
+writes a fragmented MP4 whose `moov` indexes **0 samples**, with `mvhd`
+duration **0**, no `mehd`, and each `tkhd` claiming only the first fragment
+(~3.4s). ffprobe still reports 20.25s because it scans the fragments; an
+importer that trusts the header doesn't. That is also what the gallery's
+`0:04 / 0:03` above was. Fix: `storyVideo/remux.ts` rewrites every recording
+as a non-fragmented, faststart MP4 (`ftyp, moov, mdat`, `mvhd` = full length)
+with mediabunny, stream copy only: all 1,476 packets are byte-identical
+(ffmpeg `framemd5`). Unit and e2e tests assert no `moof` and the `mvhd`
+duration. **Not yet re-tested on the phone**: whether Instagram now keeps
+the whole story is still the device check.
+
+Two more findings from the same run:
+- The excerpt went from 20s to **15s** (product choice; the picker's zoom
+  window is 3 × the excerpt).
+- For a set saved offline, the picker's zoomed strip went blank when the
+  connection dropped. Its Range fetch used the bare URL, which the SW
+  (`sw.ts` audio route) passes to the network. It now uses `withAppContext`,
+  so saved sets are served from IDB. Verified on a production build with the
+  real SW in desktop Chromium (network cut mid-pick → 206 from the SW);
+  not on a phone.
 
 **Still open:**
 - **Android (Chrome):** the share path is verified (above). Still open: a

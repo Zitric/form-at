@@ -1,5 +1,5 @@
 // Fetches just the bytes of one passage of a set's MP3, for the Story video,
-// so a 20s clip of a 100–220MB set costs ~800KB rather than the whole file.
+// so a short clip of a 100–220MB set costs well under 1MB rather than the whole file.
 //
 // The passage is located by byte offset, which is exact (to one 24ms frame)
 // only for constant-bitrate files: every frame has the same length, so

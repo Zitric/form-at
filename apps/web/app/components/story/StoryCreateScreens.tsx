@@ -2,6 +2,7 @@ import { BracketLabel, Button } from "@form-at/ui";
 import { useEffect, useMemo, useRef } from "react";
 
 import { recordingFailureMessage } from "~/utils/storyVideo/createFlow";
+import { EXCERPT_SECONDS } from "~/utils/storyVideo/layout";
 import { StoryRecordingError, recordStory } from "~/utils/storyVideo/recorder";
 import { type StoryFrameInput, prepareStoryFrame } from "~/utils/storyVideo/renderer";
 
@@ -9,6 +10,9 @@ import { type StoryFrameInput, prepareStoryFrame } from "~/utils/storyVideo/rend
 // Imported only by StoryVideoFlow, so they ship in its lazy chunk with the
 // renderer and recorder.
 
+// Every status is two lines: what's happening, larger and white; then what
+// to do about it, small and grey.
+const statusClass = "text-sm text-white tracking-widest tabular-nums";
 const noteClass = "text-xs text-grey/60 tracking-widest leading-relaxed";
 
 type RecordingProps = {
@@ -48,7 +52,7 @@ export function RecordingScreen(props: RecordingProps) {
           frame: prepareStoryFrame(input),
           excerpt: input.excerpt,
           fileName,
-          // The visitor hears the 20s being recorded.
+          // The visitor hears the excerpt being recorded.
           monitor: true,
           signal: abort.signal,
           onProgress: (p) => latest.current.onProgress(p),
@@ -67,7 +71,7 @@ export function RecordingScreen(props: RecordingProps) {
     return () => abort.abort();
   }, []);
 
-  const seconds = Math.min(20, Math.floor(progress * 20));
+  const seconds = Math.min(EXCERPT_SECONDS, Math.floor(progress * EXCERPT_SECONDS));
   return (
     <div className="flex flex-col items-center gap-4">
       <canvas
@@ -79,9 +83,10 @@ export function RecordingScreen(props: RecordingProps) {
         <div className="h-0.5 w-full bg-grey/20">
           <div className="h-full bg-gold" style={{ width: `${progress * 100}%` }} />
         </div>
-        <p className={`${noteClass} mt-2 text-center tabular-nums`}>
-          recording… {seconds}s / 20s — keep the screen on
+        <p className={`${statusClass} mt-3 text-center`}>
+          recording… {seconds}s / {EXCERPT_SECONDS}s
         </p>
+        <p className={`${noteClass} mt-1 text-center`}>keep the screen on</p>
       </div>
       <Button variant="secondary" onClick={onCancel}>
         cancel
@@ -108,7 +113,9 @@ type FileScreenProps = {
 function LinkNote({ linkCopied, onCopyLink }: Pick<FileScreenProps, "linkCopied" | "onCopyLink">) {
   if (linkCopied) {
     return (
-      <p className={noteClass}>the set link is on your clipboard — add it as a link sticker.</p>
+      <p className={`${noteClass} mt-1`}>
+        the set link is on your clipboard — add it as a link sticker.
+      </p>
     );
   }
   // The link is copied in the create tap, but the browser can still refuse
@@ -142,8 +149,12 @@ export function ShareScreen({
         aria-label="Your story video"
         className="block mx-auto h-[45vh] w-auto max-w-full border border-grey/20"
       />
-      <p className={noteClass}>your story is ready — {windowLabel}.</p>
-      <LinkNote linkCopied={linkCopied} onCopyLink={onCopyLink} />
+      <div>
+        <p className={statusClass}>
+          your story is ready — <span className="whitespace-nowrap">{windowLabel}</span>
+        </p>
+        <LinkNote linkCopied={linkCopied} onCopyLink={onCopyLink} />
+      </div>
       <Button variant="primary" onClick={onShare} disabled={sharing}>
         share
       </Button>
@@ -173,11 +184,15 @@ export function FallbackScreen({
         aria-label="Your story video"
         className="block mx-auto h-[40vh] w-auto max-w-full border border-grey/20"
       />
-      <p className="text-sm text-grey leading-relaxed">
-        your story is ready — {windowLabel} — but this browser can't hand it to instagram directly.
-        save it, then in instagram: <span className="text-white">+ → story</span> and pick it from
-        your gallery.
-      </p>
+      <div>
+        <p className={statusClass}>
+          your story is ready — <span className="whitespace-nowrap">{windowLabel}</span>
+        </p>
+        <p className={`${noteClass} mt-1`}>
+          this browser can't hand it to instagram directly. save it, then in instagram:{" "}
+          <span className="text-white">+ → story</span> and pick it from your gallery.
+        </p>
+      </div>
       <a href={url} download={file.name} className="self-start text-sm text-grey tracking-widest">
         <BracketLabel>download</BracketLabel>
       </a>
