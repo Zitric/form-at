@@ -1,27 +1,38 @@
 import { Modal } from "@form-at/ui";
 import { Suspense, lazy } from "react";
 
-import { StoryInstallGate } from "~/components/story/StoryInstallGate";
 import { useStore } from "~/store";
 
-// Never flatten this into a static import. The picker pulls in the MP3
-// excerpt reader and the spectrum (and, next, the renderer and recorder),
-// which every visitor would otherwise download for a feature few of them
-// open. A static import still renders fine; the only symptom is a bigger main
-// bundle, with no test failing. Same rule as apps/admin's TrendChart
-// (CLAUDE.md §1).
+// Never flatten either of these into a static import. A static import still
+// renders fine; the only symptom is a bigger main bundle, with no test
+// failing. Same rule as apps/admin's TrendChart (CLAUDE.md §1).
+//   - The picker pulls in the MP3 excerpt reader (and, next, the renderer,
+//     spectrum and recorder), for a feature few visitors open.
+//   - The gate reuses SaveGateModal and InstallInstructions, which otherwise
+//     live in the set page's chunks. Imported statically from here, at the
+//     root, they'd land in every visitor's main bundle (~7KB).
 const StoryVideoFlow = lazy(() => import("~/components/story/StoryVideoFlow"));
+const StoryInstallGate = lazy(() =>
+  import("~/components/story/StoryInstallGate").then((m) => ({ default: m.StoryInstallGate })),
+);
 
 // Mounted once at the root, next to ShareModal. Renders nothing until a
-// story flow is opened; the picker's chunk is only fetched then, and never on
-// the server. The install gate is small and shared with save_for_offline, so
-// it isn't lazy.
+// story flow is opened; each step's chunk is only fetched then, and never on
+// the server.
 export function StoryFlowHost() {
   const storyFlow = useStore((s) => s.storyFlow);
   const closeStoryFlow = useStore((s) => s.closeStoryFlow);
   if (!storyFlow) return null;
 
-  if (storyFlow.step === "install-gate") return <StoryInstallGate onClose={closeStoryFlow} />;
+  if (storyFlow.step === "install-gate") {
+    // No fallback: on a set page the gate's chunk is already loaded (the save
+    // button shares it), so it appears at once; elsewhere, within a fetch.
+    return (
+      <Suspense fallback={null}>
+        <StoryInstallGate onClose={closeStoryFlow} />
+      </Suspense>
+    );
+  }
 
   const loading = (
     <Modal

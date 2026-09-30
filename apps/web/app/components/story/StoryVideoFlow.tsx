@@ -145,7 +145,10 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: retries only re-triggers the fetch
   useEffect(() => {
     if (!needsSlice) return;
-    let cancelled = false;
+    // Aborted when the window moves on (or the picker closes) before this
+    // slice arrives: the ~3.6MB request is cancelled, not just ignored.
+    const abort = new AbortController();
+    const cancelled = () => abort.signal.aborted;
     const timer = setTimeout(
       async () => {
         const span = sliceFor(start, setSeconds);
@@ -155,10 +158,15 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
           // The bare URL: v1 is online-only, so this always streams. The
           // `withAppContext` marker would ask the SW for the saved copy, a
           // path not yet verified for Range requests from the page.
-          const excerpt = await fetchExcerpt(set.src, span.start, span.end - span.start, (data) =>
-            context.decodeAudioData(data),
+          const excerpt = await fetchExcerpt(
+            set.src,
+            span.start,
+            span.end - span.start,
+            (data) => context.decodeAudioData(data),
+            undefined,
+            abort.signal,
           );
-          if (cancelled) return;
+          if (cancelled()) return;
           const peaks = slicePeaks(excerpt.audio, excerpt.offsetSeconds, span.end - span.start);
           setSlice({
             span,
@@ -169,7 +177,7 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
           });
           setLoadError(null);
         } catch (e) {
-          if (cancelled) return;
+          if (cancelled()) return;
           if (e instanceof Mp3ExcerptError && e.failure === "not-cbr") {
             setRefused(true);
             setLoadError(`can't clip this set — ${e.message}`);
@@ -181,7 +189,7 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
       slice ? SLICE_DEBOUNCE_MS : 0,
     );
     return () => {
-      cancelled = true;
+      abort.abort();
       clearTimeout(timer);
     };
   }, [needsSlice, start, setSeconds, set.src, slice, retries]);
@@ -226,11 +234,16 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
     start >= slice.span.start &&
     Math.min(start + EXCERPT_SECONDS, setSeconds) <= slice.span.end;
 
-  const startPreview = async () => {
+  // Synchronous on purpose. The context was created outside any tap (for
+  // decoding, which works while suspended), so on mobile it starts suspended;
+  // resume() only takes effect when called within the user's tap. Don't await
+  // anything before it. A source started while the context is still resuming
+  // plays as soon as it runs.
+  const startPreview = () => {
     if (!slice || !windowDecoded) return;
     contextRef.current ??= new AudioContext();
     const context = contextRef.current;
-    await context.resume();
+    void context.resume();
     const source = context.createBufferSource();
     source.buffer = slice.audio;
     source.connect(context.destination);

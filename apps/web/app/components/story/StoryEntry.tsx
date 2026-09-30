@@ -2,6 +2,7 @@ import type { MusicSet } from "@form-at/data/sets";
 import { BracketLabel } from "@form-at/ui";
 
 import { useOnline } from "~/hooks/useOnline";
+import { useSaveGate } from "~/hooks/useSaveGate";
 import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";
 import { isHandheldTouch } from "~/utils/deviceFormFactor";
@@ -22,6 +23,7 @@ type Props = { set: MusicSet; rowClass: string };
 // reading window state during render can't mismatch hydration.
 export function StoryEntry({ set, rowClass }: Props) {
   const online = useOnline();
+  const gate = useSaveGate();
   const openStoryFlow = useStore((s) => s.openStoryFlow);
   const trackEvent = useTrackEvent();
 
@@ -41,6 +43,10 @@ export function StoryEntry({ set, rowClass }: Props) {
       openStoryFlow(set, "picker");
       return;
     }
+    // Before the store hydrates, the gate can't say which guidance applies,
+    // and StoryInstallGate would render nothing. Ignore the tap rather than
+    // log a gate nobody saw; hydration takes a frame, so a retap works.
+    if (gate.allow === false && gate.reason === "pending") return;
     trackEvent("story_install_gate_shown", set.id);
     openStoryFlow(set, "install-gate");
   };

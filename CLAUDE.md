@@ -165,11 +165,15 @@ inside the design system and **silently strips them from the bundle** — the
 components render unstyled, with no build error.
 
 ### Never flatten a `lazy(() => import(...))` into a static import
-Two exist: `apps/admin`'s `TrendChart` and `apps/web`'s `StoryVideoFlow`
-(`components/story/StoryFlowHost.tsx`). `ClientOnly` is a render guard, not a
-code-splitting mechanism. A static top-level import still renders correctly
-while pulling all of `visx` into admin's `_worker.js`, or the Story video's MP3
-reader, spectrum, renderer and recorder into every visitor's main bundle.
+Three exist: `apps/admin`'s `TrendChart`, and `apps/web`'s `StoryVideoFlow` and
+`StoryInstallGate` (both in `components/story/StoryFlowHost.tsx`). `ClientOnly`
+is a render guard, not a code-splitting mechanism. A static top-level import
+still renders correctly while pulling all of `visx` into admin's `_worker.js`,
+or the Story video's MP3 reader, spectrum, renderer and recorder into every
+visitor's main bundle. The gate is lazy for a less obvious reason: it reuses
+`SaveGateModal` and `InstallInstructions`, which otherwise live in the set
+page's chunks, and a static import from the root host moved them into the
+main bundle (+~7KB, found by comparing builds).
 Silent bundle regression, no test failure. The same goes for importing
 anything under `utils/storyVideo/` from always-loaded code: the entry's
 capability check lives in `capability.ts` precisely so ShareModal doesn't
