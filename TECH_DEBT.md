@@ -7,7 +7,7 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
-- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a cleared 2026-08-18 except the dropped-connection case, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project), 30 (Instagram Story device test — Android pending, iOS waits on the same device access as 12/23b)
+- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a cleared 2026-08-18 except the dropped-connection case, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project), 30 (Instagram Story device test — Android share path to the Story send screen verified, published-story playback unverified; iOS waits on the same device access as 12/23b)
 - **Deferred, recorded rather than done:** 24 (DJ/event data model still static while sets are in D1), 25 (no-cross-app-imports unenforced), 26 (`PWA_PROGRESS.md` too large to be readable)
 - **Invalid:** 1 (2026-07-22 — premise was wrong, not stale: both flagged functions are load-bearing behind a live multi-provider calendar picker; do not delete, see item for the full re-verification)
 - **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, real trigger is ~10-15 sets in the catalogue, not a calendar date; see item for why that arrives faster now)
@@ -1252,9 +1252,47 @@ Chromium 147 and WebKit (Safari 26.4 UA) both recorded 1080×1920
 Both produced **fragmented** MP4 (`moof` boxes). Whether Instagram accepts
 fragmented MP4 is one of the open questions below.
 
+**Desktop Firefox 155 (real browser, 2026-09-30).** The excerpt path works:
+Range 206, CBR detected, decode clean. But MediaRecorder records **WebM
+only** (VP8/Opus). WebCodecs has H.264 but **no AAC encoder**, only Opus, and
+there's no `navigator.share`. So Firefox can't produce an Instagram-spec file
+by either route. That makes the feature check "can make H.264 + AAC MP4
+(MediaRecorder type, or VideoEncoder + AudioEncoder AAC) **and**
+`canShare({ files })`", not just "MediaRecorder exists". Firefox on Android is
+untested; expect the same.
+
+**Desktop Chrome 154 (real browser, macOS, 2026-09-30).** Accepts every type
+tested. It recorded `video/mp4;codecs=avc1.640028,mp4a.40.2`, honouring the
+requested High profile, unlike headless. The file is 1080×1920, 683KB for 5s,
+and **fragmented** (`ftyp, moov, moof, mdat…`). WebCodecs AAC is available.
+`canShare({ files })` is true. This is the Chromium-family file Android will
+most likely produce too, but that's unconfirmed.
+
+**Android — share path passes (2026-09-30).** Device / Android version /
+Chrome version: `<fill in>`. Screenshots taken during the run show:
+- `canShare({ files })` true; the recorded file is a fragmented MP4.
+- The Android share sheet lists Instagram. Its entry expands to **Stories,
+  Messages, Feed, Reels**, so Stories is a first-class target on Android.
+- Picking Stories opens Instagram's Story composer with the video in it, and
+  it reaches the **"Your story / Close Friends"** send screen with no error or
+  format complaint.
+- Two things seen on the way, not yet explained: the share sheet's preview of
+  the file was a blank grey tile, and the phone's gallery player showed
+  `0:04 / 0:03` while playing it. Its reported duration was shorter than the
+  playback. That's consistent with fragmented-MP4 duration metadata, but it's
+  not confirmed as the cause.
+
+**Not verified yet:** that the story actually published and played back
+correctly — audio present, A/V sync, cropping, and text legibility after
+Instagram's re-encode. **Fragmented MP4 is therefore NOT resolved.** Reaching
+the send screen shows the composer accepted the file, not that the published
+story is correct.
+
 **Still open:**
-- **Android (Chrome):** mime list, AAC vs Opus, fragmented or not, canShare,
-  and which Instagram targets the share sheet shows (Stories / Feed / Chats).
+- **Android (Chrome):** the share path is verified (above). Still open: a
+  **published story plays correctly** (audio present, A/V sync, cropping,
+  legibility after re-encode). Also open: the phone's own mime list and
+  recorder output — paste its copy-report here.
 - **iOS (Safari, installed PWA and tab):** the same questions, plus whether
   the `AudioContext` path records audio at all and whether the silent switch
   mutes the recording. Waits on the same iPhone access as items 12 and 23b.
