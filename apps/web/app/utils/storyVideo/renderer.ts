@@ -129,7 +129,7 @@ export interface StoryFrame {
   pad: number;
   /** Tallest the spectrum may draw, after SPECTRUM_STRIP.clearance. */
   spectrumHeight: number;
-  /** 20s as a share of the full-set timeline, before the 12px minimum. */
+  /** The excerpt as a share of the full-set timeline, before the 12px minimum. */
   markerTrueWidth: number;
 }
 
@@ -288,7 +288,7 @@ export function prepareStoryFrame(input: StoryFrameInput): StoryFrame {
   g.fillText(endLabel, barsX + barsWidth + EXCERPT.timeGap, timeY);
   g.textBaseline = "alphabetic";
 
-  // Full-set timeline, with the excerpt's marker. 20s of a 2h set is ~2px
+  // Full-set timeline, with the excerpt's marker. The excerpt on a 2h set is ~2px
   // wide, so the marker never draws thinner than minMarkerWidth.
   g.fillStyle = TIMELINE.color;
   drawBarRow(

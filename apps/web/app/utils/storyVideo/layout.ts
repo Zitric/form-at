@@ -37,8 +37,10 @@ export const TEXT_XS = scaled(12);
 export const TEXT_SM = scaled(14);
 export const TRACKING_WIDEST = 0.1; // em, Tailwind's tracking-widest
 
-// Instagram's Story video limit, and the only length the picker offers.
-export const EXCERPT_SECONDS = 20;
+// The only length the picker offers. A product choice, not Instagram's limit
+// (a story segment can run 60s): viewers drop off after ~15s. Everything
+// else — the window, the zoomed strip, the recording — derives from this.
+export const EXCERPT_SECONDS = 15;
 
 // Top to bottom. Baselines are for text; y is a top edge.
 export const BRAND = {
@@ -86,7 +88,7 @@ export const TIMELINE = {
   barWidth: 2,
   gap: 1,
   color: "rgba(203, 203, 203, 0.35)",
-  // The true width of 20s on a 2h set is ~2px; the marker never draws thinner.
+  // The true width of the excerpt on a 2h set is ~2px; the marker never draws thinner.
   minMarkerWidth: 12,
   markerOverhang: 6,
 } as const;

@@ -1218,7 +1218,7 @@ delivery channel for the same two signals that already missed it.
 
 ## 30. [VERIFICATION DEBT] Instagram Story video — device results, iOS still untested
 
-**Status: open, not blocking.** The proposed feature (share a visitor-chosen 20s
+**Status: open, not blocking.** The proposed feature (share a visitor-chosen 15s
 passage as a Story video, made in the browser) waits on real-device answers.
 `spikes/instagram-story/index.html` is the standalone test page for that: it
 lists the MediaRecorder types the device accepts, records canvas + a decoded
@@ -1302,7 +1302,62 @@ unverified until the feature runs on a phone.
 - In the app: the picker, dragging, strip taps, and preview play / stop /
   play to the end all work. A new slice takes **~2s** to load.
 
-Recording and sharing (PR 3b) haven't run on a phone yet.
+**Android, installed app, record + share (2026-09-30, PR 3b).** Shared
+straight from the app, **Instagram kept only ~5s** of a 20s story. Cause,
+verified on a real Chrome recording (`ftyp, moov, moof, mdat` × 6): MediaRecorder
+writes a fragmented MP4 whose `moov` indexes **0 samples**, with `mvhd`
+duration **0**, no `mehd`, and each `tkhd` claiming only the first fragment
+(~3.4s). ffprobe still reports 20.25s because it scans the fragments; an
+importer that trusts the header doesn't. That is also what the gallery's
+`0:04 / 0:03` above was. Fix: `storyVideo/remux.ts` rewrites every recording
+as a non-fragmented, faststart MP4 (`ftyp, moov, mdat`, `mvhd` = full length)
+with mediabunny, stream copy only: all 1,476 packets are byte-identical
+(ffmpeg `framemd5`). Unit and e2e tests assert no `moof` and the `mvhd`
+duration. **Not yet re-tested on the phone**: whether Instagram now keeps
+the whole story is still the device check.
+
+Two more findings from the same run:
+- The excerpt went from 20s to **15s** (product choice; the picker's zoom
+  window is 3 × the excerpt).
+- For a set saved offline, the picker's zoomed strip went blank when the
+  connection dropped. Its Range fetch used the bare URL, which the SW
+  (`sw.ts` audio route) passes to the network. It now uses `withAppContext`,
+  so saved sets are served from IDB. Verified on a production build with the
+  real SW in desktop Chromium (network cut mid-pick → 206 from the SW);
+  not on a phone.
+- **Unexplained, probably avoided: a blank zoom strip online.** On the
+  phone, only for `set-003-julz-lever`: saved, and the set that had been
+  playing. It happened **online**, with the generic "couldn't load this part
+  of the set — check your connection", not the CBR refusal. The full-set
+  strip and the player's waveform were fine, and other sets (saved or not)
+  worked. Before this change, that fetch was a CORS Range request for the
+  bare URL, from the network. What was checked:
+  - **The file itself is fine.** A Range request with `Origin` gets 206,
+    `Content-Range … /206353004`, `ACAO *`, `Vary: Origin`. The first frame
+    is 320kbps with a LAME `Info` (CBR) tag, same as `set-003-unreal`. R2
+    `last-modified` is 8 Sep 2026 22:00, after the 28 Aug event, so the
+    file may be a re-upload. Git can't tell; `sets.created_at` in D1 can.
+  - **CORS cache reuse didn't reproduce in desktop Chromium.** A no-cors
+    `<audio>` played the bare URL from 23:20, and then a CORS Range fetch
+    over that same region got a fresh 206 with `ACAO *`. That test says
+    nothing about Android Chrome, whose installed app shares its HTTP cache
+    with the browser's tabs.
+  - **Open hypothesis: a stale saved copy.** The player plays the IDB copy
+    and measures its length into `durations`, and the picker positions the
+    slice with that length and the playback position. If the set was
+    re-uploaded after it was saved, the old fetch read a different file
+    than the one the length came from. Near the end of a longer old copy,
+    that becomes a 416 or a bad frame sync, shown as the generic line.
+    Unverified.
+
+  With `withAppContext`, a saved set's slice comes from the same IDB copy
+  the player plays, never from the network or the HTTP cache. That avoids
+  all three causes but proves none of them. In devmode the error line now
+  shows the underlying error (name, `Mp3ExcerptError` failure, message with
+  the HTTP status) plus the slice, the set length and where that length
+  came from. It shows up if the error comes back. A save doesn't notice a
+  re-upload at the same URL (the offline guard compares URLs, not ETags),
+  which is a gap of its own if the re-upload is confirmed.
 
 **Still open:**
 - **Android (Chrome):** the share path is verified (above). Still open: a

@@ -11,7 +11,7 @@
 
 import { pickStoryMimeType } from "./capability";
 import { FRAME } from "./layout";
-import { isFragmented, summarizeBoxes, topLevelBoxes } from "./mp4Boxes";
+import { isFragmented, movieDurationSeconds, summarizeBoxes, topLevelBoxes } from "./mp4Boxes";
 import { type StoryFrame, drawStoryFrame } from "./renderer";
 import { SPECTRUM_TUNING, bandLevels, makeSpectrumSmoother, spectrumBands } from "./spectrum";
 
@@ -34,6 +34,9 @@ const STOP_TIMEOUT_MS = 5000;
  *   suspend, so the file would have frozen frames. No file is produced.
  * - `cancelled`: the caller's AbortSignal fired.
  * - `recorder-error`, `stop-timeout`, `empty`: MediaRecorder failed.
+ * - `remux`: the recording couldn't be rewritten as a non-fragmented MP4
+ *   without re-encoding. Sharing the fragmented file instead would post a
+ *   truncated story, so there's no file.
  */
 type StoryRecordingFailure =
   | "unsupported"
@@ -41,7 +44,8 @@ type StoryRecordingFailure =
   | "cancelled"
   | "recorder-error"
   | "stop-timeout"
-  | "empty";
+  | "empty"
+  | "remux";
 
 export class StoryRecordingError extends Error {
   constructor(
@@ -69,10 +73,15 @@ interface RecordStoryOptions {
 
 export interface StoryRecordingDiagnostics {
   mimeType: string;
+  /** Of the file handed back, after the remux. */
   sizeBytes: number;
-  /** Top-level MP4 boxes, e.g. "ftyp, moov, moof, mdat, moof, mdat". */
+  /** MediaRecorder's own output, e.g. "ftyp, moov, moof, mdat, moof, mdat". */
+  recordedBoxes: string;
+  /** The file handed back: "ftyp, moov, mdat". */
   boxes: string;
   fragmented: boolean;
+  /** mvhd's duration in the file handed back, in seconds. */
+  durationSeconds: number | null;
   framesDrawn: number;
   wallSeconds: number;
   /** CPU time per drawn frame, analyser read included; not GPU time. */
@@ -207,6 +216,10 @@ export async function recordStory(options: RecordStoryOptions): Promise<StoryRec
     raf = requestAnimationFrame(tick);
   };
 
+  // mediabunny is ~100KB gzipped and only needed once the recording ends, so
+  // it's its own chunk, fetched while the excerpt plays.
+  const remux = import("./remux");
+  remux.catch(() => {});
   recorder.start(1000);
   source.start(audioStart, excerpt.offsetSeconds, excerpt.durationSeconds);
   raf = requestAnimationFrame(tick);
@@ -260,14 +273,26 @@ export async function recordStory(options: RecordStoryOptions): Promise<StoryRec
 
   const blob = new Blob(chunks, { type: recorder.mimeType || mimeType });
   if (blob.size === 0) throw new StoryRecordingError("empty", "the recording is empty");
-  const { boxes } = topLevelBoxes(new Uint8Array(await blob.arrayBuffer()));
+  const recorded = topLevelBoxes(new Uint8Array(await blob.arrayBuffer())).boxes;
+  // Never hand back MediaRecorder's fragmented file: see remux.ts for what
+  // Instagram does with it.
+  let bytes: Uint8Array<ArrayBuffer>;
+  try {
+    const { toProgressiveMp4 } = await remux;
+    bytes = await toProgressiveMp4(blob);
+  } catch (e) {
+    throw new StoryRecordingError("remux", `couldn't finish the video: ${e}`);
+  }
+  const { boxes } = topLevelBoxes(bytes);
   return {
-    file: new File([blob], fileName, { type: "video/mp4" }),
+    file: new File([bytes], fileName, { type: "video/mp4" }),
     diagnostics: {
       mimeType: recorder.mimeType || mimeType,
-      sizeBytes: blob.size,
+      sizeBytes: bytes.byteLength,
+      recordedBoxes: summarizeBoxes(recorded),
       boxes: summarizeBoxes(boxes),
       fragmented: isFragmented(boxes),
+      durationSeconds: movieDurationSeconds(bytes),
       framesDrawn,
       wallSeconds: (performance.now() - wallStart) / 1000,
       renderMsMean: framesDrawn ? renderMsTotal / framesDrawn : 0,

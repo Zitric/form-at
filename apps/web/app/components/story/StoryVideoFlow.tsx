@@ -22,6 +22,7 @@ import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";
 import { getAudioCurrentTime } from "~/store/playerSlice";
 import { withAppContext } from "~/utils/audioUrl";
+import { isDevModeActive } from "~/utils/devMode";
 import { fmtTimestamp, parseDuration } from "~/utils/fmt";
 import {
   type CreateAction,
@@ -47,7 +48,7 @@ import { EXCERPT_SECONDS } from "~/utils/storyVideo/layout";
 import { Mp3ExcerptError, fetchExcerpt } from "~/utils/storyVideo/mp3Excerpt";
 import { type StoryAssets, loadStoryAssets } from "~/utils/storyVideo/renderer";
 
-// The Instagram Story flow. First the excerpt picker: a fixed 20s window sits
+// The Instagram Story flow. First the excerpt picker: a fixed-length window sits
 // in the middle of a zoomed strip and the waveform slides under it; a
 // full-set strip above jumps anywhere; ±5s nudges fine-tune. Preview plays
 // the decoded audio through Web Audio, never the player's <audio>, which is
@@ -98,7 +99,7 @@ function drawFullStrip(
   for (let i = 0; i < count; i++) {
     const from = (i / count) * setSeconds;
     const to = ((i + 1) / count) * setSeconds;
-    // The bar(s) the window overlaps go gold: 20s of a 2h set is a fraction of
+    // The bar(s) the window overlaps go gold: the excerpt is a fraction of
     // one bar, so this is the whole marker.
     const inWindow = to > start && from < start + EXCERPT_SECONDS;
     const peak = peaks[Math.floor((i / count) * peaks.length)] ?? 0;
@@ -142,6 +143,15 @@ function artworkUrls(set: MusicSet): string[] {
     set.artwork ? `/images/${set.artwork}-1080.webp` : null,
     set.artworkOriginalUrl ?? null,
   ].filter((u): u is string => u !== null);
+}
+
+// For the devmode line under a failed slice. An HTTP failure's status is in
+// its message ("HTTP 416", "expected 206 … got 200"); a CORS block is a bare
+// "TypeError: Failed to fetch".
+function describeError(e: unknown): string {
+  if (e instanceof Mp3ExcerptError) return `${e.name}(${e.failure}): ${e.message}`;
+  if (e instanceof Error) return `${e.name}: ${e.message}`;
+  return String(e);
 }
 
 type AudioSessionNavigator = Navigator & { audioSession?: { type: string } };
@@ -194,11 +204,14 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
         try {
           contextRef.current ??= new AudioContext();
           const context = contextRef.current;
-          // The bare URL: v1 is online-only, so this always streams. The
-          // `withAppContext` marker would ask the SW for the saved copy, a
-          // path not yet verified for Range requests from the page.
+          // Marked like the player's own audio URL: in the installed app the
+          // SW answers a saved set's Range requests from its IDB copy, so the
+          // waveform doesn't depend on the network; an unsaved set streams.
+          // In a browser tab the marker isn't added, and tabs never read the
+          // offline library. Fetched with the bare URL instead, a saved set's
+          // zoomed strip went blank whenever the connection dropped.
           const excerpt = await fetchExcerpt(
-            set.src,
+            withAppContext(set.src),
             span.start,
             span.end - span.start,
             (data) => context.decodeAudioData(data),
@@ -221,7 +234,12 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
             setRefused(true);
             setLoadError(`can't clip this set — ${e.message}`);
           } else {
-            setLoadError("couldn't load this part of the set — check your connection");
+            const generic = "couldn't load this part of the set — check your connection";
+            setLoadError(
+              isDevModeActive()
+                ? `${generic} [devmode: ${describeError(e)} · slice ${fmtTimestamp(span.start)}–${fmtTimestamp(span.end)} of ${fmtTimestamp(setSeconds)} (${knownDuration ? "player" : "catalogue"} length)]`
+                : generic,
+            );
           }
         }
       },
@@ -376,7 +394,7 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
     }
     if (held.wasPlaying) setIsPlaying(false);
     session.current = held;
-    // Keep the screen on for the 20s: if it dims and locks, the page hides
+    // Keep the screen on while recording: if it dims and locks, the page hides
     // and the recording aborts. Where unsupported or refused, recording just
     // goes ahead without it.
     if ("wakeLock" in navigator) {
@@ -388,7 +406,7 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
         })
         .catch(() => {});
     }
-    // Copied now, while this tap's activation is fresh: 20s later Safari may
+    // Copied now, while this tap's activation is fresh: a recording later, Safari may
     // refuse the write. If it's refused anyway, the screens after recording
     // offer [ copy_link ] for a fresh tap.
     setLinkCopied(false);
@@ -588,7 +606,7 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
     <Modal
       open
       onClose={close}
-      ariaLabel="Pick 20 seconds for an Instagram story"
+      ariaLabel={`Pick ${EXCERPT_SECONDS} seconds for an Instagram story`}
       title={
         <div className="text-xs text-grey tracking-widest truncate">
           › <span className="text-white">instagram_story</span>
@@ -628,7 +646,7 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
           <div
             role="slider"
             tabIndex={0}
-            aria-label="20-second excerpt start"
+            aria-label={`${EXCERPT_SECONDS}-second excerpt start`}
             aria-valuemin={0}
             aria-valuemax={Math.max(0, setSeconds - EXCERPT_SECONDS)}
             aria-valuenow={start}

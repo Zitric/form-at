@@ -181,6 +181,31 @@ The part that's easy to get wrong: **edge gating protects page loads, not indivi
 
 All four mutating endpoints do this: set upload, presign, restore, send-push. There is deliberately no dev-mode bypass.
 
+### A 15-second Instagram Story, made on the phone from a 2-hour set
+
+*Constraint: no server-side video, a 100–220MB source, and Instagram's importer as the judge of the file.*
+
+In the installed app on a phone, `[ instagram_story ]` in the share sheet opens a picker: drag across the set's waveform to choose 15 seconds, preview them, and the app records a 1080×1920 video (artwork, title, the excerpt's waveform, a live spectrum) and hands it to the Web Share sheet. It's behind `?story=on` (`apps/web/app/utils/storyFlag.ts`) while it's being tested on devices. A browser tab gets the install gate instead, and a browser that can't record H.264 + AAC MP4 (Firefox) gets a muted line rather than a button that fails.
+
+The pipeline, all in the browser, in `apps/web/app/utils/storyVideo/`:
+
+1. **A byte-range excerpt, not the whole file** (`mp3Excerpt.ts`). All sets are 320kbps CBR, so a timestamp maps exactly to a byte offset; only that slice is fetched and decoded. A VBR (`Xing`) file is refused rather than seeked approximately.
+2. **Its own decoded buffer, not the player.** The excerpt plays through Web Audio into a `MediaStreamAudioDestinationNode`. The player's `<audio>` is never touched, which is also why this doesn't need `HTMLMediaElement.captureStream()`, the API Safari lacks.
+3. **Canvas frames** (`renderer.ts`, `spectrum.ts`, `layout.ts`), drawn per animation frame from an `AnalyserNode`.
+4. **MediaRecorder** captures canvas + audio in real time (`recorder.ts`).
+5. **A remux to a non-fragmented MP4** (`remux.ts`, [mediabunny](https://mediabunny.dev), stream copy, no re-encode).
+6. **Web Share**, from a fresh tap: the one that started the recording has expired by the time it ends.
+
+Three things found on devices shaped it:
+
+- **Instagram kept only ~5 seconds of a 20-second story.** Chrome's MediaRecorder writes a fragmented MP4 whose header declares a duration of 0 and indexes no samples, with every sample in `moof` fragments of ~3.4s. ffprobe reads the full length by scanning the fragments; an importer that trusts the header doesn't. Step 5 rewrites it with one `moov` up front that indexes every sample, byte-identical packets included. **Pending confirmation on a phone:** the rewritten file is verified with ffprobe and in tests, but a full 15-second story surviving Instagram on Android hasn't been confirmed yet. mediabunny is ~100KB gzipped, so it loads in its own chunk while the excerpt records, and neither it nor the picker is precached by the service worker.
+- **The CDN's CORS answer is cached per URL.** Without an `Origin` it sends no `Access-Control-Allow-Origin` and caches that for 4 hours, so once the page's own `<img>` had loaded the artwork, drawing it to the canvas failed CORS. `corsImageUrl` in `renderer.ts` gives the canvas load its own URL.
+- **iOS's silent switch** is expected to mute Web Audio, so the recording sets `navigator.audioSession.type = "playback"` for its duration. Unverified: nothing here has run on an iPhone yet.
+
+Known limitations: installed app only, and online only (a saved set's excerpt is read from IndexedDB, but the entry doesn't open offline); CBR sets only; iOS untested; 15 seconds is a product choice (Instagram's segment limit is reportedly 60s, from third-party guides; no official source found). Tests: unit tests for every module in `tests/unit/utils/storyVideo/`, including the remux against a real Chrome recording; Playwright for the picker (`story-picker.spec.ts`) with a faked MediaRecorder on Linux, whose Chromium has no H.264/AAC encoders; and a macOS CI job (`e2e-story-video`) that records for real and asserts the shared file isn't fragmented.
+
+Device results and what's still open: [`TECH_DEBT.md`](TECH_DEBT.md) item 30. Deliberately deferred follow-ups: [`IMPROVEMENTS.md`](IMPROVEMENTS.md) #13. The approved layout: the header of `spikes/instagram-story/index.html`.
+
 ---
 
 ## Running it locally

@@ -3784,6 +3784,43 @@ series. They have different provenance (D1 rows from a cron vs a live API
 call) and one number spanning both would hide precisely the seam this
 dashboard has repeatedly got wrong. Two cards, stated separately.
 
+## Instagram Story video (2026-09)
+
+How it works: README → *"A 15-second Instagram Story, made on the phone from
+a 2-hour set"*. Device results and what's open: TECH_DEBT.md item 30. This
+entry only records the decisions, including the rejected ones.
+
+**Remux, not re-encode, for Instagram's truncation.** The first Android run
+posted a ~5s story from a 20s file: Chrome's fragmented MP4 declares a
+duration of 0. The alternative was recording frames and audio through
+WebCodecs and a muxer, which writes a proper `moov` from the start. It was
+**kept as the fallback, not built**: it replaces the recorder that already
+works on the device with a second encode path, and only the container was
+wrong. A stream-copy remux (mediabunny) fixes the container and leaves the
+encoded samples alone: identical packets, checked with ffmpeg `framemd5`. If
+a track ever can't be copied, recording fails with `remux` instead of
+re-encoding or sharing the fragmented file.
+
+**Not precached.** The SW registers for every visitor, not only the
+installed app, so precaching the picker (~12KB gz) and mediabunny (~98KB gz)
+made everyone download a flagged, online-only feature: 33 → 31 entries,
+409,880 → 300,712 B gzipped. The picker's lazy import catches a failed
+load and shows a message; without the catch, a deploy while the app is open
+(old chunk gone from Pages) would reach the root error boundary. The install
+gate (1KB) **stays** precached, because a browser tab can open it offline.
+
+**20s → 15s.** A product choice after the device run. The picker's zoom
+window is 3 × the excerpt, so it follows the constant.
+
+**The picker's zoom slice uses `withAppContext`.** With the bare URL a saved
+set's slice went to the network, so the zoomed strip went blank when the
+connection dropped mid-pick; with the marker, the SW serves the Range from
+IDB. Tabs are unaffected. The blank strip first reported on the phone
+happened **online**, on the saved set that had been playing. The same change
+routes that case to IDB too, so it probably avoids it without explaining it.
+The hypotheses, what was ruled out, and the devmode diagnostics are in
+TECH_DEBT 30.
+
 ## Reference — key design decisions from the PWA work
 
 ### App-gated capability pattern (2026-07-17)

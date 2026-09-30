@@ -1,5 +1,5 @@
 // The excerpt picker's arithmetic, kept pure so it's testable without a
-// browser: where the fixed 20s window may sit, where it opens, how taps,
+// browser: where the fixed-length window may sit, where it opens, how taps,
 // drags and nudges move it, and which slice of audio the zoomed strip needs
 // decoded. All times are seconds into the set.
 
@@ -7,11 +7,12 @@ import { EXCERPT_SECONDS } from "./layout";
 import type { SampleSource } from "./spectrum";
 
 export const NUDGE_SECONDS = 5;
-// The zoomed strip shows the window with 20s either side, so the window is a
-// third of the strip, wide enough to drag with a thumb.
-export const ZOOM_VISIBLE_SECONDS = 60;
-// Decoded around the window: the visible span plus 15s either side, so a
-// short drag never shows undecoded audio. ~3.6MB at 320kbps.
+// The zoomed strip shows the window with one window's length either side, so
+// the window is exactly the middle third of the strip — which is where
+// StoryVideoFlow draws its fixed frame (left-1/3, w-1/3). Keep them in step.
+export const ZOOM_VISIBLE_SECONDS = 3 * EXCERPT_SECONDS;
+// Decoded around the window: the visible span plus a margin either side, so
+// a short drag never shows undecoded audio. ~3.6MB at 320kbps.
 const ZOOM_SLICE_SECONDS = 90;
 
 export interface Span {
@@ -38,7 +39,7 @@ export function nudge(start: number, deltaSeconds: number, setSeconds: number): 
 }
 
 // On a phone-width strip one pixel is ~25s of a 2h set, too coarse to land on
-// the set's first or last 20s by aim. Taps in the outer 2% at each end go all
+// the set's very first or last excerpt by aim. Taps in the outer 2% at each end go all
 // the way there.
 const STRIP_EDGE = 0.02;
 
