@@ -138,13 +138,18 @@ test.describe("story video recording", () => {
       })
       .then((h) => h.jsonValue())) as Outcome;
 
-    // Playwright's Chromium builds don't all ship proprietary encoders; a
-    // browser that can't record H.264 + AAC is the feature's "not available
-    // here" case, not a failure of this code.
-    test.skip(
-      !outcome.ok && outcome.unsupported,
-      "this Chromium build can't record H.264 + AAC MP4",
-    );
+    // Playwright's Chromium builds don't all ship proprietary encoders. Locally
+    // that's the feature's "not available here" case, so the test skips. In
+    // CI it fails instead: a skip there would leave this test guarding
+    // nothing on every run, and nobody reads skip counts.
+    const unsupported = !outcome.ok && outcome.unsupported;
+    if (unsupported && process.env.CI) {
+      throw new Error(
+        "CI's Chromium can't record H.264 + AAC MP4, so this test can't check anything here. " +
+          "Run it in a browser that can (e.g. Playwright's `chrome` channel) or remove it deliberately; don't let it skip.",
+      );
+    }
+    test.skip(unsupported, "this Chromium build can't record H.264 + AAC MP4");
     if (!outcome.ok) throw new Error(outcome.error);
 
     expect(outcome.fileType).toBe("video/mp4");
