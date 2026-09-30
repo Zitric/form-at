@@ -1288,6 +1288,12 @@ Instagram's re-encode. **Fragmented MP4 is therefore NOT resolved.** Reaching
 the send screen shows the composer accepted the file, not that the published
 story is correct.
 
+**Layout approved (2026-09-30).** It lives in the spike: its header comment
+is the single reference, and its constants are the source of truth. The
+published-story test is being done with a **Mac-recorded** file. So Android
+Chrome's own MediaRecorder output (codec, fragmentation, frame pacing) stays
+unverified until the feature runs on a phone.
+
 **Still open:**
 - **Android (Chrome):** the share path is verified (above). Still open: a
   **published story plays correctly** (audio present, A/V sync, cropping,

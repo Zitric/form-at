@@ -14,6 +14,75 @@
       python3 -m http.server 8787 -d spikes/instagram-story
       → open http://localhost:8787 in Chrome on the phone
     iOS: no adb equivalent — see TECH_DEBT item 30 for how to serve it there.
+
+  ==========================================================================
+  LAYOUT V2 — APPROVED. The single reference for the feature.
+  Default render only (no query flags). The constants in the script are the
+  source of truth; this block restates them so the feature can be built
+  without re-deriving anything. Change both together, or neither.
+  ==========================================================================
+  Frame      1080×1920, 9:16. Background #161615.
+  Colours    gold #c58538 (played bars, marker, pill text, spectrum),
+             purple #43437a (unplayed bars: Waveform.tsx:104 / tokens.ts:6),
+             grey #cbcbcb (brand, meta, times), white #ffffff (DJ name).
+  Type       Space Mono 400 / 700, the site's own woff2 (/fonts/…), awaited
+             via document.fonts.load before the first frame.
+             TEXT_XS 33px, TEXT_SM 39px: Tailwind 12 / 14px × UI_SCALE
+             (1080/390 ≈ 2.77, an assumed 390px phone viewport).
+  Safe zone  SAFE_TOP 250, SAFE_BOTTOM 1580. PROVISIONAL, unverified
+             against a published story. Side margin MARGIN_X 90.
+
+  Top to bottom (measured ink boxes, px):
+    brand        273–310   "formatglasgow.com", 400, 42px, grey, tracking
+                           0.1em, centred, baseline SAFE_TOP+52 = 302
+    artwork      366–926   560×560 square, never cropped, radius 11,
+                           2px grey/30 border. Optimised 1080 webp, falling
+                           back to the original, crossOrigin="anonymous"
+    DJ name      982–1042  700, 84px (shrinks to fit 900px), white, centred,
+                           baseline 1041
+    meta        1080–1109  "@ <title> · <date>" (FullPlayer.tsx:202-203),
+                           400, 39px, grey, centred, baseline 1108
+    excerpt     1192–1342  box 150 high. Times left/right as PlayerSeeker.tsx:
+                           147-151 (33px grey, 33px gap), bars in the rest:
+                           8px bar + 3px gap, centred, 0.9·h, 5.5px floor,
+                           normalised to the excerpt's own max. Played gold
+                           with glow (blur 11, rgba(197,133,56,.35)),
+                           unplayed purple. Pre-rendered once; per frame is
+                           drawImage + clip
+    pill        1416–1456  "start / total", both fmtTimestamp (e.g.
+                           "30:00 / 140:51"), 26px gold on bg, grey/30
+                           border, centred on the marker, clamped to margins
+    timeline    1466–1518  full-set peaks.json, 2px bars / 1px gap, grey 35%,
+                           40 high. Gold marker width max(true, 12px),
+                           overhang 6
+    spectrum    1590–1920  (tallest possible bar) see below
+  Gaps: 56 / 56 / 38 / 83 / 74 / 10 / 72 (brand→art→name→meta→excerpt→
+  pill→timeline→spectrum). Name→meta stays clearly under art→name.
+
+  Spectrum   72 log bands, 50–16000Hz, low→high left→right. Bottom-anchored
+             (y 1920), max 330px, never closer than SPECTRUM_CLEARANCE 70 to
+             the timeline. Gold at 45%, no glow, 15px step / 11px bars.
+  Analyser   fftSize 8192, smoothingTimeConstant 0, dB range −57..−28,
+             tilt +4dB/octave above 50Hz. Per band: loudest bin, in the
+             linear domain.
+  Smoothing  our own, per FFT bin, on linear magnitude: coefficient
+             exp(−dt/τ) with real dt between reads, τ = 74.7ms
+             (= 0.8 per read at 60fps). Frame-rate independent. The preview
+             frame runs the same path over the decoded excerpt.
+  Recording  canvas.captureStream(30) + MediaStreamAudioDestinationNode →
+             MediaRecorder video/mp4 H.264+AAC, 6Mbps video / 192kbps audio.
+             Progress follows the AudioContext clock. Aborts, with no file,
+             if the page is hidden.
+
+  Rejected / comparison-only flags. They're still in the code; don't build
+  them into the feature:
+    ?mirror            SoundCloud-style mirrored excerpt bars
+    ?blur_bg           blurred artwork background (smudged dark artwork)
+    ?top_spectrum      purple spectrum hanging from the top edge
+    ?no_timeline       caption instead of the full-set timeline
+    ?spectrum=mirror   bass-centred mirrored spectrum
+    ?city              city in the meta line
+  v1 layout (the "device test" bars) is the original capability probe only.
 -->
 <html lang="en">
 <head>
@@ -66,6 +135,7 @@
 <button id="preview">preview frame (50%)</button>
 <a id="previewPng" class="btn" style="display:none">download png</a>
 <label><input type="checkbox" id="guides"> show safe-zone guides on the preview (never recorded)</label>
+<label><input type="checkbox" id="sideCrop"> show side-crop guide: centred 864px, an UNVERIFIED 20:9 fill-crop assumption (never recorded)</label>
 <div id="layoutInfo"></div>
 <label>type <select id="mime"></select></label>
 <label><input type="checkbox" id="monitor" checked> hear it while recording</label>
@@ -133,10 +203,22 @@ const SAFE_BOTTOM = 1580;
 const W = 1080;
 const H = 1920;
 const MARGIN_X = 90;
-const COLOR = { bg: "#161615", gold: "#c58538", grey: "#cbcbcb", white: "#ffffff" };
-// The spec says unplayed bars are grey. The app's Waveform.tsx draws them in
-// purple (#43437a); swap this to match the player.
-const UNPLAYED = COLOR.grey;
+// Brand tokens, from packages/ui/src/tokens.ts.
+const COLOR = { bg: "#161615", gold: "#c58538", purple: "#43437a", grey: "#cbcbcb", white: "#ffffff" };
+// Same as the player: Waveform.tsx:104 draws the unplayed layer in
+// colors.purple (tokens.ts:6, #43437a) and the played layer in gold.
+const UNPLAYED = COLOR.purple;
+
+// Comparison toggles, all default off. They apply to both preview and
+// recording. A query param overrides each one without editing the file,
+// e.g. ?mirror or ?blur_bg or ?city.
+const FLAGS = new URLSearchParams(location.search);
+// Meta line: the player's "@ <title> · <date>", or with the city between.
+const SHOW_CITY = FLAGS.has("city");
+// SoundCloud-style: bars grow up from a baseline, with a dimmed reflection below.
+const MIRROR = FLAGS.has("mirror");
+// Artwork blurred at low opacity as the whole background, drawn once.
+const BLUR_BG = FLAGS.has("blur_bg");
 
 // Bar style mirrors apps/web/app/components/player/Waveform.tsx: BAR_W 3,
 // BAR_GAP 1, bars centred vertically at 0.9 × height with a 2px floor,
@@ -149,12 +231,96 @@ const BAR_GAP = Math.round(1 * UI_SCALE);
 const GLOW_BLUR = 4 * UI_SCALE;
 const MIN_BAR_H = 2 * UI_SCALE;
 
-// Vertical layout, top to bottom. Everything must sit inside SAFE_TOP..SAFE_BOTTOM.
-const ART = { size: 720, y: 270, radius: Math.round(4 * UI_SCALE) };
-const TEXT = { djY: 1085, djSize: 84, metaY: 1148, metaSize: 36 };
-const EXCERPT_WAVE = { y: 1190, h: 170 };
-const TIMELINE = { labelY: 1418, y: 1440, h: 44, barW: 2, gap: 1, minMarkerW: 12 };
-const FOOTER = { y: 1562, size: 30 };
+// Type sizes scale Tailwind's defaults the same way: text-xs 12px, text-sm
+// 14px, tracking-widest 0.1em, gap-3 12px.
+const TEXT_XS = Math.round(12 * UI_SCALE);
+const TEXT_SM = Math.round(14 * UI_SCALE);
+const TRACKING_WIDEST = 0.1;
+const GAP_3 = Math.round(12 * UI_SCALE);
+
+// Vertical layout, top to bottom. Everything meaningful sits inside
+// SAFE_TOP..SAFE_BOTTOM; only the decorative spectrum strip goes below.
+// Brand line: regular weight, grey, tracking-widest, the register of the
+// app's terminal labels. Bold would compete with the DJ name, the only other
+// bold text on the frame.
+const BRAND = { y: SAFE_TOP + 52, size: 42, weight: 400, text: "formatglasgow.com" };
+// Artwork stays square and uncropped: drawn at ART.size × ART.size.
+// Vertical rhythm of the top block: brand→artwork 56, artwork→DJ name 56,
+// DJ name→meta 38. Keep name→meta clearly smaller than artwork→name so name
+// and meta read as one block. ART.size is what's left once that rhythm and
+// the spectrum's clearance fit: 560 ends the timeline at 1518, inside the
+// 1520 limit (1920 − SPECTRUM.maxH 330 − SPECTRUM_CLEARANCE 70).
+const ART = { size: 560, y: SAFE_TOP + 116, radius: Math.round(4 * UI_SCALE) };
+const TEXT = { djY: 1041, djSize: 84, metaY: 1108, metaSize: TEXT_SM };
+
+// ?no_timeline drops the full-set timeline and its marker. The
+// "start / total" times then sit as small centred text under the excerpt
+// waveform. The top block keeps the same rhythm; the freed space goes into
+// meta→waveform.
+const NO_TIMELINE = FLAGS.has("no_timeline");
+const EXCERPT_WAVE = NO_TIMELINE ? { y: 1219, h: 150 } : { y: 1192, h: 150 };
+const TIMELINE = { labelY: 1456, y: 1472, h: 40, barW: 2, gap: 1, minMarkerW: 12, markerOverhang: 6 };
+// ?no_timeline only: baseline of the caption. It stays close under the
+// waveform it describes rather than taking a share of the freed space.
+const SUMMARY = { y: 1428, size: TEXT_XS };
+
+// Live spectrum strip, decorative. Edge to edge, standing on the bottom edge,
+// deliberately inside the bottom zone Instagram's UI covers. Kept subordinate
+// to the excerpt waveform: no glow, reduced opacity.
+const SPECTRUM = {
+  maxH: 330,
+  baselineFromBottom: 0,
+  color: COLOR.gold,
+  alpha: 0.45,
+  bands: 72,
+  fMin: 50,
+  fMax: 16000,
+  gap: 4, // px between bars in the default layout; 72 bands → 15px step, 11px bars
+  // ?spectrum=mirror puts bass in the centre, mirrored outwards; the default
+  // runs low to high, left to right.
+  mirror: FLAGS.get("spectrum") === "mirror",
+};
+// The tallest spectrum bar never comes closer than this to the lowest
+// content above it: the timeline's bottom edge, marker included, or the
+// ?no_timeline summary text. SPECTRUM.maxH is clamped to keep it.
+const SPECTRUM_CLEARANCE = 70;
+
+// ?top_spectrum, comparison only: the same levels drawn as purple bars
+// hanging from the top edge, stopping short of the brand line.
+const TOP_SPECTRUM = { on: FLAGS.has("top_spectrum"), maxH: 150, color: COLOR.purple, alpha: 0.6, brandClearance: 24 };
+
+// Preview guides: a centred 864px region is what a 20:9 screen would keep if
+// Instagram fill-crops a 9:16 story to it (1920 × 9/20 = 864). Whether it
+// crops that way is UNVERIFIED.
+const SIDE_CROP_W = 864;
+// AnalyserNode settings for v2. fftSize 8192 gives about 5.4Hz bins at
+// 44.1kHz. One pair of adjacent bands at 50–64Hz still reads the same bin, so
+// two bars at the far left always match; accepted in the approved design.
+// The dB range is applied by our own mapping, since float data is read so the
+// tilt below can go on before clamping. The analyser gets the same range too.
+// Tuned on 20s of set-003-unreal at 30:00, read at 60fps, with 72 bands
+// from 50Hz. Retune if the bands change: narrower bands take their max over
+// fewer bins and read lower (48 bands from 40Hz fitted −54..−26).
+//   dB range: the 5th and 99.5th percentiles of the tilted band levels.
+//   smoothing: the look of the analyser's 0.8 at 60 reads/s. That meant a
+//     mean frame-to-frame change of 2.8% of strip height (0.6: 4.3%,
+//     0.9: 1.6%) and a mean per-band spread of 0.15 (0.9 flattens it to 0.12).
+// The analyser's own smoothing is applied per read, so its motion depends on
+// frame rate (the same 0.8 moves ~40% less at 30fps, ~45% more at 120fps).
+// It is therefore off (0). SMOOTHING_TAU_S below applies it instead, per FFT
+// bin, by real elapsed time.
+const ANALYSER = { fftSize: 8192, smoothingTimeConstant: 0, minDecibels: -57, maxDecibels: -28 };
+// Time constant of the per-bin exponential smoothing: coefficient
+// exp(−dt/τ) per read. τ = −(1/60)/ln(0.8) ≈ 74.7ms reproduces the analyser's
+// 0.8-per-read at exactly 60 reads/s. It's per bin, on linear magnitude, as
+// the analyser does it; smoothing each band's loudest raw bin instead reads
+// ~0.04 higher and ~13% calmer, so it doesn't match the tuned look.
+const SMOOTHING_TAU_S = -(1 / 60) / Math.log(0.8);
+// Music's spectrum falls with frequency; without compensation the top bands
+// barely move. Measured slope for that excerpt: −4.1dB/octave, so dB added per
+// octave above fMin. It brings the left and right halves' mean levels to
+// 0.41 / 0.42.
+const TILT_DB_PER_OCTAVE = 4;
 
 const $ = (id) => document.getElementById(id);
 const lines = [];
@@ -424,7 +590,199 @@ const FONT = (weight, size) => `${weight} ${size}px "Space Mono", ui-monospace, 
 
 let artworkImg; // cached across renders; null = placeholder
 let setPeaks; // the player's peaks.json array
-let v2; // { layer, excerptPeaks, markerTrueW }
+let v2; // { layer, unplayed, played, barsX, barsW, pad, markerTrueW }
+
+// Rounded rect built from arcTo rather than ctx.roundRect, so the result
+// doesn't depend on which browsers ship roundRect.
+function roundRectPath(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+
+// Letter-spacing drawn glyph by glyph, not via ctx.letterSpacing (whose
+// support varies). x is the left edge, or the centre when align is "center".
+function fillTracked(g, text, x, y, tracking, align = "left") {
+  const spacing = tracking * parseFloat(g.font.match(/(\d+(?:\.\d+)?)px/)[1]);
+  const chars = [...text];
+  const width = chars.reduce((sum, ch) => sum + g.measureText(ch).width, 0) + spacing * (chars.length - 1);
+  let cx = align === "center" ? x - width / 2 : x;
+  g.textAlign = "left";
+  for (const ch of text) {
+    g.fillText(ch, cx, y);
+    cx += g.measureText(ch).width + spacing;
+  }
+}
+
+// ctx.filter is feature-detected: an unsupported assignment is silently
+// ignored, so reading it back tells us whether it took.
+function canvasFilterWorks(g) {
+  g.filter = "blur(2px)";
+  const ok = g.filter === "blur(2px)";
+  g.filter = "none";
+  return ok;
+}
+
+// ---- spectrum strip ----
+// Log-spaced band edges: fMin · (fMax/fMin)^(i/bands), for i = 0..bands.
+const bandEdges = () =>
+  Array.from({ length: SPECTRUM.bands + 1 }, (_, i) => SPECTRUM.fMin * (SPECTRUM.fMax / SPECTRUM.fMin) ** (i / SPECTRUM.bands));
+
+// Per band, the FFT bin range [lo, hi] it reads. A band narrower than one
+// bin (the lowest ones) reads the single bin nearest its geometric centre.
+function bandBins(sampleRate, fftSize) {
+  const binHz = sampleRate / fftSize;
+  const edges = bandEdges();
+  return edges.slice(0, -1).map((lo, i) => {
+    const hi = edges[i + 1];
+    const a = Math.ceil(lo / binHz);
+    const b = Math.floor(hi / binHz);
+    const centre = Math.round(Math.sqrt(lo * hi) / binHz);
+    return b >= a ? [a, b] : [centre, centre];
+  });
+}
+
+// Frame-rate-independent smoothing of a raw dB spectrum (analyser at
+// smoothingTimeConstant 0). Keeps a linear magnitude per bin and blends each
+// new read in with exp(−dt/τ), so the result depends on elapsed time, not on
+// how often it's read. Only the bins the bands use are touched. Returns the
+// smoothed LINEAR magnitudes in a reused array; bandLevels converts to dB.
+function makeSpectrumSmoother(binCount, ranges) {
+  const lo = ranges[0][0];
+  const hi = ranges[ranges.length - 1][1];
+  const mag = new Float32Array(binCount);
+  let primed = false;
+  return (rawDb, dt) => {
+    const keep = primed ? Math.exp(-Math.max(0, dt) / SMOOTHING_TAU_S) : 0;
+    for (let k = lo; k <= hi; k++) mag[k] = keep * mag[k] + (1 - keep) * 10 ** (rawDb[k] / 20);
+    primed = true;
+    return mag;
+  };
+}
+
+// Tilt per band in dB, TILT_DB_PER_OCTAVE × octaves of the band's geometric
+// centre above fMin. Computed once.
+const BAND_TILT_DB = (() => {
+  const edges = bandEdges();
+  return edges.slice(0, -1).map((lo, i) => TILT_DB_PER_OCTAVE * Math.log2(Math.sqrt(lo * edges[i + 1]) / SPECTRUM.fMin));
+})();
+
+// Smoothed linear magnitudes (one per bin) → 0..1 per band: the loudest bin in
+// the band, taken in the linear domain, then converted to dB. log10 is
+// monotonic, so this is the same as taking the max in dB, but it costs one
+// log per band instead of one per bin. Then tilt and map over the dB range.
+function bandLevels(mag, ranges, out) {
+  const span = ANALYSER.maxDecibels - ANALYSER.minDecibels;
+  for (let i = 0; i < ranges.length; i++) {
+    const [a, b] = ranges[i];
+    let max = 0;
+    for (let k = a; k <= b; k++) if (mag[k] > max) max = mag[k];
+    const v = (20 * Math.log10(max) + BAND_TILT_DB[i] - ANALYSER.minDecibels) / span;
+    out[i] = Math.min(1, Math.max(0, v));
+  }
+  return out;
+}
+
+// Bars stand on `edgeY` and grow up, or with `down` hang from it and grow
+// down. Layout (low→high or mirrored) follows SPECTRUM.mirror for both strips.
+function drawSpectrum(g, levels, { edgeY, maxH, down = false, color, alpha }) {
+  g.save();
+  g.globalAlpha = alpha;
+  g.fillStyle = color;
+  const n = levels.length;
+  const bar = (x, w, level) => {
+    const h = Math.max(2, level * maxH);
+    g.fillRect(x, down ? edgeY : edgeY - h, w, h);
+  };
+  if (SPECTRUM.mirror) {
+    // Bass in the centre, the same bands mirrored out to both edges.
+    const step = W / 2 / n;
+    const barW = Math.max(1, step - SPECTRUM.gap / 2);
+    for (let i = 0; i < n; i++) {
+      bar(W / 2 + i * step + (step - barW) / 2, barW, levels[i]);
+      bar(W / 2 - (i + 1) * step + (step - barW) / 2, barW, levels[i]);
+    }
+  } else {
+    const step = W / n;
+    for (let i = 0; i < n; i++) bar(i * step + SPECTRUM.gap / 2, step - SPECTRUM.gap, levels[i]);
+  }
+  g.restore();
+}
+
+// The preview has no live audio, and an AnalyserNode with nothing playing
+// reports silence. So the preview frame runs the Web Audio spec's own
+// AnalyserNode algorithm over the decoded excerpt: down-mix to mono, Blackman
+// window, FFT, |X|/N, 20·log10, with the analyser's own smoothing at 0, as
+// live. Those raw reads then go through the same makeSpectrumSmoother the live
+// strip uses. Reads are spaced 1/60s over the 0.5s (≈6.7τ) before the target
+// time, so the smoother has settled; by construction the result doesn't depend
+// on that spacing. A direct FFT rather than OfflineAudioContext + suspend():
+// it's deterministic and doesn't depend on suspend() support.
+function fftMagnitudes(re, im) {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) {
+      [re[i], re[j]] = [re[j], re[i]];
+      [im[i], im[j]] = [im[j], im[i]];
+    }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = (-2 * Math.PI) / len;
+    const wr = Math.cos(ang);
+    const wi = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let cr = 1;
+      let ci = 0;
+      for (let k = 0; k < len / 2; k++) {
+        const ar = re[i + k + len / 2] * cr - im[i + k + len / 2] * ci;
+        const ai = re[i + k + len / 2] * ci + im[i + k + len / 2] * cr;
+        re[i + k + len / 2] = re[i + k] - ar;
+        im[i + k + len / 2] = im[i + k] - ai;
+        re[i + k] += ar;
+        im[i + k] += ai;
+        const t = cr * wr - ci * wi;
+        ci = cr * wi + ci * wr;
+        cr = t;
+      }
+    }
+  }
+  const mags = new Float32Array(n / 2);
+  for (let k = 0; k < n / 2; k++) mags[k] = Math.hypot(re[k], im[k]) / n;
+  return mags;
+}
+
+// Raw (unsmoothed) spec-shaped dB spectrum of `buffer`: the fftSize samples
+// ending at `endSample`.
+function rawSpectrumDb(buffer, endSample, fftSize) {
+  const chans = Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c));
+  const re = new Float64Array(fftSize);
+  const im = new Float64Array(fftSize);
+  for (let i = 0; i < fftSize; i++) {
+    const w = 0.42 - 0.5 * Math.cos((2 * Math.PI * i) / fftSize) + 0.08 * Math.cos((4 * Math.PI * i) / fftSize);
+    const s = endSample - fftSize + i;
+    let v = 0;
+    if (s >= 0 && s < buffer.length) for (const ch of chans) v += ch[s];
+    re[i] = (v / chans.length) * w;
+  }
+  return fftMagnitudes(re, im).map((m) => 20 * Math.log10(m));
+}
+
+// Smoothed linear spectrum at `endSample`: `reads` raw reads `readHz` apart,
+// ending there, fed through a fresh makeSpectrumSmoother.
+function smoothedSpectrum(buffer, endSample, fftSize, ranges, reads = 30, readHz = 60) {
+  const smooth = makeSpectrumSmoother(fftSize / 2, ranges);
+  const step = buffer.sampleRate / readHz;
+  let mag;
+  for (let r = reads; r >= 0; r--) mag = smooth(rawSpectrumDb(buffer, Math.round(endSample - r * step), fftSize), 1 / readHz);
+  return mag;
+}
 
 function loadImage(url) {
   return new Promise((resolve, reject) => {
@@ -444,12 +802,25 @@ function barsFor(peaks, width, barW, gap) {
   return { step, count, sample: (i) => peaks[Math.floor((i / count) * peaks.length)] ?? 0 };
 }
 
-function drawBarRow(g, peaks, x, y, width, h, barW, gap) {
+// mode "centre": the player's bars, centred vertically.
+// mode "up" / "reflect": MIRROR's pair. Bars grow up from a baseline at 70% of
+// h, and a 30%-height reflection hangs below it.
+function drawBarRow(g, peaks, x, y, width, h, barW, gap, mode = "centre") {
   const { step, count, sample } = barsFor(peaks, width, barW, gap);
   const scale = 1 / Math.max(...peaks, 0.001);
+  const baseline = y + h * 0.7;
   for (let i = 0; i < count; i++) {
-    const barH = Math.max(MIN_BAR_H, Math.min(sample(i) * scale, 1) * h * 0.9);
-    g.fillRect(x + i * step, y + (h - barH) / 2, barW, barH);
+    const level = Math.min(sample(i) * scale, 1);
+    if (mode === "centre") {
+      const barH = Math.max(MIN_BAR_H, level * h * 0.9);
+      g.fillRect(x + i * step, y + (h - barH) / 2, barW, barH);
+    } else if (mode === "up") {
+      const barH = Math.max(MIN_BAR_H, level * h * 0.7 * 0.95);
+      g.fillRect(x + i * step, baseline - barH, barW, barH);
+    } else {
+      const barH = Math.max(MIN_BAR_H / 2, level * h * 0.3 * 0.9);
+      g.fillRect(x + i * step, baseline + 2, barW, barH);
+    }
   }
 }
 
@@ -525,14 +896,11 @@ async function prepareV2() {
   }
 
   const waveW = W - 2 * MARGIN_X;
-  const { count } = barsFor([], waveW, BAR_W, BAR_GAP);
-  const peaks = excerpt ? excerptPeaks(excerpt, count) : new Array(count).fill(0);
+  // Duration comes from the set's catalogue duration field, parsed to seconds.
+  // It's formatted with fmtTimestamp like every other time here.
   const setSeconds = parseHms(SET.duration);
   const excerptStart = excerpt ? excerpt.start : Number($("start").value);
   const excerptLen = excerpt ? excerpt.duration : Number($("len").value);
-  const markerTrueW = (excerptLen / setSeconds) * waveW;
-  row("layoutInfo", "excerpt bars", `${count} bars × ${BAR_W}px + ${BAR_GAP}px gap, ${(excerptLen / count).toFixed(3)}s per bar`);
-  row("layoutInfo", "timeline marker", `true width ${markerTrueW.toFixed(2)}px (${excerptLen}s of ${setSeconds}s over ${waveW}px), drawn ${Math.max(markerTrueW, TIMELINE.minMarkerW).toFixed(2)}px`);
 
   const layer = document.createElement("canvas");
   layer.width = W;
@@ -541,11 +909,68 @@ async function prepareV2() {
   g.fillStyle = COLOR.bg;
   g.fillRect(0, 0, W, H);
 
+  // Excerpt row, mirroring PlayerSeeker.tsx:147-151: current time right-aligned
+  // left of the bars, total left-aligned right of them, text-xs grey, gap-3
+  // either side. Here the two times are the excerpt's start and end. The bars
+  // take whatever width is left.
+  const startLabel = fmtTimestamp(excerptStart);
+  const endLabel = fmtTimestamp(excerptStart + excerptLen);
+  g.font = FONT(400, TEXT_XS);
+  const timeColW = Math.ceil(Math.max(g.measureText(startLabel).width, g.measureText(endLabel).width));
+  const barsX = MARGIN_X + timeColW + GAP_3;
+  const barsW = waveW - 2 * (timeColW + GAP_3);
+  const { count } = barsFor([], barsW, BAR_W, BAR_GAP);
+  const peaks = excerpt ? excerptPeaks(excerpt, count) : new Array(count).fill(0);
+  const markerTrueW = (excerptLen / setSeconds) * waveW;
+  row("layoutInfo", "excerpt bars", `${count} bars × ${BAR_W}px + ${BAR_GAP}px gap over ${barsW}px, ${(excerptLen / count).toFixed(3)}s per bar`);
+  row("layoutInfo", "timeline marker", `true width ${markerTrueW.toFixed(2)}px (${excerptLen}s of ${setSeconds}s over ${waveW}px), drawn ${Math.max(markerTrueW, TIMELINE.minMarkerW).toFixed(2)}px`);
+  row("layoutInfo", "toggles", `SHOW_CITY ${SHOW_CITY}, MIRROR ${MIRROR}, BLUR_BG ${BLUR_BG}`);
+
+  // Optional: blurred artwork as the whole background, drawn once. Uses
+  // ctx.filter where it takes. Otherwise it falls back to a downscale-then-
+  // stretch blur, which needs no filter support.
+  if (BLUR_BG && artworkImg) {
+    const cover = Math.max(W, H);
+    const cx = (W - cover) / 2;
+    const cy = (H - cover) / 2;
+    g.save();
+    g.globalAlpha = 0.28;
+    if (canvasFilterWorks(g)) {
+      g.filter = "blur(48px)";
+      g.drawImage(artworkImg, cx, cy, cover, cover);
+      row("layoutInfo", "blur path", "ctx.filter blur(48px)");
+    } else {
+      const tiny = document.createElement("canvas");
+      tiny.width = tiny.height = 24;
+      tiny.getContext("2d").drawImage(artworkImg, 0, 0, 24, 24);
+      g.imageSmoothingEnabled = true;
+      g.imageSmoothingQuality = "high";
+      g.drawImage(tiny, cx, cy, cover, cover);
+      row("layoutInfo", "blur path", "fallback: 24px downscale stretched (ctx.filter unsupported)");
+    }
+    g.restore();
+  }
+
+  // Brand line, centred at the top of the safe zone.
+  g.fillStyle = COLOR.grey;
+  g.font = FONT(BRAND.weight, BRAND.size);
+  fillTracked(g, BRAND.text, W / 2, BRAND.y, TRACKING_WIDEST, "center");
+
+  // Excerpt start/end times, vertically centred on the bar row.
+  g.font = FONT(400, TEXT_XS);
+  g.fillStyle = COLOR.grey;
+  g.textBaseline = "middle";
+  const timeY = MIRROR ? EXCERPT_WAVE.y + EXCERPT_WAVE.h * 0.7 : EXCERPT_WAVE.y + EXCERPT_WAVE.h / 2;
+  g.textAlign = "right";
+  g.fillText(startLabel, MARGIN_X + timeColW, timeY);
+  g.textAlign = "left";
+  g.fillText(endLabel, barsX + barsW + GAP_3, timeY);
+  g.textBaseline = "alphabetic";
+
   // 1. Artwork: rounded-card radius, thin grey/30 border, as the full player.
   const artX = (W - ART.size) / 2;
   g.save();
-  g.beginPath();
-  g.roundRect(artX, ART.y, ART.size, ART.size, ART.radius);
+  roundRectPath(g, artX, ART.y, ART.size, ART.size, ART.radius);
   g.clip();
   if (artworkImg) {
     g.drawImage(artworkImg, artX, ART.y, ART.size, ART.size);
@@ -560,79 +985,191 @@ async function prepareV2() {
   g.restore();
   g.strokeStyle = "rgba(203, 203, 203, 0.3)";
   g.lineWidth = 2;
-  g.beginPath();
-  g.roundRect(artX, ART.y, ART.size, ART.size, ART.radius);
+  roundRectPath(g, artX, ART.y, ART.size, ART.size, ART.radius);
   g.stroke();
 
-  // 2. DJ name + "Event · City · date".
+  // 2. DJ name + meta line. The meta format is FullPlayer.tsx:202-203:
+  // "@ <title> · <date>", with the city optionally between.
   g.textAlign = "center";
   g.fillStyle = COLOR.white;
   fitFont(g, SET.djName, 700, TEXT.djSize, waveW);
   g.fillText(SET.djName, W / 2, TEXT.djY);
-  const meta = [SET.eventTitle, SET.city, SET.date].filter(Boolean).join(" · ");
+  const meta = `@ ${[SET.eventTitle, SHOW_CITY ? SET.city : null, SET.date].filter(Boolean).join(" · ")}`;
   g.fillStyle = COLOR.grey;
   fitFont(g, meta, 400, TEXT.metaSize, waveW);
   g.fillText(meta, W / 2, TEXT.metaY);
 
-  // 4. Full-set timeline: the player's peaks, dimmed, with the excerpt marker.
-  g.fillStyle = "rgba(203, 203, 203, 0.35)";
-  drawBarRow(g, setPeaks, MARGIN_X, TIMELINE.y, waveW, TIMELINE.h, TIMELINE.barW, TIMELINE.gap);
-  const markerW = Math.max(markerTrueW, TIMELINE.minMarkerW);
-  const trueCentre = MARGIN_X + ((excerptStart + excerptLen / 2) / setSeconds) * waveW;
-  const markerX = Math.min(Math.max(trueCentre - markerW / 2, MARGIN_X), MARGIN_X + waveW - markerW);
-  g.fillStyle = COLOR.gold;
-  g.fillRect(markerX, TIMELINE.y - 6, markerW, TIMELINE.h + 12);
+  // 4. "start / total", either as the pill over the full-set timeline or,
+  // with ?no_timeline, as small centred text under the excerpt waveform.
+  const label = `${fmtTimestamp(excerptStart)} / ${fmtTimestamp(setSeconds)}`;
+  // Vertical extents of everything drawn, for the layout report below.
+  const boxes = [];
+  const textBox = (name, text, baseline) => {
+    const m = g.measureText(text);
+    boxes.push([name, Math.round(baseline - m.actualBoundingBoxAscent), Math.round(baseline + m.actualBoundingBoxDescent)]);
+  };
+  g.font = FONT(BRAND.weight, BRAND.size);
+  textBox("brand", BRAND.text, BRAND.y);
+  boxes.push(["artwork", ART.y, ART.y + ART.size]);
+  fitFont(g, SET.djName, 700, TEXT.djSize, waveW);
+  textBox("dj name", SET.djName, TEXT.djY);
+  fitFont(g, meta, 400, TEXT.metaSize, waveW);
+  textBox("meta", meta, TEXT.metaY);
+  // The box; drawn bars reach at most 90% of it, centred.
+  boxes.push(["excerpt bars", EXCERPT_WAVE.y, EXCERPT_WAVE.y + EXCERPT_WAVE.h]);
+  if (NO_TIMELINE) {
+    g.font = FONT(400, SUMMARY.size);
+    g.fillStyle = COLOR.grey;
+    g.textAlign = "center";
+    g.fillText(label, W / 2, SUMMARY.y);
+    textBox("summary text", label, SUMMARY.y);
+  } else {
+    // Full-set timeline: the player's peaks, dimmed, with the excerpt marker.
+    g.fillStyle = "rgba(203, 203, 203, 0.35)";
+    drawBarRow(g, setPeaks, MARGIN_X, TIMELINE.y, waveW, TIMELINE.h, TIMELINE.barW, TIMELINE.gap);
+    const markerW = Math.max(markerTrueW, TIMELINE.minMarkerW);
+    const trueCentre = MARGIN_X + ((excerptStart + excerptLen / 2) / setSeconds) * waveW;
+    const markerX = Math.min(Math.max(trueCentre - markerW / 2, MARGIN_X), MARGIN_X + waveW - markerW);
+    g.fillStyle = COLOR.gold;
+    g.fillRect(markerX, TIMELINE.y - TIMELINE.markerOverhang, markerW, TIMELINE.h + TIMELINE.markerOverhang * 2);
 
-  // Timecode pill above the marker, "start / total", as SoundCloud's playhead
-  // label does it. Clamped inside the side margins.
-  const label = `${fmtTimestamp(excerptStart)} / ${SET.duration}`;
-  g.font = FONT(400, 26);
-  const padX = 14;
-  const pillW = g.measureText(label).width + padX * 2;
-  const pillH = 40;
-  const pillX = Math.min(Math.max(trueCentre - pillW / 2, MARGIN_X), MARGIN_X + waveW - pillW);
-  const pillY = TIMELINE.labelY - pillH;
-  g.fillStyle = COLOR.bg;
-  g.fillRect(pillX, pillY, pillW, pillH);
-  g.strokeStyle = "rgba(203, 203, 203, 0.3)";
-  g.strokeRect(pillX, pillY, pillW, pillH);
-  g.fillStyle = COLOR.gold;
-  g.textAlign = "left";
-  g.textBaseline = "middle";
-  g.fillText(label, pillX + padX, pillY + pillH / 2 + 1);
-  g.textBaseline = "alphabetic";
+    // Timecode pill above the marker, "start / total", as SoundCloud's
+    // playhead label does it. Clamped inside the side margins.
+    g.font = FONT(400, 26);
+    const padX = 14;
+    const pillW = g.measureText(label).width + padX * 2;
+    const pillH = 40;
+    const pillX = Math.min(Math.max(trueCentre - pillW / 2, MARGIN_X), MARGIN_X + waveW - pillW);
+    const pillY = TIMELINE.labelY - pillH;
+    g.fillStyle = COLOR.bg;
+    g.fillRect(pillX, pillY, pillW, pillH);
+    g.strokeStyle = "rgba(203, 203, 203, 0.3)";
+    g.strokeRect(pillX, pillY, pillW, pillH);
+    g.fillStyle = COLOR.gold;
+    g.textAlign = "left";
+    g.textBaseline = "middle";
+    g.fillText(label, pillX + padX, pillY + pillH / 2 + 1);
+    g.textBaseline = "alphabetic";
+    boxes.push(["pill", pillY, pillY + pillH]);
+    boxes.push(["timeline (marker incl.)", TIMELINE.y - TIMELINE.markerOverhang, TIMELINE.y + TIMELINE.h + TIMELINE.markerOverhang]);
+  }
 
-  // 5. Footer.
-  g.textAlign = "center";
-  g.fillStyle = "rgba(203, 203, 203, 0.6)";
-  g.font = FONT(400, FOOTER.size);
-  g.fillText("formatglasgow.com", W / 2, FOOTER.y);
+  // Spectrum heights. Bottom strip: SPECTRUM.maxH, clamped so its tallest bar
+  // stays SPECTRUM_CLEARANCE below the lowest content. Top strip: clamped to
+  // end brandClearance above the brand line's ink.
+  const contentBottom = boxes[boxes.length - 1][2];
+  const spectrumEdge = H - SPECTRUM.baselineFromBottom;
+  const spectrumH = Math.min(SPECTRUM.maxH, spectrumEdge - (contentBottom + SPECTRUM_CLEARANCE));
+  const brandTop = boxes[0][1];
+  const topSpectrumH = Math.min(TOP_SPECTRUM.maxH, brandTop - TOP_SPECTRUM.brandClearance);
+  boxes.push(["spectrum (tallest possible bar)", spectrumEdge - spectrumH, spectrumEdge]);
+  if (TOP_SPECTRUM.on) boxes.unshift(["top spectrum (tallest possible bar)", 0, topSpectrumH]);
+  row("layoutInfo", "layout (top–bottom px)", boxes.map(([n, t, b]) => `${n} ${t}–${b}`).join("; "));
+  row("layoutInfo", "vertical gaps (px)", boxes.slice(1).map(([n, t], i) => `${boxes[i][0]}→${n} ${t - boxes[i][2]}`).join("; "));
+  row("layoutInfo", "spectrum height", `${spectrumH}px (maxH ${SPECTRUM.maxH}, clearance ${SPECTRUM_CLEARANCE} below content ending at ${contentBottom})${TOP_SPECTRUM.on ? `; top strip ${topSpectrumH}px` : ""}`);
 
-  v2 = { layer, excerptPeaks: peaks, markerTrueW };
+
+  // 3. Excerpt bars, pre-rendered once into two offscreen canvases: unplayed
+  // purple, and played gold with the player's glow. Per frame is then two
+  // drawImage calls and a clip, with no per-bar work. `pad` leaves room for
+  // the glow to spread past the bars.
+  const pad = Math.ceil(GLOW_BLUR * 2);
+  const makeBars = (color, glow) => {
+    const c = document.createElement("canvas");
+    c.width = barsW + pad * 2;
+    c.height = EXCERPT_WAVE.h + pad * 2;
+    const b = c.getContext("2d");
+    if (glow) {
+      b.shadowColor = "rgba(197, 133, 56, 0.35)";
+      b.shadowBlur = GLOW_BLUR;
+    }
+    b.fillStyle = color;
+    if (MIRROR) {
+      drawBarRow(b, peaks, pad, pad, barsW, EXCERPT_WAVE.h, BAR_W, BAR_GAP, "up");
+      b.globalAlpha = 0.35;
+      b.shadowBlur = 0;
+      drawBarRow(b, peaks, pad, pad, barsW, EXCERPT_WAVE.h, BAR_W, BAR_GAP, "reflect");
+    } else {
+      drawBarRow(b, peaks, pad, pad, barsW, EXCERPT_WAVE.h, BAR_W, BAR_GAP);
+    }
+    return c;
+  };
+
+  // Spectrum for the preview's 50% frame, from the decoded excerpt. The
+  // buffer is decoded at the AudioContext's rate, so its bin mapping matches
+  // the live analyser's.
+  const rate = excerpt ? excerpt.buffer.sampleRate : 44100;
+  const ranges = bandBins(rate, ANALYSER.fftSize);
+  const edges = bandEdges();
+  row("layoutInfo", "spectrum bands", `${SPECTRUM.bands} log bands ${SPECTRUM.fMin}–${SPECTRUM.fMax}Hz, ${SPECTRUM.mirror ? "mirrored from centre" : "low→high"}; edges Hz: ${edges.map((f) => Math.round(f)).join(" ")}`);
+  row("layoutInfo", "analyser", `fftSize ${ANALYSER.fftSize} (${(rate / ANALYSER.fftSize).toFixed(2)}Hz bins @ ${rate}Hz), smoothing ${ANALYSER.smoothingTimeConstant}, dB ${ANALYSER.minDecibels}..${ANALYSER.maxDecibels}, tilt +${TILT_DB_PER_OCTAVE}dB/oct`);
+  let previewLevels = new Float32Array(SPECTRUM.bands);
+  if (excerpt) {
+    const mid = Math.round((excerpt.offset + excerpt.duration / 2) * rate);
+    previewLevels = bandLevels(smoothedSpectrum(excerpt.buffer, mid, ANALYSER.fftSize, ranges), ranges, previewLevels);
+  }
+
+  v2 = {
+    layer,
+    unplayed: makeBars(UNPLAYED, false),
+    played: makeBars(COLOR.gold, true),
+    barsX,
+    barsW,
+    pad,
+    markerTrueW,
+    ranges,
+    previewLevels,
+    spectrumEdge,
+    spectrumH,
+    topSpectrumH,
+  };
 }
 
-function drawV2(g, progress, guides = false) {
-  g.drawImage(v2.layer, 0, 0);
-  // 3. Excerpt waveform: unplayed everywhere, then gold with the player's
-  // glow clipped to the played width.
-  const waveW = W - 2 * MARGIN_X;
-  g.fillStyle = UNPLAYED;
-  drawBarRow(g, v2.excerptPeaks, MARGIN_X, EXCERPT_WAVE.y, waveW, EXCERPT_WAVE.h, BAR_W, BAR_GAP);
-  g.save();
-  g.beginPath();
-  g.rect(MARGIN_X, EXCERPT_WAVE.y - GLOW_BLUR * 2, waveW * Math.min(Math.max(progress, 0), 1), EXCERPT_WAVE.h + GLOW_BLUR * 4);
-  g.clip();
-  g.fillStyle = COLOR.bg;
-  g.fillRect(MARGIN_X, EXCERPT_WAVE.y, waveW, EXCERPT_WAVE.h);
-  g.shadowColor = "rgba(197, 133, 56, 0.35)";
-  g.shadowBlur = GLOW_BLUR;
-  g.fillStyle = COLOR.gold;
-  drawBarRow(g, v2.excerptPeaks, MARGIN_X, EXCERPT_WAVE.y, waveW, EXCERPT_WAVE.h, BAR_W, BAR_GAP);
-  g.restore();
-  if (guides) {
+// `levels`: 0..1 per spectrum band. Live from the analyser while recording,
+// or v2.previewLevels for the preview frame.
+// `guides` is preview-only: { safe, sideCrop }. Recording always passes none.
+function drawV2(g, progress, guides = {}, levels = v2.previewLevels) {
+  const { layer, unplayed, played, barsX, barsW, pad } = v2;
+  g.drawImage(layer, 0, 0);
+  g.drawImage(unplayed, barsX - pad, EXCERPT_WAVE.y - pad);
+  // The gold layer covers the purple bars exactly, since the geometry is the
+  // same. Clip it to the played width. The clip starts at the canvas's left
+  // pad so the first bar keeps its glow.
+  const playedW = barsW * Math.min(Math.max(progress, 0), 1);
+  if (playedW > 0) {
+    g.save();
+    g.beginPath();
+    g.rect(barsX - pad, EXCERPT_WAVE.y - pad, pad + playedW, played.height);
+    g.clip();
+    g.drawImage(played, barsX - pad, EXCERPT_WAVE.y - pad);
+    g.restore();
+  }
+  drawSpectrum(g, levels, { edgeY: v2.spectrumEdge, maxH: v2.spectrumH, color: SPECTRUM.color, alpha: SPECTRUM.alpha });
+  if (TOP_SPECTRUM.on) {
+    drawSpectrum(g, levels, { edgeY: 0, maxH: v2.topSpectrumH, down: true, color: TOP_SPECTRUM.color, alpha: TOP_SPECTRUM.alpha });
+  }
+  if (guides.safe) {
     g.fillStyle = "rgba(217, 83, 79, 0.25)";
     g.fillRect(0, 0, W, SAFE_TOP);
     g.fillRect(0, SAFE_BOTTOM, W, H - SAFE_BOTTOM);
+    g.fillStyle = "rgba(255, 255, 255, 0.85)";
+    g.font = FONT(400, 24);
+    g.textAlign = "left";
+    g.fillText(`SAFE_TOP ${SAFE_TOP} (provisional)`, 16, SAFE_TOP - 12);
+    g.fillText(`SAFE_BOTTOM ${SAFE_BOTTOM} (provisional)`, 16, SAFE_BOTTOM + 32);
+  }
+  if (guides.sideCrop) {
+    const side = (W - SIDE_CROP_W) / 2;
+    g.fillStyle = "rgba(79, 140, 217, 0.3)";
+    g.fillRect(0, 0, side, H);
+    g.fillRect(W - side, 0, side, H);
+    g.strokeStyle = "rgba(79, 140, 217, 0.9)";
+    g.lineWidth = 2;
+    g.strokeRect(side, 0, SIDE_CROP_W, H);
+    g.fillStyle = "rgba(255, 255, 255, 0.85)";
+    g.font = FONT(400, 22);
+    g.textAlign = "center";
+    g.fillText(`side crop ${SIDE_CROP_W}px — ASSUMED 20:9 fill-crop, UNVERIFIED`, W / 2, 200);
   }
 }
 
@@ -642,7 +1179,7 @@ $("preview").addEventListener("click", async () => {
     audioCtx(); // loadExcerpt decodes through the context; create it inside the tap
     await prepareV2();
     const g = $("canvas").getContext("2d");
-    drawV2(g, 0.5, $("guides").checked);
+    drawV2(g, 0.5, { safe: $("guides").checked, sideCrop: $("sideCrop").checked });
     const blob = await new Promise((resolve, reject) =>
       $("canvas").toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob returned null"))), "image/png"),
     );
@@ -675,8 +1212,23 @@ $("record").addEventListener("click", async () => {
     if (layout === "v2") await prepareV2();
     const total = excerpt ? excerpt.duration : Number($("len").value);
     const analyser = ctx.createAnalyser();
-    analyser.fftSize = 256;
+    if (layout === "v2") {
+      analyser.fftSize = ANALYSER.fftSize;
+      analyser.smoothingTimeConstant = ANALYSER.smoothingTimeConstant;
+      // Setting min above the current max (or max below min) throws, so widen
+      // first and then settle both.
+      analyser.maxDecibels = Math.max(ANALYSER.maxDecibels, analyser.maxDecibels);
+      analyser.minDecibels = ANALYSER.minDecibels;
+      analyser.maxDecibels = ANALYSER.maxDecibels;
+    } else {
+      analyser.fftSize = 256;
+    }
     const bins = new Uint8Array(analyser.frequencyBinCount);
+    const dbBins = new Float32Array(analyser.frequencyBinCount);
+    const liveLevels = new Float32Array(SPECTRUM.bands);
+    const liveRanges = bandBins(ctx.sampleRate, analyser.fftSize);
+    const smoothLive = makeSpectrumSmoother(analyser.frequencyBinCount, liveRanges);
+    let lastReadAt = null;
     const dest = ctx.createMediaStreamDestination();
     analyser.connect(dest);
     if ($("monitor").checked) analyser.connect(ctx.destination);
@@ -698,8 +1250,16 @@ $("record").addEventListener("click", async () => {
 
     const canvas = $("canvas");
     const g = canvas.getContext("2d");
-    const render = (elapsed, frameNo) =>
-      layout === "v2" ? drawV2(g, elapsed / total) : draw(g, analyser, bins, elapsed, total, frameNo);
+    const render = (elapsed, frameNo) => {
+      if (layout !== "v2") return draw(g, analyser, bins, elapsed, total, frameNo);
+      analyser.getFloatFrequencyData(dbBins);
+      // dt is the real time since the previous read, so the smoothing is the
+      // same whether this runs at 30, 60 or 120fps.
+      const now = performance.now();
+      const dt = lastReadAt === null ? 0 : (now - lastReadAt) / 1000;
+      lastReadAt = now;
+      drawV2(g, elapsed / total, {}, bandLevels(smoothLive(dbBins, dt), liveRanges, liveLevels));
+    };
     render(0, 0);
     const stream = new MediaStream([
       ...canvas.captureStream(30).getVideoTracks(),
@@ -719,26 +1279,79 @@ $("record").addEventListener("click", async () => {
 
     let frame = 0;
     let raf = 0;
+    let renderSum = 0;
+    let renderMax = 0;
     const startedAt = performance.now();
+    // Progress runs off the AudioContext clock, so the waveform follows the
+    // audio actually being recorded rather than wall time. `audioStart` is
+    // scheduled slightly ahead so the first frames and the recorder are
+    // already running when sound begins.
+    const audioStart = ctx.currentTime + 0.1;
+    const audioElapsed = () => Math.max(0, ctx.currentTime - audioStart);
     const tick = () => {
-      const elapsed = (performance.now() - startedAt) / 1000;
+      const elapsed = audioElapsed();
+      const r0 = performance.now();
       render(elapsed, ++frame);
+      const dt = performance.now() - r0;
+      renderSum += dt;
+      if (dt > renderMax) renderMax = dt;
       $("recState").textContent = `recording ${elapsed.toFixed(1)}s`;
       if (elapsed < total) raf = requestAnimationFrame(tick);
     };
+
+    // Hiding the page (app switch, lock screen) stops requestAnimationFrame,
+    // and on iOS the AudioContext is expected to be suspended too. A file
+    // made past that point would have frozen or missing frames, so abort
+    // and produce nothing.
+    let aborted = null;
+    let finish;
+    const ended = new Promise((resolve) => {
+      finish = resolve;
+    });
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        aborted = "page was hidden during recording (app switch or screen lock)";
+        finish();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    source.onended = () => finish();
+    // Fallback in case `ended` never fires, e.g. a context left suspended.
+    const fallback = setTimeout(() => finish(), (total + 3) * 1000);
+
     rec.start(1000);
-    if (excerpt) source.start(0, excerpt.offset, total);
-    else source.start();
+    if (excerpt) source.start(audioStart, excerpt.offset, total);
+    else {
+      source.start(audioStart);
+      source.stop(audioStart + total);
+    }
     raf = requestAnimationFrame(tick);
-    await new Promise((r) => setTimeout(r, total * 1000 + 150));
-    cancelAnimationFrame(raf);
-    try { source.stop(); } catch {}
+    try {
+      await ended;
+    } finally {
+      clearTimeout(fallback);
+      document.removeEventListener("visibilitychange", onVisibility);
+      cancelAnimationFrame(raf);
+      try { source.stop(); } catch {}
+    }
+    if (aborted) {
+      rec.ondataavailable = null;
+      if (rec.state !== "inactive") rec.stop();
+      stream.getTracks().forEach((t) => t.stop());
+      chunks.length = 0;
+      row("result", "recording aborted", `${aborted} — no file produced, tap record to try again`, "bad");
+      return;
+    }
+    // One more frame at exactly 100%, since the last rAF can land a few ms short.
+    render(total, ++frame);
+    await new Promise((r) => setTimeout(r, 150));
     rec.stop();
     const watchdog = new Promise((_, reject) =>
       setTimeout(() => reject(new Error("MediaRecorder stop event never fired (5s)")), 5000),
     );
     await Promise.race([stopped, watchdog]);
     const wall = (performance.now() - startedAt) / 1000;
+    row("result", "render per frame (CPU submit time)", `mean ${(renderSum / frame).toFixed(3)}ms, max ${renderMax.toFixed(3)}ms over ${frame} frames`);
     stream.getTracks().forEach((t) => t.stop());
 
     const type = rec.mimeType || chunks[0]?.type || "";
