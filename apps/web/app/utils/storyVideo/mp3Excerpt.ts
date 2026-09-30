@@ -174,8 +174,13 @@ export class Mp3ExcerptError extends Error {
   }
 }
 
-/** Fetches bytes [from, to] of `url`, inclusive. */
-export type RangeFetch = (url: string, from: number, to: number) => Promise<Uint8Array>;
+/** Fetches bytes [from, to] of `url`, inclusive; `signal` aborts the request. */
+export type RangeFetch = (
+  url: string,
+  from: number,
+  to: number,
+  signal?: AbortSignal,
+) => Promise<Uint8Array>;
 
 /**
  * A RangeFetch over `fetch`. Anything but a 206 is an error, and its body is
@@ -183,8 +188,8 @@ export type RangeFetch = (url: string, from: number, to: number) => Promise<Uint
  * 100–220MB set, which must never be downloaded by accident.
  */
 export function rangeFetcher(fetchFn: typeof fetch = fetch): RangeFetch {
-  return async (url, from, to) => {
-    const res = await fetchFn(url, { headers: { Range: `bytes=${from}-${to}` } });
+  return async (url, from, to, signal) => {
+    const res = await fetchFn(url, { headers: { Range: `bytes=${from}-${to}` }, signal });
     if (res.status !== 206) {
       await res.body?.cancel();
       throw res.ok
@@ -199,9 +204,13 @@ export function rangeFetcher(fetchFn: typeof fetch = fetch): RangeFetch {
 }
 
 /** Reads the file's layout with two small Range requests; refuses anything not CBR. */
-async function fetchMp3Layout(url: string, fetchRange: RangeFetch): Promise<Mp3Layout> {
-  const id3End = id3TagEnd(await fetchRange(url, 0, 9));
-  const probe = await fetchRange(url, id3End, id3End + FIRST_FRAME_PROBE_BYTES - 1);
+async function fetchMp3Layout(
+  url: string,
+  fetchRange: RangeFetch,
+  signal?: AbortSignal,
+): Promise<Mp3Layout> {
+  const id3End = id3TagEnd(await fetchRange(url, 0, 9, signal));
+  const probe = await fetchRange(url, id3End, id3End + FIRST_FRAME_PROBE_BYTES - 1, signal);
   const read = readMp3Layout(id3End, probe);
   if (!read)
     throw new Mp3ExcerptError("not-mp3", "no MPEG-1 Layer III frame where the audio should start");
@@ -226,6 +235,8 @@ export interface Excerpt<T> {
 /**
  * Fetches and decodes [startSeconds, startSeconds + durationSeconds) of a CBR
  * MP3. `decode` is typically `(data) => audioContext.decodeAudioData(data)`.
+ * Aborting `signal` cancels whichever request is in flight and skips the
+ * decode; the promise rejects with the signal's AbortError.
  */
 export async function fetchExcerpt<T>(
   url: string,
@@ -233,10 +244,13 @@ export async function fetchExcerpt<T>(
   durationSeconds: number,
   decode: (data: ArrayBuffer) => Promise<T>,
   fetchRange: RangeFetch = rangeFetcher(),
+  signal?: AbortSignal,
 ): Promise<Excerpt<T>> {
-  const layout = await fetchMp3Layout(url, fetchRange);
+  const layout = await fetchMp3Layout(url, fetchRange, signal);
   const range = excerptByteRange(layout, startSeconds, durationSeconds);
-  const bytes = await fetchRange(url, range.from, range.to);
+  const bytes = await fetchRange(url, range.from, range.to, signal);
+  // decodeAudioData can't be cancelled, so don't start one nobody wants.
+  signal?.throwIfAborted();
   const sync = findFrameSync(bytes, layout);
   if (sync < 0) throw new Mp3ExcerptError("no-sync", "no frame sync in the fetched range");
   // slice() copies into a fresh ArrayBuffer: decodeAudioData detaches its input.

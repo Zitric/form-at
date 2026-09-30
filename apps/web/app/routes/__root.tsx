@@ -14,6 +14,7 @@ import { ShareModal } from "~/components/ShareModal";
 import { SwipeNavigator } from "~/components/SwipeNavigator";
 import { Toast } from "~/components/Toast";
 import { PlaybackErrorToast, Player } from "~/components/player";
+import { StoryFlowHost } from "~/components/story/StoryFlowHost";
 import { fontCSS } from "~/styles/fontCSS";
 import "~/styles/global.css";
 import { rootHead } from "~/utils/rootHead";
@@ -46,6 +47,7 @@ function Root() {
         <PlaybackErrorToast />
         <Toast />
         <ShareModal />
+        <StoryFlowHost />
         <InAppBrowserBanner />
         <BottomNav />
         <Scripts />

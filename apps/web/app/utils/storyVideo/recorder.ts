@@ -9,18 +9,11 @@
 // Browser-only. Does not share: navigator.share needs a fresh user tap, and
 // the one that started the recording has expired 20 seconds later.
 
+import { pickStoryMimeType } from "./capability";
 import { FRAME } from "./layout";
 import { isFragmented, summarizeBoxes, topLevelBoxes } from "./mp4Boxes";
 import { type StoryFrame, drawStoryFrame } from "./renderer";
 import { SPECTRUM_TUNING, bandLevels, makeSpectrumSmoother, spectrumBands } from "./spectrum";
-
-// H.264 + AAC in MP4 only: Instagram's Story video format. Most specific
-// first. WebM (all Firefox records) and Opus-in-MP4 are never used, even
-// where supported: the file would record fine and then fail at Instagram.
-export const STORY_MIME_TYPES = [
-  'video/mp4;codecs="avc1.640028,mp4a.40.2"',
-  "video/mp4;codecs=avc1,mp4a.40.2",
-] as const;
 
 const VIDEO_BITS_PER_SECOND = 6_000_000;
 const AUDIO_BITS_PER_SECOND = 192_000;
@@ -33,13 +26,6 @@ const TAIL_MS = 150;
 // MediaRecorder's stop event has been reported never firing on iOS. Give up
 // rather than hang.
 const STOP_TIMEOUT_MS = 5000;
-
-export function pickStoryMimeType(
-  isTypeSupported: (type: string) => boolean = (type) =>
-    typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(type),
-): string | null {
-  return STORY_MIME_TYPES.find((type) => isTypeSupported(type)) ?? null;
-}
 
 /**
  * - `unsupported`: no H.264 + AAC MP4 recording in this browser.

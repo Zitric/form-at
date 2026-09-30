@@ -287,6 +287,24 @@ describe("fetchExcerpt", () => {
     ).rejects.toBeInstanceOf(Mp3ExcerptError);
   });
 
+  it("passes the signal to every request, and skips the decode once aborted", async () => {
+    const file = mp3File({});
+    const abort = new AbortController();
+    const signals: (AbortSignal | undefined)[] = [];
+    const fetchRange: RangeFetch = async (_url, from, to, signal) => {
+      signals.push(signal);
+      // Aborted while the excerpt itself is downloading.
+      if (signals.length === 3) abort.abort();
+      return file.slice(from, to + 1);
+    };
+    const decode = vi.fn();
+    await expect(fetchExcerpt("u", 10, 1, decode, fetchRange, abort.signal)).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(signals).toEqual([abort.signal, abort.signal, abort.signal]);
+    expect(decode).not.toHaveBeenCalled();
+  });
+
   it("refuses something that isn't an MP3", async () => {
     await expect(
       fetchExcerpt("u", 1, 1, vi.fn(), fetchFrom(new Uint8Array(4096))),

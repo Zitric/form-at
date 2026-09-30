@@ -1,10 +1,13 @@
 import { getCityForSet } from "@form-at/data/events";
 import { BracketLabel, Modal, TerminalRow } from "@form-at/ui";
+import { useEffect } from "react";
 
+import { StoryEntry } from "~/components/story/StoryEntry";
 import { useStore } from "~/store";
 import { getAudioCurrentTime } from "~/store/playerSlice";
 import { buildAndroidIntent, isAndroid } from "~/utils/deeplink";
 import { fmtTimestamp } from "~/utils/fmt";
+import { applyStoryFlagFromUrl } from "~/utils/storyFlag";
 
 // Each platform's `wa.me` / `t.me` URL is already a Universal Link / App Link
 // in theory — but Android only honours them if the user has enabled "open
@@ -29,6 +32,10 @@ export function ShareModal() {
   const closeShareModal = useStore((s) => s.closeShareModal);
   const setToast = useStore((s) => s.setToast);
   const nowPlaying = useStore((s) => s.nowPlaying);
+
+  // ShareModal is mounted once at the root, so this reads the landing URL:
+  // a later client-side navigation drops `?story=on` from it.
+  useEffect(() => applyStoryFlagFromUrl(), []);
 
   if (!shareSet) return null;
 
@@ -130,6 +137,7 @@ export function ShareModal() {
             >
               <BracketLabel>telegram</BracketLabel>
             </a>
+            <StoryEntry set={shareSet} rowClass={rowClass} />
           </div>
         </div>
       </div>

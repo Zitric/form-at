@@ -51,6 +51,7 @@ tests/
 │   ├── navigation.spec.ts  # Top/bottom nav routing
 │   ├── csp-violations.spec.ts # Zero CSP violations on the golden path; allowed hosts reachable
 │   ├── story-video.spec.ts # Story video recorder in a real browser (harness page, no UI)
+│   ├── story-picker.spec.ts # ?story=on entry, install gate, excerpt picker (Pixel 7 emulation)
 │   └── _helpers.ts         # shared gotoAndHydrate helper, not a spec
 └── setup.ts          # jest-dom matchers, jsdom HTMLMediaElement stubs
 ```

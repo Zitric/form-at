@@ -19,6 +19,13 @@ export type UiSlice = {
   shareSet: MusicSet | null;
   openShareModal: (set: MusicSet) => void;
   closeShareModal: () => void;
+  /** The open Instagram Story flow, `null` when closed: which set, and
+   *  which step — the install gate (a browser tab) or the excerpt picker
+   *  (the installed app). Never persisted: a MusicSet object is a migration
+   *  hazard, and a half-made story has no business surviving a reload. */
+  storyFlow: { set: MusicSet; step: "install-gate" | "picker" } | null;
+  openStoryFlow: (set: MusicSet, step: "install-gate" | "picker") => void;
+  closeStoryFlow: () => void;
   /** Mobile full-screen "now playing" overlay open/closed flag. Mini-player
    *  tap sets this true; close button + route changes set it false.
    *  <FullPlayer> renders null when this is true but `nowPlaying` is null,
@@ -95,6 +102,10 @@ export const createUiSlice: StateCreator<UiSlice, [], [], UiSlice> = (set) => ({
   shareSet: null,
   openShareModal: (s) => set({ shareSet: s }),
   closeShareModal: () => set({ shareSet: null }),
+  storyFlow: null,
+  // Replaces the share modal rather than stacking on it: one dialog at a time.
+  openStoryFlow: (s, step) => set({ storyFlow: { set: s, step }, shareSet: null }),
+  closeStoryFlow: () => set({ storyFlow: null }),
   fullPlayerOpen: false,
   openFullPlayer: () => set({ fullPlayerOpen: true }),
   closeFullPlayer: () => set({ fullPlayerOpen: false }),

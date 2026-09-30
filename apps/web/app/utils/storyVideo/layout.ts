@@ -37,6 +37,9 @@ export const TEXT_XS = scaled(12);
 export const TEXT_SM = scaled(14);
 export const TRACKING_WIDEST = 0.1; // em, Tailwind's tracking-widest
 
+// Instagram's Story video limit, and the only length the picker offers.
+export const EXCERPT_SECONDS = 20;
+
 // Top to bottom. Baselines are for text; y is a top edge.
 export const BRAND = {
   text: "formatglasgow.com",
