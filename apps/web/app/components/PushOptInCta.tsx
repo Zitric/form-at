@@ -123,7 +123,6 @@ export function PushOptInCta({ className }: { className?: string }) {
         onClose={() => setModalOpen(false)}
         onDeclined={() => setPushOptInDeclinedSession(true)}
         onOutcome={handleOutcome}
-        gate={gate}
       />
     </>
   );

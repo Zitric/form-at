@@ -1,5 +1,5 @@
 import { BracketLabel } from "@form-at/ui";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { BookingsButton } from "~/components/BookingsButton";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
@@ -85,15 +85,6 @@ function Home() {
           <span className="text-gold">›</span>
           <span>{listenLabel}</span>
         </button>
-
-        {/* Prototype, pending a decision: delete this Link to drop it. */}
-        <Link
-          to="/sets"
-          className="self-center mt-3 text-xs text-grey/60 hover:text-white transition-colors tracking-widest"
-          style={{ opacity: visible ? 1 : 0, transition: `opacity ${fadeDuration} ease-out` }}
-        >
-          → all_sets
-        </Link>
 
         <div
           className="flex items-center justify-center gap-10 my-8"

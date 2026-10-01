@@ -1,5 +1,6 @@
 export { DownloadIcon } from "./DownloadIcon";
 export { InstallIcon } from "./InstallIcon";
+export { InstallMobileIcon } from "./InstallMobileIcon";
 export { NextIcon } from "./NextIcon";
 export { PauseIcon } from "./PauseIcon";
 export { PlayIcon } from "./PlayIcon";

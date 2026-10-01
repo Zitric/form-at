@@ -1,4 +1,4 @@
-import { Button } from "@form-at/ui";
+import { Button, InstallMobileIcon } from "@form-at/ui";
 import { useEffect, useState } from "react";
 
 import { type InstallGateCopy, SaveGateModal } from "~/components/SaveGateModal";
@@ -84,8 +84,8 @@ function InstallAppButtonView({ promptReady, onTap }: { promptReady: boolean; on
 
   return (
     <div className={isFirstLoad ? "animate-slow-fade-in" : "animate-fade-in"}>
-      <Button variant="emphasis" onClick={onTap}>
-        install_app
+      <Button variant="secondary" onClick={onTap}>
+        <InstallMobileIcon className="inline-block align-[-0.15em]" /> install_app
       </Button>
     </div>
   );

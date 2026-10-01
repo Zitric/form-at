@@ -41,12 +41,6 @@ test.describe("home page", () => {
     await expect(page).toHaveURL(/\/$/);
   });
 
-  test("→ all_sets goes to /sets", async ({ page }) => {
-    await gotoAndHydrate(page, "/");
-    await page.getByRole("link", { name: "→ all_sets" }).click();
-    await expect(page).toHaveURL(/\/sets$/);
-  });
-
   test("renders instagram link and bookings modal trigger", async ({ page }) => {
     await gotoAndHydrate(page, "/");
 

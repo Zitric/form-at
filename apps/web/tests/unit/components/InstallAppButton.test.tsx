@@ -59,11 +59,13 @@ describe("InstallAppButton — who sees it", () => {
     expect(button()).toBeInTheDocument();
   });
 
-  it("is there on desktop Chromium, with the gold label of the emphasis variant", () => {
+  it("is there on desktop Chromium, a secondary bracket button with the phone icon", () => {
     formFactorRef.current = "desktop";
     setGate({ allow: false, reason: "needs-install", platform: "chromium", canPrompt: true });
     render(<InstallAppButton />);
-    expect(button()).toHaveClass("text-gold");
+    expect(button()).toHaveClass("text-grey");
+    // The icon is decorative: the accessible name is the bracketed label alone.
+    expect(button()?.querySelector("svg[aria-hidden='true']")).not.toBeNull();
   });
 });
 

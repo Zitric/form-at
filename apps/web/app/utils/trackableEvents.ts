@@ -16,13 +16,16 @@ export const TRACKABLE_EVENT_TYPES = [
   "app_launch",
   "save_click",
   "share_click",
-  // Push opt-in soft prompt — mirrors the install_* naming.
-  // `notify_prompt_shown` / `notify_install_nudge_shown`
-  // are the two modal variants becoming visible (standalone subscribe prompt
-  // vs browser-tab install nudge); `notify_accepted` is accepting OUR soft
-  // prompt (fires before the native permission ask — grant rate is inferable
-  // by comparing against the push_subscriptions table); `notify_declined` is
-  // closing either variant without accepting/engaging.
+  // Push opt-in soft prompt (installed app only) — mirrors the install_*
+  // naming. `notify_prompt_shown` is the subscribe prompt becoming visible;
+  // `notify_accepted` is accepting OUR soft prompt (fires before the native
+  // permission ask — grant rate is inferable by comparing against the
+  // push_subscriptions table); `notify_declined` is closing it without
+  // accepting. `notify_install_nudge_shown` is LEGACY: the browser-tab
+  // nudge it counted is gone (a tab's install ask is
+  // install_cta_instructions_shown), and nothing current sends it. It stays
+  // accepted for tabs still running an older cached bundle; the admin
+  // dashboard reads historic rows from D1 either way, not through this list.
   "notify_prompt_shown",
   "notify_accepted",
   "notify_declined",

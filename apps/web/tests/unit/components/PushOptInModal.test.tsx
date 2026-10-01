@@ -2,22 +2,13 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PushOptInModal } from "~/components/PushOptInModal";
-import type { SaveGate } from "~/hooks/useSaveGate";
 import { useStore } from "~/store";
 
-// Locks the soft-prompt contract: the
-// NATIVE permission dialog must never fire except from the standalone
-// variant's explicit accept. A native "Block" is nearly unrecoverable, so
-// every other path — declining, closing, and the entire browser-tab install
-// nudge — must leave `Notification.requestPermission` untouched.
-
-const { triggerInstallMock } = vi.hoisted(() => ({
-  triggerInstallMock: vi.fn(async () => "accepted" as const),
-}));
-
-vi.mock("~/hooks/useSaveGate", () => ({
-  useTriggerInstallPrompt: () => triggerInstallMock,
-}));
+// Locks the soft-prompt contract: the NATIVE permission dialog must never
+// fire except from the explicit accept. A native "Block" is nearly
+// unrecoverable, so declining and closing must leave
+// `Notification.requestPermission` untouched. Installed app only: the
+// browser-tab install nudge this modal once had is InstallAppButton's job.
 
 // Same spec-shaped per-test mocks as usePushSubscription.test.tsx — jsdom
 // has none of Notification / PushManager / navigator.serviceWorker.
@@ -77,33 +68,11 @@ async function beaconedEventTypes(spy: ReturnType<typeof vi.spyOn>): Promise<str
   return types;
 }
 
-const standaloneGate: SaveGate = { allow: true };
-const needsInstallGate: SaveGate = {
-  allow: false,
-  reason: "needs-install",
-  platform: "chromium",
-  canPrompt: true,
-};
-const openAppGate: SaveGate = { allow: false, reason: "open-app" };
-const cannotInstallGate: SaveGate = {
-  allow: false,
-  reason: "cannot-install",
-  hint: "use-chrome-or-safari",
-};
-
-function renderModal(gate: SaveGate) {
+function renderModal() {
   const onClose = vi.fn();
   const onDeclined = vi.fn();
   const onOutcome = vi.fn();
-  render(
-    <PushOptInModal
-      open
-      onClose={onClose}
-      onDeclined={onDeclined}
-      onOutcome={onOutcome}
-      gate={gate}
-    />,
-  );
+  render(<PushOptInModal open onClose={onClose} onDeclined={onDeclined} onOutcome={onOutcome} />);
   return { onClose, onDeclined, onOutcome };
 }
 
@@ -117,7 +86,6 @@ beforeEach(() => {
     };
   }
   useStore.setState({ pushOptInDismissed: false, pushOptInDeclinedSession: false });
-  triggerInstallMock.mockClear();
 });
 
 afterEach(() => {
@@ -125,35 +93,14 @@ afterEach(() => {
   clearPushGlobals();
 });
 
-describe("PushOptInModal — variant branching", () => {
-  it("standalone gate renders the subscribe ask, not the install nudge", () => {
+describe("PushOptInModal — content", () => {
+  it("renders the subscribe ask, and no install nudge", () => {
     mockPushSupport(() => Promise.reject(new Error("not tapped")));
     mockNotification("granted");
-    renderModal(standaloneGate);
+    renderModal();
 
     expect(screen.getByRole("button", { name: /enable_notifications/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "[ install ]" })).not.toBeInTheDocument();
-  });
-
-  it("browser-tab needs-install gate renders the install nudge, no subscribe ask", () => {
-    renderModal(needsInstallGate);
-
-    expect(screen.getByText(/notifications live in the Form:at app/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "[ install ]" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /enable_notifications/ })).not.toBeInTheDocument();
-  });
-
-  it("open-app gate points at the installed app", () => {
-    renderModal(openAppGate);
-    expect(screen.getByText(/already on your device/i)).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /not installed\? install the app/i }),
-    ).toBeInTheDocument();
-  });
-
-  it("cannot-install gate is honest about the missing install path", () => {
-    renderModal(cannotInstallGate);
-    expect(screen.getByText(/this browser can't install it/i)).toBeInTheDocument();
   });
 });
 
@@ -164,7 +111,7 @@ describe("PushOptInModal — native permission guarantee", () => {
     );
     const requestPermission = mockNotification("granted");
     vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
-    const { onDeclined } = renderModal(standaloneGate);
+    const { onDeclined } = renderModal();
 
     expect(requestPermission).not.toHaveBeenCalled();
 
@@ -176,19 +123,6 @@ describe("PushOptInModal — native permission guarantee", () => {
     await user.click(screen.getByRole("button", { name: /enable_notifications/ }));
     expect(requestPermission).toHaveBeenCalledTimes(1);
   });
-
-  it("browser-tab variant NEVER calls requestPermission — not even via its primary action", async () => {
-    mockPushSupport(() => Promise.reject(new Error("subscribe must not run in a tab")));
-    const requestPermission = mockNotification("granted");
-    vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
-    renderModal(needsInstallGate);
-
-    const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "[ install ]" }));
-
-    expect(triggerInstallMock).toHaveBeenCalledTimes(1);
-    expect(requestPermission).not.toHaveBeenCalled();
-  });
 });
 
 describe("PushOptInModal — subscribe outcomes through the modal", () => {
@@ -198,7 +132,7 @@ describe("PushOptInModal — subscribe outcomes through the modal", () => {
     );
     mockNotification("granted");
     vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
-    const { onDeclined, onOutcome, onClose } = renderModal(standaloneGate);
+    const { onDeclined, onOutcome, onClose } = renderModal();
 
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /enable_notifications/ }));
@@ -218,7 +152,7 @@ describe("PushOptInModal — subscribe outcomes through the modal", () => {
     );
     mockNotification("granted");
     vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
-    const { onDeclined, onClose } = renderModal(standaloneGate);
+    const { onDeclined, onClose } = renderModal();
 
     expect(document.querySelectorAll("dialog")).toHaveLength(1);
 
@@ -240,7 +174,7 @@ describe("PushOptInModal — subscribe outcomes through the modal", () => {
     mockPushSupport(() => Promise.reject(new Error("subscribe should not be called")));
     mockNotification("denied");
     vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
-    const { onOutcome } = renderModal(standaloneGate);
+    const { onOutcome } = renderModal();
 
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /enable_notifications/ }));
@@ -254,7 +188,7 @@ describe("PushOptInModal — subscribe outcomes through the modal", () => {
     mockPushSupport(() => Promise.reject(new Error("push service unreachable")));
     mockNotification("granted");
     vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
-    const { onDeclined, onOutcome } = renderModal(standaloneGate);
+    const { onDeclined, onOutcome } = renderModal();
 
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /enable_notifications/ }));
@@ -278,7 +212,7 @@ describe("PushOptInModal — granted-but-unsubscribed resume", () => {
     );
     const requestPermission = mockNotification("granted", "granted");
     const beaconSpy = vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
-    const { onOutcome } = renderModal(standaloneGate);
+    const { onOutcome } = renderModal();
 
     expect(await screen.findByText(/notifications on/i)).toBeInTheDocument();
     expect(onOutcome).toHaveBeenCalledWith("subscribed");
@@ -294,7 +228,7 @@ describe("PushOptInModal — granted-but-unsubscribed resume", () => {
     mockPushSupport(() => Promise.reject(new Error("push service unreachable")));
     mockNotification("granted", "granted");
     const beaconSpy = vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
-    const { onDeclined } = renderModal(standaloneGate);
+    const { onDeclined } = renderModal();
 
     expect(await screen.findByRole("button", { name: /try_again/ })).toBeInTheDocument();
 
@@ -316,7 +250,7 @@ describe("PushOptInModal — busy phase visibility (2026-07-20 simplification)",
     mockPushSupport(() => promise);
     mockNotification("granted", "granted");
     vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
-    renderModal(standaloneGate);
+    renderModal();
 
     expect(screen.queryByText(/setting up/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/hear about new sets/i)).not.toBeInTheDocument();
@@ -332,7 +266,7 @@ describe("PushOptInModal — busy phase visibility (2026-07-20 simplification)",
     mockPushSupport(() => promise);
     mockNotification("granted");
     vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
-    renderModal(standaloneGate);
+    renderModal();
 
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /enable_notifications/ }));
@@ -350,26 +284,13 @@ describe("PushOptInModal — busy phase visibility (2026-07-20 simplification)",
 });
 
 describe("PushOptInModal — analytics", () => {
-  it("fires notify_prompt_shown when the standalone variant opens", async () => {
+  it("fires notify_prompt_shown when it opens", async () => {
     mockPushSupport(() => Promise.reject(new Error("not tapped")));
     mockNotification("granted");
     const beaconSpy = vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
-    renderModal(standaloneGate);
+    renderModal();
 
     expect(await beaconedEventTypes(beaconSpy)).toContain("notify_prompt_shown");
-  });
-
-  it("fires notify_install_nudge_shown when the tab variant opens, and notify_declined on close", async () => {
-    const beaconSpy = vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
-    renderModal(needsInstallGate);
-
-    const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Close" }));
-
-    const types = await beaconedEventTypes(beaconSpy);
-    expect(types).toContain("notify_install_nudge_shown");
-    expect(types).toContain("notify_declined");
-    expect(types).not.toContain("notify_prompt_shown");
   });
 
   it("fires notify_accepted on accept and does NOT fire notify_declined afterwards", async () => {
@@ -378,7 +299,7 @@ describe("PushOptInModal — analytics", () => {
     );
     mockNotification("granted");
     const beaconSpy = vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
-    renderModal(standaloneGate);
+    renderModal();
 
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /enable_notifications/ }));

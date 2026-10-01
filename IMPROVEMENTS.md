@@ -16,7 +16,7 @@ Running list of feature/functional improvements. Tick off as we ship.
 
 - [x] **#3 — Continue listening card on home**
   We already persist `nowPlayingId` + `positions`. Surface a top card on `/` that resumes the last set in one tap when those are present.
-  Shipped, but not as a separate card: `routes/index.tsx`'s main button is a play/pause toggle for the loaded set — `resume_signal` when it's paused, `pause` while it plays — and with nothing loaded it reads `play_latest` and plays the newest set. Same one-tap-resume outcome, folded into the button rather than a distinct component.
+p  Shipped, but not as a separate card: `routes/index.tsx`'s main button is a play/pause toggle for the loaded set — `resume_signal` when it's paused, `pause` while it plays — and with nothing loaded it reads `play_latest` and plays the newest set. Same one-tap-resume outcome, folded into the button rather than a distinct component.
 
 - [x] **#4 — Add to calendar on events**
   `AddToCalendarButton` builds an RFC 5545 `.ics` (TZID=Europe/London) from `event.date / runtime / venue` and triggers a download. Shown on upcoming events only. Util: `apps/web/app/utils/ics.ts`.
