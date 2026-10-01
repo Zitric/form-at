@@ -7,7 +7,7 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
-- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a cleared 2026-08-18 except the dropped-connection case, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project), 30 (Instagram Story device test — Android verified end to end: the full 15s story shares directly and publishes whole; A/V sync, cropping and legibility after Instagram's re-encode not separately reported; iOS waits on the same device access as 12/23b), 31 (a re-upload at the same R2 URL never reaches a saved offline copy; versioned upload paths recommended)
+- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a cleared 2026-08-18 except the dropped-connection case, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project), 30 (Instagram Story device test — Android fully verified: the full 15s story shares directly, publishes whole, A/V sync and framing intact after Instagram's re-encode; iOS waits on the same device access as 12/23b), 31 (a re-upload at the same R2 URL never reaches a saved offline copy; versioned upload paths recommended)
 - **Deferred, recorded rather than done:** 24 (DJ/event data model still static while sets are in D1), 25 (no-cross-app-imports unenforced), 26 (`PWA_PROGRESS.md` too large to be readable)
 - **Invalid:** 1 (2026-07-22 — premise was wrong, not stale: both flagged functions are load-bearing behind a live multi-provider calendar picker; do not delete, see item for the full re-verification)
 - **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, real trigger is ~10-15 sets in the catalogue, not a calendar date; see item for why that arrives faster now)
@@ -1366,12 +1366,15 @@ Two more findings from the same run:
   re-upload at the same URL (the offline guard compares URLs, not ETags),
   which is a gap of its own if the re-upload is confirmed.
 
+**Android (Chrome) fully verified (2026-10-01).** Shared directly and
+published, the story keeps the whole 15s. After Instagram's re-encode, A/V
+sync holds (the gold progress follows the audio) and nothing is cropped or
+covered by Instagram's own UI. Not recorded, and not blocking: the phone's
+own MediaRecorder mime list (the spike's copy-report).
+
 **Still open:**
-- **Android (Chrome):** sharing and publishing are verified (above), and the
-  published story keeps the whole 15s. Not separately reported: A/V sync,
-  cropping and legibility after Instagram's re-encode. Also open: the phone's own mime list and
-  recorder output — paste its copy-report here.
-- **iOS (Safari, installed PWA and tab):** the same questions, plus whether
+- **iOS (Safari, installed PWA and tab):** everything Android verified above
+  (direct share, the whole 15s published, A/V sync, framing), plus whether
   the `AudioContext` path records audio at all and whether the silent switch
   mutes the recording (PR 3b sets `navigator.audioSession.type = "playback"`
   for the recording, unverified). Waits on the same iPhone access as items 12
