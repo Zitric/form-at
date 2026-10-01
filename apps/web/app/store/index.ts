@@ -4,7 +4,12 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { type CatalogueSlice, createCatalogueSlice, getCatalogueSet } from "./catalogueSlice";
 import { type OfflineSetState, type OfflineSlice, createOfflineSlice } from "./offlineSlice";
-import { type PlayerSlice, createPlayerSlice } from "./playerSlice";
+import {
+  type PlayerSlice,
+  createPlayerSlice,
+  stampedDurationsOnly,
+  stampedPeaksOnly,
+} from "./playerSlice";
 import { type UiSlice, createUiSlice } from "./uiSlice";
 
 export type AppStore = PlayerSlice & UiSlice & OfflineSlice & CatalogueSlice;
@@ -76,8 +81,8 @@ export const useStore = create<AppStore>()(
         } = persisted as {
           nowPlayingId: string | null;
           positions: Record<string, number>;
-          peaksCache: Record<string, number[]>;
-          durations: Record<string, number>;
+          peaksCache: unknown;
+          durations: unknown;
           pwaInstalled?: boolean;
           pwaInstallDismissed?: boolean;
           pushOptInDismissed?: boolean;
@@ -107,8 +112,8 @@ export const useStore = create<AppStore>()(
             ? (getCatalogueSet(catalogueSets, nowPlayingId) ?? getSet(nowPlayingId) ?? null)
             : null,
           positions: positions ?? {},
-          peaksCache: peaksCache ?? {},
-          durations: durations ?? {},
+          peaksCache: stampedPeaksOnly(peaksCache),
+          durations: stampedDurationsOnly(durations),
           pwaInstalled: pwaInstalled ?? false,
           pwaInstallDismissed: pwaInstallDismissed ?? false,
           pushOptInDismissed: pushOptInDismissed ?? false,

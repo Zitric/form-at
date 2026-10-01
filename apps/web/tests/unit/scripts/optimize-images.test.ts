@@ -78,6 +78,46 @@ describe("processUploadedSet", () => {
     expect(second.status === "ok" && second.wroteAny).toBe(false);
   });
 
+  // Re-upload staleness (TECH_DEBT 31): variants are named from
+  // `artwork`, so a re-upload (`uploads/{id}-{version}`) gets new image URLs
+  // instead of being skipped as "already exists" under the id.
+  it("names variants from the artwork field: uploads/{id}-{version} → {id}-{version}-{w}.{ext}", async () => {
+    const buffer = await makeTestPng(1200, 1200);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(buffer, { status: 200 })));
+
+    const result = await processUploadedSet({
+      id: "test-set-4",
+      artwork: "uploads/test-set-4-vmfzx1a2b-4c5d",
+      artworkOriginalUrl: "https://cdn.example.com/x.png",
+    });
+
+    expect(result.status === "ok" && result.wroteAny).toBe(true);
+    await expect(
+      stat(join(UPLOADED_OUT, "test-set-4-vmfzx1a2b-4c5d-640.webp")),
+    ).resolves.toBeTruthy();
+    await expect(stat(join(UPLOADED_OUT, "test-set-4-640.webp"))).rejects.toThrow();
+  });
+
+  it("refuses an artwork value that isn't uploads/{name}, rather than writing to a path built from it", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    for (const artwork of [
+      "uploads/../../evil",
+      "sets/test-set-5",
+      "uploads/Test",
+      "uploads/a/b",
+    ]) {
+      const result = await processUploadedSet({
+        id: "test-set-5",
+        artwork,
+        artworkOriginalUrl: "https://cdn.example.com/x.png",
+      });
+      expect(result.status).toBe("failed");
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   // Failure policy: a missing/broken variant degrades to
   // Image.tsx's already-shipped fallback — this must warn and skip, never
   // throw and fail the whole build.

@@ -1,7 +1,12 @@
 import { djs } from "@form-at/data/djs";
 import { events } from "@form-at/data/events";
 import { createFileRoute } from "@tanstack/react-router";
-import { type SetR2Keys, deriveSetR2Keys } from "~/utils/r2Sets";
+import {
+  type SetR2Keys,
+  deriveSetR2Keys,
+  isValidUploadVersion,
+  uploadedArtworkName,
+} from "~/utils/r2Sets";
 import { extractAccessToken, verifyAccessJwt } from "~/utils/verifyAccessJwt";
 
 // Access-gated. Creates the `sets` row after all 3 R2 uploads have already
@@ -34,6 +39,8 @@ type CreateSetBody = {
   sizeBytes?: number;
   audioExt: (typeof AUDIO_EXTS)[number];
   artworkExt: (typeof ARTWORK_EXTS)[number];
+  /** The version presign issued for this upload (r2Sets.ts). */
+  version: string;
 };
 
 // Exported for unit tests — same convention as send-push.ts's validate().
@@ -99,6 +106,9 @@ export function validate(raw: unknown): CreateSetBody | null {
   ) {
     return null;
   }
+  // Re-checked by deriveSetR2Keys, which is what turns it into a key; this
+  // only rejects a malformed body early.
+  if (typeof r.version !== "string" || !isValidUploadVersion(r.version)) return null;
 
   return {
     id: r.id,
@@ -112,6 +122,7 @@ export function validate(raw: unknown): CreateSetBody | null {
     sizeBytes: r.sizeBytes as number | undefined,
     audioExt: r.audioExt as (typeof AUDIO_EXTS)[number],
     artworkExt: r.artworkExt as (typeof ARTWORK_EXTS)[number],
+    version: r.version,
   };
 }
 
@@ -453,7 +464,10 @@ export const Route = createFileRoute("/api/sets")({
 
         let keys: SetR2Keys;
         try {
-          keys = deriveSetR2Keys(body.id, { audio: body.audioExt, artwork: body.artworkExt });
+          keys = deriveSetR2Keys(body.id, body.version, {
+            audio: body.audioExt,
+            artwork: body.artworkExt,
+          });
         } catch {
           return new Response(null, { status: 400 });
         }
@@ -472,14 +486,16 @@ export const Route = createFileRoute("/api/sets")({
           description: body.description ?? null,
           duration: body.duration ?? null,
           src: keys.publicAudioUrl,
-          // `uploads/{id}`, NOT `sets/{id}` — deliberately a different local
-          // /images/ directory than the 4 legacy sets' committed variants.
-          // apps/web/scripts/optimize-images.ts generates this set's
-          // responsive variants there, and only there, specifically so a
-          // path-based .gitignore can tell an uploaded set's generated
-          // files apart from a legacy set's committed ones in the same
-          // `sets/` folder — see that script's UPLOADED_OUT comment.
-          artwork: `uploads/${body.id}`,
+          // `uploads/{id}-{version}`, NOT `sets/{id}` — deliberately a
+          // different local /images/ directory than the 4 legacy sets'
+          // committed variants. apps/web/scripts/optimize-images.ts generates
+          // this set's responsive variants there, and only there, so a
+          // path-based .gitignore can tell an uploaded set's generated files
+          // apart from a legacy set's committed ones in the same `sets/`
+          // folder — see that script's UPLOADED_OUT comment. The version
+          // gives a re-upload's artwork new image URLs too; rows from before
+          // versioning hold `uploads/{id}` and still work.
+          artwork: uploadedArtworkName(body.id, body.version),
           artworkOriginalUrl: keys.publicArtworkUrl,
           peaks: keys.publicPeaksUrl,
           sizeBytes: body.sizeBytes ?? null,

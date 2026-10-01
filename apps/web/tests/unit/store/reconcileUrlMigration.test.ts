@@ -105,6 +105,30 @@ describe("reconcileFromIdb URL migration", () => {
     expect(deleteOfflineSetEntries.mock.calls.flat(2)).toEqual([oldPeaks]);
   });
 
+  // TECH_DEBT 31: a re-upload writes under a new version folder, so the
+  // catalogue's URLs change and the copy saved from the previous upload is
+  // under URLs it no longer lists. Same path as the host swap above: the old
+  // bytes go, the set shows "↻ re-save", nothing re-downloads on its own.
+  it("re-upload under a new version: the previous version's copy is purged, saved → evicted", async () => {
+    const previous = `https://cdn.formatglasgow.com/sets/${testSet.id}/vmfzx1a2b-4c5d`;
+    getAllOfflineEntries.mockResolvedValue([
+      entry(`${previous}/audio.mp3`, "mp3"),
+      entry(`${previous}/peaks.json`, "peaks"),
+    ]);
+    const store = makeStore();
+
+    await store.getState().reconcileFromIdb();
+
+    expect(store.getState().offlineSets[testSet.id]).toEqual({
+      status: "evicted",
+      lastKnownSavedAt: 111,
+      lastKnownBytes: 2000,
+    });
+    expect(deleteOfflineSetEntries.mock.calls.flat(2)).toEqual(
+      expect.arrayContaining([`${previous}/audio.mp3`, `${previous}/peaks.json`]),
+    );
+  });
+
   it("catalogueReady: false — no-ops entirely, nothing read from IDB or purged (PR3 safety guard)", async () => {
     // Same old-host fixture as the very first test above, which — with
     // catalogueReady: true — purges and evicts. Here it must do NOTHING:

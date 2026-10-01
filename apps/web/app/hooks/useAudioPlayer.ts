@@ -4,7 +4,7 @@ import type { RefObject } from "react";
 import { queueSignalForReplay } from "~/data/beacon-queue";
 import { useStore } from "~/store";
 import { getAdjacentSets } from "~/store/catalogueSlice";
-import { wasServedFromIdb } from "~/store/playerSlice";
+import { knownDurationFor, wasServedFromIdb } from "~/store/playerSlice";
 import { withAppContext } from "~/utils/audioUrl";
 import { isDevModeActive } from "~/utils/devMode";
 import { MAX_LISTENED_SECONDS } from "~/utils/playTracking";
@@ -76,7 +76,7 @@ export function useAudioPlayer(audioRef: RefObject<HTMLAudioElement | null>): Au
     // ISN'T known yet, fall back to MAX_LISTENED_SECONDS rather than leaving
     // this uncapped — "duration not cached yet" must degrade to "generously
     // capped", never to "no cap at all". See playTracking.ts.
-    const knownDuration = useStore.getState().durations[track.id];
+    const knownDuration = knownDurationFor(useStore.getState().durations, track);
     const seconds = Math.min(rawElapsed, knownDuration ?? MAX_LISTENED_SECONDS);
 
     // `useStore.getState()` (not a selector) — same live-read pattern already

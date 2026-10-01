@@ -3,6 +3,7 @@ import { useDrag } from "@use-gesture/react";
 import { memo, useEffect, useRef, useState } from "react";
 import { useScrubControl } from "~/hooks/useScrubControl";
 import { useStore } from "~/store";
+import { knownDurationFor } from "~/store/playerSlice";
 
 // Gold played / purple remaining progress bar at the bottom of the mobile
 // mini-player. The outer 16px row is the tap/drag target — necessary because
@@ -20,7 +21,9 @@ export const MobileProgressBar = memo(function MobileProgressBar({
   audioRef: React.RefObject<HTMLAudioElement | null>;
   nowPlaying: MusicSet | null;
 }) {
-  const cachedDuration = useStore((s) => (nowPlaying ? s.durations[nowPlaying.id] : undefined));
+  const cachedDuration = useStore((s) =>
+    nowPlaying ? knownDurationFor(s.durations, nowPlaying) : undefined,
+  );
   const savedPosition = useStore((s) => (nowPlaying ? s.positions[nowPlaying.id] : undefined));
   const [audioDuration, setAudioDuration] = useState(0);
   const [audioCurrentTime, setAudioCurrentTime] = useState<number | null>(null);

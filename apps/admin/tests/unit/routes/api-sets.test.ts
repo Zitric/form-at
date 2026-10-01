@@ -17,6 +17,7 @@ const validBody = {
   djId: "til",
   audioExt: "mp3",
   artworkExt: "jpg",
+  version: "vmfzx1a2b-4c5d",
 } as const;
 
 describe("validate (api/sets)", () => {
@@ -33,7 +34,18 @@ describe("validate (api/sets)", () => {
       sizeBytes: undefined,
       audioExt: "mp3",
       artworkExt: "jpg",
+      version: "vmfzx1a2b-4c5d",
     });
+  });
+
+  // The version becomes a key segment, so a malformed one (or a path in
+  // disguise) never gets as far as deriveSetR2Keys.
+  it("rejects a missing or malformed upload version", () => {
+    const { version: _omit, ...noVersion } = validBody;
+    expect(validate(noVersion)).toBeNull();
+    for (const version of ["", "v1", "../x", "vmfzx1a2b-4c5d/../x", "VMFZX1A2B-4C5D", 42]) {
+      expect(validate({ ...validBody, version })).toBeNull();
+    }
   });
 
   it("accepts every optional field populated", () => {

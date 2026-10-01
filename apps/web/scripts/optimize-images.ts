@@ -30,9 +30,14 @@ const OUT = join(ROOT, "public/images");
 // needs no change for this — it only ever resolves whatever base path
 // `MusicSet.artwork` gives it (`/images/${artwork}-${w}.${ext}`), so an
 // uploaded set's `artwork` field simply points here
-// (`apps/admin/app/routes/api/sets.ts` sets it to `uploads/{id}`, not
-// `sets/{id}`).
+// (`apps/admin/app/routes/api/sets.ts` sets it to `uploads/{id}-{version}`,
+// not `sets/{id}`; rows from before upload versions hold `uploads/{id}`).
+// Variants are named from that field, never from the id alone, so a
+// re-upload's artwork lands at new image URLs.
 const UPLOADED_OUT = join(OUT, "uploads");
+// `uploads/{name}`, name in the set-id alphabet (an id, or `{id}-{version}`).
+// Anything else is refused rather than turned into a path.
+const UPLOADED_ARTWORK = /^uploads\/([a-z0-9]+(?:-[a-z0-9]+)*)$/;
 
 // Output one variant per (width × format). Sized for typical web layouts:
 // 640px = mobile, 1080px = tablet / desktop. Keep in sync with the WIDTHS
@@ -174,10 +179,15 @@ type UploadedSetResult =
 // undersized-source case is also a warning, not a thrown error).
 export async function processUploadedSet(musicSet: {
   id: string;
+  artwork?: string;
   artworkOriginalUrl?: string;
 }): Promise<UploadedSetResult> {
   const url = musicSet.artworkOriginalUrl;
   if (!url) return { id: musicSet.id, status: "failed", reason: "no artworkOriginalUrl" };
+  const name = musicSet.artwork ? UPLOADED_ARTWORK.exec(musicSet.artwork)?.[1] : musicSet.id;
+  if (!name) {
+    return { id: musicSet.id, status: "failed", reason: `unexpected artwork ${musicSet.artwork}` };
+  }
 
   try {
     await mkdir(UPLOADED_OUT, { recursive: true });
@@ -185,7 +195,7 @@ export async function processUploadedSet(musicSet: {
     if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
     const buffer = Buffer.from(await res.arrayBuffer());
 
-    const outPathBase = join(UPLOADED_OUT, musicSet.id);
+    const outPathBase = join(UPLOADED_OUT, name);
     const { variants, wroteAny } = await generateVariants(buffer, outPathBase, async (outPath) => {
       // Existence-only — see generateVariants' comment for why mtime
       // comparison doesn't apply to R2-fetched bytes.
