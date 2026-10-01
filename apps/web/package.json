@@ -22,7 +22,7 @@
     "master-set": "tsx scripts/master-set.ts",
     "screenshots": "vite build && tsx scripts/capture-screenshots.ts",
     "stats": "node scripts/stats.mjs",
-    "deploy": "pnpm build && npx wrangler pages deploy dist/client --project-name=form-at-web --commit-dirty=true"
+    "deploy": "pnpm build && pnpm exec wrangler pages deploy dist/client --project-name=form-at-web --commit-dirty=true"
   },
   "dependencies": {
     "@form-at/data": "workspace:*",

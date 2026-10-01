@@ -3,7 +3,7 @@
   "workspaces": {
     ".": {
       "entry": ["turbo.json", "scripts/*.{ts,mjs,js}"],
-      "ignoreBinaries": ["vite", "playwright", "wrangler", "ffmpeg", "generate-sets-snapshot"]
+      "ignoreBinaries": ["vite", "playwright", "ffmpeg", "generate-sets-snapshot"]
     },
     "apps/web": {
       "entry": [
@@ -18,8 +18,7 @@
       "paths": {
         "~/*": ["app/*"]
       },
-      "ignoreDependencies": ["tailwindcss", "@form-at/tsconfig"],
-      "ignoreBinaries": ["wrangler"]
+      "ignoreDependencies": ["tailwindcss", "@form-at/tsconfig"]
     },
     "apps/admin": {
       "entry": [
@@ -33,16 +32,14 @@
       "paths": {
         "~/*": ["app/*"]
       },
-      "ignoreDependencies": ["tailwindcss"],
-      "ignoreBinaries": ["wrangler"]
+      "ignoreDependencies": ["tailwindcss"]
     },
     "packages/tsconfig": {},
     "packages/ui": {},
     "packages/data": {},
     "apps/rum-archiver": {
       "entry": ["src/index.ts!", "tests/**/*.ts"],
-      "project": ["src/**/*.ts", "tests/**/*.ts"],
-      "ignoreBinaries": ["wrangler"]
+      "project": ["src/**/*.ts", "tests/**/*.ts"]
     }
   }
 }

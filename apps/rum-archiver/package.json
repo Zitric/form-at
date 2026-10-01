@@ -8,8 +8,8 @@
     "tsc": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
-    "deploy": "npx wrangler deploy",
-    "capture": "npx wrangler dev --test-scheduled"
+    "deploy": "pnpm exec wrangler deploy",
+    "capture": "pnpm exec wrangler dev --test-scheduled"
   },
   "dependencies": {
     "@form-at/data": "workspace:*"

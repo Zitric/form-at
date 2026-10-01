@@ -144,7 +144,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: npx wrangler pages deploy apps/web/dist/client --project-name=form-at-web --branch=main
+      - run: pnpm exec wrangler pages deploy apps/web/dist/client --project-name=form-at-web --branch=main
 
   # Separate Cloudflare Pages project, separate job — independent build
   # output and failure isolation from the apps/web deploy above (one failing
@@ -162,7 +162,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm -C apps/admin build
-      - run: npx wrangler pages deploy dist/client --project-name=form-at-admin --branch=main
+      - run: pnpm exec wrangler pages deploy dist/client --project-name=form-at-admin --branch=main
         working-directory: apps/admin
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -184,7 +184,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: npx wrangler deploy
+      - run: pnpm exec wrangler deploy
         working-directory: apps/rum-archiver
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -17,7 +17,7 @@ function query(sql) {
   // Collapse whitespace so the SQL is safe to pass on the command line.
   const oneLine = sql.replace(/\s+/g, " ").trim();
   const out = execSync(
-    `npx wrangler d1 execute ${DB} --remote --json --command "${oneLine.replace(/"/g, '\\"')}"`,
+    `pnpm exec wrangler d1 execute ${DB} --remote --json --command "${oneLine.replace(/"/g, '\\"')}"`,
     { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
   );
   const start = out.indexOf("[");
