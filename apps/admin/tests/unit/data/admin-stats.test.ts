@@ -78,6 +78,33 @@ describe("fetchInstallFunnel", () => {
     expect(result).toMatchObject({ shown: 10, accepted: 4, dismissed: 6, conversionRate: 0.4 });
   });
 
+  it("counts install_app's instructions opens as their own entry point, outside the rate", async () => {
+    const { db, queries } = createFakeD1([
+      totalsRoute([
+        { event_type: "install_prompt_shown", n: 10 },
+        { event_type: "install_cta_instructions_shown", n: 7 },
+        { event_type: "install_accepted", n: 4 },
+      ]),
+      // Dated today: the 60-day window ends today, and 60 days in 7-day
+      // buckets is 9 buckets with today in the last one.
+      trendRoute([
+        {
+          day: new Date().toISOString().slice(0, 10),
+          event_type: "install_cta_instructions_shown",
+          count: 3,
+        },
+      ]),
+    ]);
+
+    const result = await fetchInstallFunnel(db);
+
+    expect(result.instructionsShown).toBe(7);
+    expect(result.conversionRate).toBe(0.4);
+    expect(result.instructionsShownTrend).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 3]);
+    expect(result.shownTrend).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(queries.every((q) => q.includes("'install_cta_instructions_shown'"))).toBe(true);
+  });
+
   it("returns conversionRate null (not 0) when nothing has been shown yet", async () => {
     const { db } = createFakeD1([totalsRoute([]), trendRoute()]);
 

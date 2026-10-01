@@ -7,16 +7,10 @@ const STORY_GATE_COPY: InstallGateCopy = {
   prompt:
     "instagram stories are made in the Form:at app. install it to your home screen, then open this set there to make one.",
   manual: "instagram stories are made in the Form:at app — ",
-  ios: "instagram stories are made in the Form:at app. iOS Safari only installs from the share menu — two taps:",
+  ios: "instagram stories are made in the Form:at app. on iOS it installs from the share menu:",
   openApp:
     "Form:at is already on your device — open this set from your home-screen app to make an instagram story. this tab can't record one.",
-  cannotInstall: (
-    <>
-      instagram stories need <span className="text-white">Chrome on Android</span> or{" "}
-      <span className="text-white">Safari on iOS</span> — open{" "}
-      <span className="text-white">formatglasgow.com</span> there to install the app.
-    </>
-  ),
+  cannotInstall: "instagram stories are made in the Form:at app —",
 };
 
 // Stories are made in the installed app. A browser-tab user who taps

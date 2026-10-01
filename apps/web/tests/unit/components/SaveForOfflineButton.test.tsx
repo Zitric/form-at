@@ -76,7 +76,7 @@ describe("SaveForOfflineButton", () => {
   });
 
   it("renders the button on a browser that cannot install (case c)", async () => {
-    await withGate({ allow: false, reason: "cannot-install" });
+    await withGate({ allow: false, reason: "cannot-install", hint: "use-chrome-or-safari" });
     render(<SaveForOfflineButton set={fixture} />);
     expect(screen.getByRole("button", { name: /save_for_offline/ })).toBeInTheDocument();
   });

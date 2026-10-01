@@ -1,7 +1,11 @@
 import { Button, Modal, TextButton } from "@form-at/ui";
 import type { ReactNode } from "react";
 
-import { IosInstallSteps, ManualInstallHint } from "~/components/InstallInstructions";
+import {
+  IosInstallSteps,
+  ManualInstallHint,
+  NoInstallPath,
+} from "~/components/InstallInstructions";
 import { type SaveGate, useTriggerInstallPrompt } from "~/hooks/useSaveGate";
 import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";
@@ -19,9 +23,10 @@ export type InstallGateCopy = {
   prompt: ReactNode;
   /** Chromium without one; followed by ManualInstallHint. */
   manual: ReactNode;
-  /** iOS Safari; followed by IosInstallSteps. */
+  /** iOS (Safari, or Chrome / Firefox / Edge on 16.4+); followed by IosInstallSteps. */
   ios: ReactNode;
   openApp: ReactNode;
+  /** What lives in the app; followed by NoInstallPath (where to install instead). */
   cannotInstall: ReactNode;
 };
 
@@ -31,17 +36,11 @@ const SAVE_COPY: InstallGateCopy = {
   prompt:
     "saving sets offline lives in the Form:at app. install it to your home screen — fullscreen, no browser chrome — then come back here to save.",
   manual: "saving sets offline lives in the Form:at app — ",
-  ios: "saving sets offline lives in the Form:at app. iOS Safari only installs from the share menu — two taps:",
+  ios: "saving sets offline lives in the Form:at app. on iOS it installs from the share menu:",
   openApp:
     "Form:at is already on your device — open it from your home screen to save sets for offline listening. this tab streams from the network, the app keeps the bytes.",
-  cannotInstall: (
-    <>
-      saving sets offline needs <span className="text-white">Chrome on Android</span> or{" "}
-      <span className="text-white">Safari on iOS</span> — open{" "}
-      <span className="text-white">formatglasgow.com</span> there to install the app. this browser
-      streams sets fine, but can't keep them offline.
-    </>
-  ),
+  cannotInstall:
+    "saving sets offline lives in the Form:at app, and this browser streams sets fine but can't keep them —",
 };
 
 type Props = { open: boolean; onClose: () => void; gate: SaveGate; copy?: InstallGateCopy };
@@ -61,9 +60,9 @@ type Props = { open: boolean; onClose: () => void; gate: SaveGate; copy?: Instal
 //                    to the home-screen icon. Include the inverse escape-
 //                    hatch ("not installed? install it") for users whose
 //                    flag is stale (cleared the app, never re-installed).
-//   cannot-install — case (c): Firefox, iOS non-Safari, desktop Safari. No
-//                    install path the user can drive on this browser. Point
-//                    them at Chrome/Safari + formatglasgow.com.
+//   cannot-install — case (c): Firefox, iOS browsers before 16.4, desktop
+//                    Safari. No install path the user can drive on this
+//                    browser. `gate.hint` says where to go instead.
 //
 // Never instantiated for `allow: true` or `reason: "pending"` — consumer
 // buttons skip the modal entirely in those states.
@@ -74,9 +73,8 @@ export function SaveGateModal({ open, onClose, gate, copy = SAVE_COPY }: Props) 
   const trackEvent = useTrackEvent();
 
   const handleClose = () => {
-    // Passive dismiss matches the previous InstallPromptModal behaviour:
-    // closing without engaging suppresses the home-page <InstallCta> while
-    // leaving this modal reachable on every future save tap.
+    // Records the "not now" (see `pwaInstallDismissed` in uiSlice.ts); the
+    // modal stays reachable on every future tap.
     setPwaInstallDismissed(true);
     // Only the needs-install branch is actually offering to install —
     // open-app ("go to your home screen") and cannot-install ("this browser
@@ -148,7 +146,7 @@ export function SaveGateModal({ open, onClose, gate, copy = SAVE_COPY }: Props) 
           ) : (
             <>
               <p className="text-sm text-grey leading-relaxed">{copy.ios}</p>
-              <IosInstallSteps />
+              <IosInstallSteps browser={gate.platform === "ios-other" ? gate.browser : "Safari"} />
             </>
           )}
           <TextButton
@@ -177,7 +175,9 @@ export function SaveGateModal({ open, onClose, gate, copy = SAVE_COPY }: Props) 
       )}
 
       {gate.allow === false && gate.reason === "cannot-install" && (
-        <p className="text-sm text-grey leading-relaxed">{copy.cannotInstall}</p>
+        <p className="text-sm text-grey leading-relaxed">
+          {copy.cannotInstall} <NoInstallPath hint={gate.hint} />
+        </p>
       )}
     </Modal>
   );

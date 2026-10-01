@@ -37,19 +37,31 @@ export function GrowthTab({ stats }: GrowthTabProps) {
         <Label className="mb-2 text-grey tracking-widest">{"// install_funnel"}</Label>
         <div className="space-y-1">
           <TerminalRow label="shown" value={String(stats.installFunnel.shown)} dimValue />
+          <TerminalRow
+            label="instructions_shown"
+            value={String(stats.installFunnel.instructionsShown)}
+            dimValue
+          />
           <TerminalRow label="accepted" value={String(stats.installFunnel.accepted)} dimValue />
           <TerminalRow label="dismissed" value={String(stats.installFunnel.dismissed)} dimValue />
           <TerminalRow label="conversion" value={installConversionLabel} dimValue />
           <TerminalRow label="install_to_push" value={installToPushLabel} dimValue />
         </div>
         <p className="mt-1 text-xs text-grey/70">
-          install_to_push is an aggregate approximation, not a tracked per-user funnel — install
-          events are anonymous and push_subscriptions shares no key with them.
+          shown is an install button with the browser's own prompt behind it; instructions_shown is
+          the home page's install_app opening its how-to instead (iOS, no prompt, or another
+          browser). accepted counts installs from either, so conversion (accepted ÷ shown) reads
+          high. install_to_push is an aggregate approximation, not a tracked per-user funnel —
+          install events are anonymous and push_subscriptions shares no key with them.
         </p>
         <div className="mt-3 space-y-3">
           <div>
             <Label className="mb-1 block text-xs text-grey">shown_trend</Label>
             <TrendChart data={stats.installFunnel.shownTrend} />
+          </div>
+          <div>
+            <Label className="mb-1 block text-xs text-grey">instructions_shown_trend</Label>
+            <TrendChart data={stats.installFunnel.instructionsShownTrend} />
           </div>
           <div>
             <Label className="mb-1 block text-xs text-grey">accepted_trend</Label>
@@ -79,8 +91,8 @@ export function GrowthTab({ stats }: GrowthTabProps) {
           />
         </div>
         <p className="mt-1 text-xs text-grey/70">
-          tab will always read 0 by current product policy — the browser-tab opt-in variant never
-          subscribes (see PushOptInModal.tsx), it only offers an install nudge instead.
+          tab will always read 0 by current product policy — notify_me only renders in the installed
+          app (see PushOptInCta.tsx); a browser tab gets install_app instead.
         </p>
         <div className="mt-3">
           <Label className="mb-1 block text-xs text-grey">growth_60d</Label>
@@ -102,21 +114,26 @@ export function GrowthTab({ stats }: GrowthTabProps) {
             value={String(stats.notifyFunnel.promptShown)}
             dimValue
           />
-          <TerminalRow
-            label="install_nudge_shown"
-            value={String(stats.notifyFunnel.installNudgeShown)}
-            dimValue
-          />
           <TerminalRow label="accepted" value={String(stats.notifyFunnel.accepted)} dimValue />
           <TerminalRow label="declined" value={String(stats.notifyFunnel.declined)} dimValue />
           <TerminalRow label="accepted_rate" value={notifyAcceptedRateLabel} dimValue />
         </div>
         <p className="mt-1 text-xs text-grey/70">
-          prompt_shown is the standalone subscribe soft-prompt; install_nudge_shown is the
-          browser-tab install nudge shown instead (tab visitors can't get a real push permission
-          prompt — see push_subscribers above). declined is fired by closing either variant and
-          isn't split by surface in the data — it can't be attributed to one or the other, though
-          install_nudge_shown far exceeding prompt_shown suggests most declines are nudge-side.
+          prompt_shown is the installed app's subscribe soft-prompt. declined is closing it without
+          accepting; historic declined rows also include closes of the legacy tab nudge below, with
+          nothing in the data to tell them apart.
+        </p>
+        <div className="mt-3 space-y-1">
+          <TerminalRow
+            label="legacy_install_nudge_shown"
+            value={String(stats.notifyFunnel.installNudgeShown)}
+            dimValue
+          />
+        </div>
+        <p className="mt-1 text-xs text-grey/70">
+          legacy, frozen: the browser-tab install nudge notify_me used to open. notify_me is
+          installed-app only now and a tab's install ask is counted as install_funnel's
+          instructions_shown, so this only shows historic rows — not part of the funnel above.
         </p>
         {stats.notifyFunnel.acceptedRate == null && (
           <p className="mt-1 text-xs text-grey/70">

@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { detectPlatform, isStandalone } from "~/utils/installCapability";
+import {
+  detectPlatform,
+  iosThirdPartyBrowser,
+  isStandalone,
+  noInstallHint,
+} from "~/utils/installCapability";
 
 // Real-world UA strings — copied from production browsers rather than invented
 // so the matchers stay aligned with what we'd see in the wild. Same convention
@@ -23,15 +28,26 @@ const UA = {
   iosSafariPad:
     "Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
 
-  // iOS browsers that can't install PWAs (Apple lock-down). Critical that
-  // these return "other", NOT "ios-safari" — we don't want to show
-  // Share-menu instructions that wouldn't produce a PWA when followed.
+  // iOS third-party browsers on 17.5: since iOS 16.4 they add web apps to
+  // the Home Screen from their Share menu, so "ios-other", never
+  // "ios-safari" (the steps are worded per browser).
   iosChrome:
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/120.0.6099.119 Mobile/15E148 Safari/604.1",
   iosFirefox:
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/120.0 Mobile/15E148 Safari/605.1.15",
   iosEdge:
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 EdgiOS/120.0.0.0 Mobile/15E148 Safari/604.1",
+
+  // The same browsers on iOS 16.3, the last version where only Safari could
+  // install, and on 16.4, the first where they can.
+  iosChrome163:
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/110.0.5481.83 Mobile/15E148 Safari/604.1",
+  iosFirefox163:
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/110.0 Mobile/15E148 Safari/605.1.15",
+  iosChrome164:
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/112.0.5615.46 Mobile/15E148 Safari/604.1",
+  iosEdgePad:
+    "Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 EdgiOS/120.0.0.0 Mobile/15E148 Safari/604.1",
 
   // No install path
   androidFirefox: "Mozilla/5.0 (Android 14; Mobile; rv:120.0) Gecko/120.0 Firefox/120.0",
@@ -68,16 +84,33 @@ describe("detectPlatform", () => {
     expect(detectPlatform(UA.iosSafariPad)).toBe("ios-safari");
   });
 
-  it("returns 'other' for iOS Chrome (CriOS) — Apple blocks PWA install in non-Safari iOS browsers", () => {
-    expect(detectPlatform(UA.iosChrome)).toBe("other");
+  it("returns 'ios-other' for iOS Chrome (CriOS) on 17.5 — installs from its Share menu", () => {
+    expect(detectPlatform(UA.iosChrome)).toBe("ios-other");
   });
 
-  it("returns 'other' for iOS Firefox (FxiOS)", () => {
-    expect(detectPlatform(UA.iosFirefox)).toBe("other");
+  it("returns 'ios-other' for iOS Firefox (FxiOS) on 17.5", () => {
+    expect(detectPlatform(UA.iosFirefox)).toBe("ios-other");
   });
 
-  it("returns 'other' for iOS Edge (EdgiOS) — and proves the Edg/ vs EdgiOS regex distinction works", () => {
-    expect(detectPlatform(UA.iosEdge)).toBe("other");
+  it("returns 'ios-other' for iOS Edge (EdgiOS), not chromium — the Edg/ vs EdgiOS regex distinction", () => {
+    expect(detectPlatform(UA.iosEdge)).toBe("ios-other");
+  });
+
+  it("reads the iPad's 'CPU OS' version too", () => {
+    expect(detectPlatform(UA.iosEdgePad)).toBe("ios-other");
+  });
+
+  it("returns 'other' for iOS third-party browsers before 16.4, when only Safari could install", () => {
+    expect(detectPlatform(UA.iosChrome163)).toBe("other");
+    expect(detectPlatform(UA.iosFirefox163)).toBe("other");
+  });
+
+  it("returns 'ios-other' from 16.4 exactly", () => {
+    expect(detectPlatform(UA.iosChrome164)).toBe("ios-other");
+  });
+
+  it("treats a third-party iOS UA with no readable version as too old", () => {
+    expect(detectPlatform("Mozilla/5.0 (iPhone) CriOS/120.0")).toBe("other");
   });
 
   it("returns 'other' for Android Firefox", () => {
@@ -90,6 +123,35 @@ describe("detectPlatform", () => {
 
   it("returns 'other' for an empty UA (SSR safety)", () => {
     expect(detectPlatform("")).toBe("other");
+  });
+});
+
+describe("iosThirdPartyBrowser", () => {
+  it("names the iOS browser from its UA marker", () => {
+    expect(iosThirdPartyBrowser(UA.iosChrome)).toBe("Chrome");
+    expect(iosThirdPartyBrowser(UA.iosFirefox)).toBe("Firefox");
+    expect(iosThirdPartyBrowser(UA.iosEdge)).toBe("Edge");
+  });
+
+  it("is null for Safari and for anything off iOS", () => {
+    expect(iosThirdPartyBrowser(UA.iosSafariPhone)).toBeNull();
+    expect(iosThirdPartyBrowser(UA.desktopEdge)).toBeNull();
+    expect(iosThirdPartyBrowser(UA.androidChrome)).toBeNull();
+  });
+});
+
+describe("noInstallHint", () => {
+  it("sends Firefox on Android to Chrome", () => {
+    expect(noInstallHint(UA.androidFirefox)).toBe("use-chrome");
+  });
+
+  it("sends an iOS browser older than 16.4 to Safari", () => {
+    expect(noInstallHint(UA.iosChrome163)).toBe("use-safari");
+  });
+
+  it("offers either for desktop Safari and anything unknown", () => {
+    expect(noInstallHint(UA.macSafari)).toBe("use-chrome-or-safari");
+    expect(noInstallHint("")).toBe("use-chrome-or-safari");
   });
 });
 

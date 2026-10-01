@@ -21,18 +21,29 @@ import {
 // handler) so it's unit-testable with a fake D1Database.
 
 export type InstallFunnel = {
+  /** An install CTA on screen with Chrome's native prompt behind it. */
   shown: number;
+  /** The home page's [ install_app ] opened its instructions instead (no
+   *  native prompt: iOS share-menu steps, the manual hint, open-app, or
+   *  where to install instead). A separate entry point, not a stage after
+   *  `shown`. */
+  instructionsShown: number;
+  /** `appinstalled`, from any path — the native prompt, or a manual install
+   *  the browser reports (iOS reports none). */
   accepted: number;
   dismissed: number;
   /** accepted ÷ shown. `null` (not 0) when nothing has been shown yet —
    *  "no data" and "0% conversion" are different facts, and the caller
-   *  should render them differently. */
+   *  should render them differently. `accepted` counts installs from every
+   *  path, including after `instructionsShown`, so this reads high as an
+   *  approximation of the native prompt's own rate. */
   conversionRate: number | null;
   /** Same 60-day/7-day-bucket shape as `AppLaunchStats.weeklyTrend` /
    *  `PushSubscriberStats.weeklyGrowth` — one array per event type, so the
    *  three funnel stages can be compared as sparklines over time instead of
    *  only as all-time totals. */
   shownTrend: number[];
+  instructionsShownTrend: number[];
   acceptedTrend: number[];
   dismissedTrend: number[];
 };
@@ -103,13 +114,15 @@ export const MIN_SAMPLE_FOR_RATE = 10;
 export type NotifyFunnel = {
   /** Standalone subscribe soft-prompt becoming visible. */
   promptShown: number;
-  /** Browser-tab install nudge becoming visible instead (tab visitors can't
-   *  get a real push permission prompt — see PushOptInModal.tsx). */
+  /** LEGACY, frozen: the browser-tab install nudge notify_me used to open.
+   *  notify_me is installed-app only now, and a tab's install ask counts as
+   *  `InstallFunnel.instructionsShown`, so no new rows arrive here (beyond
+   *  tabs still running an older cached bundle). Kept so historic rows stay
+   *  visible, never as part of the live funnel. */
   installNudgeShown: number;
   accepted: number;
-  /** Closing either variant without accepting — PushOptInModal.tsx's
-   *  handleClose fires this for BOTH surfaces with no distinguishing field,
-   *  so this total can't be attributed to one surface from the data alone. */
+  /** Closing the soft prompt without accepting. Historic rows also include
+   *  closes of the legacy tab nudge, with no field to tell them apart. */
   declined: number;
   /** accepted ÷ promptShown, or `null` below MIN_SAMPLE_FOR_RATE — see that
    *  constant's doc comment. */
@@ -222,18 +235,18 @@ export async function fetchInstallFunnel(db: D1Database): Promise<InstallFunnel>
     db
       .prepare(
         `SELECT event_type, COUNT(*) as n FROM events
-         WHERE event_type IN ('install_prompt_shown', 'install_accepted', 'install_dismissed')
+         WHERE event_type IN ('install_prompt_shown', 'install_cta_instructions_shown', 'install_accepted', 'install_dismissed')
          GROUP BY event_type`,
       )
       .all<{ event_type: string; n: number }>(),
-    // One query for all three event types (grouped by day AND event_type)
+    // One query for all four event types (grouped by day AND event_type)
     // rather than three separate day-bucketed queries — same total data,
     // one D1 round trip instead of three.
     db
       .prepare(
         `SELECT DATE(created_at/1000, 'unixepoch') AS day, event_type, COUNT(*) AS count
          FROM events
-         WHERE event_type IN ('install_prompt_shown', 'install_accepted', 'install_dismissed')
+         WHERE event_type IN ('install_prompt_shown', 'install_cta_instructions_shown', 'install_accepted', 'install_dismissed')
            AND created_at >= (strftime('%s', 'now', '-${TREND_WINDOW_DAYS} days') * 1000)
          GROUP BY day, event_type
          ORDER BY day ASC`,
@@ -243,6 +256,7 @@ export async function fetchInstallFunnel(db: D1Database): Promise<InstallFunnel>
 
   const counts = Object.fromEntries(totals.results.map((r) => [r.event_type, r.n]));
   const shown = counts.install_prompt_shown ?? 0;
+  const instructionsShown = counts.install_cta_instructions_shown ?? 0;
   const accepted = counts.install_accepted ?? 0;
   const dismissed = counts.install_dismissed ?? 0;
 
@@ -257,10 +271,12 @@ export async function fetchInstallFunnel(db: D1Database): Promise<InstallFunnel>
 
   return {
     shown,
+    instructionsShown,
     accepted,
     dismissed,
     conversionRate: shown > 0 ? accepted / shown : null,
     shownTrend: trendFor("install_prompt_shown"),
+    instructionsShownTrend: trendFor("install_cta_instructions_shown"),
     acceptedTrend: trendFor("install_accepted"),
     dismissedTrend: trendFor("install_dismissed"),
   };

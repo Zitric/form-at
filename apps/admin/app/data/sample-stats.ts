@@ -125,10 +125,12 @@ export const SAMPLE_EDGE_TRAFFIC: EdgeTraffic = {
 export const SAMPLE_ADMIN_DASHBOARD_STATS: AdminDashboardStats = {
   installFunnel: {
     shown: 24,
+    instructionsShown: 11,
     accepted: 9,
     dismissed: 6,
     conversionRate: 9 / 24,
     shownTrend: [1, 2, 2, 3, 3, 4, 4, 5, 3],
+    instructionsShownTrend: [0, 0, 0, 0, 0, 0, 2, 4, 5],
     acceptedTrend: [0, 1, 1, 1, 2, 1, 2, 2, 1],
     dismissedTrend: [],
   },

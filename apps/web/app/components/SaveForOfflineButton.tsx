@@ -23,8 +23,8 @@ import { fmtBytes } from "~/utils/fmt";
 //
 // Dismiss semantic: this button stays VISIBLE and TAPPABLE in every gate
 // branch, and a tap ALWAYS opens the relevant modal or triggers the relevant
-// action. `pwaInstallDismissed` suppresses only passive prompting (the home
-// <InstallCta>), never user-initiated taps here.
+// action. `pwaInstallDismissed` is for passive prompting only (none exists
+// today), never user-initiated taps here.
 type Props = { set: MusicSet };
 
 export function SaveForOfflineButton({ set }: Props) {

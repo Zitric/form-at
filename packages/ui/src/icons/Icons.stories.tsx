@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import {
   DownloadIcon,
   InstallIcon,
+  InstallMobileIcon,
   NextIcon,
   PauseIcon,
   PlayIcon,
@@ -13,6 +14,7 @@ import {
 const ICONS = {
   DownloadIcon,
   InstallIcon,
+  InstallMobileIcon,
   NextIcon,
   PauseIcon,
   PlayIcon,
