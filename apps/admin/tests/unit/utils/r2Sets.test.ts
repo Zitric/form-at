@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { deriveSetR2Keys, isValidSetId } from "~/utils/r2Sets";
+import {
+  deriveSetR2Keys,
+  generateUploadVersion,
+  isValidSetId,
+  isValidUploadVersion,
+  uploadedArtworkName,
+  versionedSetKey,
+} from "~/utils/r2Sets";
 
 // The id becomes both an R2 object
 // key path segment AND a public URL path segment — the one place in this
@@ -66,27 +73,89 @@ describe("isValidSetId", () => {
   });
 });
 
-describe("deriveSetR2Keys", () => {
-  it("derives keys and public URLs from a valid id", () => {
-    const result = deriveSetR2Keys("set-003-new-artist", { audio: "mp3", artwork: "jpg" });
+const VERSION = "vmfzx1a2b-4c5d";
 
+describe("generateUploadVersion / isValidUploadVersion", () => {
+  it("is v + the time in base36 + 4 random base36 characters", () => {
+    const version = generateUploadVersion(1_759_320_000_000, () => 0.5);
+    expect(version).toBe(`v${(1_759_320_000_000).toString(36)}-iiii`);
+    expect(isValidUploadVersion(version)).toBe(true);
+  });
+
+  it("produces valid, distinct versions in practice", () => {
+    const versions = new Set(Array.from({ length: 200 }, () => generateUploadVersion()));
+    expect(versions.size).toBe(200);
+    for (const v of versions) expect(isValidUploadVersion(v)).toBe(true);
+  });
+
+  // A version becomes a key segment: anything path-shaped or loose is out.
+  it("rejects anything that isn't exactly that shape", () => {
+    for (const bad of [
+      "",
+      "v",
+      "vmfzx1a2b",
+      "vmfzx1a2b-4c5",
+      "mfzx1a2b-4c5d",
+      "v../x-4c5d",
+      "vMFZX1A2B-4c5d",
+      "vmfzx1a2b-4c5d/x",
+    ]) {
+      expect(isValidUploadVersion(bad)).toBe(false);
+    }
+  });
+});
+
+describe("versionedSetKey", () => {
+  it("builds sets/{id}/{version}/{file}, any file name another writer needs", () => {
+    expect(versionedSetKey("set-003-new-artist", VERSION, "peaks-fine.bin")).toBe(
+      `sets/set-003-new-artist/${VERSION}/peaks-fine.bin`,
+    );
+  });
+
+  it("throws on a bad id, version or file name", () => {
+    expect(() => versionedSetKey("../x", VERSION, "audio.mp3")).toThrow("INVALID_SET_ID");
+    expect(() => versionedSetKey("set-003-a", "../x", "audio.mp3")).toThrow(
+      "INVALID_UPLOAD_VERSION",
+    );
+    for (const file of ["../audio.mp3", "a/b.mp3", ".hidden", ""]) {
+      expect(() => versionedSetKey("set-003-a", VERSION, file)).toThrow("INVALID_FILE_NAME");
+    }
+  });
+});
+
+describe("uploadedArtworkName", () => {
+  it("is uploads/{id}-{version}, so a re-upload's artwork gets new image URLs", () => {
+    expect(uploadedArtworkName("set-003-new-artist", VERSION)).toBe(
+      `uploads/set-003-new-artist-${VERSION}`,
+    );
+    expect(() => uploadedArtworkName("set-003-a", "nope")).toThrow("INVALID_UPLOAD_VERSION");
+  });
+});
+
+describe("deriveSetR2Keys", () => {
+  it("derives versioned keys and public URLs", () => {
+    const result = deriveSetR2Keys("set-003-new-artist", VERSION, { audio: "mp3", artwork: "jpg" });
+
+    const key = `sets/set-003-new-artist/${VERSION}`;
     expect(result).toEqual({
-      audioKey: "sets/set-003-new-artist/audio.mp3",
-      artworkKey: "sets/set-003-new-artist/artwork.jpg",
-      peaksKey: "sets/set-003-new-artist/peaks.json",
-      publicAudioUrl: "https://cdn.formatglasgow.com/sets/set-003-new-artist/audio.mp3",
-      publicArtworkUrl: "https://cdn.formatglasgow.com/sets/set-003-new-artist/artwork.jpg",
-      publicPeaksUrl: "https://cdn.formatglasgow.com/sets/set-003-new-artist/peaks.json",
+      audioKey: `${key}/audio.mp3`,
+      artworkKey: `${key}/artwork.jpg`,
+      peaksKey: `${key}/peaks.json`,
+      publicAudioUrl: `https://cdn.formatglasgow.com/${key}/audio.mp3`,
+      publicArtworkUrl: `https://cdn.formatglasgow.com/${key}/artwork.jpg`,
+      publicPeaksUrl: `https://cdn.formatglasgow.com/${key}/peaks.json`,
     });
   });
 
   // The fail-closed defense-in-depth check — this must throw
   // regardless of whether some call site validated the id first, since this
   // is the function that actually turns it into a key/URL segment.
-  it("throws on an invalid id rather than silently building a key from it", () => {
-    expect(() => deriveSetR2Keys("../../etc/passwd", { audio: "mp3", artwork: "jpg" })).toThrow(
-      "INVALID_SET_ID",
+  it("throws on an invalid id or version rather than silently building a key", () => {
+    const exts = { audio: "mp3", artwork: "jpg" };
+    expect(() => deriveSetR2Keys("../../etc/passwd", VERSION, exts)).toThrow("INVALID_SET_ID");
+    expect(() => deriveSetR2Keys("", VERSION, exts)).toThrow("INVALID_SET_ID");
+    expect(() => deriveSetR2Keys("set-003-new-artist", "../..", exts)).toThrow(
+      "INVALID_UPLOAD_VERSION",
     );
-    expect(() => deriveSetR2Keys("", { audio: "mp3", artwork: "jpg" })).toThrow("INVALID_SET_ID");
   });
 });

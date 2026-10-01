@@ -83,6 +83,7 @@ describe("UploadSetForm — submit sequence", () => {
       if (url === "/api/sets-presign") {
         return new Response(
           JSON.stringify({
+            version: "vmfzx1a2b-4c5d",
             audioUploadUrl: "https://r2.example.com/audio",
             artworkUploadUrl: "https://r2.example.com/artwork",
             peaksUploadUrl: "https://r2.example.com/peaks",
@@ -117,6 +118,10 @@ describe("UploadSetForm — submit sequence", () => {
       "/api/sets",
       expect.objectContaining({ method: "POST" }),
     );
+    // Create gets the folder the files went to, from presign, so the row's
+    // URLs point at this upload's version and never at a previous one.
+    const createCall = fetchMock.mock.calls.find(([url]) => url === "/api/sets");
+    expect(JSON.parse(String(createCall?.[1]?.body))).toMatchObject({ version: "vmfzx1a2b-4c5d" });
   });
 
   it("shows an id-conflict error and does NOT attempt any PUT when presign returns 409", async () => {

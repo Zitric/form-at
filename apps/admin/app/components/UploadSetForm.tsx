@@ -233,6 +233,7 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
         return;
       }
       const presign = (await presignResponse.json()) as {
+        version: string;
         audioUploadUrl: string;
         artworkUploadUrl: string;
         peaksUploadUrl: string;
@@ -272,6 +273,9 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
           sizeBytes: audioFile.size,
           audioExt,
           artworkExt,
+          // The folder the three files just went to; create rebuilds the
+          // public URLs from it rather than trusting URLs from the client.
+          version: presign.version,
         }),
       });
       if (!createResponse.ok) {

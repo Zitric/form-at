@@ -3,6 +3,7 @@ import {
   type R2Credentials,
   type SetR2Keys,
   deriveSetR2Keys,
+  generateUploadVersion,
   isValidSetId,
   presignSetUploadUrl,
 } from "~/utils/r2Sets";
@@ -50,6 +51,8 @@ export function validate(raw: unknown): PresignBody | null {
 }
 
 type PresignResponseBody = {
+  /** This upload's version folder; the client sends it back to create. */
+  version: string;
   audioUploadUrl: string;
   artworkUploadUrl: string;
   peaksUploadUrl: string;
@@ -77,9 +80,10 @@ export async function presignSetUpload(
   const existing = await db.prepare("SELECT 1 FROM sets WHERE id = ?").bind(body.id).first();
   if (existing) return { outcome: "conflict" };
 
+  const version = generateUploadVersion();
   let keys: SetR2Keys;
   try {
-    keys = deriveSetR2Keys(body.id, { audio: body.audioExt, artwork: body.artworkExt });
+    keys = deriveSetR2Keys(body.id, version, { audio: body.audioExt, artwork: body.artworkExt });
   } catch {
     return { outcome: "invalid" };
   }
@@ -93,6 +97,7 @@ export async function presignSetUpload(
   return {
     outcome: "ok",
     response: {
+      version,
       audioUploadUrl,
       artworkUploadUrl,
       peaksUploadUrl,

@@ -8,6 +8,7 @@
 // path). This module has zero DOM surface anyway.
 import { describe, expect, it, vi } from "vitest";
 import { presignSetUpload, validate } from "~/routes/api/sets-presign";
+import { isValidUploadVersion } from "~/utils/r2Sets";
 
 type FakeRoute = { match: RegExp; first?: unknown; throws?: boolean };
 
@@ -77,14 +78,15 @@ describe("presignSetUpload", () => {
 
     expect(result.outcome).toBe("ok");
     if (result.outcome !== "ok") throw new Error("expected ok");
-    expect(result.response.publicAudioUrl).toBe(
-      "https://cdn.formatglasgow.com/sets/set-003-new-artist/audio.mp3",
-    );
-    expect(result.response.publicArtworkUrl).toBe(
-      "https://cdn.formatglasgow.com/sets/set-003-new-artist/artwork.jpg",
-    );
-    expect(result.response.publicPeaksUrl).toBe(
-      "https://cdn.formatglasgow.com/sets/set-003-new-artist/peaks.json",
+    // A fresh version folder per upload, so a re-upload never overwrites.
+    const { version } = result.response;
+    expect(isValidUploadVersion(version)).toBe(true);
+    const base = `https://cdn.formatglasgow.com/sets/set-003-new-artist/${version}`;
+    expect(result.response.publicAudioUrl).toBe(`${base}/audio.mp3`);
+    expect(result.response.publicArtworkUrl).toBe(`${base}/artwork.jpg`);
+    expect(result.response.publicPeaksUrl).toBe(`${base}/peaks.json`);
+    expect(result.response.audioUploadUrl).toContain(
+      `/sets/set-003-new-artist/${version}/audio.mp3`,
     );
     expect(result.response.audioUploadUrl).toContain("acct123.r2.cloudflarestorage.com");
     expect(result.response.audioUploadUrl).toContain("X-Amz-Signature");
