@@ -1,4 +1,5 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
+import type { CSSProperties } from "react";
 import { AppLaunchTracker } from "~/components/AppLaunchTracker";
 import { BeaconQueueFlusher } from "~/components/BeaconQueueFlusher";
 import { BottomNav } from "~/components/BottomNav";
@@ -16,6 +17,7 @@ import { Toast } from "~/components/Toast";
 import { PlaybackErrorToast, Player } from "~/components/player";
 import { StoryFlowHost } from "~/components/story/StoryFlowHost";
 import { fontCSS } from "~/styles/fontCSS";
+import { LAYOUT } from "~/styles/layout";
 import "~/styles/global.css";
 import { rootHead } from "~/utils/rootHead";
 
@@ -27,7 +29,12 @@ export const Route = createRootRoute({
 
 function Root() {
   return (
-    <html lang="en">
+    // --mini-player-h: the home page always reserves the mini player's height
+    // on phones ("Fitting the home page on a short phone", global.css).
+    <html
+      lang="en"
+      style={{ "--mini-player-h": `${LAYOUT.playerHeightMobile}px` } as CSSProperties}
+    >
       <head>
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: critical font + reset CSS must be inlined */}
         <style dangerouslySetInnerHTML={{ __html: fontCSS }} suppressHydrationWarning />

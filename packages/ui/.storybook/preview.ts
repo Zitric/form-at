@@ -4,7 +4,13 @@ import "./preview.css";
 const preview: Preview = {
   parameters: {
     layout: "centered",
-    backgrounds: { default: "dark" },
+    backgrounds: {},
+  },
+
+  initialGlobals: {
+    backgrounds: {
+      value: "dark",
+    },
   },
 };
 

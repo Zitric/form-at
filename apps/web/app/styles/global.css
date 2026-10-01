@@ -49,3 +49,35 @@
     /* etc... */
   }
 }
+
+/* Fitting the home page on a short phone
+   ----------------------------------------
+   On phones the home page sizes its manifesto and gaps against --fit-h:
+   the SMALL viewport height (svh: stable while Safari's toolbars slide,
+   unlike dvh) minus the mini player's height, ALWAYS reserved, idle too.
+   Reserving it whether or not something plays means pressing play_latest
+   doesn't reflow the page under the finger. --mini-player-h is set on
+   <html> from LAYOUT.playerHeightMobile (routes/__root.tsx), so the height
+   has one source; the 56px below is only the fallback if that style is
+   ever missing (unset, every --fit-* value would be invalid). Keep it
+   equal to LAYOUT.playerHeightMobile.
+
+   Each value runs in a straight line from its floor, at a 560px screen
+   (--fit-h 504px), to the old fixed size, at an 800px screen (--fit-h
+   744px), clamped at both ends: from 800px of height the page is exactly
+   as before, and short screens get every floor. Used below 640px wide only
+   (each class pairs with an sm: override); t-body-fit in
+   @form-at/ui/tokens.css reads --fit-text-size and --fit-text-leading.
+
+   value = floor + ramp * k, where ramp = --fit-h - 504px (0 to 240px) and
+   k = (old size - floor) / 240. */
+:root {
+  --fit-h: calc(100svh - var(--mini-player-h, 56px));
+  --fit-ramp: calc(var(--fit-h) - 504px);
+  --fit-header-pt: clamp(24px, calc(24px + var(--fit-ramp) * 0.0667), 40px); /* pt-10 */
+  --fit-header-mb: clamp(6px, calc(6px + var(--fit-ramp) * 0.1083), 32px); /* mb-8 */
+  --fit-gap: clamp(8px, calc(8px + var(--fit-ramp) * 0.1), 32px); /* mb-8, my-8 */
+  --fit-gap-sm: clamp(2px, calc(2px + var(--fit-ramp) * 0.0583), 16px); /* my-4 */
+  --fit-text-size: clamp(12px, calc(12px + var(--fit-ramp) * 0.00834), 14px); /* t-body */
+  --fit-text-leading: clamp(20px, calc(20px + var(--fit-ramp) * 0.01667), 24px);
+}

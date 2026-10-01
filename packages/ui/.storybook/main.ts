@@ -1,10 +1,12 @@
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { StorybookConfig } from "@storybook/react-vite";
 import tailwindcss from "@tailwindcss/vite";
 
 const config: StorybookConfig = {
   stories: ["../src/**/*.stories.@(ts|tsx)"],
-  addons: ["@storybook/addon-a11y", "@storybook/addon-docs"],
-  framework: { name: "@storybook/react-vite", options: {} },
+  addons: [getAbsolutePath("@storybook/addon-a11y"), getAbsolutePath("@storybook/addon-docs")],
+  framework: { name: getAbsolutePath("@storybook/react-vite"), options: {} },
   core: { disableTelemetry: true },
   // Storybook's own Vite instance doesn't include the app's Tailwind plugin —
   // without this, `@import "tailwindcss"` in preview.css can't resolve.
@@ -16,3 +18,7 @@ const config: StorybookConfig = {
 };
 
 export default config;
+
+function getAbsolutePath(value: string): string {
+  return dirname(fileURLToPath(import.meta.resolve(`${value}/package.json`)));
+}

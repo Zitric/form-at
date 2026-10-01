@@ -41,6 +41,31 @@ test.describe("home page", () => {
     await expect(page).toHaveURL(/\/$/);
   });
 
+  // Regression guard for "Fitting the home page on a short phone" in
+  // global.css: at idle on an iPhone SE-size screen (375×667), install_app
+  // must end above the bottom nav, not under it. Phone projects only: the
+  // bottom nav is sm:hidden.
+  test("on an iPhone SE screen install_app clears the bottom nav at idle", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      !["mobile-chrome", "mobile-safari"].includes(testInfo.project.name),
+      "phones only: the bottom nav doesn't render on desktop",
+    );
+    await page.setViewportSize({ width: 375, height: 667 });
+    await gotoAndHydrate(page, "/");
+
+    const install = page.getByRole("button", { name: "[ install_app ]" });
+    await expect(install).toBeVisible();
+    const bottomNav = page.locator("nav").filter({ visible: true });
+    await expect(bottomNav).toHaveCount(1);
+
+    const installBox = await install.boundingBox();
+    const navBox = await bottomNav.boundingBox();
+    if (!installBox || !navBox) throw new Error("install_app or the bottom nav has no box");
+    expect(installBox.y + installBox.height).toBeLessThanOrEqual(navBox.y);
+  });
+
   test("renders instagram link and bookings modal trigger", async ({ page }) => {
     await gotoAndHydrate(page, "/");
 
