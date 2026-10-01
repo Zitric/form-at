@@ -27,10 +27,10 @@ export const sets: MusicSet[] = [
     djId: "julz-lever",
     eventId: "format-003",
     duration: "1:25:58",
-    src: "https://cdn.formatglasgow.com/sets/set-003-julz-lever/audio.mp3",
+    src: "https://cdn.formatglasgow.com/sets/set-003-julz-lever/vmupjr8nd-x08h/audio.mp3",
     artwork: "uploads/set-003-julz-lever",
     artworkOriginalUrl: "https://cdn.formatglasgow.com/sets/set-003-julz-lever/artwork.png",
-    peaks: "https://cdn.formatglasgow.com/sets/set-003-julz-lever/peaks.json",
+    peaks: "https://cdn.formatglasgow.com/sets/set-003-julz-lever/vmupjr8nd-x08h/peaks.json",
     sizeBytes: 206353004,
   },
   {
