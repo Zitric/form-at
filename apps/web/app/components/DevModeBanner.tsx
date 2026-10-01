@@ -30,7 +30,7 @@ export function DevModeBanner() {
     <div
       className={`fixed inset-x-0 top-0 ${Z.devModeBanner} bg-gold text-black px-3 py-1.5 flex items-center justify-center gap-3 font-mono text-xs`}
     >
-      <span>[ dev_mode — plays from this browser are not counted ]</span>
+      <span>[ dev_mode — plays and events aren't counted ]</span>
       <button
         type="button"
         onClick={() => {

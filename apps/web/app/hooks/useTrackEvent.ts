@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { isDevModeActive } from "~/utils/devMode";
 import { isStandalone } from "~/utils/installCapability";
 import type { TrackableEventType } from "~/utils/trackableEvents";
 
@@ -15,9 +16,13 @@ import type { TrackableEventType } from "~/utils/trackableEvents";
 //
 // `is_standalone` is read fresh at call time, never cached — same as
 // `withAppContext` re-reading `isStandalone()` per call, so a display-mode
-// change between renders is always reflected.
+// change between renders is always reflected. Dev mode is read per call too:
+// it can be switched on or off with the page already open.
 export function useTrackEvent(): (eventType: TrackableEventType, setId?: string) => void {
   return useCallback((eventType: TrackableEventType, setId?: string) => {
+    // The operator's own test rig, skipped like the player's plays: see
+    // devMode.ts.
+    if (isDevModeActive()) return;
     navigator.sendBeacon(
       "/api/event",
       new Blob(

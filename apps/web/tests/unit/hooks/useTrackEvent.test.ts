@@ -1,6 +1,7 @@
 import { renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTrackEvent } from "~/hooks/useTrackEvent";
+import { setDevMode } from "~/utils/devMode";
 
 // Locks the beacon-firing convention: must use
 // navigator.sendBeacon (fire-and-forget, survives page unload — same
@@ -19,6 +20,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  setDevMode(false);
   vi.restoreAllMocks();
 });
 
@@ -46,6 +48,19 @@ describe("useTrackEvent", () => {
     const [, blobNoSet] = beaconSpy.mock.calls[1] as [string, Blob];
     expect(JSON.parse(await blobWithSet.text())).toMatchObject({ set_id: "set-002-til" });
     expect(JSON.parse(await blobNoSet.text())).toMatchObject({ set_id: null });
+  });
+
+  it("sends nothing while dev mode is on, read at call time", () => {
+    const beaconSpy = vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
+    const { result } = renderHook(() => useTrackEvent());
+
+    setDevMode(true);
+    result.current("save_click", "set-002-til");
+    expect(beaconSpy).not.toHaveBeenCalled();
+
+    setDevMode(false);
+    result.current("save_click", "set-002-til");
+    expect(beaconSpy).toHaveBeenCalledTimes(1);
   });
 
   it("reads is_standalone fresh at call time (not cached across calls)", async () => {

@@ -1,7 +1,8 @@
 import { safeLocal } from "~/utils/safeStorage";
 
-// Excludes THIS browser's own play beacons from the public plays count —
-// for the operator testing the player, not a feature visitors ever see a
+// Plays and events aren't counted: THIS browser's own play beacons
+// (useAudioPlayer's sendPlay) and event beacons (useTrackEvent) are never
+// sent — for the operator testing the app, not a feature visitors ever see a
 // control for. Default OFF, and the ONLY way to turn it on is visiting with
 // `?devmode=on` in the URL — never a clickable control anywhere in the
 // public UI. A discoverable toggle would itself be the risk this whole
