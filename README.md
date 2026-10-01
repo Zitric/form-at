@@ -68,6 +68,37 @@ The Workers target isn't free. `apps/web/app/server.ts` is a custom server entry
 
 R2 is fronted by a custom domain, `cdn.formatglasgow.com`, rather than an R2 public bucket URL — no rate limit and Cloudflare edge caching. Every reference to that host goes through `AUDIO_HOST`/`AUDIO_ORIGIN` in `packages/data/src/sets.ts` so it's one edit if it ever moves.
 
+### CDN rules for cdn.formatglasgow.com
+
+Every upload writes under its own version folder, `sets/{id}/{version}/audio.mp3` (and `peaks.json`, `artwork.{ext}`), so a re-upload of a set gets new URLs instead of overwriting the old objects (`apps/admin/app/utils/r2Sets.ts`; [`TECH_DEBT.md`](TECH_DEBT.md) item 31 is the stale-copy incident behind it). Versioned objects never change, which lets the CDN cache them for a year. Two dashboard rules do that. They're configured by hand in Cloudflare, not in code, and they cover every writer: the admin upload, a manual `wrangler r2 object put`, and any backfill script.
+
+1. **Response Header Transform Rule, "cdn: CORS on every response".** It matches `http.host eq "cdn.formatglasgow.com"` and sets static headers:
+   - `Access-Control-Allow-Origin: *`
+   - `Access-Control-Expose-Headers: Content-Range, Accept-Ranges, Content-Length`
+
+   R2's own CORS policy only answers a request that carries an `Origin` header, and `<audio>` sends none. Its plain answer is cached like any other, so a later `fetch()` (saving a set, peaks, the Story excerpt) can be handed the cached copy without CORS headers and blocked. Today that cached copy expires in 4 hours; under the rule below it would last a year. Cloudflare applies response header rules after its cache, to every response it serves, cached ones included ([docs](https://developers.cloudflare.com/rules/transform/response-header-modification/): "Cloudflare evaluates caching behavior before applying response header modifications"). So whichever request filled the cache, every answer goes out with CORS headers.
+
+   A second rule in the same set adds `Cache-Control: public, max-age=31536000, immutable` to the versioned paths (expression as in rule 2). A cache rule's Browser TTL can set `max-age` but not `immutable`.
+2. **Cache Rule, "cdn: versioned set objects".** It matches `(http.host eq "cdn.formatglasgow.com" and http.request.uri.path wildcard "/sets/*/*/*")`, with these settings:
+   - **Cache eligibility:** eligible for cache.
+   - **Edge TTL:** ignore the cache-control header and use this TTL, 1 year.
+   - **Browser TTL:** override origin, 1 year.
+
+   `wildcard` rather than `matches` because regex needs a Business plan ([operators](https://developers.cloudflare.com/ruleset-engine/rules-language/operators/)). A wildcard `*` also matches `/`, and the pattern must match the whole path, so it needs two more slashes after `/sets/`. The flat pre-versioning keys (`/sets/{id}/audio.mp3`) have one, so they never match and keep the default 4-hour caching. They can still be overwritten.
+
+**Order:** apply rule 1 before rule 2. Otherwise there's a window where an answer without CORS headers can be cached for a year.
+
+**Never overwrite a versioned object.** Under rule 2 the old bytes would stay cached for a year. Upload a new version instead.
+
+**To verify**, on a versioned URL, with no `Origin` first (like `<audio>`), then with one (like `fetch()`):
+```bash
+U=https://cdn.formatglasgow.com/sets/<id>/<version>/audio.mp3
+curl -s -o /dev/null -D - -H "Range: bytes=0-1" "$U" | grep -iE "^HTTP|access-control|cache-control|cf-cache-status"
+curl -s -o /dev/null -D - -H "Range: bytes=0-1" "$U" | grep -iE "^HTTP|access-control|cache-control|cf-cache-status"
+curl -s -o /dev/null -D - -H "Range: bytes=0-1" -H "Origin: https://formatglasgow.com" "$U" | grep -iE "^HTTP|access-control|cache-control|cf-cache-status"
+```
+Expect `206` and `access-control-allow-origin: *` all three times, with `cache-control: public, max-age=31536000, immutable`. `cf-cache-status` should be `MISS` (or `EXPIRED`) the first time, then `HIT`. A flat key such as `/sets/set-003-unreal/audio.mp3` should still show `max-age=14400`, now with `access-control-allow-origin: *`.
+
 **Zustand for state, with persistence that's narrower than it looks.** Store is split into slices (`playerSlice`, `offlineSlice`) in `apps/web/app/store/`. Persistence matters concretely here: playback position per track, so a 90-minute set resumes where you left it, and which sets are saved offline. But **`MusicSet` objects are never persisted** — only IDs are written to localStorage and re-hydrated through `getSet()` on load. Persisted objects are a migration hazard the moment the shape changes; persisted IDs aren't.
 
 **Workbox's libraries, but not a PWA plugin.** `vite-plugin-pwa` isn't a dependency; only the `workbox-*` runtime packages are. The service worker is hand-written (`apps/web/app/sw.ts`) and built by a ~90-line custom Vite plugin (`buildServiceWorker` in `apps/web/vite.config.ts`) that walks `dist/client`, assembles the precache manifest and esbuilds the SW, substituting the manifest via `define`.

@@ -111,6 +111,15 @@ request-no-cors guard discards anything not no-CORS-safelisted — so seeks retu
 doesn't implement that guard, so **no unit test can catch this**; it only appears
 in a real browser.
 
+### Never overwrite an object under `sets/{id}/{version}/` in R2
+Every upload writes to its own version folder (`apps/admin/app/utils/r2Sets.ts`),
+and the CDN caches those paths for a year (README → *"CDN rules for
+cdn.formatglasgow.com"*). Overwrite one and the old bytes keep being served
+from the edge and browsers for a year, and a saved offline copy never notices,
+because its URL didn't change: TECH_DEBT.md item 31. To replace a set's files,
+upload a new version and point the row at it. Any script that writes to R2
+builds its keys with `versionedSetKey`, never by hand.
+
 ### Every mutating admin endpoint must call `verifyAccessJwt`
 Cloudflare Access gates page loads at the edge, not individual endpoint calls, so
 each writer verifies the Access identity server-side via
@@ -442,7 +451,7 @@ things you need *at the moment of editing* that no section heading can give you.
 | Offline audio | `apps/web/app/data/offline-audio.ts`, `store/offlineSlice.ts`, the audio route in `app/sw.ts` | README → *"220MB of audio has to survive with no signal"* (IDB over Cache Storage, quota pre-flight, Range) |
 | Web/app divide | `apps/web/app/utils/appContext.ts` — the `?ctx=app` marker | README → *"Browser tabs never read the offline library"*. A product invariant, not an accident: don't make tabs read IDB. |
 | Catalogue | `packages/data/src/sets.ts` (+ `sets.generated.ts`, `apps/web/app/data/sets.ts` for the app's fallback wrapping) | README → *"The catalogue is in a database, but the app is offline-first"* (live-wins `mergeSets`, committed snapshot) |
-| Set upload | `apps/admin/app/routes/api/sets-presign.ts`, `utils/uploadWithProgress.ts` | README → *"A 220MB upload can't go through a Worker"* |
+| Set upload | `apps/admin/app/routes/api/sets-presign.ts`, `utils/uploadWithProgress.ts`; R2 keys and upload versions in `utils/r2Sets.ts` | README → *"A 220MB upload can't go through a Worker"* and *"CDN rules for cdn.formatglasgow.com"* (versioned keys, the immutable cache rule) |
 | Waveform peaks | `scripts/generate-peaks.mjs` (root, needs `ffmpeg` on PATH) | README → *"Waveform peaks are computed with ffmpeg, not in the browser"* |
 | Push sending | `packages/data/src/webPush.ts` | README → *"The standard Web Push library doesn't run on Workers"* |
 | Admin + auth | `apps/admin/app/routes/`, `utils/verifyAccessJwt.ts` | README → *"Admin auth: no auth code, then auth code anyway"*. The enforcement rule is §1. |

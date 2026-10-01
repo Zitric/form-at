@@ -7,7 +7,7 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
-- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a cleared 2026-08-18 except the dropped-connection case, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project), 30 (Instagram Story device test — Android fully verified: the full 15s story shares directly, publishes whole, A/V sync and framing intact after Instagram's re-encode; iOS waits on the same device access as 12/23b), 31 (a re-upload at the same R2 URL never reaches a saved offline copy; versioned upload paths recommended), 32 (Firefox on Android treated as non-installable until a device shows its home-screen shortcut runs standalone)
+- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a cleared 2026-08-18 except the dropped-connection case, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project), 30 (Instagram Story device test — Android fully verified: the full 15s story shares directly, publishes whole, A/V sync and framing intact after Instagram's re-encode; iOS waits on the same device access as 12/23b), 31 (a re-upload at the same R2 URL never reaches a saved offline copy; fixed with versioned upload paths, CDN rules applied, Julz 003 moved; only the manual Android re-upload test remains), 32 (Firefox on Android treated as non-installable until a device shows its home-screen shortcut runs standalone)
 - **Deferred, recorded rather than done:** 24 (DJ/event data model still static while sets are in D1), 25 (no-cross-app-imports unenforced), 26 (`PWA_PROGRESS.md` too large to be readable)
 - **Invalid:** 1 (2026-07-22 — premise was wrong, not stale: both flagged functions are load-bearing behind a live multi-provider calendar picker; do not delete, see item for the full re-verification)
 - **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, real trigger is ~10-15 sets in the catalogue, not a calendar date; see item for why that arrives faster now)
@@ -1396,7 +1396,28 @@ never a button that fails.
 
 ## 31. A re-upload at the same URL never reaches a saved copy
 
-**Status: open.** Recommended fix below, not built.
+**Status: fixed (option 1). Only the manual Android re-upload test remains.**
+- **Versioned R2 paths on every upload:** `sets/{id}/{version}/…`, with the
+  version generated at presign (`apps/admin/app/utils/r2Sets.ts`).
+- **Versioned artwork variants:** `uploads/{id}-{version}`.
+- **`peaksCache` and `durations`** are stamped with the URL they came from
+  (`apps/web/app/store/playerSlice.ts`).
+- **A saved copy of a re-uploaded set** is dropped by the existing URL guard
+  and shows "↻ re-save · was N MB". Nothing re-downloads on its own.
+- **CDN rules applied (2026-10-01)** by the repo owner (README → "CDN rules
+  for cdn.formatglasgow.com") and verified with curl on a versioned URL: 206,
+  a single `access-control-allow-origin: *`, `immutable` cache-control,
+  `MISS` then `HIT`. Flat keys still get `max-age=14400`, now with ACAO.
+- **`set-003-julz-lever` moved** to version `vmupjr8nd-x08h` (objects copied,
+  D1 row and snapshot updated), so devices holding the old copy see the
+  change. Rows uploaded before versioning keep their flat keys; they're only
+  stale if overwritten in place again, which the admin can't do.
+- **Remaining:** the manual Android re-upload test. Upload a throwaway set,
+  save it in the installed app, re-upload it with the same id, and check the
+  set shows "↻ re-save", the waveform updates, and the re-saved copy plays
+  the new audio offline.
+
+The original diagnosis follows.
 
 **Evidence (2026-10-01, on the operator's phone).** `set-003-julz-lever` was
 saved for offline, then re-uploaded at the same URL
