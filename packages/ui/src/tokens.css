@@ -107,6 +107,17 @@
   line-height: 1.75rem;
 }
 
+/* t-body whose size the app scales to the screen: --fit-text-size and
+   --fit-text-leading, defined in apps/web's global.css ("Fitting the home
+   page on a short phone"), which shrink it on short phones so the home
+   manifesto and what follows fit above the bottom chrome. Without them it
+   is exactly t-body (14px / 24px). Pair with sm:t-body-md like t-body. */
+@utility t-body-fit {
+  font-size: var(--fit-text-size, 0.875rem);
+  line-height: var(--fit-text-leading, 1.5rem);
+  color: var(--color-grey);
+}
+
 @utility t-muted {
   font-size: 0.625rem; /* 10px */
   line-height: 0.875rem;

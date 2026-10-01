@@ -62,8 +62,15 @@ function Home() {
     <PageLayout>
       <JsonLd data={organizationLd()} />
       <div className="flex flex-col justify-start sm:justify-center sm:py-16">
-        <div className="space-y-2 mb-8 sm:mb-12 min-h-[20dvh]">
-          <ConsoleWriter isFirstLoading={isFirstLoading}>{mainText}</ConsoleWriter>
+        {/* On phones every gap from here to the install slot, and the
+            manifesto (fitToHeight), shrinks on a short screen so play, the
+            socials and install_app stay above the bottom chrome, mini player
+            included: the --fit-* values in global.css. From about 800px of
+            height they're the old fixed values. */}
+        <div className="space-y-2 mb-(--fit-gap) sm:mb-12 min-h-[20dvh]">
+          <ConsoleWriter isFirstLoading={isFirstLoading} fitToHeight>
+            {mainText}
+          </ConsoleWriter>
         </div>
 
         <button
@@ -87,7 +94,7 @@ function Home() {
         </button>
 
         <div
-          className="flex items-center justify-center gap-10 my-8"
+          className="flex items-center justify-center gap-10 my-(--fit-gap) sm:my-8"
           style={{
             opacity: visible ? 1 : 0,
             transition: `opacity ${fadeDuration} ease-out`,
@@ -109,7 +116,9 @@ function Home() {
             install), the installed app gets notify_me (PushOptInCta) while
             the Push API is there and the ask is unspent. Below the socials
             so neither competes with the play button. */}
-        <div className="flex flex-col items-center gap-3 -mt-4 mb-8">
+        {/* Pulled up by half the socials gap (16px of 32 at full size), so
+            the two rows can't overlap when the gap shrinks. */}
+        <div className="flex flex-col items-center gap-3 -mt-[calc(var(--fit-gap)/2)] sm:-mt-4 mb-8">
           <InstallAppButton />
           <PushOptInCta />
         </div>

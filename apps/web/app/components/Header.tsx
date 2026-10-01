@@ -12,9 +12,14 @@ export function Header() {
     setVisible(true);
   }, []);
 
+  // On phones the top padding and the gap below shrink on short screens (the
+  // --fit-* values in global.css; from about 800px of height they're the old
+  // pt-10 / mb-8), part of what lets the home page fit above the bottom
+  // chrome. Every page shares the header, so they all get it and it doesn't
+  // jump between pages.
   return (
     <header
-      className="flex items-center justify-center px-6 md:px-0 pt-10 mb-8 sm:pt-10 sm:mb-12 sm:justify-between max-w-2xl mx-auto w-full"
+      className="flex items-center justify-center px-6 md:px-0 pt-(--fit-header-pt) mb-(--fit-header-mb) sm:pt-10 sm:mb-12 sm:justify-between max-w-2xl mx-auto w-full"
       style={{ opacity: visible ? 1 : 0, transition: "opacity 5s ease-out" }}
       suppressHydrationWarning
     >
