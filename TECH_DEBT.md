@@ -7,7 +7,7 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
-- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a cleared 2026-08-18 except the dropped-connection case, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project), 30 (Instagram Story device test — Android share path to the Story send screen verified, published-story playback unverified; iOS waits on the same device access as 12/23b)
+- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a cleared 2026-08-18 except the dropped-connection case, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project), 30 (Instagram Story device test — Android verified end to end: the full 15s story shares directly and publishes whole; A/V sync, cropping and legibility after Instagram's re-encode not separately reported; iOS waits on the same device access as 12/23b), 31 (a re-upload at the same R2 URL never reaches a saved offline copy; versioned upload paths recommended)
 - **Deferred, recorded rather than done:** 24 (DJ/event data model still static while sets are in D1), 25 (no-cross-app-imports unenforced), 26 (`PWA_PROGRESS.md` too large to be readable)
 - **Invalid:** 1 (2026-07-22 — premise was wrong, not stale: both flagged functions are load-bearing behind a live multi-provider calendar picker; do not delete, see item for the full re-verification)
 - **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, real trigger is ~10-15 sets in the catalogue, not a calendar date; see item for why that arrives faster now)
@@ -1313,8 +1313,12 @@ importer that trusts the header doesn't. That is also what the gallery's
 as a non-fragmented, faststart MP4 (`ftyp, moov, mdat`, `mvhd` = full length)
 with mediabunny, stream copy only: all 1,476 packets are byte-identical
 (ffmpeg `framemd5`). Unit and e2e tests assert no `moof` and the `mvhd`
-duration. **Not yet re-tested on the phone**: whether Instagram now keeps
-the whole story is still the device check.
+duration.
+
+**Confirmed on Android (2026-10-01).** With the remux, the full 15s story
+shares directly from the installed app to Instagram Stories, with no
+WhatsApp or gallery workaround, and the published story keeps the whole
+15s. The story link copies in the create tap, as designed.
 
 Two more findings from the same run:
 - The excerpt went from 20s to **15s** (product choice; the picker's zoom
@@ -1325,7 +1329,10 @@ Two more findings from the same run:
   so saved sets are served from IDB. Verified on a production build with the
   real SW in desktop Chromium (network cut mid-pick → 206 from the SW);
   not on a phone.
-- **Unexplained, probably avoided: a blank zoom strip online.** On the
+- **Explained (2026-10-01): a stale saved copy, item 31.** The set had been
+  re-uploaded at the same URL after it was saved, and deleting and
+  re-saving it fixed the picker. The investigation as it stood:
+- **A blank zoom strip online.** On the
   phone, only for `set-003-julz-lever`: saved, and the set that had been
   playing. It happened **online**, with the generic "couldn't load this part
   of the set — check your connection", not the CBR refusal. The full-set
@@ -1360,9 +1367,9 @@ Two more findings from the same run:
   which is a gap of its own if the re-upload is confirmed.
 
 **Still open:**
-- **Android (Chrome):** the share path is verified (above). Still open: a
-  **published story plays correctly** (audio present, A/V sync, cropping,
-  legibility after re-encode). Also open: the phone's own mime list and
+- **Android (Chrome):** sharing and publishing are verified (above), and the
+  published story keeps the whole 15s. Not separately reported: A/V sync,
+  cropping and legibility after Instagram's re-encode. Also open: the phone's own mime list and
   recorder output — paste its copy-report here.
 - **iOS (Safari, installed PWA and tab):** the same questions, plus whether
   the `AudioContext` path records audio at all and whether the silent switch
@@ -1376,12 +1383,88 @@ Two more findings from the same run:
   other way, e.g. a throwaway `cloudflared tunnel --url http://localhost:8787`
   quick tunnel (no account resources, random URL, gone on exit). Run it
   yourself; it isn't something to provision from a session.
-- **Instagram accepting the file:** whether the Story composer opens with it
-  and lets you post.
+- **Instagram accepting the file:** verified on Android (posted, full
+  length). iOS still open.
 
 If iOS can't record, the feature degrades to a clear message on that device,
 never a button that fails.
 
 ---
 
-_Last updated: 2026-09-30_
+## 31. A re-upload at the same URL never reaches a saved copy
+
+**Status: open.** Recommended fix below, not built.
+
+**Evidence (2026-10-01, on the operator's phone).** `set-003-julz-lever` was
+saved for offline, then re-uploaded at the same URL
+(`https://cdn.formatglasgow.com/sets/set-003-julz-lever/audio.mp3`, R2
+`last-modified` 8 Sep 2026 22:00). The installed app went on playing the old
+IDB copy, and the Story picker failed on that set (item 30, "a stale saved
+copy") until it was deleted and saved again. Which request failed is not
+known; deleting and re-saving fixed it.
+
+**Why nothing noticed.** Every layer keys the saved copy on the URL, and the
+URL didn't change:
+- R2 keys are fixed per set id: `sets/{id}/audio.{ext}`, `artwork.{ext}`,
+  `peaks.json` (`apps/admin/app/utils/r2Sets.ts:41-45`). Presign and create
+  both derive them from the id (`routes/api/sets-presign.ts:82`,
+  `routes/api/sets.ts:456`).
+- The admin can reuse an id. Delete removes only the `sets` row
+  (`routes/api/sets.ts:413`), and R2 objects are never deleted
+  (`routes/api/sets/restore.ts:6`). Presign's 409 only checks for a live row,
+  so the next upload with that id overwrites the same objects.
+- The offline guard compares URLs only. `reconcileFromIdb` keeps an IDB entry
+  whose `url` is still in the catalogue (`apps/web/app/store/offlineSlice.ts:483-489`),
+  and an entry stores no ETag, size check or version
+  (`apps/web/app/data/offline-audio.ts:14-15`). The SW serves whatever is
+  stored under the bare URL (`apps/web/app/sw.ts:173`).
+- The persisted `peaksCache` is keyed by set id and fetched only when empty
+  (`apps/web/app/components/player/PlayerSeeker.tsx:89`, and the same check
+  in `StoryVideoFlow.tsx`'s peaks effect). A re-upload's new peaks never
+  replace it, saved or not, until localStorage is cleared. `durations` is
+  rewritten on every metadata load (`PlayerSeeker.tsx:68`), so it follows
+  whichever copy last played.
+
+**Impact.** Offline listeners keep the old master with no sign of it: no
+error, no "re-save", the same size label. Since this branch's picker reads a
+saved set from IDB, a story made from that set clips the old master too.
+Inferred, not observed: the same fixed URL lets the CDN's 4-hour
+`max-age=14400` and the browser's HTTP cache serve old bytes for a while
+after an overwrite, and a restore of the original deletion would bring back
+the new master under the old row.
+
+**Options:**
+1. **A new R2 path on every upload (recommended).** Add a version segment,
+   e.g. `sets/{id}/{version}/audio.mp3`, where `version` is generated per
+   upload at presign. A random id or the upload time is enough: hashing
+   220MB in the browser would need it all in memory, and every upload is new
+   content anyway. `deriveSetR2Keys` takes the version, presign returns it,
+   and create validates it and re-derives from it, as it does with the id
+   today. Then the existing URL guard does the rest: the old entries become
+   orphans, and the set flips to `evicted` with the existing
+   "↻ re-save · was N MB" notice (`offlineSlice.ts:483-500`). It also gives
+   the CDN and HTTP caches a fresh key, and keeps a deleted row's
+   `admin_deleted_sets.src` pointing at its own bytes. No migration: the
+   existing sets keep their URLs. Two follow-ups:
+   - key `peaksCache` by the peaks URL rather than the set id, or it stays
+     stale regardless;
+   - never overwrite an object in R2 by hand: upload under a new path.
+2. **An ETag or size check on launch.** Store the ETag at save time and HEAD
+   each saved MP3 in `reconcileFromIdb`. Weaker on every axis:
+   - It only runs online, and costs a request per saved set per launch.
+   - Entries saved before the change have no ETag. Size against the
+     catalogue's `sizeBytes` can't stand in: a remaster of the same length
+     at the same CBR bitrate can be the same size.
+   - The CDN's CORS config doesn't expose `ETag`
+     (`access-control-expose-headers: Content-Range,Accept-Ranges,Content-Length`).
+     Exposing it is a Cloudflare change for the repo owner to make.
+
+**Recommendation: option 1.** It reuses the guard and the re-save UX that
+already exist, and it fixes the CDN and HTTP-cache staleness as well. Option
+2 keeps the URL fixed and has to detect the change on each device. Devices
+that saved an overwritten set before the fix stay stale until that set is
+uploaded once more under a versioned path.
+
+---
+
+_Last updated: 2026-10-01_

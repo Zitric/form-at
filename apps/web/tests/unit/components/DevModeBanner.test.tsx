@@ -34,7 +34,7 @@ describe("DevModeBanner", () => {
     setUrl("?devmode=on");
     render(<DevModeBanner />);
     expect(
-      screen.getByText(/dev_mode — plays from this browser are not counted/),
+      screen.getByText(/dev_mode — plays and events aren't counted/),
     ).toBeInTheDocument();
     expect(isDevModeActive()).toBe(true);
   });

@@ -3817,9 +3817,10 @@ set's slice went to the network, so the zoomed strip went blank when the
 connection dropped mid-pick; with the marker, the SW serves the Range from
 IDB. Tabs are unaffected. The blank strip first reported on the phone
 happened **online**, on the saved set that had been playing. The same change
-routes that case to IDB too, so it probably avoids it without explaining it.
-The hypotheses, what was ruled out, and the devmode diagnostics are in
-TECH_DEBT 30.
+routes that case to IDB too, so it probably avoids it. The cause turned out to
+be a re-upload at the same URL after the set was saved: the saved copy was
+the old master (TECH_DEBT 31). What was ruled out on the way, and the devmode
+diagnostics, are in TECH_DEBT 30.
 
 ## Reference — key design decisions from the PWA work
 
