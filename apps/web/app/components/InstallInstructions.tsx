@@ -1,6 +1,7 @@
 import { InstallIcon } from "@form-at/ui";
 import { useState } from "react";
 import { type FormFactor, detectFormFactor } from "~/utils/deviceFormFactor";
+import type { IosThirdPartyBrowser, NoInstallHint } from "~/utils/installCapability";
 
 // The two manual-install instruction blocks, extracted from SaveGateModal so
 // PushOptInModal can reuse the exact same guidance with its own lead copy —
@@ -36,12 +37,28 @@ export function ManualInstallHint() {
   );
 }
 
-// iOS Safari has no programmatic install prompt — the share menu is the only
-// path. Callers render their own lead sentence above this list.
-export function IosInstallSteps() {
+// Where the Share menu lives in each iOS browser. Only Safari's position has
+// been checked on a device; the third-party ones follow each browser's
+// current layout as documented, which they redesign often, so the wording
+// names the menu rather than leaning on an exact spot.
+const IOS_SHARE_STEP: Record<"Safari" | IosThirdPartyBrowser, string> = {
+  Safari: "tap the share icon (⎙) at the bottom of Safari",
+  Chrome: "tap the share icon (⎙) in Chrome's address bar",
+  Firefox: "open Firefox's menu (☰) and tap Share",
+  Edge: "open Edge's menu (⋯) and tap Share",
+};
+
+// iOS has no programmatic install prompt — the share menu is the only path,
+// in Safari and, since iOS 16.4, in Chrome / Firefox / Edge too. Callers
+// render their own lead sentence above this list.
+export function IosInstallSteps({
+  browser = "Safari",
+}: {
+  browser?: "Safari" | IosThirdPartyBrowser;
+}) {
   return (
     <ol className="text-xs text-grey leading-relaxed space-y-2 pl-5 list-decimal">
-      <li>tap the share icon (⎙) at the bottom of Safari</li>
+      <li>{IOS_SHARE_STEP[browser]}</li>
       <li>
         scroll and tap <span className="text-white">Add to Home Screen</span>
       </li>
@@ -49,5 +66,34 @@ export function IosInstallSteps() {
         tap <span className="text-white">Add</span> in the top right
       </li>
     </ol>
+  );
+}
+
+// The second half of every "this browser can't install" message: where to
+// go instead. The caller's sentence before it says what lives in the app.
+export function NoInstallPath({ hint }: { hint: NoInstallHint }) {
+  const site = <span className="text-white">formatglasgow.com</span>;
+  if (hint === "use-chrome") {
+    return (
+      <>
+        this browser can't install it — open {site} in <span className="text-white">Chrome</span>{" "}
+        and install from there.
+      </>
+    );
+  }
+  if (hint === "use-safari") {
+    return (
+      <>
+        this version of iOS only installs from Safari — open {site} in{" "}
+        <span className="text-white">Safari</span> and install from there.
+      </>
+    );
+  }
+  return (
+    <>
+      this browser can't install it — open {site} in{" "}
+      <span className="text-white">Chrome on Android</span> or{" "}
+      <span className="text-white">Safari on iOS</span> to install.
+    </>
   );
 }

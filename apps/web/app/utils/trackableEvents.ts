@@ -51,6 +51,12 @@ export const TRACKABLE_EVENT_TYPES = [
   // installs; the two rows aren't linkable, so it's a rate, not a per-visitor
   // conversion.
   "story_install_gate_shown",
+  // The home page's [ install_app ] opened its instructions modal: a browser
+  // tab with no native prompt to fire (iOS share-menu steps, the manual hint,
+  // open-app, or where to install instead). A tap that fires Chrome's prompt
+  // directly isn't this; that funnel is install_prompt_shown →
+  // install_accepted / install_dismissed.
+  "install_cta_instructions_shown",
 ] as const;
 
 export type TrackableEventType = (typeof TRACKABLE_EVENT_TYPES)[number];

@@ -85,7 +85,11 @@ const needsInstallGate: SaveGate = {
   canPrompt: true,
 };
 const openAppGate: SaveGate = { allow: false, reason: "open-app" };
-const cannotInstallGate: SaveGate = { allow: false, reason: "cannot-install" };
+const cannotInstallGate: SaveGate = {
+  allow: false,
+  reason: "cannot-install",
+  hint: "use-chrome-or-safari",
+};
 
 function renderModal(gate: SaveGate) {
   const onClose = vi.fn();

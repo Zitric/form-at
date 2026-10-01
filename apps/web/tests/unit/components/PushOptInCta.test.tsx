@@ -5,11 +5,9 @@ import { PushOptInCta } from "~/components/PushOptInCta";
 import type { SaveGate } from "~/hooks/useSaveGate";
 import { useStore } from "~/store";
 
-// CTA gating for the two-variant soft prompt. The gate is deliberately
-// different per display mode:
-// standalone offers the real subscribe (needs the Push API + an unspent
-// ask), a browser tab offers the install nudge (shown even where the Push
-// API is absent — that's the iOS-Safari-tab audience the nudge exists for).
+// CTA gating: installed app only. Standalone offers the real subscribe
+// (needs the Push API + an unspent ask); a browser tab never shows notify_me,
+// whose slot there belongs to InstallAppButton.
 
 const { gateRef } = vi.hoisted(() => ({
   gateRef: { current: { allow: true } as unknown },
@@ -155,17 +153,18 @@ describe("PushOptInCta gating — standalone", () => {
 });
 
 describe("PushOptInCta gating — browser tab", () => {
-  it("shows even where the Push API is absent (iOS Safari tab — the install nudge audience)", async () => {
-    setGate(tabGate);
-    render(<PushOptInCta />);
-
-    expect(await screen.findByRole("button", { name: "[ notify_me ]" })).toBeInTheDocument();
-  });
-
-  it("hides once permission is known-spent at this origin", async () => {
+  it("never shows in a tab, even with an unspent ask (install_app holds that slot)", async () => {
     setGate(tabGate);
     mockPushSupport({ subscribed: false });
-    mockNotification("denied");
+    mockNotification("default");
+    render(<PushOptInCta />);
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(ctaButton()).not.toBeInTheDocument();
+  });
+
+  it("never shows in a tab without the Push API either (iOS Safari tab)", async () => {
+    setGate(tabGate);
     render(<PushOptInCta />);
 
     await new Promise((r) => setTimeout(r, 10));
@@ -174,17 +173,12 @@ describe("PushOptInCta gating — browser tab", () => {
 });
 
 describe("PushOptInCta gating — suppression flags", () => {
-  it("hides on the persisted dismiss flag", async () => {
-    setGate(tabGate);
-    useStore.setState({ pushOptInDismissed: true });
-    render(<PushOptInCta />);
-
-    await new Promise((r) => setTimeout(r, 10));
-    expect(ctaButton()).not.toBeInTheDocument();
-  });
-
+  // The persisted dismiss flag is covered under "persisted denial flag vs
+  // live permission": in the app it only holds while permission is denied.
   it("hides on the session decline flag", async () => {
-    setGate(tabGate);
+    setGate({ allow: true });
+    mockPushSupport({ subscribed: false });
+    mockNotification("default");
     useStore.setState({ pushOptInDeclinedSession: true });
     render(<PushOptInCta />);
 
@@ -292,14 +286,16 @@ describe("PushOptInCta — orphaned-subscription reconcile", () => {
 });
 
 describe("PushOptInCta → PushOptInModal wiring", () => {
-  it("tapping the CTA opens the modal for the current variant", async () => {
-    setGate(tabGate);
+  it("tapping the CTA opens the subscribe soft prompt", async () => {
+    setGate({ allow: true });
+    mockPushSupport({ subscribed: false });
+    mockNotification("default");
     render(<PushOptInCta />);
 
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "[ notify_me ]" }));
 
-    expect(screen.getByText(/notifications live in the Form:at app/i)).toBeInTheDocument();
+    expect(await screen.findByText(/hear about new sets/i)).toBeInTheDocument();
   });
 
   it("granted-but-unsubscribed tap goes straight to subscribe — no soft prompt, no requestPermission", async () => {

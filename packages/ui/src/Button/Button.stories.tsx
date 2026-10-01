@@ -20,6 +20,15 @@ export const Secondary: Story = {
   },
 };
 
+export const Emphasis: Story = {
+  args: { variant: "emphasis", children: "install_app" },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button"));
+    await expect(args.onClick).toHaveBeenCalledOnce();
+  },
+};
+
 export const Fail: Story = {
   args: { variant: "fail", children: "cancel_download" },
 };

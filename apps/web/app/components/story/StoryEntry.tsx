@@ -12,7 +12,16 @@ import { canRecordStory } from "~/utils/storyVideo/capability";
 
 type Props = { set: MusicSet; rowClass: string };
 
-// The [ instagram_story ] row in ShareModal. Nothing renders unless the
+/**
+ * Whether the [ instagram_story ] row renders at all: the `?story=on` flag on
+ * a phone. Past this, StoryEntry always renders something (a button or a
+ * muted line), so the share modal shows its create_video: section on this.
+ */
+export function isStoryEntryShown(): boolean {
+  return isStoryFlagActive() && isHandheldTouch();
+}
+
+// The [ instagram_story ] row in ShareModal's create_video: section. Nothing renders unless the
 // `?story=on` flag is set AND this is a phone. Past that:
 //   - can't record H.264 + AAC MP4 (Firefox) → a muted line, not a button
 //   - the installed app, offline → a muted line: v1 is online-only
@@ -27,7 +36,7 @@ export function StoryEntry({ set, rowClass }: Props) {
   const openStoryFlow = useStore((s) => s.openStoryFlow);
   const trackEvent = useTrackEvent();
 
-  if (!isStoryFlagActive() || !isHandheldTouch()) return null;
+  if (!isStoryEntryShown()) return null;
 
   const mutedClass = "text-left text-sm text-grey/40 tracking-widest py-1 cursor-default";
   if (!canRecordStory()) {

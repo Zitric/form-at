@@ -2,7 +2,7 @@ import { getCityForSet } from "@form-at/data/events";
 import { BracketLabel, Modal, TerminalRow } from "@form-at/ui";
 import { useEffect } from "react";
 
-import { StoryEntry } from "~/components/story/StoryEntry";
+import { StoryEntry, isStoryEntryShown } from "~/components/story/StoryEntry";
 import { useStore } from "~/store";
 import { getAudioCurrentTime } from "~/store/playerSlice";
 import { buildAndroidIntent, isAndroid } from "~/utils/deeplink";
@@ -78,6 +78,13 @@ export function ShareModal() {
     closeShareModal();
   };
 
+  // create_video: holds the video formats made from a set — the Instagram
+  // story today, reels or others alongside it later. Shown only when one of
+  // them renders, so the label never stands over an empty column. Only open
+  // after a tap, on the client, so reading window state here can't mismatch
+  // hydration.
+  const showCreateVideo = isStoryEntryShown();
+
   return (
     <Modal
       open
@@ -137,9 +144,16 @@ export function ShareModal() {
             >
               <BracketLabel>telegram</BracketLabel>
             </a>
-            <StoryEntry set={shareSet} rowClass={rowClass} />
           </div>
         </div>
+        {showCreateVideo && (
+          <div className="flex-shrink-0">
+            <div className={sectionLabelClass}>create_video:</div>
+            <div className="flex flex-col">
+              <StoryEntry set={shareSet} rowClass={rowClass} />
+            </div>
+          </div>
+        )}
       </div>
     </Modal>
   );

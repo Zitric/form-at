@@ -8,8 +8,8 @@ import { safeLocal } from "~/utils/safeStorage";
 // Global capture of the two PWA install lifecycle events. Rendered once in
 // __root — null render, just runs effects on mount.
 //
-// Why one listener pair globally (not per-component): both <InstallCta> (home)
-// and <SaveForOfflineButton> (/sets/:setId) need the captured
+// Why one listener pair globally (not per-component): both <InstallAppButton>
+// (home) and <SaveForOfflineButton> (/sets/:setId) need the captured
 // `beforeinstallprompt` event to call `.prompt()` on. Capturing it twice in
 // two components would mean only whichever mounted second sees it — the
 // first listener consumed-and-stored it locally. Capturing once into the

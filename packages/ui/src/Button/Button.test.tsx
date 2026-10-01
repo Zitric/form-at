@@ -4,10 +4,11 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import * as stories from "./Button.stories";
 
-const { Secondary, Fail, Primary, Disabled } = composeStories(stories);
+const { Secondary, Emphasis, Fail, Primary, Disabled } = composeStories(stories);
 
 beforeEach(() => {
   Secondary.args.onClick?.mockClear();
+  Emphasis.args.onClick?.mockClear();
   Disabled.args.onClick?.mockClear();
 });
 
@@ -15,6 +16,23 @@ describe("Button", () => {
   it("secondary variant wraps its label in gold brackets", () => {
     render(<Secondary />);
     expect(screen.getByText("[")).toHaveClass("text-gold");
+  });
+
+  it("emphasis variant has a gold label as well as gold brackets", () => {
+    render(<Emphasis />);
+    expect(screen.getByText("[")).toHaveClass("text-gold");
+    expect(screen.getByRole("button")).toHaveClass("text-gold");
+  });
+
+  it("secondary keeps a grey label, so emphasis is the only gold one", () => {
+    render(<Secondary />);
+    expect(screen.getByRole("button")).toHaveClass("text-grey");
+  });
+
+  it("emphasis fires onClick when clicked", async () => {
+    render(<Emphasis />);
+    await userEvent.setup().click(screen.getByRole("button"));
+    expect(Emphasis.args.onClick).toHaveBeenCalledTimes(1);
   });
 
   it("fail variant wraps its label in red brackets", () => {

@@ -15,8 +15,14 @@ import { cn } from "../cn";
 //   primary   — the one heavyweight CTA: pulsing gold border, glow on hover,
 //               icon-and-label content. No brackets — the border IS the
 //               container. Caller composes icon + label inside.
+//   emphasis  — secondary with a GOLD label as well as gold brackets. A
+//               deliberate exception to "grey label, gold brackets": it
+//               exists for the one bracket CTA that has to stand out from
+//               the secondary nudges around it — the home page's
+//               [ install_app ] in a browser tab. Not a second primary, and
+//               not for general use: if everything is gold, nothing is.
 //
-// Children API: callers pass label TEXT for secondary/fail (the component wraps
+// Children API: callers pass label TEXT for secondary/emphasis/fail (the component wraps
 // it in <BracketLabel>) and arbitrary children for primary (icon + label live
 // inside, since the play button needs PlayIcon/PauseIcon). Never hand-roll
 // `[ label ]` strings or bracket spans — BracketLabel.tsx owns those.
@@ -25,11 +31,12 @@ import { cn } from "../cn";
 // page-level w-full / mb-6!, etc). It's merged via twMerge so callers can
 // override variant defaults cleanly when layout needs it.
 
-type Variant = "primary" | "secondary" | "fail";
+type Variant = "primary" | "secondary" | "emphasis" | "fail";
 
 const variantClass: Record<Variant, string> = {
   // whitespace-nowrap now lives on BracketLabel itself, not here.
   secondary: "text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer",
+  emphasis: "text-sm text-gold hover:text-white transition-colors tracking-widest cursor-pointer",
   fail: "text-sm text-red-400 hover:text-red-300 transition-colors tracking-widest cursor-pointer",
   primary:
     "flex items-center justify-center gap-4 border-2 border-gold px-6 py-4 text-sm text-grey shadow-[0_0_15px_rgba(197,133,56,0.2)] hover:shadow-[0_0_25px_rgba(197,133,56,0.4)] hover:cursor-pointer transition-all group",
@@ -57,7 +64,7 @@ export function Button({
   children,
 }: Props) {
   const content =
-    variant === "secondary" ? (
+    variant === "secondary" || variant === "emphasis" ? (
       <BracketLabel tone="gold">{children}</BracketLabel>
     ) : variant === "fail" ? (
       <BracketLabel tone="red">{children}</BracketLabel>

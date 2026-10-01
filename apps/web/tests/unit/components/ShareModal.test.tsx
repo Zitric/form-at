@@ -16,6 +16,14 @@ const testSet: MusicSet = {
 
 let clipboardSpy: ReturnType<typeof vi.fn>;
 
+// The Story entry's own gating (flag, phone, capability, install gate) is
+// StoryEntry.test.tsx's job; here only whether the section shows matters.
+const { storyShown } = vi.hoisted(() => ({ storyShown: { current: false } }));
+vi.mock("~/components/story/StoryEntry", () => ({
+  isStoryEntryShown: () => storyShown.current,
+  StoryEntry: () => <button type="button">[ instagram_story ]</button>,
+}));
+
 // jsdom's localStorage in this worker setup doesn't satisfy Zustand's persist
 // middleware (setItem is missing), so wire the store to an in-memory storage
 // before each test. createJSONStorage handles the serialize/parse layer; we
@@ -138,5 +146,30 @@ describe("ShareModal", () => {
     render(<ShareModal />);
     await user.click(screen.getByRole("button", { name: /close/i }));
     expect(useStore.getState().shareSet).toBeNull();
+  });
+});
+
+describe("ShareModal create_video: section", () => {
+  afterEach(() => {
+    storyShown.current = false;
+  });
+
+  it("isn't there when no video format would render (no flag, or not a phone)", () => {
+    useStore.setState({ shareSet: testSet });
+    render(<ShareModal />);
+    expect(screen.queryByText("create_video:")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /instagram_story/ })).not.toBeInTheDocument();
+  });
+
+  it("holds [ instagram_story ], after send:, which no longer does", () => {
+    storyShown.current = true;
+    useStore.setState({ shareSet: testSet });
+    render(<ShareModal />);
+    const create = screen.getByText("create_video:");
+    const send = screen.getByText("send:");
+    expect(send.compareDocumentPosition(create) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const story = screen.getByRole("button", { name: /instagram_story/ });
+    expect(create.parentElement).toContainElement(story);
+    expect(send.parentElement).not.toContainElement(story);
   });
 });

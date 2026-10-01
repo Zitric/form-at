@@ -12,23 +12,18 @@ import { useSaveGate } from "~/hooks/useSaveGate";
 import { useStore, useStoreHydrated } from "~/store";
 import { isStandalone } from "~/utils/installCapability";
 
-// Push-notification opt-in CTA — home route, stacked directly below
-// <InstallCta> in the same passive-nudge zone (see routes/index.tsx).
+// Push-notification opt-in CTA — home route, installed app only. In a
+// browser tab the same slot is <InstallAppButton> (see routes/index.tsx):
+// subscriptions are app-only product policy, so a tab's ask is the install.
 // Tapping it opens <PushOptInModal> (the soft prompt); the native permission
 // dialog NEVER fires from this component — only from the modal's accept
-// action, and only in the standalone variant.
+// action.
 //
-// Renders in BOTH display modes, with different asks behind the tap:
-//   standalone — the real subscribe offer. Requires the Push API and an
-//     unspent ask: permission "default", OR "granted" with no live
-//     subscription (a previous subscribe failed after the grant — the modal
-//     can retry without re-prompting, so the CTA must come back).
-//   browser tab — the install nudge (subscriptions are app-only product
-//     policy; the tab variant converts notification interest into installs).
-//     Shown even where the Push API is absent (iOS Safari tabs — installing
-//     IS the fix there); hidden once permission is known-spent at this
-//     origin ("granted" means they've been through the app flow, "denied"
-//     means notifications are a dead end nobody should be nudged toward).
+// Requires the Push API and an unspent ask: permission "default", OR
+// "granted" with no live subscription (a previous subscribe failed after the
+// grant — the modal can retry without re-prompting, so the CTA must come
+// back). Hiding it in a tab changes only which button shows: an existing
+// subscription lives with the service worker and keeps receiving pushes.
 //
 // Suppression tiers: `pushOptInDismissed` (persisted — a spent native ask)
 // and `pushOptInDeclinedSession` (this session only — declined the soft
@@ -105,11 +100,8 @@ export function PushOptInCta({ className }: { className?: string }) {
 
   const suppressed = pushOptInDismissed || pushOptInDeclinedSession;
   const grantedButUnsubscribed = permission === "granted" && hasSubscription === false;
-  const standaloneOfferable = permission === "default" || grantedButUnsubscribed;
-  // In a tab, `permission === null` means the Push API is absent here (iOS
-  // Safari tab) — exactly the audience the install nudge exists for.
-  const tabOfferable = permission === null || permission === "default";
-  const showCta = !suppressed && (gate.allow === true ? standaloneOfferable : tabOfferable);
+  const offerable = permission === "default" || grantedButUnsubscribed;
+  const showCta = gate.allow === true && !suppressed && offerable;
 
   // Stable (useCallback) because the modal folds this into `applyOutcome`,
   // which its open-effect depends on — an unstable identity would re-fire
@@ -137,8 +129,8 @@ export function PushOptInCta({ className }: { className?: string }) {
   );
 }
 
-// Split from the gate above for the same reason InstallCtaButton is split from
-// InstallCta: the fade must run from this component's own mount rather than
+// Split from the gate above, as InstallAppButtonView is from InstallAppButton:
+// the fade must run from this component's own mount rather than
 // racing the gate's null render.
 //
 // A CSS keyframe class, deliberately NOT the opacity-state + transition

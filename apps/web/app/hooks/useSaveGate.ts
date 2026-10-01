@@ -1,7 +1,14 @@
 import { useCallback } from "react";
 import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore, useStoreHydrated } from "~/store";
-import { detectPlatform, isStandalone } from "~/utils/installCapability";
+import {
+  type IosThirdPartyBrowser,
+  type NoInstallHint,
+  detectPlatform,
+  iosThirdPartyBrowser,
+  isStandalone,
+  noInstallHint,
+} from "~/utils/installCapability";
 import { clearStashedInstallPrompt } from "~/utils/installPromptStash";
 
 // Decides whether the `save_for_offline` action is allowed right now, and if
@@ -35,7 +42,16 @@ export type SaveGate =
       platform: "chromium" | "ios-safari";
       canPrompt: boolean;
     }
-  | { allow: false; reason: "cannot-install" };
+  // iOS 16.4+ Chrome / Firefox / Edge: Share menu → Add to Home Screen,
+  // worded for the browser in hand.
+  | {
+      allow: false;
+      reason: "needs-install";
+      platform: "ios-other";
+      browser: IosThirdPartyBrowser;
+      canPrompt: false;
+    }
+  | { allow: false; reason: "cannot-install"; hint: NoInstallHint };
 
 export function useSaveGate(): SaveGate {
   const hydrated = useStoreHydrated();
@@ -67,18 +83,28 @@ export function useSaveGate(): SaveGate {
   if (platform === "ios-safari") {
     return { allow: false, reason: "needs-install", platform: "ios-safari", canPrompt: false };
   }
+  const ua = navigator.userAgent;
+  const iosBrowser = iosThirdPartyBrowser(ua);
+  if (platform === "ios-other" && iosBrowser) {
+    return {
+      allow: false,
+      reason: "needs-install",
+      platform: "ios-other",
+      browser: iosBrowser,
+      canPrompt: false,
+    };
+  }
 
   // Firefox (any platform), iOS Chrome / Firefox / Edge, macOS Safari, empty
   // UA — no install path the user can drive. Modal explains where to open
   // the site instead.
-  return { allow: false, reason: "cannot-install" };
+  return { allow: false, reason: "cannot-install", hint: noInstallHint(ua) };
 }
 
 export type TriggerInstallOutcome = "accepted" | "dismissed" | "no-prompt";
 
 // Fires the native install prompt + handles user choice + cleans up the
-// deferred event. Same surface as before (InstallCta on home + SaveGateModal
-// share it).
+// deferred event. InstallAppButton (home) and SaveGateModal share it.
 export function useTriggerInstallPrompt(): () => Promise<TriggerInstallOutcome> {
   const deferredPrompt = useStore((s) => s.deferredPrompt);
   const setDeferredPrompt = useStore((s) => s.setDeferredPrompt);
@@ -91,8 +117,8 @@ export function useTriggerInstallPrompt(): () => Promise<TriggerInstallOutcome> 
     const choice = await deferredPrompt.userChoice;
     if (choice.outcome === "dismissed") {
       setPwaInstallDismissed(true);
-      // Native browser dialog dismiss — shared by InstallCta's tap-to-install
-      // AND SaveGateModal's "install" button, since both call this same hook.
+      // Native browser dialog dismiss — shared by InstallAppButton's direct
+      // prompt AND SaveGateModal's "install" button, since both call this hook.
       trackEvent("install_dismissed");
     }
     // Single-use per Chrome spec — clear it either way (store AND the

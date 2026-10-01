@@ -33,9 +33,7 @@ describe("DevModeBanner", () => {
   it("?devmode=on shows the banner AND persists the flag to localStorage", () => {
     setUrl("?devmode=on");
     render(<DevModeBanner />);
-    expect(
-      screen.getByText(/dev_mode — plays and events aren't counted/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/dev_mode — plays and events aren't counted/)).toBeInTheDocument();
     expect(isDevModeActive()).toBe(true);
   });
 

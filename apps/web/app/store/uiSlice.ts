@@ -42,18 +42,15 @@ export type UiSlice = {
   /** True if the user closed the install modal without installing. Persisted:
    *  the dismissal is a soft one, by design.
    *
-   *  IMPORTANT — two consumers, two different semantics:
-   *   - <InstallCta> on the home page: a passive CTA. When this flag is true,
-   *     the button is HIDDEN entirely. The user said "not now"; we respect
-   *     it by removing the passive nudge.
-   *   - <SaveForOfflineButton> on /sets/:setId: a user-initiated action. The
-   *     button stays VISIBLE and TAPPABLE regardless of this flag. A
-   *     deliberate user tap always reopens the install modal — the flag
-   *     only suppresses any future *automatic / passive* prompting we might
-   *     add later. No dead buttons. */
+   *  Nothing hides on it today. Every install surface is user-initiated —
+   *  <SaveForOfflineButton> on /sets/:setId and <InstallAppButton> on the
+   *  home page stay VISIBLE and TAPPABLE regardless of this flag, because a
+   *  deliberate tap always reopens the install flow. The flag is the record
+   *  of a "not now" for any *automatic / passive* prompting added later.
+   *  No dead buttons. */
   pwaInstallDismissed: boolean;
-  /** Captured `beforeinstallprompt` event held in memory for InstallCta and
-   *  SaveForOfflineButton to call `.prompt()` on. **Not persisted** — the
+  /** Captured `beforeinstallprompt` event held in memory for InstallAppButton
+   *  and SaveForOfflineButton to call `.prompt()` on. **Not persisted** — the
    *  event has a native ref and methods that don't round-trip through JSON.
    *  Re-captured on each page load when Chrome decides to fire it. */
   deferredPrompt: BeforeInstallPromptEvent | null;

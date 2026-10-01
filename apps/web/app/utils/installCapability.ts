@@ -8,24 +8,27 @@
 // shape that the InstallPromptModal switches on. Keeping that composition
 // outside this file means the pure parts stay testable in isolation.
 
-export type InstallPlatform = "chromium" | "ios-safari" | "other";
+export type InstallPlatform = "chromium" | "ios-safari" | "ios-other" | "other";
 
 // Categorises the browser based on UA, narrowly enough to make a correct
 // install-flow decision. The traps worth knowing:
-//   - iOS Chrome / Firefox / Edge are NOT install-capable (Apple only allows
-//     Safari to install PWAs on iOS), so they must NOT return "ios-safari"
-//     even though they run on an iOS device. UA markers: CriOS, FxiOS, EdgiOS.
+//   - iOS Chrome / Firefox / Edge (UA markers CriOS, FxiOS, EdgiOS) can add a
+//     web app to the Home Screen from their Share menu since iOS 16.4
+//     (webkit.org/blog/13878; MDN's "Making PWAs installable"). Before 16.4
+//     only Safari could, so an older iOS third-party browser is "other" and
+//     gets "open it in Safari" rather than steps that produce no app.
 //   - "Edg/" (desktop / Android Edge) and "EdgiOS/" (iOS Edge) share the
 //     prefix "Edg" but the literal slash in the regex separates them safely.
 //   - Order matters: iOS-browser block comes FIRST so iOS Chrome can't fall
 //     through to the "chromium" branch via its embedded `Chrome/` marker.
+//   - Firefox on Android stays "other": per MDN it adds a browser-badged
+//     shortcut that opens the site in the browser, and whether that runs in
+//     standalone display-mode (which saving offline needs) is unverified.
+//     TECH_DEBT.md item 32.
 export function detectPlatform(
   ua: string = typeof navigator !== "undefined" ? navigator.userAgent : "",
 ): InstallPlatform {
-  // iOS Chrome / Firefox / Edge → no install path at all. Bail before the
-  // ios-safari check so we don't promise Share-menu instructions that wouldn't
-  // produce a PWA when followed.
-  if (/CriOS|FxiOS|EdgiOS/.test(ua)) return "other";
+  if (iosThirdPartyBrowser(ua)) return isIosAtLeast(ua, 16, 4) ? "ios-other" : "other";
 
   // Real iOS Safari (iOS device, none of the third-party browser markers
   // above). Returns ios-safari so the modal can render manual install
@@ -41,6 +44,39 @@ export function detectPlatform(
   // Firefox (any platform), macOS Safari, anything else — no install path
   // we can drive. The modal will render a graceful fallback or hide entirely.
   return "other";
+}
+
+export type IosThirdPartyBrowser = "Chrome" | "Firefox" | "Edge";
+
+/** Which third-party browser this is on iOS, or null for anything else. */
+export function iosThirdPartyBrowser(ua: string): IosThirdPartyBrowser | null {
+  if (/CriOS\//.test(ua)) return "Chrome";
+  if (/FxiOS\//.test(ua)) return "Firefox";
+  if (/EdgiOS\//.test(ua)) return "Edge";
+  return null;
+}
+
+// "CPU iPhone OS 16_4 like Mac OS X" / "CPU OS 17_5 like Mac OS X" (iPad).
+// No version in the UA reads as too old: the guidance then says "use Safari",
+// which works on every iOS version.
+function isIosAtLeast(ua: string, major: number, minor: number): boolean {
+  const m = /OS (\d+)_(\d+)/.exec(ua);
+  if (!m) return false;
+  const [maj, min] = [Number(m[1]), Number(m[2])];
+  return maj > major || (maj === major && min >= minor);
+}
+
+/**
+ * Where to send someone whose browser can't install: Firefox on Android to
+ * Chrome, an iOS browser older than 16.4 to Safari, anything else (desktop
+ * Safari / Firefox) to either.
+ */
+export type NoInstallHint = "use-chrome" | "use-safari" | "use-chrome-or-safari";
+
+export function noInstallHint(ua: string): NoInstallHint {
+  if (iosThirdPartyBrowser(ua)) return "use-safari";
+  if (/Android/.test(ua) && /Firefox\//.test(ua)) return "use-chrome";
+  return "use-chrome-or-safari";
 }
 
 // Detects whether the page is currently being rendered inside an installed

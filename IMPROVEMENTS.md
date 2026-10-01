@@ -16,7 +16,7 @@ Running list of feature/functional improvements. Tick off as we ship.
 
 - [x] **#3 — Continue listening card on home**
   We already persist `nowPlayingId` + `positions`. Surface a top card on `/` that resumes the last set in one tap when those are present.
-  Shipped, but not as a separate card: `routes/index.tsx`'s existing main CTA button relabels itself to `resume_signal` and calls `playTrack(nowPlaying)` when a paused `nowPlaying` set exists, `access_audio` otherwise — same one-tap-resume outcome, folded into the CTA rather than a distinct component.
+  Shipped, but not as a separate card: `routes/index.tsx`'s main button is a play/pause toggle for the loaded set — `resume_signal` when it's paused, `pause` while it plays — and with nothing loaded it reads `play_latest` and plays the newest set. Same one-tap-resume outcome, folded into the button rather than a distinct component.
 
 - [x] **#4 — Add to calendar on events**
   `AddToCalendarButton` builds an RFC 5545 `.ics` (TZID=Europe/London) from `event.date / runtime / venue` and triggers a download. Shown on upcoming events only. Util: `apps/web/app/utils/ics.ts`.
@@ -74,7 +74,7 @@ Running list of feature/functional improvements. Tick off as we ship.
   - Add an in-app "Install Form:at" CTA on `/` that calls `beforeinstallprompt`.
   - Lighthouse PWA audit → green.
   - **Outcome**: phone shows install prompt; tap → Form:at home-screen icon, launches in standalone mode (no URL bar, no tabs). Feels like a real audio app.
-  - _Confirmed: `public/manifest.json` has every field listed above plus `launch_handler`; `app/utils/rootHead.ts` registers the SW; `InstallCta.tsx` + `installCapability.ts`/`installPromptStash.ts` handle the `beforeinstallprompt` capture/CTA flow._
+  - _Confirmed: `public/manifest.json` has every field listed above plus `launch_handler`; `app/utils/rootHead.ts` registers the SW; `InstallAppButton.tsx` (home) + `installCapability.ts`/`installPromptStash.ts` handle the `beforeinstallprompt` capture/CTA flow._
 
   ### Phase 2 — Shared links open the PWA, not the in-app browser ✅ shipped
   - **Android**: with the PWA installed + "Open supported links" enabled (Chrome auto-prompts post-install), taps on `formatglasgow.com` links from Instagram / WhatsApp / wherever open directly inside our PWA, bypassing the in-app browser. Automatic once WebAPK criteria are met.

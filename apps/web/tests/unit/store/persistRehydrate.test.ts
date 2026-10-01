@@ -7,7 +7,7 @@ import { useStore } from "~/store";
 // the storage key doesn't exist yet — a true first visit. A merge that
 // destructures its first argument unconditionally throws, persist swallows
 // the error in its own .catch, `hasHydrated` never flips, and every surface
-// gated on `useStoreHydrated()` (InstallCta, save-for-offline buttons,
+// gated on `useStoreHydrated()` (the save gate, save-for-offline buttons,
 // OfflineReconciler) stays hidden for the entire session.
 //
 // Relies on tests/setup.ts replacing Node 25's broken `localStorage` global

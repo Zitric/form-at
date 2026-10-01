@@ -13,7 +13,7 @@ const env = {
   canRecord: true,
   standalone: false,
   online: true,
-  gate: { allow: false, reason: "cannot-install" } as SaveGate,
+  gate: { allow: false, reason: "cannot-install", hint: "use-chrome-or-safari" } as SaveGate,
 };
 const trackEvent = vi.fn();
 const openStoryFlow = vi.fn();

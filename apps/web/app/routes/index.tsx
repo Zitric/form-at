@@ -1,9 +1,9 @@
 import { BracketLabel } from "@form-at/ui";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { BookingsButton } from "~/components/BookingsButton";
 import { ConsoleWriter } from "~/components/ConsoleWriter";
-import { InstallCta } from "~/components/InstallCta";
+import { InstallAppButton } from "~/components/InstallAppButton";
 import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
 import { PushOptInCta } from "~/components/PushOptInCta";
@@ -30,7 +30,6 @@ export const Route = createFileRoute("/")({
 function Home() {
   const isFirstLoading = useTypedOnce("home");
   const isFirstLoad = useFirstLoad();
-  const navigate = useNavigate();
 
   // Opacity-transition fade-in to avoid the appear → disappear → fade flash
   // the previous keyframe-on-mount approach caused (full diagnosis in
@@ -46,16 +45,18 @@ function Home() {
   const nowPlaying = useStore((s) => s.nowPlaying);
   const isPlaying = useStore((s) => s.isPlaying);
   const playTrack = useStore((s) => s.playTrack);
+  // The catalogue is newest-upload first (live D1 rows, ORDER BY created_at
+  // DESC, over the snapshot), the same order /sets lists.
+  const latestSet = useStore((s) => s.catalogueSets[0]);
 
+  // A play/pause toggle for one set: the one loaded, or with nothing loaded
+  // the newest. playTrack on the loaded set toggles it; called synchronously
+  // from the tap, so the user gesture survives for audio.play().
+  const listenSet = nowPlaying ?? latestSet;
   const handleListenClick = () => {
-    // If track is saved and not playing: resume it (synchronously, preserves user gesture)
-    if (nowPlaying && !isPlaying) {
-      playTrack(nowPlaying);
-    } else {
-      // Otherwise navigate to sets (either no track or already playing)
-      navigate({ to: "/sets" });
-    }
+    if (listenSet) playTrack(listenSet);
   };
+  const listenLabel = !nowPlaying ? "play_latest" : isPlaying ? "pause" : "resume_signal";
 
   return (
     <PageLayout>
@@ -82,8 +83,17 @@ function Home() {
           suppressHydrationWarning
         >
           <span className="text-gold">›</span>
-          <span>{nowPlaying && !isPlaying ? "resume_signal" : "access_audio "}</span>
+          <span>{listenLabel}</span>
         </button>
+
+        {/* Prototype, pending a decision: delete this Link to drop it. */}
+        <Link
+          to="/sets"
+          className="self-center mt-3 text-xs text-grey/60 hover:text-white transition-colors tracking-widest"
+          style={{ opacity: visible ? 1 : 0, transition: `opacity ${fadeDuration} ease-out` }}
+        >
+          → all_sets
+        </Link>
 
         <div
           className="flex items-center justify-center gap-10 my-8"
@@ -103,15 +113,13 @@ function Home() {
           <BookingsButton className="text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer" />
         </div>
 
-        {/* Passive capability-opt-in nudge zone — install CTA renders only
-            when Chromium fires beforeinstallprompt (post-engagement +
-            manifest + SW); push CTA renders only when the Push API is
-            present and permission is still unasked. Stacked together below
-            the socials so they don't compete with the primary CTA but stay
-            discoverable. Either, both, or neither may render depending on
-            platform + prior dismissals. */}
+        {/* One slot, two display modes: a browser tab gets [ install_app ]
+            (InstallAppButton; nothing on a desktop browser that can't
+            install), the installed app gets notify_me (PushOptInCta) while
+            the Push API is there and the ask is unspent. Below the socials
+            so neither competes with the play button. */}
         <div className="flex flex-col items-center gap-3 -mt-4 mb-8">
-          <InstallCta />
+          <InstallAppButton />
           <PushOptInCta />
         </div>
       </div>

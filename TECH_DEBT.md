@@ -7,7 +7,7 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
-- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a cleared 2026-08-18 except the dropped-connection case, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project), 30 (Instagram Story device test — Android fully verified: the full 15s story shares directly, publishes whole, A/V sync and framing intact after Instagram's re-encode; iOS waits on the same device access as 12/23b), 31 (a re-upload at the same R2 URL never reaches a saved offline copy; versioned upload paths recommended)
+- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a cleared 2026-08-18 except the dropped-connection case, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project), 30 (Instagram Story device test — Android fully verified: the full 15s story shares directly, publishes whole, A/V sync and framing intact after Instagram's re-encode; iOS waits on the same device access as 12/23b), 31 (a re-upload at the same R2 URL never reaches a saved offline copy; versioned upload paths recommended), 32 (Firefox on Android treated as non-installable until a device shows its home-screen shortcut runs standalone)
 - **Deferred, recorded rather than done:** 24 (DJ/event data model still static while sets are in D1), 25 (no-cross-app-imports unenforced), 26 (`PWA_PROGRESS.md` too large to be readable)
 - **Invalid:** 1 (2026-07-22 — premise was wrong, not stale: both flagged functions are load-bearing behind a live multi-provider calendar picker; do not delete, see item for the full re-verification)
 - **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, real trigger is ~10-15 sets in the catalogue, not a calendar date; see item for why that arrives faster now)
@@ -1467,6 +1467,38 @@ already exist, and it fixes the CDN and HTTP-cache staleness as well. Option
 2 keeps the URL fixed and has to detect the change on each device. Devices
 that saved an overwritten set before the fix stay stale until that set is
 uploaded once more under a versioned path.
+
+---
+
+## 32. [VERIFICATION DEBT] Can Firefox on Android install the app?
+
+**Status: open, not blocking.** Firefox on Android is classified as unable to
+install. `detectPlatform` returns `"other"` for it
+(`apps/web/app/utils/installCapability.ts`), and the install guidance sends it
+to Chrome (`noInstallHint` → `"use-chrome"`: "this browser can't install it —
+open formatglasgow.com in Chrome and install from there").
+
+**Why that's not settled.** MDN's "Making PWAs installable" (last modified
+7 Sep 2026) says only Chrome (with Google Mobile Services) and Samsung
+Internet install real WebAPKs, and that Firefox "add[s] a browser-badged
+home-screen shortcut that opens the site in the browser". Mozilla's own
+2017 announcement of the feature (Firefox 58) said a web app added that way
+"will be shown in the configured view mode", i.e. standalone. The two don't
+agree, and only a device can say which holds today.
+
+**Why it matters.** Saving sets offline, notifications and Story videos all
+gate on standalone display-mode (`isStandalone()`). A shortcut that opens in
+an ordinary Firefox tab would install something that still can't save a set,
+which is worse than "use Chrome".
+
+**To settle it (about 5 minutes on an Android phone with Firefox):** open
+formatglasgow.com, use Firefox's menu → "Add app to Home screen" (or
+"Install"), launch it from the home screen, and check whether the address bar
+is gone and `save_for_offline` works. If it does, give Firefox Android its own
+`needs-install` platform with menu steps instead of the Chrome hint.
+
+Sources: [MDN — Making PWAs installable](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable),
+[Mozilla Hacks — Firefox for Android, 2017](https://hacks.mozilla.org/2017/10/progressive-web-apps-firefox-android/).
 
 ---
 

@@ -59,7 +59,7 @@ export const useStore = create<AppStore>()(
         // not exist yet — i.e. on every true first visit. Without this guard
         // the destructure below throws, persist swallows the TypeError in its
         // internal .catch, `hasHydrated` never flips, and every surface gated
-        // on useStoreHydrated() (InstallCta, save-for-offline buttons,
+        // on useStoreHydrated() (the save gate, save-for-offline buttons,
         // OfflineReconciler) stays hidden for the whole session.
         if (!persisted) return current;
         const {
@@ -128,7 +128,7 @@ export const useStore = create<AppStore>()(
 
 // Returns `true` once Zustand's persist middleware has finished rehydrating
 // from localStorage, `false` before that. Use for components that gate
-// rendering on persisted state (e.g. <InstallCta> checking pwaInstallDismissed)
+// rendering on persisted state (e.g. useSaveGate reading pwaInstalled)
 // so they don't flash the wrong UI for one frame between mount and the
 // `HydrateStore` effect firing `persist.rehydrate()`.
 //
