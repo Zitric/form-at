@@ -20,7 +20,7 @@ import {
 } from "~/components/story/StoryCreateScreens";
 import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";
-import { getAudioCurrentTime } from "~/store/playerSlice";
+import { cachedPeaksFor, getAudioCurrentTime, knownDurationFor } from "~/store/playerSlice";
 import { withAppContext } from "~/utils/audioUrl";
 import { isDevModeActive } from "~/utils/devMode";
 import { fmtTimestamp, parseDuration } from "~/utils/fmt";
@@ -171,8 +171,8 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
   const setIsPlaying = useStore((s) => s.setIsPlaying);
   const setToast = useStore((s) => s.setToast);
   const trackEvent = useTrackEvent();
-  const knownDuration = useStore((s) => s.durations[set.id]);
-  const cachedPeaks = useStore((s) => s.peaksCache[set.id]);
+  const knownDuration = useStore((s) => knownDurationFor(s.durations, set));
+  const cachedPeaks = useStore((s) => cachedPeaksFor(s.peaksCache, set));
   const setPeaks = useStore((s) => s.setPeaks);
 
   // The player's measured duration when it has one; otherwise the catalogue's.
@@ -254,10 +254,11 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
   // The full-set strip reuses the player's peaks; fetch them if the player
   // never has, the same way PlayerSeeker does.
   useEffect(() => {
-    if ((cachedPeaks && cachedPeaks.length > 0) || !set.peaks) return;
-    fetch(withAppContext(set.peaks))
+    const peaksUrl = set.peaks;
+    if ((cachedPeaks && cachedPeaks.length > 0) || !peaksUrl) return;
+    fetch(withAppContext(peaksUrl))
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((d) => setPeaks(set.id, (d as { peaks: number[] }).peaks))
+      .then((d) => setPeaks(set.id, peaksUrl, (d as { peaks: number[] }).peaks))
       .catch(() => {
         // The strip stays empty; the zoomed strip and nudges still work.
       });

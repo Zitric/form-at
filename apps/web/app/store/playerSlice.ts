@@ -81,14 +81,62 @@ function blockedPlaybackReason(): PlaybackBlockedReason {
   return isStandalone() ? "not-saved-offline" : "tab-offline-needs-network";
 }
 
+/** A set's peaks and its measured duration, each stamped with the URL they
+ *  came from: the `peaks` URL and the `src` URL. A re-upload gives the set new
+ *  URLs (versioned R2 paths), so a stamp that no longer matches reads as
+ *  unknown and the new file's peaks are fetched, its duration measured,
+ *  instead of the old file's being reused. Keyed by set id: one entry per
+ *  set, and a stale one is overwritten in place, so nothing piles up.
+ *  TECH_DEBT.md item 31. */
+export type StampedPeaks = { url: string; peaks: number[] };
+export type StampedDuration = { src: string; seconds: number };
+
+export function cachedPeaksFor(
+  cache: Record<string, StampedPeaks>,
+  set: Pick<MusicSet, "id" | "peaks">,
+): number[] | undefined {
+  const entry = cache[set.id];
+  return entry && set.peaks && entry.url === set.peaks ? entry.peaks : undefined;
+}
+
+export function knownDurationFor(
+  durations: Record<string, StampedDuration>,
+  set: Pick<MusicSet, "id" | "src">,
+): number | undefined {
+  const entry = durations[set.id];
+  return entry && entry.src === set.src ? entry.seconds : undefined;
+}
+
+/** For the persisted store: keeps stamped entries only. Entries saved before
+ *  stamping (a bare array of peaks, a bare number of seconds) carry no URL
+ *  to check, so they count as missing and get fetched / measured again. */
+export function stampedPeaksOnly(raw: unknown): Record<string, StampedPeaks> {
+  return keepValid(raw, (v): v is StampedPeaks => {
+    const e = v as Partial<StampedPeaks> | null;
+    return !!e && typeof e.url === "string" && Array.isArray(e.peaks);
+  });
+}
+
+export function stampedDurationsOnly(raw: unknown): Record<string, StampedDuration> {
+  return keepValid(raw, (v): v is StampedDuration => {
+    const e = v as Partial<StampedDuration> | null;
+    return !!e && typeof e.src === "string" && typeof e.seconds === "number";
+  });
+}
+
+function keepValid<T>(raw: unknown, isValid: (v: unknown) => v is T): Record<string, T> {
+  if (!raw || typeof raw !== "object") return {};
+  return Object.fromEntries(Object.entries(raw).filter(([, v]) => isValid(v))) as Record<string, T>;
+}
+
 export type PlayerSlice = {
   nowPlaying: MusicSet | null;
   isPlaying: boolean;
   hasError: boolean;
   playbackBlockedReason: PlaybackBlockedReason;
   positions: Record<string, number>;
-  peaksCache: Record<string, number[]>;
-  durations: Record<string, number>;
+  peaksCache: Record<string, StampedPeaks>;
+  durations: Record<string, StampedDuration>;
   loadTrack: (set: MusicSet) => void;
   playTrack: (set: MusicSet, opts?: { startTime?: number }) => void;
   togglePlay: () => void;
@@ -96,8 +144,8 @@ export type PlayerSlice = {
   setIsPlaying: (playing: boolean) => void;
   setHasError: (hasError: boolean) => void;
   setLastPosition: (setId: string, seconds: number) => void;
-  setPeaks: (setId: string, peaks: number[]) => void;
-  setTrackDuration: (setId: string, seconds: number) => void;
+  setPeaks: (setId: string, url: string, peaks: number[]) => void;
+  setTrackDuration: (setId: string, src: string, seconds: number) => void;
 };
 
 export const createPlayerSlice: StateCreator<PlayerSlice & OfflineSlice, [], [], PlayerSlice> = (
@@ -250,7 +298,8 @@ export const createPlayerSlice: StateCreator<PlayerSlice & OfflineSlice, [], [],
   setHasError: (hasError) => set({ hasError }),
   setLastPosition: (setId, seconds) =>
     set((s) => ({ positions: { ...s.positions, [setId]: seconds } })),
-  setPeaks: (setId, peaks) => set((s) => ({ peaksCache: { ...s.peaksCache, [setId]: peaks } })),
-  setTrackDuration: (setId, seconds) =>
-    set((s) => ({ durations: { ...s.durations, [setId]: seconds } })),
+  setPeaks: (setId, url, peaks) =>
+    set((s) => ({ peaksCache: { ...s.peaksCache, [setId]: { url, peaks } } })),
+  setTrackDuration: (setId, src, seconds) =>
+    set((s) => ({ durations: { ...s.durations, [setId]: { src, seconds } } })),
 });

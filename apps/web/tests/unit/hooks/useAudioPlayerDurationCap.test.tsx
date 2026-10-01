@@ -45,7 +45,7 @@ describe("useAudioPlayer sendPlay — duration cap", () => {
   it("caps a segment at the track's known duration when wall-clock elapsed exceeds it (the exact bug: a stall/background gap counted as listening)", async () => {
     const track = sets[0];
     if (!track) throw new Error("catalogue empty");
-    useStore.setState({ durations: { [track.id]: 90 } }); // a 90s track
+    useStore.setState({ durations: { [track.id]: { src: track.src, seconds: 90 } } }); // a 90s track
     const beaconSpy = vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
     const { result } = renderHook(() => {
       const ref = useRef<HTMLAudioElement | null>(audio);
@@ -66,7 +66,7 @@ describe("useAudioPlayer sendPlay — duration cap", () => {
   it("does not cap a segment that's genuinely shorter than the track's duration", async () => {
     const track = sets[0];
     if (!track) throw new Error("catalogue empty");
-    useStore.setState({ durations: { [track.id]: 5400 } }); // a 90-min track
+    useStore.setState({ durations: { [track.id]: { src: track.src, seconds: 5400 } } }); // a 90-min track
     const beaconSpy = vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
     const { result } = renderHook(() => {
       const ref = useRef<HTMLAudioElement | null>(audio);

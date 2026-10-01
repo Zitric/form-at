@@ -2,6 +2,7 @@ import type { MusicSet } from "@form-at/data/sets";
 import { memo, useEffect, useState } from "react";
 import { Waveform } from "~/components/player/Waveform";
 import { useStore } from "~/store";
+import { cachedPeaksFor, knownDurationFor } from "~/store/playerSlice";
 import { withAppContext } from "~/utils/audioUrl";
 import { fmtTimestamp } from "~/utils/fmt";
 
@@ -20,8 +21,12 @@ export const PlayerSeeker = memo(function PlayerSeeker({
   seek: (time: number) => void;
   disabled: boolean;
 }) {
-  const cachedPeaks = useStore((s) => (nowPlaying ? s.peaksCache[nowPlaying.id] : undefined));
-  const cachedDuration = useStore((s) => (nowPlaying ? s.durations[nowPlaying.id] : undefined));
+  const cachedPeaks = useStore((s) =>
+    nowPlaying ? cachedPeaksFor(s.peaksCache, nowPlaying) : undefined,
+  );
+  const cachedDuration = useStore((s) =>
+    nowPlaying ? knownDurationFor(s.durations, nowPlaying) : undefined,
+  );
   const savedPosition = useStore((s) => (nowPlaying ? s.positions[nowPlaying.id] : undefined));
   const setCachedPeaks = useStore((s) => s.setPeaks);
   const setTrackDuration = useStore((s) => s.setTrackDuration);
@@ -64,8 +69,8 @@ export const PlayerSeeker = memo(function PlayerSeeker({
     const onDuration = () => {
       const d = Number.isFinite(audio.duration) ? audio.duration : 0;
       setAudioDuration(d);
-      const id = useStore.getState().nowPlaying?.id;
-      if (id && d > 0) setTrackDuration(id, d);
+      const playing = useStore.getState().nowPlaying;
+      if (playing && d > 0) setTrackDuration(playing.id, playing.src, d);
     };
     const onEnded = () => setAudioCurrentTime(0);
     audio.addEventListener("timeupdate", onTime);
@@ -97,7 +102,7 @@ export const PlayerSeeker = memo(function PlayerSeeker({
         return r.json();
       })
       .then((d) => {
-        setCachedPeaks(trackId, (d as { peaks: number[] }).peaks);
+        setCachedPeaks(trackId, peaksUrl, (d as { peaks: number[] }).peaks);
         setPeaksFetchState("ready");
       })
       .catch((err) => {
