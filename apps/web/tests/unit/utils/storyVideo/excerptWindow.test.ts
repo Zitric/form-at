@@ -1,7 +1,9 @@
+import type { FinePeaks } from "@form-at/data/finePeaks";
 import { describe, expect, it } from "vitest";
 import {
   ZOOM_VISIBLE_SECONDS,
   clampStart,
+  finePeaksStrip,
   initialStart,
   nudge,
   sliceCovers,
@@ -9,6 +11,7 @@ import {
   slicePeaks,
   startFromDrag,
   startFromStripTap,
+  stripMax,
 } from "~/utils/storyVideo/excerptWindow";
 import { EXCERPT_SECONDS } from "~/utils/storyVideo/layout";
 
@@ -151,5 +154,68 @@ describe("slicePeaks", () => {
     expect(peaks).toHaveLength(20);
     expect(peaks[0]).toBe(0.5);
     expect(peaks[19]).toBe(0.25);
+  });
+});
+
+describe("finePeaksStrip", () => {
+  // Value i is i (exact in a Float32Array), so every index read is checkable.
+  const fine: FinePeaks = {
+    valuesPerSecond: 10,
+    scale: 1,
+    values: Float32Array.from({ length: 85_000 }, (_, i) => i),
+  };
+
+  it("covers the span a decoded slice would, at the same resolution", () => {
+    const strip = finePeaksStrip(fine, 1000, SET);
+    expect(strip.span).toEqual(sliceFor(1000, SET));
+    expect(strip.peaks).toHaveLength(Math.floor((strip.span.end - strip.span.start) * 10));
+  });
+
+  it("reads the value for each 0.1s, never the one before it", () => {
+    // Near the end of a set whose measured length is fractional, the span
+    // is clamped to start at 8361.3s, where (8361.3 + i / 10) * 10 in
+    // floating point falls just under an integer for 360 of the 900 values.
+    for (const [start, setSeconds] of [
+      [1000, SET],
+      [8400, 8451.3],
+    ] as const) {
+      const strip = finePeaksStrip(fine, start, setSeconds);
+      const first = Math.round(strip.span.start * 10);
+      strip.peaks.forEach((p, i) => {
+        expect(p).toBe(first + i);
+      });
+    }
+  });
+
+  it("scales to the loudest value in its span, as the decoded strip does", () => {
+    const strip = finePeaksStrip(fine, 1000, SET);
+    expect(strip.max).toBe(stripMax(strip.peaks));
+    expect(strip.max).toBe(strip.peaks[strip.peaks.length - 1]);
+  });
+
+  it("reads past the end of a short file as silence", () => {
+    const short: FinePeaks = { ...fine, values: fine.values.subarray(0, 100) };
+    const strip = finePeaksStrip(short, 0, SET);
+    expect(strip.peaks[99]).toBe(99);
+    expect(strip.peaks[100]).toBe(0);
+  });
+
+  it("resamples a file at another resolution", () => {
+    const coarse: FinePeaks = {
+      valuesPerSecond: 5,
+      scale: 1,
+      values: Float32Array.from({ length: SET * 5 }, (_, i) => i),
+    };
+    const strip = finePeaksStrip(coarse, 1000, SET);
+    const first = Math.round(strip.span.start * 10);
+    expect(strip.peaks[0]).toBe(Math.floor(first / 2));
+    expect(strip.peaks[1]).toBe(Math.floor((first + 1) / 2));
+  });
+});
+
+describe("stripMax", () => {
+  it("floors at 0.001, so a silent span never divides by zero", () => {
+    expect(stripMax(new Float32Array(10))).toBe(0.001);
+    expect(stripMax(Float32Array.of(0.2, 0.7, 0.1))).toBeCloseTo(0.7, 6);
   });
 });
