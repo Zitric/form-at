@@ -20,6 +20,8 @@
     "sitemap": "tsx scripts/generate-sitemap.ts",
     "send-push": "tsx scripts/send-push.ts",
     "master-set": "tsx scripts/master-set.ts",
+    "peaks": "tsx scripts/generate-peaks.ts",
+    "backfill-fine-peaks": "tsx scripts/backfill-fine-peaks.ts",
     "screenshots": "vite build && tsx scripts/capture-screenshots.ts",
     "stats": "node scripts/stats.mjs",
     "deploy": "pnpm build && pnpm exec wrangler pages deploy dist/client --project-name=form-at-web --commit-dirty=true"

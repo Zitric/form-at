@@ -44,6 +44,11 @@ apps/*/public/images/uploads/
 # Per-route OG banners — regenerated on every build by scripts/generate-og.ts
 apps/*/public/og/
 
+# Fine-peaks backfill output — scripts/backfill-fine-peaks.ts writes the files
+# here and prints the R2 commands that upload them, so they have to outlive
+# the run until those commands are pasted. They belong in R2, not git.
+apps/web/fine-peaks-backfill/
+
 # Sitemap — regenerated on every build by scripts/generate-sitemap.ts
 apps/*/public/sitemap.xml
 

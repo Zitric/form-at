@@ -3,7 +3,7 @@
   "workspaces": {
     ".": {
       "entry": ["turbo.json", "scripts/*.{ts,mjs,js}"],
-      "ignoreBinaries": ["vite", "playwright", "ffmpeg", "generate-sets-snapshot"]
+      "ignoreBinaries": ["vite", "playwright", "generate-sets-snapshot"]
     },
     "apps/web": {
       "entry": [
@@ -18,7 +18,8 @@
       "paths": {
         "~/*": ["app/*"]
       },
-      "ignoreDependencies": ["tailwindcss", "@form-at/tsconfig"]
+      "ignoreDependencies": ["tailwindcss", "@form-at/tsconfig"],
+      "ignoreBinaries": ["ffmpeg"]
     },
     "apps/admin": {
       "entry": [
