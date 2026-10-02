@@ -1290,7 +1290,9 @@ story is correct.
 
 **Layout approved (2026-09-30).** The spike's header comment is the design
 reference; since PR 1 the feature draws from `apps/web/app/utils/storyVideo/layout.ts`,
-kept in step with it until the spike is deleted. The
+kept in step with it until the spike is deleted. (Since then `layout.ts` has
+moved on — DJ photo card, artwork background, equal-width rows — and is the
+reference; the spike records the first version.) The
 published-story test is being done with a **Mac-recorded** file. So Android
 Chrome's own MediaRecorder output (codec, fragmentation, frame pacing) stays
 unverified until the feature runs on a phone.

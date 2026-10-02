@@ -3894,6 +3894,51 @@ and prints the R2 puts and D1 UPDATEs, each into a new version folder, since
 versioned folders are immutable. All 10 sets: 26.6–82.6KB each, 2.8–7.1s
 each (both files) streaming from the CDN.
 
+## Story video: DJ photo card and artwork background (2026-10)
+
+The frame's card is now the DJ's photo, over the set's artwork as a faint
+full-frame background; a set with no DJ or no photo keeps the artwork in the
+card (`utils/storyVideo/storyImages.ts`). The photos are same-origin
+(`/images/djs/<id>-1080.webp`), so they can't taint the canvas; the real
+macOS recording test draws one. Geometry and constants: `layout.ts`.
+
+**No blur.** The spike's `?blur_bg` (48px blur, 28%) was the starting point.
+Rejected in review: the artwork should read as its shape, not a smudge. It's
+drawn sharp, at its own aspect ratio, and kept subtle by opacity alone.
+12/18/25% read as too faint; 40% is the setting (`BACKGROUND.alpha`), from a
+30/40/50% comparison. Over Seafield's bright pink artwork the purple unplayed
+bars and grey timeline lose some contrast; a dark band behind those rows was
+tried and dropped, since the waveform moves and stays readable.
+
+**The colon is hidden by mirroring the background.** The Form:at colon is not
+at the artwork's centre: it sits 60–75% down (measured on 002 and 003;
+Seafield has none). Drawn as the spike did, it showed as two gold blocks
+either side of the waveform; centring the background on the card only moved
+them under it (both measured as leaked pixels outside the card). Placing the
+background so the colon's centre sits on the card's hides it at any size
+where the colon fits behind the card (≤3733px tall), but the frame needs
+≥3957px to stay covered from there: upright, 2100px leaves the bottom 598px
+bare and 3500px still 147px. Mirrored, the colon sits 25–40% down, and at
+2100px the artwork covers the frame with the colon at y 488–803, inside the
+card's 366–926: zero leaked pixels on both artworks. No artwork has text;
+the 003 rings and Seafield look the same mirrored, and 002's patterned dome
+becomes a bowl. `layout.test.ts` holds both constraints.
+
+**Cropped, never stretched.** The card used to stretch the 4:5 artwork into
+its square (the colon came out as wide rectangles). Photo and artwork are now
+cropped to the square: the photo's crop sits 35% down, where the roster's
+faces are.
+
+**Equal widths.** The full-set timeline was 900px wide, the excerpt's bars
+632px between their times. Compared: the timeline narrowed to the bars; the
+bars widened to the timeline with the times under them; and the timeline
+narrowed with 0:00 and the set's length beside it. The last was chosen, with
+both rows sharing one time column and the timeline spread over exactly the
+bars' ink, so the two rows start and end on the same pixel (measured: 250
+and 829). The pill shows just the position ("30:00"): the set's length is
+beside the timeline. A purple → gold duotone of the photo was also tried and
+dropped: the card shows the photo as shot.
+
 ## Reference — key design decisions from the PWA work
 
 ### App-gated capability pattern (2026-07-17)
