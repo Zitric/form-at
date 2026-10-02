@@ -1218,8 +1218,16 @@ delivery channel for the same two signals that already missed it.
 
 ## 30. [VERIFICATION DEBT] Instagram Story video — device results, iOS still untested
 
-**Status: open, not blocking.** The proposed feature (share a visitor-chosen 15s
-passage as a Story video, made in the browser) waits on real-device answers.
+**Status: Android launched (2026-10-02), iOS still flagged.** Android phones
+get the entry without `?story=on`; iOS and everything else stay behind the
+flag until the iOS items below are verified. One constant switches Android
+back behind the flag: `STORY_LAUNCHED_ON_ANDROID` in
+`apps/web/app/utils/storyAvailability.ts`, which also decides who sees the
+entry (PWA_PROGRESS.md → *"Story video: launched on Android"*).
+
+**Original status: open, not blocking.** The proposed feature (share a
+visitor-chosen 15s passage as a Story video, made in the browser) waits on
+real-device answers.
 `spikes/instagram-story/index.html` is the standalone test page for that: it
 lists the MediaRecorder types the device accepts, records canvas + a decoded
 set excerpt, reports the container actually produced (top-level MP4 boxes,

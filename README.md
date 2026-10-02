@@ -219,7 +219,7 @@ All four mutating endpoints do this: set upload, presign, restore, send-push. Th
 
 *Constraint: no server-side video, a 100–220MB source, and Instagram's importer as the judge of the file.*
 
-In the installed app on a phone, `[ instagram_story ]` in the share sheet opens a picker: drag across the set's waveform to choose 15 seconds, preview them, and the app records a 1080×1920 video (the DJ's photo over the set's artwork, the DJ's name, the excerpt's waveform, a live spectrum) and hands it to the Web Share sheet. It's behind `?story=on` (`apps/web/app/utils/storyFlag.ts`) while it's being tested on devices. A browser tab gets the install gate instead, and a browser that can't record H.264 + AAC MP4 (Firefox) gets a muted line rather than a button that fails.
+In the installed app on a phone, `[ instagram_story ]` in the share sheet opens a picker: drag across the set's waveform to choose 15 seconds, preview them, and the app records a 1080×1920 video (the DJ's photo over the set's artwork, the DJ's name, the excerpt's waveform, a live spectrum) and hands it to the Web Share sheet. It's live on Android phones; iOS and everything else stay behind `?story=on` (`apps/web/app/utils/storyFlag.ts`) until it's tested on an iPhone, and one constant puts Android back behind it (`STORY_LAUNCHED_ON_ANDROID`, `apps/web/app/utils/storyAvailability.ts`). A browser tab gets the install gate instead. Instagram's in-app browser and Firefox can't install the app, so their gate sends the visitor to Chrome; a phone whose browser can't record H.264 + AAC MP4 gets no entry at all rather than one that fails.
 
 The pipeline, all in the browser, in `apps/web/app/utils/storyVideo/`:
 

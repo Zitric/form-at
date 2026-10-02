@@ -13,6 +13,7 @@ import {
   fetchPlayStats,
   fetchPushSubscriberStats,
   fetchPushSubscriptionsTrackingStart,
+  fetchStoryFunnel,
   pickStatsForMissingDb,
 } from "~/data/admin-stats";
 import { SAMPLE_ADMIN_DASHBOARD_STATS } from "~/data/sample-stats";
@@ -539,5 +540,141 @@ describe("fetchEventsTrackingStart / fetchPushSubscriptionsTrackingStart", () =>
     it("treats a missing flag the same as false — defaults to the sample fixture", () => {
       expect(pickStatsForMissingDb(undefined)).toBe(SAMPLE_ADMIN_DASHBOARD_STATS);
     });
+  });
+});
+
+describe("fetchStoryFunnel", () => {
+  // Three queries on `events`, told apart by their leading columns: totals
+  // select `event_type, COUNT(*) as n`, the trend groups `day, event_type`,
+  // the per-set one selects `set_id, event_type`.
+  const totalsRoute = (all: Record<string, unknown>[]): FakeRoute => ({
+    match: /SELECT event_type, COUNT\(\*\) as n/,
+    all,
+  });
+  const trendRoute = (all: Record<string, unknown>[] = []): FakeRoute => ({
+    match: /GROUP BY day, event_type/,
+    all,
+  });
+  const perSetRoute = (all: Record<string, unknown>[] = []): FakeRoute => ({
+    match: /SELECT set_id, event_type/,
+    all,
+  });
+
+  it("counts each stage and divides each by the stage it follows", async () => {
+    const { db } = createFakeD1([
+      totalsRoute([
+        { event_type: "share_click", n: 40 },
+        { event_type: "story_create_tap", n: 10 },
+        { event_type: "story_install_gate_shown", n: 4 },
+        { event_type: "story_video_created", n: 5 },
+        { event_type: "story_video_shared", n: 4 },
+      ]),
+      trendRoute(),
+      perSetRoute(),
+    ]);
+
+    const result = await fetchStoryFunnel(db);
+
+    expect(result).toMatchObject({
+      shareClicks: 40,
+      createTaps: 10,
+      installGateShown: 4,
+      created: 5,
+      shared: 4,
+      tapRate: 0.25,
+      gateRate: 0.4,
+      createdRate: 0.5,
+      sharedRate: 0.8,
+    });
+  });
+
+  // "no data" and "0%" are different facts: a rate over an empty base is null.
+  it("returns every rate null when its base is 0", async () => {
+    const { db } = createFakeD1([totalsRoute([]), trendRoute(), perSetRoute()]);
+
+    const result = await fetchStoryFunnel(db);
+
+    expect(result).toMatchObject({
+      shareClicks: 0,
+      createTaps: 0,
+      tapRate: null,
+      gateRate: null,
+      createdRate: null,
+      sharedRate: null,
+      perSet: [],
+    });
+  });
+
+  // Story rows from before story_create_tap existed: created with no taps
+  // leaves createdRate null rather than dividing by zero.
+  it("leaves createdRate null for videos made before taps were recorded", async () => {
+    const { db } = createFakeD1([
+      totalsRoute([
+        { event_type: "story_video_created", n: 3 },
+        { event_type: "story_video_shared", n: 1 },
+      ]),
+      trendRoute(),
+      perSetRoute(),
+    ]);
+
+    const result = await fetchStoryFunnel(db);
+
+    expect(result.createdRate).toBeNull();
+    expect(result.sharedRate).toBeCloseTo(1 / 3);
+  });
+
+  it("buckets each event type's trend into the 60-day weekly window", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const { db, queries } = createFakeD1([
+      totalsRoute([]),
+      trendRoute([
+        { day: today, event_type: "story_create_tap", count: 3 },
+        { day: today, event_type: "story_video_shared", count: 1 },
+      ]),
+      perSetRoute(),
+    ]);
+
+    const result = await fetchStoryFunnel(db);
+
+    const buckets = Math.ceil(TREND_WINDOW_DAYS / TREND_BUCKET_DAYS);
+    expect(result.createTapsTrend).toHaveLength(buckets);
+    expect(result.createTapsTrend.at(-1)).toBe(3);
+    expect(result.sharedTrend.at(-1)).toBe(1);
+    expect(result.createdTrend.every((n) => n === 0)).toBe(true);
+    const trendSql = queries.find((q) => /GROUP BY day, event_type/.test(q)) ?? "";
+    for (const type of [
+      "share_click",
+      "story_create_tap",
+      "story_install_gate_shown",
+      "story_video_created",
+      "story_video_shared",
+    ]) {
+      expect(trendSql).toContain(`'${type}'`);
+    }
+  });
+
+  it("breaks created/shared down per set, titled from the catalogue, most made first", async () => {
+    const { db } = createFakeD1([
+      totalsRoute([]),
+      trendRoute(),
+      perSetRoute([
+        { set_id: "set-002-til", event_type: "story_video_created", n: 1 },
+        { set_id: "set-003-unreal", event_type: "story_video_created", n: 4 },
+        { set_id: "set-003-unreal", event_type: "story_video_shared", n: 2 },
+      ]),
+    ]);
+
+    const result = await fetchStoryFunnel(db);
+
+    expect(result.perSet).toEqual([
+      {
+        setId: "set-003-unreal",
+        setTitle: "Form:at 003",
+        setArtist: "Unreal",
+        created: 4,
+        shared: 2,
+      },
+      { setId: "set-002-til", setTitle: "Form:at 002", setArtist: "t.i.l.", created: 1, shared: 0 },
+    ]);
   });
 });

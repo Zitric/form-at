@@ -39,6 +39,11 @@ export const TRACKABLE_EVENT_TYPES = [
   // context of one event per page load — adding an id column is a separate,
   // not-yet-needed schema decision.
   "calendar_add_click",
+  // A tap on [ instagram_story ] in the share modal's create_video: section,
+  // with the set's id: the top of the Story funnel, before the install gate
+  // (a tab) or the picker (the installed app). Not sent for a tap ignored
+  // while the gate is still pending.
+  "story_create_tap",
   // Instagram Story video, both with the set's id.
   // `story_video_created` is a finished recording, a File in hand.
   // `story_video_shared` means `navigator.share` resolved, i.e. the visitor
