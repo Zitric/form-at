@@ -7,7 +7,9 @@ looks out of date — that file is the source of truth, this doc explains it).
 | Command | Script | What it does |
 |---|---|---|
 | `pnpm send-push -- --title "..." --body "..."` | `send-push.ts` | Sends a push notification to every subscribed device. **Real production mechanism** — see [Notifications](#notifications-sending--configuring) below. |
-| `pnpm master-set analyse <folder-or-file...>` / `pnpm master-set process <...>` | `master-set.ts` | Local mastering pipeline for a freshly-recorded set, run **before** it reaches the admin upload form — declip, loudness-match to the catalogue, true-peak-safe MP3, peaks.json. See [Mastering a new set](#mastering-a-new-set-before-upload) below. |
+| `pnpm master-set analyse <folder-or-file...>` / `pnpm master-set process <...>` | `master-set.ts` | Local mastering pipeline for a freshly-recorded set, run **before** it reaches the admin upload form — declip, loudness-match to the catalogue, true-peak-safe MP3, both peaks files. See [Mastering a new set](#mastering-a-new-set-before-upload) below. |
+| `pnpm peaks <file.mp3...>` | `generate-peaks.ts` | Writes the two peaks files the admin upload form asks for, next to each MP3: `<name>.json` (1000 values for the player's waveform) and `<name>.peaks-fine.bin` (one value per 0.1s for the Story picker's zoomed strip; format in `packages/data/src/finePeaks.ts`). One ffmpeg decode split two ways: the coarse file from 8kHz, as it always was, so it matches the published ones; the fine file at 48000 Hz, the sets' own rate and the usual phone decode rate, so it matches the picker's own decode. Needs `ffmpeg` on PATH. `master-set process` runs it for you. |
+| `pnpm backfill-fine-peaks [--out dir] [--only id,id]` | `backfill-fine-peaks.ts` | Generates `peaks-fine.bin` for every set in the committed snapshot that has none, streaming each MP3 from the CDN, and **prints** the commands to publish them — an R2 upload per file into a new version folder, a check that one is served, a D1 `UPDATE` per set (only fills an empty `fine_peaks`), then the snapshot regeneration. It runs none of them: they're Cloudflare writes, the repo owner's to run. Regenerate the snapshot first if D1 has changed. Needs `ffmpeg`. |
 | `pnpm optimize-images` | `optimize-images.ts` | Converts originals in `images-source/` into responsive AVIF + WebP variants in `public/images/`, and generates the same for every uploaded set's artwork (fetched from R2) into `public/images/uploads/`. Runs automatically as part of `pnpm build`. See `images-source/README.md`. |
 | `pnpm og` | `generate-og.ts` | Generates social share banners (1200×630) — one global default plus one per DJ/set/event. Runs automatically as part of `pnpm build`. |
 | `pnpm sitemap` | `generate-sitemap.ts` | Writes `public/sitemap.xml` from every static + dynamic route (DJs, sets, events). Runs automatically as part of `pnpm build`. |
@@ -150,8 +152,9 @@ understood — start from the least-processed source you have).
 pnpm master-set analyse "/path/to/event folder"
 
 # Runs the real chain: normalize format -> declip -> two-pass loudness match
-# -> 320kbps MP3 -> generate-peaks.mjs on the result automatically. Writes
-# <name>.mastered.mp3 and <name>.mastered.json next to each source WAV —
+# -> 320kbps MP3 -> generate-peaks.ts on the result automatically. Writes
+# <name>.mastered.mp3, <name>.mastered.json and <name>.mastered.peaks-fine.bin
+# next to each source WAV —
 # never <name>.mp3, so it can never silently overwrite an already-published
 # file that happens to share that basename (confirmed by actually running it
 # against a copy with a fake "published" file present — verified untouched

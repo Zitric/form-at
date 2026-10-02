@@ -3822,6 +3822,78 @@ be a re-upload at the same URL after the set was saved: the saved copy was
 the old master (TECH_DEBT 31). What was ruled out on the way, and the devmode
 diagnostics, are in TECH_DEBT 30.
 
+## Fine-resolution peaks for the Story picker (2026-10)
+
+How it works: README → *"Waveform peaks are computed with ffmpeg, not in the
+browser"*. The picker's zoomed strip draws from a per-set `peaks-fine.bin`
+(one value per 0.1s) instead of decoding a ~90s slice, so dragging downloads
+nothing; the slice is decoded once the drag stops, for preview and recording.
+Measured with the real code paths on the real catalogue.
+
+**Coarse stays at 8kHz; the fine file is 48000 Hz.** The first version
+decoded once at 22050 Hz and derived both files from it. The coarse values
+then differed from the published `peaks.json` files by a median 2% (set-002-til)
+and 6% (set-003-unreal) per bucket, up to 37% of the waveform's height as
+drawn: higher rates keep transients 8kHz filters out. Fed the 8kHz stream,
+the same reducer reproduced the live files (999/1000 and 1000/1000 values
+identical), so the bucketing was right and only the rate differed. Now one
+ffmpeg decode is split into a 48000 Hz and an 8kHz stream (`asplit`), one
+reducer each. An earlier mistake on the way: averaging L and R for the mono
+mix put every coarse value ~29% low; ffmpeg's `-ac 1` weights each channel by
+√½.
+
+**48000 Hz fine, not 22050 or 44100.** The fine file was first generated at
+22050 Hz. Against the picker's own measure (`slicePeaks` on the decoded slice, five
+windows per set, 4500 values, stored file incl. quantisation), in pixels of
+the 64.8px bar:
+
+| fine file | slice decoded at 44100 | slice decoded at 48000 |
+|---|---|---|
+| 22050 Hz | 1.6 / 1.8px mean, max 17 / 18px | 1.8px mean, max 15 / 14px |
+| 44100 Hz | 0.19 / 0.12px mean | 0.63 / 0.52px mean, max 14 / 6px |
+| 48000 Hz | 0.70 / 0.54px mean | 0.18 / 0.14px mean |
+
+(set-002-til / set-003-unreal where they differ.) Lower rates soften
+transients in the resample, so 22050 Hz was dropped: same file size, and
+generation is decode-bound, so the rate doesn't change its time. A fine
+file matches exactly only where it and the slice are decoded at the same
+rate: `decodeAudioData` resamples to the `AudioContext`'s rate, which
+depends on the device. 44100 Hz was tried next, after a comparison that
+had decoded the slice at 44100 too, which hid that the MP3s are 48000 Hz.
+48000 Hz was chosen: it's the files' own rate, so the fine file involves
+no resampling, and it's the usual `AudioContext` rate on phones, the only
+place the Story runs. That rate wasn't measured on the operator's devices;
+on a device running at 44100 the strip is off by ~0.5–0.7px on average. The
+~14px maxima on set-002-til show up in every pairing, so they're the slice
+decode's own edge, not the file.
+
+**Square-root companding over linear bytes.** Synthetic quiet passage
+(values 1–10% of the set's loudest): worst error per value 4.0% vs 17.7%
+linear, 56 levels vs 24, and as drawn (scaled to the view's loudest) 2.1% vs
+3.8% of the bar's height at worst, 0.6% vs 1.3% mean. Above a quarter of the
+loudest the two are on par. On the real catalogue no 90s view is quieter
+than a quarter of its set's loudest (checked every 30s across set-002-til
+and set-003-unreal), and both encodings stay under a pixel as drawn: sqrt
+0.16 / 0.13px mean, linear 0.13 / 0.09px. Sqrt is for the quiet intro or
+outro the catalogue doesn't have yet. `finePeaks.test.ts` locks the
+synthetic numbers.
+
+**Not saved offline.** The `.bin` is fetched with the bare URL, and the SW's
+audio route only matches `.mp3` and `.json`, so it never enters the offline
+library and a browser tab can't read that library through it. Offline, the
+strip decodes the saved copy as before.
+
+**Required at upload, decoded server-side.** The form reads the file's
+header and compares its length with the audio's (1s tolerance), so a file
+generated from another MP3 is refused before upload. Create then fetches and
+decodes the object that landed on R2 (at most ~85KB), because the endpoint
+can't trust the browser's check; a HEAD only proves the object exists.
+
+**Backfill prints, never runs.** `backfill-fine-peaks.ts` writes the files
+and prints the R2 puts and D1 UPDATEs, each into a new version folder, since
+versioned folders are immutable. All 10 sets: 26.6–82.6KB each, 2.8–7.1s
+each (both files) streaming from the CDN.
+
 ## Reference — key design decisions from the PWA work
 
 ### App-gated capability pattern (2026-07-17)

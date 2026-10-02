@@ -73,7 +73,7 @@ redirect so it doesn't advertise the real hostname. It is not redundant with
 Access; deleting it makes the dashboard public.
 
 ### Never apply `schema.sql` with `--file` against a database that already exists
-It holds **5 `ALTER TABLE`s that are not idempotent** — re-running them fails
+It holds **9 `ALTER TABLE`s that are not idempotent** — re-running them fails
 with a duplicate-column error. `ADD COLUMN IF NOT EXISTS` is not an option: D1
 rejects it (`near "EXISTS": syntax error … SQLITE_ERROR`), unlike vanilla SQLite
 ≥3.35. `schema.sql` is the reference definition and what a *fresh* database needs
@@ -112,7 +112,7 @@ doesn't implement that guard, so **no unit test can catch this**; it only appear
 in a real browser.
 
 ### Never overwrite an object under `sets/{id}/{version}/` in R2
-Every upload writes to its own version folder (`apps/admin/app/utils/r2Sets.ts`),
+Every upload writes to its own version folder (`packages/data/src/r2Keys.ts`),
 and the CDN caches those paths for a year (README → *"CDN rules for
 cdn.formatglasgow.com"*). Overwrite one and the old bytes keep being served
 from the edge and browsers for a year, and a saved offline copy never notices,
@@ -143,7 +143,7 @@ real `server.ts` response.
 never fires, and every upload reports a valid mp3 as unreadable.
 
 `connect-src 'self' https://*.r2.cloudflarestorage.com` — once the file passes
-the check above, `UploadSetForm`'s three PUTs (`uploadWithProgress.ts`'s XHR)
+the check above, `UploadSetForm`'s four PUTs (`uploadWithProgress.ts`'s XHR)
 go straight from the browser to R2 against a presigned URL from
 `sets-presign.ts` (see `r2Sets.ts`). Without the R2 host, every PUT is
 silently blocked and the form shows "check your connection", which has
@@ -451,8 +451,8 @@ things you need *at the moment of editing* that no section heading can give you.
 | Offline audio | `apps/web/app/data/offline-audio.ts`, `store/offlineSlice.ts`, the audio route in `app/sw.ts` | README → *"220MB of audio has to survive with no signal"* (IDB over Cache Storage, quota pre-flight, Range) |
 | Web/app divide | `apps/web/app/utils/appContext.ts` — the `?ctx=app` marker | README → *"Browser tabs never read the offline library"*. A product invariant, not an accident: don't make tabs read IDB. |
 | Catalogue | `packages/data/src/sets.ts` (+ `sets.generated.ts`, `apps/web/app/data/sets.ts` for the app's fallback wrapping) | README → *"The catalogue is in a database, but the app is offline-first"* (live-wins `mergeSets`, committed snapshot) |
-| Set upload | `apps/admin/app/routes/api/sets-presign.ts`, `utils/uploadWithProgress.ts`; R2 keys and upload versions in `utils/r2Sets.ts` | README → *"A 220MB upload can't go through a Worker"* and *"CDN rules for cdn.formatglasgow.com"* (versioned keys, the immutable cache rule) |
-| Waveform peaks | `scripts/generate-peaks.mjs` (root, needs `ffmpeg` on PATH) | README → *"Waveform peaks are computed with ffmpeg, not in the browser"* |
+| Set upload | `apps/admin/app/routes/api/sets-presign.ts`, `utils/uploadWithProgress.ts`; R2 keys in `utils/r2Sets.ts`, built from `packages/data/src/r2Keys.ts` (upload versions, `versionedSetKey`). Four files per upload; the fine-peaks file is decoded server-side on create, not just HEADed | README → *"A 220MB upload can't go through a Worker"* and *"CDN rules for cdn.formatglasgow.com"* (versioned keys, the immutable cache rule) |
+| Waveform peaks | `apps/web/scripts/generate-peaks.ts` (`pnpm -C apps/web peaks`, needs `ffmpeg` on PATH) writes both files: `peaks.json` (player) and `peaks-fine.bin` (Story picker; format in `packages/data/src/finePeaks.ts`). Existing sets: `backfill-fine-peaks` | README → *"Waveform peaks are computed with ffmpeg, not in the browser"*. Keep the coarse file at 8kHz (higher, it no longer matches the published ones) and the fine one at 48000 Hz, the sets' own rate and the usual phone `AudioContext` rate (any other rate resamples and drifts from the picker's own decode). The backfill only prints its R2/D1 commands (§2: Cloudflare writes are the owner's). |
 | Push sending | `packages/data/src/webPush.ts` | README → *"The standard Web Push library doesn't run on Workers"* |
 | Admin + auth | `apps/admin/app/routes/`, `utils/verifyAccessJwt.ts` | README → *"Admin auth: no auth code, then auth code anyway"*. The enforcement rule is §1. |
 | RUM archive | `apps/rum-archiver/src/index.ts`, query + upsert in `packages/data/src/rumArchive.ts` | Cloudflare degrades beacon data after 7 days, so a cron captures it first. Pages cannot run cron — hence a standalone Worker. Never remove the upsert's `sample_interval` guard: it stops a late run overwriting exact rows. |
@@ -464,7 +464,7 @@ things you need *at the moment of editing* that no section heading can give you.
 | Analytics | `apps/web/app/routes/api/signal.ts`, `hooks/useTrackEvent.ts` | `navigator.sendBeacon` on pause, track change and tab close; plays under 3s ignored. Lands in D1 `plays`. |
 | Web Analytics beacon | `apps/web/app/utils/rootHead.ts`, tag in `packages/data/src/webAnalytics.ts` | **We inject it ourselves** — Cloudflare's automatic edge injection worked, then silently stopped. That file's header has the evidence and why manual is also the more precise option. Its host must stay allowlisted in the CSP in BOTH `apps/web/app/server.ts` and `public/_headers`. |
 | Server entry | `apps/web/app/server.ts`, `apps/admin/app/server.ts` | Forwards `env.DB` as `context.cloudflare.env`. See §1 — deleting either breaks all D1 access. |
-| Instagram Story video | Entry and gate: `apps/web/app/components/story/StoryEntry.tsx`, `StoryInstallGate.tsx`. Flow: `StoryFlowHost.tsx` (lazy), `StoryVideoFlow.tsx` (picker + create), `StoryCreateScreens.tsx`. Logic: `app/utils/storyVideo/` — `mp3Excerpt` (byte-range excerpt, CBR only), `excerptWindow` (picker arithmetic), `renderer`/`spectrum`/`layout` (the frame), `recorder`, `remux` (rewrites MediaRecorder's fragmented MP4 as a non-fragmented one with mediabunny, in its own lazy chunk; a fragmented file made Instagram keep only its first seconds), `createFlow` (phases + events), `capability` | Behind `?story=on` (`utils/storyFlag.ts`), phones only, installed app only. Design reference and device results: TECH_DEBT.md item 30 and `spikes/instagram-story/` (its header is the approved layout). Keep it out of the main bundle (§1's lazy rule). Never touches the player's `<audio>`: the excerpt is decoded separately, which is also why it works without `HTMLMediaElement.captureStream()`. The recorder test needs real encoders, hence ci.yml's macOS job. The picker and remux chunks are excluded from the SW precache by filename in `vite.config.ts`'s `shouldPrecache`: renaming either module silently precaches it again. Deferred follow-ups: IMPROVEMENTS.md #13. |
+| Instagram Story video | Entry and gate: `apps/web/app/components/story/StoryEntry.tsx`, `StoryInstallGate.tsx`. Flow: `StoryFlowHost.tsx` (lazy), `StoryVideoFlow.tsx` (picker + create), `StoryCreateScreens.tsx`. Logic: `app/utils/storyVideo/` — `mp3Excerpt` (byte-range excerpt, CBR only), `excerptWindow` (picker arithmetic, incl. `finePeaksStrip`: the zoomed strip draws from the set's `peaks-fine.bin` when it has one and from the decoded slice otherwise; fetched bare and never saved offline), `renderer`/`spectrum`/`layout` (the frame), `recorder`, `remux` (rewrites MediaRecorder's fragmented MP4 as a non-fragmented one with mediabunny, in its own lazy chunk; a fragmented file made Instagram keep only its first seconds), `createFlow` (phases + events), `capability` | Behind `?story=on` (`utils/storyFlag.ts`), phones only, installed app only. Design reference and device results: TECH_DEBT.md item 30 and `spikes/instagram-story/` (its header is the approved layout). Keep it out of the main bundle (§1's lazy rule). Never touches the player's `<audio>`: the excerpt is decoded separately, which is also why it works without `HTMLMediaElement.captureStream()`. The recorder test needs real encoders, hence ci.yml's macOS job. The picker and remux chunks are excluded from the SW precache by filename in `vite.config.ts`'s `shouldPrecache`: renaming either module silently precaches it again. Deferred follow-ups: IMPROVEMENTS.md #13. |
 
 ### Store slice map — `apps/web/app/store/`
 

@@ -282,7 +282,7 @@ CREATE TABLE IF NOT EXISTS admin_push_sends (
 -- original, used as the always-available fallback until a build generates
 -- optimized variants for it — see the upload feature's design notes).
 -- `peaks_status` defaults to 'ready' since the upload flow (Option 1: admin
--- runs the existing scripts/generate-peaks.mjs locally and uploads the
+-- runs apps/web/scripts/generate-peaks.ts locally and uploads the
 -- result) never leaves a set in a pending state — the column exists now so
 -- a possible future automated-peaks-generation phase doesn't need a second
 -- migration.
@@ -497,6 +497,27 @@ ALTER TABLE admin_deleted_sets ADD COLUMN restored_at INTEGER;
 -- npx wrangler d1 execute form-at-analytics --remote --command "PRAGMA table_info(admin_deleted_sets)"
 ALTER TABLE admin_deleted_sets ADD COLUMN dj_id TEXT;
 ALTER TABLE admin_deleted_sets ADD COLUMN event_id TEXT;
+
+-- fine_peaks — the URL of a set's `peaks-fine.bin` (one value per 0.1s, for
+-- the Story picker's zoomed strip; packages/data/src/finePeaks.ts), on both
+-- tables so a delete-then-restore round trip keeps it, like dj_id/event_id
+-- above. Nullable for good: every upload writes it, but a set without one
+-- still plays and the picker falls back to decoding the slice. Sets from
+-- before it get theirs from apps/web/scripts/backfill-fine-peaks.ts, which
+-- prints the R2 uploads and UPDATEs to run rather than running them.
+-- `sets` is created further up, `admin_deleted_sets` just above, so on a
+-- fresh database both columns land here, after both CREATEs.
+--
+-- Applied to production as of 2026-10-02. Same non-idempotent limitation as
+-- every ALTER in this file — do not re-run.
+--
+-- npx wrangler d1 execute form-at-analytics --remote --command "ALTER TABLE sets ADD COLUMN fine_peaks TEXT"
+-- npx wrangler d1 execute form-at-analytics --remote --command "ALTER TABLE admin_deleted_sets ADD COLUMN fine_peaks TEXT"
+-- Verify:
+-- npx wrangler d1 execute form-at-analytics --remote --command "PRAGMA table_info(sets)"
+-- npx wrangler d1 execute form-at-analytics --remote --command "PRAGMA table_info(admin_deleted_sets)"
+ALTER TABLE sets ADD COLUMN fine_peaks TEXT;
+ALTER TABLE admin_deleted_sets ADD COLUMN fine_peaks TEXT;
 
 -- No secondary index — this table only ever serves "most recent N deletions"
 -- (the admin sets page's recently-deleted list) or a full scan when actually
