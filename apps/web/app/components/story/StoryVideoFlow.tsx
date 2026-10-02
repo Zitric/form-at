@@ -51,6 +51,7 @@ import {
 import { EXCERPT_SECONDS } from "~/utils/storyVideo/layout";
 import { Mp3ExcerptError, fetchExcerpt } from "~/utils/storyVideo/mp3Excerpt";
 import { type StoryAssets, loadStoryAssets } from "~/utils/storyVideo/renderer";
+import { artworkUrls, djPhotoUrl } from "~/utils/storyVideo/storyImages";
 
 // The Instagram Story flow. First the excerpt picker: a fixed-length window sits
 // in the middle of a zoomed strip and the waveform slides under it; a
@@ -135,15 +136,6 @@ function drawZoomStrip(
     g.fillStyle = !decoded ? "rgba(203, 203, 203, 0.2)" : inWindow ? colors.gold : colors.purple;
     g.fillRect(i * step, (ZOOM_STRIP_HEIGHT - h) / 2, 3, h);
   }
-}
-
-// The artwork the story frame draws: the optimised 1080 webp Image.tsx serves
-// (`/images/${src}-${w}.webp`), then the uploaded original.
-function artworkUrls(set: MusicSet): string[] {
-  return [
-    set.artwork ? `/images/${set.artwork}-1080.webp` : null,
-    set.artworkOriginalUrl ?? null,
-  ].filter((u): u is string => u !== null);
 }
 
 // For the devmode line under a failed slice. An HTTP failure's status is in
@@ -381,12 +373,12 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
     [trackEvent, set.id],
   );
 
-  // Fonts and artwork load while the visitor picks, so [ create_story ]
-  // starts at once.
+  // Fonts, artwork and the DJ's photo load while the visitor picks, so
+  // [ create_story ] starts at once.
   const [assets, setAssets] = useState<StoryAssets | null>(null);
   useEffect(() => {
     let live = true;
-    void loadStoryAssets(artworkUrls(set)).then((loaded) => {
+    void loadStoryAssets(artworkUrls(set), djPhotoUrl(set)).then((loaded) => {
       if (live) setAssets(loaded);
     });
     return () => {
@@ -616,6 +608,7 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
           excerpt: windowExcerpt,
           setPeaks: cachedPeaks ?? [],
           artwork: assets.artwork,
+          photo: assets.photo,
         }}
         fileName={storyFileName(set.id, start)}
         progress={flow.progress}
