@@ -8,16 +8,20 @@
  *   pnpm stats --raw        # also dump the raw JSON for each section
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 const DB = "form-at-analytics";
 const RAW = process.argv.includes("--raw");
 
 function query(sql) {
-  // Collapse whitespace so the SQL is safe to pass on the command line.
+  // The SQL goes to wrangler as one argument, with no shell in between, so
+  // nothing in it needs escaping. Never rebuild this as a command string:
+  // quoting SQL for a shell by hand is how quotes, backslashes and `$` break
+  // out. Whitespace is collapsed only to keep wrangler's echo readable.
   const oneLine = sql.replace(/\s+/g, " ").trim();
-  const out = execSync(
-    `npx wrangler d1 execute ${DB} --remote --json --command "${oneLine.replace(/"/g, '\\"')}"`,
+  const out = execFileSync(
+    "pnpm",
+    ["exec", "wrangler", "d1", "execute", DB, "--remote", "--json", "--command", oneLine],
     { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
   );
   const start = out.indexOf("[");

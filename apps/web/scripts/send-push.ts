@@ -101,8 +101,9 @@ function escapeSqlString(value: string): string {
 // sending to zero subscribers or crashing on an obscure `undefined.map`.
 function runD1Command<T>(command: string): T[] {
   const output = execFileSync(
-    "npx",
+    "pnpm",
     [
+      "exec",
       "wrangler",
       "d1",
       "execute",

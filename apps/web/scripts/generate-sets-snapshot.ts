@@ -50,8 +50,9 @@ function queryD1(): SetRow[] {
   let stdout: string;
   try {
     stdout = execFileSync(
-      "npx",
+      "pnpm",
       [
+        "exec",
         "wrangler",
         "d1",
         "execute",
@@ -121,7 +122,7 @@ export const sets: MusicSet[] = ${JSON.stringify(sets, null, 2)};
   // file remembering to run `pnpm check` afterward. Self-format on every
   // run instead, so the committed output is always correct regardless of
   // how it was produced.
-  execFileSync("npx", ["biome", "check", "--write", OUT_PATH], { stdio: "inherit" });
+  execFileSync("pnpm", ["exec", "biome", "check", "--write", OUT_PATH], { stdio: "inherit" });
 
   console.log(`✓ ${OUT_PATH} (${sets.length} sets)`);
 }
