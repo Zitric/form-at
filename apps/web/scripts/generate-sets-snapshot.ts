@@ -42,6 +42,7 @@ type SetRow = {
   artwork: string | null;
   artwork_original_url: string | null;
   peaks: string | null;
+  fine_peaks: string | null;
   size_bytes: number | null;
   created_at: number;
 };
