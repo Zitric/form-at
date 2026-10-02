@@ -63,6 +63,24 @@ describe("useTrackEvent", () => {
     expect(beaconSpy).toHaveBeenCalledTimes(1);
   });
 
+  // The operator's own story tests mustn't inflate the Story funnel.
+  it("sends story_create_tap with its set, and not in dev mode", async () => {
+    const beaconSpy = vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
+    const { result } = renderHook(() => useTrackEvent());
+
+    setDevMode(true);
+    result.current("story_create_tap", "set-003-unreal");
+    expect(beaconSpy).not.toHaveBeenCalled();
+
+    setDevMode(false);
+    result.current("story_create_tap", "set-003-unreal");
+    const [, blob] = beaconSpy.mock.calls[0] as [string, Blob];
+    expect(JSON.parse(await blob.text())).toMatchObject({
+      event_type: "story_create_tap",
+      set_id: "set-003-unreal",
+    });
+  });
+
   it("reads is_standalone fresh at call time (not cached across calls)", async () => {
     const beaconSpy = vi.spyOn(navigator, "sendBeacon").mockReturnValue(true);
     const { result } = renderHook(() => useTrackEvent());

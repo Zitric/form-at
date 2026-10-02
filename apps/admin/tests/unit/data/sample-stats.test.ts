@@ -28,6 +28,20 @@ describe("SAMPLE_ADMIN_DASHBOARD_STATS", () => {
     expect(max).toBeGreaterThan(Math.max(...others) * 3);
   });
 
+  // Both count share_click, so the two cards must agree.
+  it("gives storyFunnel the same share_click count as clicks", () => {
+    expect(SAMPLE_ADMIN_DASHBOARD_STATS.storyFunnel.shareClicks).toBe(
+      SAMPLE_ADMIN_DASHBOARD_STATS.clicks.shareClicks,
+    );
+  });
+
+  // The shape a launch gives: weeks of zeros, then a start.
+  it("has story taps only at the end of the window (storyFunnel.createTapsTrend)", () => {
+    const trend = SAMPLE_ADMIN_DASHBOARD_STATS.storyFunnel.createTapsTrend;
+    expect(trend.slice(0, -2).every((n) => n === 0)).toBe(true);
+    expect(trend.at(-1)).toBeGreaterThan(0);
+  });
+
   it("installToPushConversion.ratio realistically exceeds 100% (no shared key between the two aggregates)", () => {
     expect(SAMPLE_ADMIN_DASHBOARD_STATS.installToPushConversion.ratio).toBeGreaterThan(1);
   });

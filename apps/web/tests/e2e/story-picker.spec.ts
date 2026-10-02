@@ -4,9 +4,10 @@ import { type Page, type Route, devices, expect, test } from "@playwright/test";
 import { movieDurationSeconds, topLevelBoxes } from "../../app/utils/storyVideo/mp4Boxes";
 import { gotoAndHydrate } from "./_helpers";
 
-// The Instagram Story entry and excerpt picker, behind `?story=on`, on a
-// phone. Runs in the `chromium` project with Pixel 7 emulation rather than in
-// `mobile-chrome`, because CI only runs the chromium and webkit projects.
+// The Instagram Story entry and excerpt picker on a phone: launched on
+// Android, behind `?story=on` everywhere else. Runs in the `chromium` project
+// with Pixel 7 emulation rather than in `mobile-chrome`, because CI only runs
+// the chromium and webkit projects.
 //
 // Two things are emulated, and only these: MediaRecorder claiming H.264 + AAC
 // MP4 (CI's Linux Chromium has neither encoder, and the picker records
@@ -133,22 +134,36 @@ async function openShare(page: Page, url: string) {
 
 const pickerLabel = (page: Page) => page.locator("div.text-gold.tabular-nums");
 
-test.describe("instagram story entry (mobile, ?story=on)", () => {
+test.describe("instagram story entry (Android phone)", () => {
   // Playwright needs the fixtures argument destructured; `page` is the one
   // every test here uses anyway.
   test.beforeEach(async ({ page: _page }, testInfo) => {
     test.skip(testInfo.project.name !== "chromium", "phone emulation runs in the chromium project");
   });
 
-  test("isn't there without the flag", async ({ page }) => {
+  // Launched on Android (STORY_LAUNCHED_ON_ANDROID): no flag needed.
+  test("is there without the flag", async ({ page }) => {
     await stubNetworkAndCodecs(page);
     await openShare(page, SET_PATH);
+    await expect(page.getByRole("button", { name: /instagram_story/ })).toBeVisible();
+  });
+
+  // A phone that can't record H.264 + AAC MP4 gets no entry, rather than
+  // one that fails at the end. Without the codec stub, isTypeSupported
+  // answers for real, so it's forced to no here.
+  test("isn't there where MP4 can't be recorded", async ({ page }) => {
+    await stubNetworkAndCodecs(page);
+    await page.addInitScript(() => {
+      if ("MediaRecorder" in window) MediaRecorder.isTypeSupported = () => false;
+    });
+    await openShare(page, SET_PATH);
     await expect(page.getByRole("button", { name: /instagram_story/ })).toHaveCount(0);
+    await expect(page.getByText("create_video:")).toHaveCount(0);
   });
 
   test("in a browser tab, opens the install gate", async ({ page }) => {
     await stubNetworkAndCodecs(page);
-    await openShare(page, `${SET_PATH}?story=on`);
+    await openShare(page, SET_PATH);
     await page.getByRole("button", { name: /instagram_story/ }).click();
     const gate = page.getByRole("dialog", { name: "Form:at — make an Instagram story" });
     await expect(gate).toBeVisible();
@@ -453,6 +468,41 @@ test("creates a story in the installed app and hands a non-fragmented MP4 to the
     "story_video_created",
     "story_video_shared",
   ]);
+});
+
+// Instagram's in-app browser on Android can't install the app or share a
+// file, so the gate sends the visitor out to Chrome through its menu.
+test("in Instagram's Android browser, the gate says to open it in Chrome", async ({
+  browser,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "chromium project only");
+  const { defaultBrowserType: _ignored, ...pixel } = devices["Pixel 7"];
+  const context = await browser.newContext({
+    ...pixel,
+    userAgent:
+      "Mozilla/5.0 (Linux; Android 14; SM-S916U Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/119.0.6045.66 Mobile Safari/537.36 Instagram 309.0.0.40.113 Android (34/14; 510dpi; 1080x2113; samsung; SM-S916U; dm2q; qcom; en_US; 536988425)",
+  });
+  const page = await context.newPage();
+  await stubNetworkAndCodecs(page);
+  await openShare(page, SET_PATH);
+  await page.getByRole("button", { name: /instagram_story/ }).click();
+  const gate = page.getByRole("dialog", { name: "Form:at — make an Instagram story" });
+  await expect(gate).toContainText("open in Chrome");
+  await context.close();
+});
+
+// iOS is untested (TECH_DEBT.md item 30), so an iPhone still needs the flag.
+test("an iPhone needs the flag", async ({ browser }, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "chromium project only");
+  const { defaultBrowserType: _ignored, ...iphone } = devices["iPhone 14"];
+  const context = await browser.newContext(iphone);
+  const page = await context.newPage();
+  await stubNetworkAndCodecs(page);
+  await openShare(page, SET_PATH);
+  await expect(page.getByRole("button", { name: /instagram_story/ })).toHaveCount(0);
+  await openShare(page, `${SET_PATH}?story=on`);
+  await expect(page.getByRole("button", { name: /instagram_story/ })).toBeVisible();
+  await context.close();
 });
 
 test("desktop never shows the entry, even with the flag", async ({ browser }, testInfo) => {

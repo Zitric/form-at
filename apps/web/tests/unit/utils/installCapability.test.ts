@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   detectPlatform,
   iosThirdPartyBrowser,
+  isAndroidWebView,
   isStandalone,
   noInstallHint,
 } from "~/utils/installCapability";
@@ -48,6 +49,16 @@ const UA = {
     "Mozilla/5.0 (iPhone; CPU iPhone OS 16_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/112.0.5615.46 Mobile/15E148 Safari/604.1",
   iosEdgePad:
     "Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 EdgiOS/120.0.0.0 Mobile/15E148 Safari/604.1",
+
+  // Android WebViews: an app's built-in browser carries `Chrome/` but can't
+  // install. Instagram's real UA, as logged by useragents.io; Facebook's
+  // carries FBAV; a bare WebView only `; wv)`.
+  instagramAndroid:
+    "Mozilla/5.0 (Linux; Android 14; SM-S916U Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/119.0.6045.66 Mobile Safari/537.36 Instagram 309.0.0.40.113 Android (34/14; 510dpi; 1080x2113; samsung; SM-S916U; dm2q; qcom; en_US; 536988425)",
+  facebookAndroid:
+    "Mozilla/5.0 (Linux; Android 13; Pixel 7 Build/TQ3A.230805.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/116.0.5845.163 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/430.0.0.23.113;]",
+  androidWebView:
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/AP1A.240305.019; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/122.0.6261.105 Mobile Safari/537.36",
 
   // No install path
   androidFirefox: "Mozilla/5.0 (Android 14; Mobile; rv:120.0) Gecko/120.0 Firefox/120.0",
@@ -137,6 +148,27 @@ describe("iosThirdPartyBrowser", () => {
     expect(iosThirdPartyBrowser(UA.iosSafariPhone)).toBeNull();
     expect(iosThirdPartyBrowser(UA.desktopEdge)).toBeNull();
     expect(iosThirdPartyBrowser(UA.androidChrome)).toBeNull();
+  });
+});
+
+describe("Android WebViews", () => {
+  it("can't install, though their UA carries Chrome/", () => {
+    expect(detectPlatform(UA.instagramAndroid)).toBe("other");
+    expect(detectPlatform(UA.facebookAndroid)).toBe("other");
+    expect(detectPlatform(UA.androidWebView)).toBe("other");
+  });
+
+  it("are sent out through their own menu to Chrome", () => {
+    expect(noInstallHint(UA.instagramAndroid)).toBe("open-in-chrome");
+    expect(noInstallHint(UA.facebookAndroid)).toBe("open-in-chrome");
+    expect(noInstallHint(UA.androidWebView)).toBe("open-in-chrome");
+  });
+
+  it("leaves Chrome and Samsung Internet on Android installable", () => {
+    expect(detectPlatform(UA.androidChrome)).toBe("chromium");
+    expect(detectPlatform(UA.samsungInternet)).toBe("chromium");
+    expect(isAndroidWebView(UA.androidChrome)).toBe(false);
+    expect(isAndroidWebView(UA.samsungInternet)).toBe(false);
   });
 });
 
