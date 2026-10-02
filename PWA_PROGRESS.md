@@ -3894,6 +3894,53 @@ and prints the R2 puts and D1 UPDATEs, each into a new version folder, since
 versioned folders are immutable. All 10 sets: 26.6–82.6KB each, 2.8–7.1s
 each (both files) streaming from the CDN.
 
+## Story video: launched on Android (2026-10)
+
+Android phones get `[ instagram_story ]` without `?story=on`; iOS and
+everything else keep the flag (TECH_DEBT.md item 30), which still works as a
+testing override. Who sees the entry, and what a tap does, is one pure
+function, `storyEntryState` (`apps/web/app/utils/storyAvailability.ts`), so
+the whole environment matrix is unit-tested. Rollback is one constant there,
+`STORY_LAUNCHED_ON_ANDROID`.
+
+**Per environment, with the evidence:**
+- **Chrome tab** → the install gate, as before. Chrome Android installs
+  WebAPKs and records H.264 + AAC MP4 (MP4 MediaRecorder shipped in
+  Chrome 126, blink-dev "Intent to ship: MP4 container support for
+  MediaRecorder").
+- **Installed app** → the picker; offline, the "needs a connection" line.
+- **Instagram's and Facebook's in-app browsers** (Android WebViews: `; wv)`
+  and `Instagram` / `FBAV` in the UA) → the gate, now saying to open the page
+  in Chrome from the app's menu. A WebView can neither install the app (MDN's
+  "Making PWAs installable": only Chrome and Samsung Internet install on
+  Android) nor share a file (MDN compat data: `navigator.share`, files
+  included, unsupported in WebView Android). Before this, `detectPlatform`
+  read their `Chrome/` as Chrome and the gate gave Chrome's menu steps,
+  which don't exist there; `save_for_offline`'s gate had the same fault and
+  is fixed by the same change (`isAndroidWebView`, `installCapability.ts`).
+  Hiding the entry was rejected: Instagram is where most visitors arrive.
+- **Firefox Android** → the gate, sending it to Chrome. Firefox can't install
+  (TECH_DEBT.md item 32) and records no MP4 at all (Bugzilla 1631143), so its
+  own capability says nothing about the device's Chrome; the entry stays.
+- **Samsung Internet** → the gate when it records MP4, no entry when it
+  doesn't. It installs WebAPKs of itself, so the app records with this same
+  engine; whether its Chromium base has the MP4 recorder varies by version,
+  so it's decided at runtime by `canRecordStory()`, not by UA.
+- **No MP4 recording** (a Chrome tab, Samsung Internet, or the installed app)
+  → no entry and no `create_video:` section, instead of the old muted "not
+  available in this browser" line. Only a tab that can install is judged by
+  its own engine; one that can't is sent to Chrome regardless.
+
+**Funnel event.** `story_create_tap` is sent on every tap of the entry (with
+the set's id) before the gate or the picker; not for a tap ignored while the
+gate is still pending. The admin Growth tab's `story_funnel` card reads
+share_click → story_create_tap → story_install_gate_shown (tabs) →
+story_video_created → story_video_shared. Story rows from before the launch
+are the operator's own tests.
+
+**Not verified on a device yet:** the launched Android build, and the
+in-app-browser gate inside Instagram itself.
+
 ## Story video: DJ photo card and artwork background (2026-10)
 
 The frame's card is now the DJ's photo, over the set's artwork as a faint
