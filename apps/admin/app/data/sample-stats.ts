@@ -214,6 +214,41 @@ export const SAMPLE_ADMIN_DASHBOARD_STATS: AdminDashboardStats = {
     declined: 18,
     acceptedRate: 12 / 30,
   },
+  storyFunnel: {
+    // shareClicks matches clicks.shareClicks above: both count share_click.
+    // Story activity only in the last two buckets, the shape a launch gives:
+    // weeks of zeros, then a start.
+    shareClicks: 8,
+    createTaps: 5,
+    installGateShown: 2,
+    created: 3,
+    shared: 2,
+    tapRate: 5 / 8,
+    gateRate: 2 / 5,
+    createdRate: 3 / 5,
+    sharedRate: 2 / 3,
+    shareClicksTrend: [0, 1, 0, 1, 1, 0, 1, 2, 2],
+    createTapsTrend: [0, 0, 0, 0, 0, 0, 0, 2, 3],
+    installGateShownTrend: [0, 0, 0, 0, 0, 0, 0, 1, 1],
+    createdTrend: [0, 0, 0, 0, 0, 0, 0, 1, 2],
+    sharedTrend: [0, 0, 0, 0, 0, 0, 0, 1, 1],
+    perSet: [
+      {
+        setId: "set-003-unreal",
+        setTitle: "Form:at 003",
+        setArtist: "Unreal",
+        created: 2,
+        shared: 1,
+      },
+      {
+        setId: "set-002-til",
+        setTitle: "Form:at 002",
+        setArtist: "t.i.l.",
+        created: 1,
+        shared: 1,
+      },
+    ],
+  },
   calendarAdds: {
     // Deliberately 0: this is the fixture's one demonstration of the "nothing
     // recorded yet" empty state, which every other metric here skips past.

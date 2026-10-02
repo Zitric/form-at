@@ -129,6 +129,43 @@ export type NotifyFunnel = {
   acceptedRate: number | null;
 };
 
+/** The Instagram Story funnel, from the `events` table. Each rate divides by
+ *  the stage before it and is `null` (not 0) while that base is 0, as with
+ *  InstallFunnel.conversionRate. */
+export type StoryFunnel = {
+  /** share_click: the share modal opened, on any device — including desktop
+   *  and iPhone, where the story entry isn't shown — so it's a ceiling. */
+  shareClicks: number;
+  /** story_create_tap: [ instagram_story ] tapped. Recorded from the Android
+   *  launch on; earlier story rows have no tap before them. */
+  createTaps: number;
+  /** story_install_gate_shown: a tab's tap, sent to install the app. A
+   *  branch of createTaps, not a stage before `created`: videos are made in
+   *  the installed app, whose taps go straight to the picker. */
+  installGateShown: number;
+  /** story_video_created: a finished recording. */
+  created: number;
+  /** story_video_shared: the system share sheet completed. NOT a posted
+   *  story: nothing reports back from Instagram. */
+  shared: number;
+  /** createTaps ÷ shareClicks. */
+  tapRate: number | null;
+  /** installGateShown ÷ createTaps: the share of taps made in a tab. */
+  gateRate: number | null;
+  /** created ÷ createTaps. */
+  createdRate: number | null;
+  /** shared ÷ created. */
+  sharedRate: number | null;
+  /** Same 60-day/7-day-bucket shape as InstallFunnel's trends. */
+  shareClicksTrend: number[];
+  createTapsTrend: number[];
+  installGateShownTrend: number[];
+  createdTrend: number[];
+  sharedTrend: number[];
+  /** Videos made and shared per set, most made first. */
+  perSet: { setId: string; setTitle: string; setArtist: string; created: number; shared: number }[];
+};
+
 export type CalendarAddStats = {
   /** AddToCalendarButton clicks, merged across all three destinations
    *  (google/outlook/.ics) — see trackableEvents.ts's calendar_add_click
@@ -214,6 +251,7 @@ export type AdminDashboardStats = {
   pushSubscribers: PushSubscriberStats;
   clicks: ClickStats;
   notifyFunnel: NotifyFunnel;
+  storyFunnel: StoryFunnel;
   calendarAdds: CalendarAddStats;
   installToPushConversion: InstallToPushConversion;
   /** Non-null only when real tracking history is shorter than the 60-day
@@ -409,6 +447,95 @@ export async function fetchNotifyFunnel(db: D1Database): Promise<NotifyFunnel> {
   };
 }
 
+const STORY_EVENT_TYPES = [
+  "share_click",
+  "story_create_tap",
+  "story_install_gate_shown",
+  "story_video_created",
+  "story_video_shared",
+] as const;
+const STORY_EVENTS_IN = STORY_EVENT_TYPES.map((t) => `'${t}'`).join(", ");
+
+const rate = (part: number, base: number) => (base > 0 ? part / base : null);
+
+export async function fetchStoryFunnel(db: D1Database): Promise<StoryFunnel> {
+  const [totals, trend, perSetRows] = await Promise.all([
+    db
+      .prepare(
+        `SELECT event_type, COUNT(*) as n FROM events
+         WHERE event_type IN (${STORY_EVENTS_IN})
+         GROUP BY event_type`,
+      )
+      .all<{ event_type: string; n: number }>(),
+    db
+      .prepare(
+        `SELECT DATE(created_at/1000, 'unixepoch') AS day, event_type, COUNT(*) AS count
+         FROM events
+         WHERE event_type IN (${STORY_EVENTS_IN})
+           AND created_at >= (strftime('%s', 'now', '-${TREND_WINDOW_DAYS} days') * 1000)
+         GROUP BY day, event_type
+         ORDER BY day ASC`,
+      )
+      .all<{ day: string; event_type: string; count: number }>(),
+    db
+      .prepare(
+        `SELECT set_id, event_type, COUNT(*) as n FROM events
+         WHERE event_type IN ('story_video_created', 'story_video_shared') AND set_id IS NOT NULL
+         GROUP BY set_id, event_type`,
+      )
+      .all<{ set_id: string; event_type: string; n: number }>(),
+  ]);
+
+  const counts = Object.fromEntries(totals.results.map((r) => [r.event_type, r.n]));
+  const shareClicks = counts.share_click ?? 0;
+  const createTaps = counts.story_create_tap ?? 0;
+  const installGateShown = counts.story_install_gate_shown ?? 0;
+  const created = counts.story_video_created ?? 0;
+  const shared = counts.story_video_shared ?? 0;
+
+  const trendFor = (eventType: string) =>
+    bucketByWeek(
+      fillDailyWindow(
+        trend.results.filter((r) => r.event_type === eventType),
+        TREND_WINDOW_DAYS,
+      ),
+      TREND_BUCKET_DAYS,
+    );
+
+  // Titles from the catalogue, as fetchClickStats does: events store only set_id.
+  const bySet = new Map<string, { created: number; shared: number }>();
+  for (const row of perSetRows.results) {
+    const entry = bySet.get(row.set_id) ?? { created: 0, shared: 0 };
+    if (row.event_type === "story_video_created") entry.created = row.n;
+    if (row.event_type === "story_video_shared") entry.shared = row.n;
+    bySet.set(row.set_id, entry);
+  }
+  const perSet = [...bySet.entries()]
+    .map(([setId, n]) => {
+      const set = getSet(setId);
+      return { setId, setTitle: set?.title ?? setId, setArtist: set?.artist ?? "unknown", ...n };
+    })
+    .sort((a, b) => b.created - a.created || b.shared - a.shared);
+
+  return {
+    shareClicks,
+    createTaps,
+    installGateShown,
+    created,
+    shared,
+    tapRate: rate(createTaps, shareClicks),
+    gateRate: rate(installGateShown, createTaps),
+    createdRate: rate(created, createTaps),
+    sharedRate: rate(shared, created),
+    shareClicksTrend: trendFor("share_click"),
+    createTapsTrend: trendFor("story_create_tap"),
+    installGateShownTrend: trendFor("story_install_gate_shown"),
+    createdTrend: trendFor("story_video_created"),
+    sharedTrend: trendFor("story_video_shared"),
+    perSet,
+  };
+}
+
 export async function fetchCalendarAddStats(db: D1Database): Promise<CalendarAddStats> {
   const row = await db
     .prepare("SELECT COUNT(*) as total FROM events WHERE event_type = 'calendar_add_click'")
@@ -538,6 +665,7 @@ export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handle
         pushSubscribers,
         clicks,
         notifyFunnel,
+        storyFunnel,
         calendarAdds,
         eventsEarliest,
         pushEarliest,
@@ -548,6 +676,7 @@ export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handle
         fetchPushSubscriberStats(db),
         fetchClickStats(db),
         fetchNotifyFunnel(db),
+        fetchStoryFunnel(db),
         fetchCalendarAddStats(db),
         fetchEventsTrackingStart(db),
         fetchPushSubscriptionsTrackingStart(db),
@@ -568,6 +697,7 @@ export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handle
         pushSubscribers,
         clicks,
         notifyFunnel,
+        storyFunnel,
         calendarAdds,
         installToPushConversion,
         eventsTrackingStartDay: computeTrackingStartDay(eventsEarliest),

@@ -14,6 +14,7 @@ interface GrowthTabProps {
 // a THIRD, separate card here rather than merged into either: it's the push
 // PERMISSION funnel, not the PWA install funnel, despite the structural
 // resemblance — conflating them would blur two different features.
+// story_funnel is the Instagram Story's own, from share modal to share sheet.
 export function GrowthTab({ stats }: GrowthTabProps) {
   const installConversionLabel =
     stats.installFunnel.conversionRate == null
@@ -27,6 +28,17 @@ export function GrowthTab({ stats }: GrowthTabProps) {
     stats.notifyFunnel.acceptedRate == null
       ? "—"
       : `${Math.round(stats.notifyFunnel.acceptedRate * 100)}%`;
+  const story = stats.storyFunnel;
+  // "count · rate", the rate dropped (not 0%) while its base is 0.
+  const withRate = (count: number, rate: number | null) =>
+    rate == null ? String(count) : `${count} · ${Math.round(rate * 100)}%`;
+  const storyTrends = [
+    ["share_click_trend", story.shareClicksTrend],
+    ["create_tap_trend", story.createTapsTrend],
+    ["install_gate_trend", story.installGateShownTrend],
+    ["created_trend", story.createdTrend],
+    ["shared_trend", story.sharedTrend],
+  ] as const;
 
   return (
     // Two columns above mobile, matching SetsTab. Three columns made each card
@@ -140,6 +152,58 @@ export function GrowthTab({ stats }: GrowthTabProps) {
             accepted_rate hidden — fewer than {MIN_SAMPLE_FOR_RATE} prompt_shown so far. A computed
             percentage at this sample size reads far more confident than it is.
           </p>
+        )}
+      </DashboardCard>
+
+      <DashboardCard>
+        <Label className="mb-2 text-grey tracking-widest">{"// story_funnel"}</Label>
+        <div className="space-y-1">
+          <TerminalRow label="share_click" value={String(story.shareClicks)} dimValue />
+          <TerminalRow
+            label="create_tap"
+            value={withRate(story.createTaps, story.tapRate)}
+            dimValue
+          />
+          <TerminalRow
+            label="install_gate (tabs)"
+            value={withRate(story.installGateShown, story.gateRate)}
+            dimValue
+          />
+          <TerminalRow
+            label="created"
+            value={withRate(story.created, story.createdRate)}
+            dimValue
+          />
+          <TerminalRow label="shared" value={withRate(story.shared, story.sharedRate)} dimValue />
+        </div>
+        <p className="mt-1 text-xs text-grey/70">
+          each % is of the row above it, except created, which is of create_tap: install_gate is a
+          tab's tap sent to install the app, and videos are made in the app. share_click counts
+          every share modal, desktop and iPhone included, where the entry isn't shown. "shared"
+          means the system share sheet completed, not that it was posted to Instagram.
+          story_create_tap only exists from the Android launch on; earlier rows are the operator's
+          own tests.
+        </p>
+        <div className="mt-3 space-y-3">
+          {storyTrends.map(([label, data]) => (
+            <div key={label}>
+              <Label className="mb-1 block text-xs text-grey">{label}</Label>
+              <TrendChart data={data} />
+            </div>
+          ))}
+        </div>
+        {story.perSet.length > 0 && (
+          <div className="mt-3 space-y-1">
+            <Label className="mb-1 block text-xs text-grey">per_set (created / shared)</Label>
+            {story.perSet.map((s) => (
+              <TerminalRow
+                key={s.setId}
+                label={`${s.setArtist} @ ${s.setTitle}`}
+                value={`${s.created} / ${s.shared}`}
+                dimValue
+              />
+            ))}
+          </div>
         )}
       </DashboardCard>
     </div>
