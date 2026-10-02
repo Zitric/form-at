@@ -1,15 +1,12 @@
 import { djs } from "@form-at/data/djs";
 import { events } from "@form-at/data/events";
+import { FINE_PEAKS_PER_SECOND, decodeFinePeaks } from "@form-at/data/finePeaks";
+import { isValidUploadVersion, uploadedArtworkName } from "@form-at/data/r2Keys";
 import { createFileRoute } from "@tanstack/react-router";
-import {
-  type SetR2Keys,
-  deriveSetR2Keys,
-  isValidUploadVersion,
-  uploadedArtworkName,
-} from "~/utils/r2Sets";
+import { type SetR2Keys, deriveSetR2Keys } from "~/utils/r2Sets";
 import { extractAccessToken, verifyAccessJwt } from "~/utils/verifyAccessJwt";
 
-// Access-gated. Creates the `sets` row after all 3 R2 uploads have already
+// Access-gated. Creates the `sets` row after all 4 R2 uploads have already
 // succeeded client-side (see UploadSetForm.tsx): this endpoint never sees file
 // bytes, and re-derives the public URLs via `deriveSetR2Keys` rather than
 // trusting a client-supplied URL string for anything structural.
@@ -145,9 +142,9 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Nothing before this point checks that the 3 R2 uploads actually succeeded —
+// Nothing before this point checks that the 4 R2 uploads actually succeeded —
 // the client's word for it isn't enough, because the consequence lands on the
-// PUBLIC site: a row whose src/artwork/peaks point at 404s. Three cheap HEADs
+// PUBLIC site: a row whose src/artwork/peaks point at 404s. Four cheap HEADs
 // close that on an operation that already took minutes.
 //
 // Plain `fetch` against the public CDN URLs, not a signed R2 API call: this
@@ -155,7 +152,7 @@ function sleep(ms: number): Promise<void> {
 // (TECH_DEBT.md item 15) doesn't apply, and R2's strong read-after-write
 // consistency means there's no eventual-consistency flakiness to retry around.
 // Deliberately no retry on a genuine 404 — the client has already reported all
-// 3 PUTs as succeeded, so a failure here is real; the admin's own resubmit
+// 4 PUTs as succeeded, so a failure here is real; the admin's own resubmit
 // (which restarts presign→PUTs→create) is the retry path.
 //
 // Takes a plain URL list rather than a `SetR2Keys` object so restore.ts can
@@ -177,7 +174,28 @@ export async function verifyUrlsExist(urls: string[]): Promise<boolean> {
 }
 
 export async function verifyR2ObjectsExist(keys: SetR2Keys): Promise<boolean> {
-  return verifyUrlsExist([keys.publicAudioUrl, keys.publicArtworkUrl, keys.publicPeaksUrl]);
+  return verifyUrlsExist([
+    keys.publicAudioUrl,
+    keys.publicArtworkUrl,
+    keys.publicPeaksUrl,
+    keys.publicFinePeaksUrl,
+  ]);
+}
+
+// The fine-peaks file is fetched and decoded, not just HEADed: the form's
+// own check (readFinePeaksFile) runs in a browser this endpoint can't trust,
+// and a file that exists but doesn't decode would only show up later as a
+// blank strip in the Story picker. At most ~85KB for a 2h20 set. Exported for
+// unit tests.
+export async function verifyFinePeaksFile(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return false;
+    const peaks = decodeFinePeaks(await res.arrayBuffer());
+    return peaks.valuesPerSecond === FINE_PEAKS_PER_SECOND && peaks.values.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 // Exported for unit tests — covers the retry-then-fail path directly,
@@ -199,6 +217,7 @@ export async function insertSetWithRetry(
     artwork: string;
     artworkOriginalUrl: string;
     peaks: string;
+    finePeaks: string;
     sizeBytes: number | null;
     createdAt: number;
   },
@@ -208,7 +227,7 @@ export async function insertSetWithRetry(
     try {
       await db
         .prepare(
-          "INSERT INTO sets (id, title, artist, date, dj_id, event_id, description, duration, src, artwork, artwork_original_url, peaks, size_bytes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO sets (id, title, artist, date, dj_id, event_id, description, duration, src, artwork, artwork_original_url, peaks, fine_peaks, size_bytes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(
           row.id,
@@ -223,6 +242,7 @@ export async function insertSetWithRetry(
           row.artwork,
           row.artworkOriginalUrl,
           row.peaks,
+          row.finePeaks,
           row.sizeBytes,
           row.createdAt,
         )
@@ -348,6 +368,7 @@ type DeletedSetRow = {
   artwork: string | null;
   artwork_original_url: string | null;
   peaks: string | null;
+  fine_peaks: string | null;
   size_bytes: number | null;
   created_at: number;
 };
@@ -398,8 +419,8 @@ export async function deleteSetWithAudit(
   const insertAudit = db
     .prepare(
       `INSERT INTO admin_deleted_sets
-        (deleted_at, deleted_by_email, set_id, title, artist, date, dj_id, event_id, venue, description, duration, src, artwork, artwork_original_url, peaks, size_bytes, created_at, play_count_at_deletion)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (deleted_at, deleted_by_email, set_id, title, artist, date, dj_id, event_id, venue, description, duration, src, artwork, artwork_original_url, peaks, fine_peaks, size_bytes, created_at, play_count_at_deletion)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       Date.now(),
@@ -417,6 +438,8 @@ export async function deleteSetWithAudit(
       row.artwork,
       row.artwork_original_url,
       row.peaks,
+      // Absent on rows from before the column existed, hence `?? null`.
+      row.fine_peaks ?? null,
       row.size_bytes,
       row.created_at,
       playCount,
@@ -472,7 +495,10 @@ export const Route = createFileRoute("/api/sets")({
           return new Response(null, { status: 400 });
         }
 
-        if (!(await verifyR2ObjectsExist(keys))) {
+        if (
+          !(await verifyR2ObjectsExist(keys)) ||
+          !(await verifyFinePeaksFile(keys.publicFinePeaksUrl))
+        ) {
           return new Response(null, { status: 422 });
         }
 
@@ -498,6 +524,7 @@ export const Route = createFileRoute("/api/sets")({
           artwork: uploadedArtworkName(body.id, body.version),
           artworkOriginalUrl: keys.publicArtworkUrl,
           peaks: keys.publicPeaksUrl,
+          finePeaks: keys.publicFinePeaksUrl,
           sizeBytes: body.sizeBytes ?? null,
           createdAt: Date.now(),
         });

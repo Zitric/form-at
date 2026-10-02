@@ -5,13 +5,16 @@ type FakeRoute = { match: RegExp; first?: unknown };
 
 function createFakeD1(routes: FakeRoute[], opts: { batchThrows?: string | true } = {}) {
   const calls: string[] = [];
-  const statements: Array<{ sql: string }> = [];
+  const statements: Array<{ sql: string; boundArgs?: unknown[] }> = [];
   const prepare = vi.fn((sql: string) => {
     calls.push(sql);
     const route = routes.find((r) => r.match.test(sql));
-    const statement = {
+    const statement: { sql: string; boundArgs?: unknown[]; [k: string]: unknown } = {
       sql,
-      bind: () => statement,
+      bind: (...args: unknown[]) => {
+        statement.boundArgs = args;
+        return statement;
+      },
       first: async () => route?.first ?? null,
       run: async () => ({ meta: { changes: 1 } }),
     };
@@ -40,6 +43,7 @@ const sampleLogRow = {
   artwork: "uploads/set-999-old",
   artwork_original_url: "https://cdn.formatglasgow.com/999/artwork.jpg",
   peaks: "https://cdn.formatglasgow.com/999/peaks.json",
+  fine_peaks: "https://cdn.formatglasgow.com/sets/set-999-old/vmuqr1t1u-smtk/peaks-fine.bin",
   size_bytes: 123_456,
   created_at: 1_700_000_000_000,
 };
@@ -52,6 +56,7 @@ const legacyLogRow = {
   id: 8,
   set_id: "set-002-til",
   artwork_original_url: null,
+  fine_peaks: null,
 };
 
 describe("restoreSetFromLog", () => {
@@ -84,10 +89,26 @@ describe("restoreSetFromLog", () => {
     const outcome = await restoreSetFromLog(db, 8);
 
     expect(outcome).toBe("restored");
-    expect(fetchMock).toHaveBeenCalledTimes(2); // src + peaks only, not artwork_original_url
+    // src + peaks only, not a null artwork_original_url or fine_peaks
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     const checkedUrls = fetchMock.mock.calls.map((c) => c[0]);
     expect(checkedUrls).toContain(legacyLogRow.src);
     expect(checkedUrls).toContain(legacyLogRow.peaks);
+  });
+
+  it("checks and writes back a recorded fine_peaks", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { db, statements } = createFakeD1([
+      { match: /SELECT \* FROM admin_deleted_sets WHERE id/, first: sampleLogRow },
+    ]);
+
+    expect(await restoreSetFromLog(db, 7)).toBe("restored");
+
+    expect(fetchMock.mock.calls.map((c) => c[0])).toContain(sampleLogRow.fine_peaks);
+    const insert = statements.find((s) => s.sql.startsWith("INSERT INTO sets"));
+    expect(insert?.sql).toMatch(/\bfine_peaks\b/);
+    expect(insert?.boundArgs).toContain(sampleLogRow.fine_peaks);
   });
 
   it("returns 'not_found' when no matching un-restored log row exists — no R2 check, no batch", async () => {

@@ -1,10 +1,9 @@
+import { generateUploadVersion, isValidSetId } from "@form-at/data/r2Keys";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   type R2Credentials,
   type SetR2Keys,
   deriveSetR2Keys,
-  generateUploadVersion,
-  isValidSetId,
   presignSetUploadUrl,
 } from "~/utils/r2Sets";
 import { extractAccessToken, verifyAccessJwt } from "~/utils/verifyAccessJwt";
@@ -56,9 +55,11 @@ type PresignResponseBody = {
   audioUploadUrl: string;
   artworkUploadUrl: string;
   peaksUploadUrl: string;
+  finePeaksUploadUrl: string;
   publicAudioUrl: string;
   publicArtworkUrl: string;
   publicPeaksUrl: string;
+  publicFinePeaksUrl: string;
 };
 
 // Exported for unit tests — `createFileRoute`'s wrapping isn't unit-testable
@@ -88,10 +89,11 @@ export async function presignSetUpload(
     return { outcome: "invalid" };
   }
 
-  const [audioUploadUrl, artworkUploadUrl, peaksUploadUrl] = await Promise.all([
+  const [audioUploadUrl, artworkUploadUrl, peaksUploadUrl, finePeaksUploadUrl] = await Promise.all([
     presignSetUploadUrl(keys.audioKey, creds),
     presignSetUploadUrl(keys.artworkKey, creds),
     presignSetUploadUrl(keys.peaksKey, creds),
+    presignSetUploadUrl(keys.finePeaksKey, creds),
   ]);
 
   return {
@@ -101,9 +103,11 @@ export async function presignSetUpload(
       audioUploadUrl,
       artworkUploadUrl,
       peaksUploadUrl,
+      finePeaksUploadUrl,
       publicAudioUrl: keys.publicAudioUrl,
       publicArtworkUrl: keys.publicArtworkUrl,
       publicPeaksUrl: keys.publicPeaksUrl,
+      publicFinePeaksUrl: keys.publicFinePeaksUrl,
     },
   };
 }

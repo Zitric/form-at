@@ -1,9 +1,15 @@
+import { encodeFinePeaks } from "@form-at/data/finePeaks";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readAudioDuration, validateArtworkFile, validatePeaksFile } from "~/utils/validateUpload";
+import {
+  readAudioDuration,
+  readFinePeaksFile,
+  validateArtworkFile,
+  validatePeaksFile,
+} from "~/utils/validateUpload";
 
 // Shape verified against a REAL
 // peaks file pulled from R2 (t.i.l.'s set) — `{ peaks: number[] }`, exactly
-// 1000 elements (scripts/generate-peaks.mjs's fixed `PEAKS = 1000`), values
+// 1000 elements (apps/web/scripts/generate-peaks.ts's fixed `COARSE_PEAKS = 1000`), values
 // NOT bounded to [0, 1] (real observed max: 1.137). These tests lock that
 // real shape, not the originally-assumed `Array.isArray` guess.
 
@@ -65,6 +71,35 @@ describe("validatePeaksFile", () => {
   it("rejects a bare array (no top-level object)", async () => {
     const file = new File([JSON.stringify(validPeaksArray)], "peaks.json");
     expect(await validatePeaksFile(file)).toBe(false);
+  });
+});
+
+// The format itself is tested in packages/data's finePeaks.test.ts; these
+// cover what the form gets back.
+describe("readFinePeaksFile", () => {
+  const binFile = (bytes: Uint8Array) => new File([bytes], "set.peaks-fine.bin");
+
+  it("returns the length the file covers", async () => {
+    const values = Array.from({ length: 27190 }, (_, i) => (i % 7) / 7);
+    expect(await readFinePeaksFile(binFile(encodeFinePeaks(values)))).toEqual({
+      ok: true,
+      seconds: 2719,
+    });
+  });
+
+  it("rejects a peaks.json picked by mistake, with the reason", async () => {
+    const read = await readFinePeaksFile(makeJsonFile({ peaks: validPeaksArray }));
+    expect(read).toEqual({ ok: false, reason: "not FPKS" });
+  });
+
+  it("rejects a truncated file", async () => {
+    const read = await readFinePeaksFile(binFile(encodeFinePeaks([0.1, 0.2, 0.3]).slice(0, -1)));
+    expect(read.ok).toBe(false);
+  });
+
+  it("rejects a file at another resolution", async () => {
+    const read = await readFinePeaksFile(binFile(encodeFinePeaks([0.1, 0.2], 20)));
+    expect(read).toEqual({ ok: false, reason: "20 values per second, expected 10" });
   });
 });
 

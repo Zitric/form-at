@@ -19,7 +19,7 @@ const handler = createStartHandler({ handler: defaultStreamHandler });
 // discovered against a real, valid file.
 //
 // `connect-src` allows `*.r2.cloudflarestorage.com` because UploadSetForm's
-// three PUTs (via uploadWithProgress.ts's XHR) go straight from the browser
+// four PUTs (via uploadWithProgress.ts's XHR) go straight from the browser
 // to R2 against a presigned URL from sets-presign.ts — `https://<accountId>
 // .r2.cloudflarestorage.com/...` (see r2Sets.ts). The account id isn't a
 // secret (it's published in that same URL) but it's only known at runtime
