@@ -1,7 +1,7 @@
 // Draws the Story video frame. Everything that doesn't change while
-// recording — background, brand, artwork, names, times, full-set timeline —
-// is drawn once into a static layer, and the excerpt bars are pre-rendered
-// in both colours. A frame is then a few drawImage calls, a clip and the
+// recording — background, brand, card, names, times, full-set timeline — is
+// drawn once into a static layer, and the excerpt bars are pre-rendered in
+// both colours. A frame is then a few drawImage calls, a clip and the
 // spectrum's 72 rects, cheap enough for a phone at 60fps.
 //
 // Browser-only (canvas, FontFaceSet, Image). Positions and colours come from
@@ -10,7 +10,9 @@
 import { fmtTimestamp } from "~/utils/fmt";
 import {
   ARTWORK,
+  BACKGROUND,
   BRAND,
+  CARD,
   COLORS,
   EXCERPT,
   EXCERPT_BARS,
@@ -19,11 +21,15 @@ import {
   MARGIN_X,
   META,
   PILL,
+  type Rect,
   SPECTRUM_STRIP,
   TEXT_XS,
   TIMELINE,
   TITLE,
   TRACKING_WIDEST,
+  backgroundRect,
+  barRow,
+  coverCrop,
 } from "./layout";
 import { type SampleSource, bandLevels, smoothedSpectrum, spectrumBands } from "./spectrum";
 
@@ -47,6 +53,8 @@ export interface StoryAssets {
   artwork: HTMLImageElement | null;
   /** Which URL the artwork came from, for diagnostics. */
   artworkUrl: string | null;
+  /** The DJ's photo for the card; null when there's none or it failed to load. */
+  photo: HTMLImageElement | null;
   /** false means text will render in a fallback face. */
   fontsLoaded: boolean;
 }
@@ -71,7 +79,8 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     // Without CORS the canvas is tainted, and captureStream() then throws a
-    // SecurityError. Every artwork origin answers with ACAO *.
+    // SecurityError. Every artwork origin answers with ACAO *; the DJ photos
+    // are same-origin.
     img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error(`failed to load ${url}`));
@@ -80,10 +89,16 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 /**
- * Waits for Space Mono in both weights the frame uses, and loads the first
- * artwork URL that works: the optimised webp, then the original.
+ * Waits for Space Mono in both weights the frame uses, loads the first
+ * artwork URL that works (the optimised webp, then the original), and the
+ * DJ's photo when there is one. A photo that fails to load leaves the card
+ * to the artwork.
  */
-export async function loadStoryAssets(artworkUrls: readonly string[]): Promise<StoryAssets> {
+export async function loadStoryAssets(
+  artworkUrls: readonly string[],
+  photoUrl: string | null = null,
+): Promise<StoryAssets> {
+  const photo = photoUrl ? loadImage(photoUrl).catch(() => null) : Promise.resolve(null);
   await Promise.allSettled([
     document.fonts.load(font(META.weight, META.size)),
     document.fonts.load(font(TITLE.weight, TITLE.size)),
@@ -96,12 +111,12 @@ export async function loadStoryAssets(artworkUrls: readonly string[]): Promise<S
 
   for (const url of artworkUrls) {
     try {
-      return { artwork: await loadImage(url), artworkUrl: url, fontsLoaded };
+      return { artwork: await loadImage(url), artworkUrl: url, photo: await photo, fontsLoaded };
     } catch {
       // try the next one
     }
   }
-  return { artwork: null, artworkUrl: null, fontsLoaded };
+  return { artwork: null, artworkUrl: null, photo: await photo, fontsLoaded };
 }
 
 export interface StoryFrameInput {
@@ -116,7 +131,10 @@ export interface StoryFrameInput {
   excerpt: { audio: SampleSource; offsetSeconds: number; durationSeconds: number };
   /** The player's peaks.json values for the whole set. */
   setPeaks: readonly number[];
+  /** The background, and the card when there's no photo. */
   artwork: CanvasImageSource | null;
+  /** The DJ's photo for the card; null or absent puts the artwork there. */
+  photo?: CanvasImageSource | null;
 }
 
 export interface StoryFrame {
@@ -133,9 +151,45 @@ export interface StoryFrame {
   markerTrueWidth: number;
 }
 
+function sourceSize(img: CanvasImageSource): { width: number; height: number } {
+  if (img instanceof HTMLImageElement)
+    return { width: img.naturalWidth, height: img.naturalHeight };
+  const sized = img as { width: number | SVGAnimatedLength; height: number | SVGAnimatedLength };
+  return { width: Number(sized.width), height: Number(sized.height) };
+}
+
+/** Fills the square at (x, y) with `img`, cropped (coverCrop), never stretched. */
+function drawCropped(
+  g: CanvasRenderingContext2D,
+  img: CanvasImageSource,
+  x: number,
+  y: number,
+  size: number,
+  focusY: number,
+) {
+  const { width, height } = sourceSize(img);
+  const crop: Rect = coverCrop(width, height, focusY);
+  g.drawImage(img, crop.x, crop.y, crop.width, crop.height, x, y, size, size);
+}
+
+function drawBackground(g: CanvasRenderingContext2D, artwork: CanvasImageSource) {
+  const { width, height } = sourceSize(artwork);
+  const at = backgroundRect(width / height);
+  g.save();
+  g.globalAlpha = BACKGROUND.alpha;
+  if (BACKGROUND.flipped) {
+    g.translate(0, 2 * at.y + at.height);
+    g.scale(1, -1);
+  }
+  g.drawImage(artwork, at.x, at.y, at.width, at.height);
+  g.restore();
+}
+
 // Bars centred on the row at 0.9 of its height, floored so silence still
 // shows, and scaled to the row's own loudest peak — Waveform.tsx's rule, so a
-// quieter master still fills the row.
+// quieter master still fills the row. With `justify`, the bars are spread so
+// the first starts at x and the last ends at x + width exactly (gaps vary by
+// at most a pixel); otherwise they sit at a fixed step from x.
 function drawBarRow(
   g: CanvasRenderingContext2D,
   peaks: readonly number[],
@@ -146,14 +200,15 @@ function drawBarRow(
   barWidth: number,
   gap: number,
   minHeight: number,
+  justify = false,
 ) {
-  const step = barWidth + gap;
-  const count = Math.floor(width / step);
+  const { count } = barRow(width, barWidth, gap);
+  const step = justify && count > 1 ? (width - barWidth) / (count - 1) : barWidth + gap;
   const scale = 1 / Math.max(...peaks, 0.001);
   for (let i = 0; i < count; i++) {
     const peak = peaks[Math.floor((i / count) * peaks.length)] ?? 0;
     const barHeight = Math.max(minHeight, Math.min(peak * scale, 1) * height * EXCERPT_BARS.fill);
-    g.fillRect(x + i * step, y + (height - barHeight) / 2, barWidth, barHeight);
+    g.fillRect(Math.round(x + i * step), y + (height - barHeight) / 2, barWidth, barHeight);
   }
 }
 
@@ -237,27 +292,31 @@ export function prepareStoryFrame(input: StoryFrameInput): StoryFrame {
   const g = context2d(layer);
   g.fillStyle = COLORS.background;
   g.fillRect(0, 0, FRAME.width, FRAME.height);
+  if (input.artwork) drawBackground(g, input.artwork);
 
   // Brand.
   g.fillStyle = COLORS.text;
   g.font = font(BRAND.weight, BRAND.size);
   fillTrackedCentred(g, BRAND.text, FRAME.width / 2, BRAND.baselineY, BRAND.size);
 
-  // Artwork: square, never cropped, rounded, with the player's hairline border.
-  const artX = (FRAME.width - ARTWORK.size) / 2;
+  // Card: the DJ's photo, else the artwork; square, rounded, with the
+  // player's hairline border.
+  const cardX = (FRAME.width - ARTWORK.size) / 2;
   g.save();
-  roundRectPath(g, artX, ARTWORK.y, ARTWORK.size, ARTWORK.size, ARTWORK.radius);
+  roundRectPath(g, cardX, ARTWORK.y, ARTWORK.size, ARTWORK.size, ARTWORK.radius);
   g.clip();
-  if (input.artwork) {
-    g.drawImage(input.artwork, artX, ARTWORK.y, ARTWORK.size, ARTWORK.size);
+  if (input.photo) {
+    drawCropped(g, input.photo, cardX, ARTWORK.y, ARTWORK.size, CARD.photoFocusY);
+  } else if (input.artwork) {
+    drawCropped(g, input.artwork, cardX, ARTWORK.y, ARTWORK.size, 0.5);
   } else {
     g.fillStyle = "#222222";
-    g.fillRect(artX, ARTWORK.y, ARTWORK.size, ARTWORK.size);
+    g.fillRect(cardX, ARTWORK.y, ARTWORK.size, ARTWORK.size);
   }
   g.restore();
   g.strokeStyle = COLORS.hairline;
   g.lineWidth = ARTWORK.borderWidth;
-  roundRectPath(g, artX, ARTWORK.y, ARTWORK.size, ARTWORK.size, ARTWORK.radius);
+  roundRectPath(g, cardX, ARTWORK.y, ARTWORK.size, ARTWORK.size, ARTWORK.radius);
   g.stroke();
 
   // DJ name, and the player's "@ <title> · <date>" meta line.
@@ -270,23 +329,34 @@ export function prepareStoryFrame(input: StoryFrameInput): StoryFrame {
   fitFont(g, meta, META.weight, META.size, contentWidth);
   g.fillText(meta, FRAME.width / 2, META.baselineY);
 
-  // Excerpt row: start and end times either side, bars in the width left.
+  // Two rows share one layout: times in a column either side, sized to the
+  // widest of the four, and the bars centred in the width between. The
+  // timeline then spans exactly the excerpt bars' ink.
   const startLabel = fmtTimestamp(input.startSeconds);
   const endLabel = fmtTimestamp(input.startSeconds + input.excerpt.durationSeconds);
+  const setStartLabel = fmtTimestamp(0);
+  const setEndLabel = fmtTimestamp(input.setSeconds);
   g.font = font(400, TEXT_XS);
   const timeWidth = Math.ceil(
-    Math.max(g.measureText(startLabel).width, g.measureText(endLabel).width),
+    Math.max(
+      ...[startLabel, endLabel, setStartLabel, setEndLabel].map((l) => g.measureText(l).width),
+    ),
   );
-  const barsX = MARGIN_X + timeWidth + EXCERPT.timeGap;
-  const barsWidth = contentWidth - 2 * (timeWidth + EXCERPT.timeGap);
-  const timeY = EXCERPT.y + EXCERPT.height / 2;
-  g.fillStyle = COLORS.text;
-  g.textBaseline = "middle";
-  g.textAlign = "right";
-  g.fillText(startLabel, MARGIN_X + timeWidth, timeY);
-  g.textAlign = "left";
-  g.fillText(endLabel, barsX + barsWidth + EXCERPT.timeGap, timeY);
-  g.textBaseline = "alphabetic";
+  const rowWidth = contentWidth - 2 * (timeWidth + EXCERPT.timeGap);
+  const { count: barCount, inkWidth } = barRow(rowWidth, EXCERPT_BARS.width, EXCERPT_BARS.gap);
+  const barsX = Math.round(MARGIN_X + timeWidth + EXCERPT.timeGap + (rowWidth - inkWidth) / 2);
+  const barsWidth = inkWidth;
+  const fillTimes = (left: string, right: string, y: number) => {
+    g.fillStyle = COLORS.text;
+    g.textBaseline = "middle";
+    g.textAlign = "right";
+    g.fillText(left, MARGIN_X + timeWidth, y);
+    g.textAlign = "left";
+    g.fillText(right, MARGIN_X + contentWidth - timeWidth, y);
+    g.textBaseline = "alphabetic";
+  };
+  fillTimes(startLabel, endLabel, EXCERPT.y + EXCERPT.height / 2);
+  fillTimes(setStartLabel, setEndLabel, TIMELINE.y + TIMELINE.height / 2);
 
   // Full-set timeline, with the excerpt's marker. The excerpt on a 2h set is ~2px
   // wide, so the marker never draws thinner than minMarkerWidth.
@@ -294,21 +364,22 @@ export function prepareStoryFrame(input: StoryFrameInput): StoryFrame {
   drawBarRow(
     g,
     input.setPeaks,
-    MARGIN_X,
+    barsX,
     TIMELINE.y,
-    contentWidth,
+    barsWidth,
     TIMELINE.height,
     TIMELINE.barWidth,
     TIMELINE.gap,
     EXCERPT_BARS.minHeight,
+    true,
   );
-  const markerTrueWidth = (input.excerpt.durationSeconds / input.setSeconds) * contentWidth;
+  const markerTrueWidth = (input.excerpt.durationSeconds / input.setSeconds) * barsWidth;
   const markerWidth = Math.max(markerTrueWidth, TIMELINE.minMarkerWidth);
   const markerCentre =
-    MARGIN_X +
-    ((input.startSeconds + input.excerpt.durationSeconds / 2) / input.setSeconds) * contentWidth;
+    barsX +
+    ((input.startSeconds + input.excerpt.durationSeconds / 2) / input.setSeconds) * barsWidth;
   const clampX = (x: number, width: number) =>
-    Math.min(Math.max(x, MARGIN_X), MARGIN_X + contentWidth - width);
+    Math.min(Math.max(x, barsX), barsX + barsWidth - width);
   g.fillStyle = COLORS.played;
   g.fillRect(
     clampX(markerCentre - markerWidth / 2, markerWidth),
@@ -317,8 +388,8 @@ export function prepareStoryFrame(input: StoryFrameInput): StoryFrame {
     TIMELINE.height + 2 * TIMELINE.markerOverhang,
   );
 
-  // "start / total" pill over the marker.
-  const label = `${fmtTimestamp(input.startSeconds)} / ${fmtTimestamp(input.setSeconds)}`;
+  // Position pill over the marker.
+  const label = fmtTimestamp(input.startSeconds);
   g.font = font(400, PILL.fontSize);
   const pillWidth = g.measureText(label).width + 2 * PILL.paddingX;
   const pillX = clampX(markerCentre - pillWidth / 2, pillWidth);
@@ -337,10 +408,7 @@ export function prepareStoryFrame(input: StoryFrameInput): StoryFrame {
   // Excerpt bars, pre-rendered once in each colour; `pad` leaves room for the
   // glow to spread past the bars.
   const pad = Math.ceil(EXCERPT_BARS.glowBlur * 2);
-  const peaks = excerptPeaks(
-    input.excerpt,
-    Math.floor(barsWidth / (EXCERPT_BARS.width + EXCERPT_BARS.gap)),
-  );
+  const peaks = excerptPeaks(input.excerpt, barCount);
   const bars = (color: string, glow: boolean) => {
     const canvas = createCanvas(barsWidth + 2 * pad, EXCERPT.height + 2 * pad);
     const b = context2d(canvas);
