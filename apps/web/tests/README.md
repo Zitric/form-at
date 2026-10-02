@@ -41,7 +41,7 @@ tests/
 │   ├── utils/         # fmt, appContext, deeplink, installCapability…
 │   ├── data/          # beacon-queue, sets, setsForRoute (the D1-fallback logic)
 │   ├── routes/        # API handlers — api-signal, api-event, api-push-subscribe
-│   └── scripts/       # build scripts (optimize-images)
+│   └── scripts/       # build scripts (optimize-images, generate-peaks)
 ├── fixtures/          # binary test inputs (mediarecorder-fragmented.mp4: a real Chrome recording, cut after 2 fragments)
 ├── e2e/
 │   ├── home.spec.ts        # Manifesto, CTA, social links
@@ -52,7 +52,7 @@ tests/
 │   ├── navigation.spec.ts  # Top/bottom nav routing
 │   ├── csp-violations.spec.ts # Zero CSP violations on the golden path; allowed hosts reachable
 │   ├── story-video.spec.ts # Story video recorder in a real browser (harness page, no UI)
-│   ├── story-picker.spec.ts # ?story=on entry, install gate, picker, create → share (Pixel 7; real recording on macOS)
+│   ├── story-picker.spec.ts # ?story=on entry, install gate, picker (zoomed strip from fine peaks, no audio mid-drag), create → share (Pixel 7; real recording on macOS)
 │   └── _helpers.ts         # shared gotoAndHydrate helper, not a spec
 └── setup.ts          # jest-dom matchers, jsdom HTMLMediaElement stubs
 ```

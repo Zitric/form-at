@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { encodeFinePeaks } from "@form-at/data/finePeaks";
 import { type Page, type Route, devices, expect, test } from "@playwright/test";
 import { movieDurationSeconds, topLevelBoxes } from "../../app/utils/storyVideo/mp4Boxes";
 import { gotoAndHydrate } from "./_helpers";
@@ -71,8 +72,21 @@ async function serveMp3(route: Route) {
   });
 }
 
+// The set's fine peaks: one value per 0.1s over the whole set, all between
+// 0.6 and 0.9, so every bar the zoomed strip draws from them is at least
+// two-thirds of the tallest in view. The synthetic MP3 is silent, so a strip
+// drawn from the decoded slice instead is 2px bars throughout.
+const FINE_PEAKS = Buffer.from(
+  encodeFinePeaks(
+    Array.from({ length: 8451 * 10 }, (_, i) => 0.6 + 0.3 * Math.abs(Math.sin(i / 13))),
+  ),
+);
+
 async function stubNetworkAndCodecs(page: Page) {
   await page.route(/cdn\.formatglasgow\.com\/.*\.mp3(\?.*)?$/, serveMp3);
+  await page.route(/cdn\.formatglasgow\.com\/.*peaks-fine\.bin(\?.*)?$/, (route) =>
+    route.fulfill({ headers: cors, contentType: "application/octet-stream", body: FINE_PEAKS }),
+  );
   await page.route(/cdn\.formatglasgow\.com\/.*peaks\.json(\?.*)?$/, (route) =>
     route.fulfill({
       headers: cors,
@@ -176,6 +190,114 @@ test.describe("instagram story entry (mobile, ?story=on)", () => {
     // 8451s − 15 = 8436s: 140:36.
     await expect(pickerLabel(page)).toHaveText("140:36 → 140:51");
     await expect(picker.getByText("drag the waveform, tap the full set, or nudge")).toBeVisible();
+  });
+});
+
+// ── The zoomed strip while dragging: fine peaks vs the decoded slice ─────
+// With the set's peaks-fine.bin the strip draws from it, so a drag needs no
+// audio: every MP3 request is refused while the pointer is down, and the
+// strip must still be whole, including past the start of the slice decoded
+// before the drag. The control runs the same drag with the file 404ing: the
+// strip falls back to the decoded slice, which is silent here (2px bars) and
+// undecoded past its start (2px dotted line), so the same measurement reads
+// near zero — the first test can only pass on fine peaks.
+
+// The share of 4px bar slots, across the left 30% of the zoomed strip, whose
+// bar is taller than a quarter of the canvas. Read from the canvas pixels.
+async function tallBarShare(page: Page): Promise<number> {
+  return page
+    .getByRole("slider", { name: "15-second excerpt start" })
+    .locator("canvas")
+    .evaluate((canvas: HTMLCanvasElement) => {
+      const g = canvas.getContext("2d");
+      if (!g) return 0;
+      const { width, height } = canvas;
+      const { data } = g.getImageData(0, 0, width, height);
+      const slot = Math.round(4 * (width / canvas.clientWidth));
+      const slots = Math.floor((width * 0.3) / slot);
+      let tall = 0;
+      for (let s = 0; s < slots; s++) {
+        let painted = 0;
+        for (let x = s * slot; x < (s + 1) * slot; x++) {
+          let rows = 0;
+          for (let y = 0; y < height; y++) if ((data[(y * width + x) * 4 + 3] ?? 0) > 0) rows++;
+          painted = Math.max(painted, rows);
+        }
+        if (painted > height / 4) tall++;
+      }
+      return slots ? tall / slots : 0;
+    });
+}
+
+async function openPickerAndDragBackWithMp3Blocked(page: Page) {
+  let blockMp3 = false;
+  let blockedRequests = 0;
+  await page.route(/cdn\.formatglasgow\.com\/.*\.mp3(\?.*)?$/, (route) => {
+    if (!blockMp3) return serveMp3(route);
+    blockedRequests++;
+    return route.abort();
+  });
+  await emulateStandalone(page);
+  await openShare(page, `${SET_PATH}?story=on`);
+  await page.getByRole("button", { name: /instagram_story/ }).click();
+  const picker = page.getByRole("dialog", { name: "Pick 15 seconds for an Instagram story" });
+  // The first slice decodes, so preview is available before the drag.
+  await expect(picker.getByText("drag the waveform, tap the full set, or nudge")).toBeVisible();
+  await expect(picker.getByRole("button", { name: /preview/ })).toBeEnabled();
+
+  const strip = picker.getByRole("slider", { name: "15-second excerpt start" });
+  const box = await strip.boundingBox();
+  if (!box) throw new Error("zoomed strip has no box");
+  blockMp3 = true;
+  // Nearly the strip's whole width: ~40s back, past the start of the 90s
+  // slice decoded around the opening window (its view starts 22.5s in).
+  await page.mouse.move(box.x + box.width * 0.04, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.96, box.y + box.height / 2, { steps: 12 });
+  // Held past the 250ms slice debounce, so a slice fetch would have started.
+  await page.waitForTimeout(600);
+  return {
+    picker,
+    blockedRequests: () => blockedRequests,
+    release: async () => {
+      blockMp3 = false;
+      await page.mouse.up();
+    },
+  };
+}
+
+test.describe("the zoomed strip while dragging (mobile, installed app)", () => {
+  test.beforeEach(async ({ page: _page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium", "phone emulation runs in the chromium project");
+  });
+
+  test("draws from fine peaks: whole while the MP3 is unreachable, and fetches no audio mid-drag", async ({
+    page,
+  }) => {
+    await stubNetworkAndCodecs(page);
+    const drag = await openPickerAndDragBackWithMp3Blocked(page);
+
+    expect(drag.blockedRequests()).toBe(0);
+    expect(await tallBarShare(page)).toBeGreaterThan(0.9);
+    await expect(drag.picker.getByText("loading this part of the set…")).toHaveCount(0);
+    // Preview waits for the slice under the new window.
+    await expect(drag.picker.getByRole("button", { name: /preview/ })).toBeDisabled();
+
+    // Released, the slice for preview and recording loads.
+    await drag.release();
+    await expect(drag.picker.getByRole("button", { name: /preview/ })).toBeEnabled();
+    expect(await tallBarShare(page)).toBeGreaterThan(0.9);
+  });
+
+  test("control — without fine peaks, the same drag shows undecoded audio", async ({ page }) => {
+    await stubNetworkAndCodecs(page);
+    await page.route(/cdn\.formatglasgow\.com\/.*peaks-fine\.bin(\?.*)?$/, (route) =>
+      route.fulfill({ status: 404, headers: cors }),
+    );
+    const drag = await openPickerAndDragBackWithMp3Blocked(page);
+
+    expect(await tallBarShare(page)).toBeLessThan(0.1);
+    await drag.release();
   });
 });
 
