@@ -8,6 +8,8 @@
 // shape that the InstallPromptModal switches on. Keeping that composition
 // outside this file means the pure parts stay testable in isolation.
 
+import { isInAppBrowser } from "./inAppBrowser";
+
 export type InstallPlatform = "chromium" | "ios-safari" | "ios-other" | "other";
 
 // Categorises the browser based on UA, narrowly enough to make a correct
@@ -29,6 +31,12 @@ export function detectPlatform(
   ua: string = typeof navigator !== "undefined" ? navigator.userAgent : "",
 ): InstallPlatform {
   if (iosThirdPartyBrowser(ua)) return isIosAtLeast(ua, 16, 4) ? "ios-other" : "other";
+
+  // An Android WebView (Instagram's, Facebook's…) carries `Chrome/` but isn't
+  // Chrome: MDN lists only Chrome and Samsung Internet as Android browsers
+  // that install a web app, and a WebView has neither browser's install menu.
+  // Before the chromium branch, or it gets Chrome's menu steps.
+  if (isAndroidWebView(ua)) return "other";
 
   // Real iOS Safari (iOS device, none of the third-party browser markers
   // above). Returns ios-safari so the modal can render manual install
@@ -67,13 +75,25 @@ function isIosAtLeast(ua: string, major: number, minor: number): boolean {
 }
 
 /**
- * Where to send someone whose browser can't install: Firefox on Android to
- * Chrome, an iOS browser older than 16.4 to Safari, anything else (desktop
- * Safari / Firefox) to either.
+ * An app's built-in browser on Android: a known in-app browser, or any
+ * WebView (`; wv)` in the UA, Android's own WebView marker). It can't install
+ * the app, and has no Web Share at all (MDN's compat data: `navigator.share`
+ * unsupported in WebView Android).
  */
-export type NoInstallHint = "use-chrome" | "use-safari" | "use-chrome-or-safari";
+export function isAndroidWebView(ua: string): boolean {
+  return /Android/.test(ua) && (/; wv\)/.test(ua) || isInAppBrowser(ua) !== null);
+}
+
+/**
+ * Where to send someone whose browser can't install: an Android in-app
+ * browser out to Chrome through its own menu, Firefox on Android to Chrome,
+ * an iOS browser older than 16.4 to Safari, anything else (desktop Safari /
+ * Firefox) to either.
+ */
+export type NoInstallHint = "open-in-chrome" | "use-chrome" | "use-safari" | "use-chrome-or-safari";
 
 export function noInstallHint(ua: string): NoInstallHint {
+  if (isAndroidWebView(ua)) return "open-in-chrome";
   if (iosThirdPartyBrowser(ua)) return "use-safari";
   if (/Android/.test(ua) && /Firefox\//.test(ua)) return "use-chrome";
   return "use-chrome-or-safari";

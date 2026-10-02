@@ -73,6 +73,14 @@ export function IosInstallSteps({
 // go instead. The caller's sentence before it says what lives in the app.
 export function NoInstallPath({ hint }: { hint: NoInstallHint }) {
   const site = <span className="text-white">formatglasgow.com</span>;
+  if (hint === "open-in-chrome") {
+    return (
+      <>
+        this app's browser can't install it — open its menu (⋮) and choose{" "}
+        <span className="text-white">open in Chrome</span>, then install from there.
+      </>
+    );
+  }
   if (hint === "use-chrome") {
     return (
       <>
