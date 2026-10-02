@@ -12,7 +12,9 @@
     "./webPush": "./src/webPush.ts",
     "./pushEndpoints": "./src/pushEndpoints.ts",
     "./webAnalytics": "./src/webAnalytics.ts",
-    "./rumArchive": "./src/rumArchive.ts"
+    "./rumArchive": "./src/rumArchive.ts",
+    "./r2Keys": "./src/r2Keys.ts",
+    "./finePeaks": "./src/finePeaks.ts"
   },
   "scripts": {
     "lint": "biome check src",

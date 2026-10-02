@@ -17,6 +17,8 @@ export const sets: MusicSet[] = [
     artwork: "uploads/set-003-iona-violet",
     artworkOriginalUrl: "https://cdn.formatglasgow.com/sets/set-003-iona-violet/artwork.png",
     peaks: "https://cdn.formatglasgow.com/sets/set-003-iona-violet/peaks.json",
+    finePeaks:
+      "https://cdn.formatglasgow.com/sets/set-003-iona-violet/vmuqsoc81-vz5j/peaks-fine.bin",
     sizeBytes: 181612844,
   },
   {
@@ -31,6 +33,8 @@ export const sets: MusicSet[] = [
     artwork: "uploads/set-003-julz-lever",
     artworkOriginalUrl: "https://cdn.formatglasgow.com/sets/set-003-julz-lever/artwork.png",
     peaks: "https://cdn.formatglasgow.com/sets/set-003-julz-lever/vmupjr8nd-x08h/peaks.json",
+    finePeaks:
+      "https://cdn.formatglasgow.com/sets/set-003-julz-lever/vmuqsofgk-yojf/peaks-fine.bin",
     sizeBytes: 206353004,
   },
   {
@@ -45,6 +49,7 @@ export const sets: MusicSet[] = [
     artwork: "uploads/set-003-unreal",
     artworkOriginalUrl: "https://cdn.formatglasgow.com/sets/set-003-unreal/artwork.png",
     peaks: "https://cdn.formatglasgow.com/sets/set-003-unreal/peaks.json",
+    finePeaks: "https://cdn.formatglasgow.com/sets/set-003-unreal/vmuqsokyn-4eqv/peaks-fine.bin",
     sizeBytes: 338072684,
   },
   {
@@ -60,6 +65,8 @@ export const sets: MusicSet[] = [
     artworkOriginalUrl:
       "https://cdn.formatglasgow.com/sets/set-seafield-sound-2026-hubey/artwork.png",
     peaks: "https://cdn.formatglasgow.com/sets/set-seafield-sound-2026-hubey/peaks.json",
+    finePeaks:
+      "https://cdn.formatglasgow.com/sets/set-seafield-sound-2026-hubey/vmuqsonb4-ks82/peaks-fine.bin",
     sizeBytes: 134041004,
   },
   {
@@ -75,6 +82,8 @@ export const sets: MusicSet[] = [
     artworkOriginalUrl:
       "https://cdn.formatglasgow.com/sets/set-seafield-sound-2026-julz-lever/artwork.png",
     peaks: "https://cdn.formatglasgow.com/sets/set-seafield-sound-2026-julz-lever/peaks.json",
+    finePeaks:
+      "https://cdn.formatglasgow.com/sets/set-seafield-sound-2026-julz-lever/vmuqsor8j-5w1w/peaks-fine.bin",
     sizeBytes: 230446124,
   },
   {
@@ -90,6 +99,8 @@ export const sets: MusicSet[] = [
     artworkOriginalUrl:
       "https://cdn.formatglasgow.com/sets/set-seafield-sound-2026-til/artwork.png",
     peaks: "https://cdn.formatglasgow.com/sets/set-seafield-sound-2026-til/peaks.json",
+    finePeaks:
+      "https://cdn.formatglasgow.com/sets/set-seafield-sound-2026-til/vmuqsoudq-c5ni/peaks-fine.bin",
     sizeBytes: 177933164,
   },
   {
@@ -105,6 +116,7 @@ export const sets: MusicSet[] = [
     src: "https://cdn.formatglasgow.com/002/Form_at%20002%20-%20t.i.l.mp3",
     artwork: "sets/002",
     peaks: "https://cdn.formatglasgow.com/002/Form_at%20002%20-%20t.i.l.json",
+    finePeaks: "https://cdn.formatglasgow.com/sets/set-002-til/vmuqsowkh-mzfp/peaks-fine.bin",
     sizeBytes: 108761280,
   },
   {
@@ -120,6 +132,7 @@ export const sets: MusicSet[] = [
     src: "https://cdn.formatglasgow.com/002/Form_at%20002%20-%20hubey.mp3",
     artwork: "sets/002",
     peaks: "https://cdn.formatglasgow.com/002/Form_at%20002%20-%20hubey.json",
+    finePeaks: "https://cdn.formatglasgow.com/sets/set-002-hubey/vmuqsp0ne-dzkc/peaks-fine.bin",
     sizeBytes: 220613760,
   },
   {
@@ -135,6 +148,8 @@ export const sets: MusicSet[] = [
     src: "https://cdn.formatglasgow.com/002/Form_at%20002%20-%20Brandon%20Lee%20Vear.mp3.mp3",
     artwork: "sets/002",
     peaks: "https://cdn.formatglasgow.com/002/Form_at%20002%20-%20Brandon%20Lee%20Vear.mp3.json",
+    finePeaks:
+      "https://cdn.formatglasgow.com/sets/set-002-brandon-lee-vear/vmuqsp5w7-h986/peaks-fine.bin",
     sizeBytes: 292611840,
   },
   {
@@ -150,6 +165,8 @@ export const sets: MusicSet[] = [
     src: "https://cdn.formatglasgow.com/002/Form_at%20002%20-%20Julz%20Lever.mp3",
     artwork: "sets/002",
     peaks: "https://cdn.formatglasgow.com/002/Form_at%20002%20-%20Julz%20Lever.json",
+    finePeaks:
+      "https://cdn.formatglasgow.com/sets/set-002-julz-lever/vmuqspabp-ap1o/peaks-fine.bin",
     sizeBytes: 238804800,
   },
 ];

@@ -1,18 +1,24 @@
 import { djs } from "@form-at/data/djs";
 import { events } from "@form-at/data/events";
+import { isValidSetId } from "@form-at/data/r2Keys";
 import { Button, Label, Modal } from "@form-at/ui";
 import { type ChangeEvent, useEffect, useState } from "react";
 import { fmtBytes, fmtSetDuration, parseSetDuration } from "~/utils/fmt";
-import { isValidSetId } from "~/utils/r2Sets";
 import { slugifySetId } from "~/utils/slugifySetId";
 import { uploadWithProgress } from "~/utils/uploadWithProgress";
-import { readAudioDuration, validateArtworkFile, validatePeaksFile } from "~/utils/validateUpload";
+import {
+  FINE_PEAKS_DURATION_TOLERANCE_SECONDS,
+  readAudioDuration,
+  readFinePeaksFile,
+  validateArtworkFile,
+  validatePeaksFile,
+} from "~/utils/validateUpload";
 
 interface UploadSetFormProps {
   onCreated: () => void;
 }
 
-type FileKey = "audio" | "artwork" | "peaks";
+type FileKey = "audio" | "artwork" | "peaks" | "finePeaks";
 type Progress = Record<FileKey, number>;
 
 const inputClass =
@@ -22,7 +28,7 @@ function getExt(filename: string): string {
   return filename.split(".").pop()?.toLowerCase() ?? "";
 }
 
-const ZERO_PROGRESS: Progress = { audio: 0, artwork: 0, peaks: 0 };
+const ZERO_PROGRESS: Progress = { audio: 0, artwork: 0, peaks: 0, finePeaks: 0 };
 
 // The signal-tracking ceiling in ~/utils/playTracking.ts (apps/web) trusts
 // this stored string as the real length of the set — a typed value the admin
@@ -66,6 +72,9 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [artworkFile, setArtworkFile] = useState<File | null>(null);
   const [peaksFile, setPeaksFile] = useState<File | null>(null);
+  const [finePeaksFile, setFinePeaksFile] = useState<File | null>(null);
+  // The length the fine-peaks file covers, by its own value count.
+  const [finePeaksSeconds, setFinePeaksSeconds] = useState<number | null>(null);
 
   const [duration, setDuration] = useState("");
   const [durationTouched, setDurationTouched] = useState(false);
@@ -76,6 +85,7 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
   const [audioError, setAudioError] = useState<string | null>(null);
   const [artworkError, setArtworkError] = useState<string | null>(null);
   const [peaksError, setPeaksError] = useState<string | null>(null);
+  const [finePeaksError, setFinePeaksError] = useState<string | null>(null);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -156,6 +166,20 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
       setPeaksError("doesn't look like a valid peaks.json (expected { peaks: [1000 numbers] })");
   };
 
+  const handleFinePeaksChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    setFinePeaksFile(file);
+    setFinePeaksError(null);
+    setFinePeaksSeconds(null);
+    if (!file) return;
+    const read = await readFinePeaksFile(file);
+    if (read.ok) setFinePeaksSeconds(read.seconds);
+    else
+      setFinePeaksError(
+        `doesn't look like a peaks-fine.bin from the peaks script (${read.reason})`,
+      );
+  };
+
   // Only meaningful once the file's been decoded — an admin who overwrites
   // the auto-filled field with a shorter number would otherwise ship a
   // duration the real audio can't back up (see
@@ -165,6 +189,13 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
     decodedDurationSeconds !== null &&
     typedDurationSeconds !== undefined &&
     Math.abs(typedDurationSeconds - decodedDurationSeconds) > DURATION_MISMATCH_TOLERANCE_SECONDS;
+
+  // A fine-peaks file generated from a different MP3 would draw another
+  // set's waveform in the Story picker, with nothing else to notice it.
+  const finePeaksMismatch =
+    decodedDurationSeconds !== null &&
+    finePeaksSeconds !== null &&
+    Math.abs(finePeaksSeconds - decodedDurationSeconds) > FINE_PEAKS_DURATION_TOLERANCE_SECONDS;
 
   const canSubmit =
     title.trim().length > 0 &&
@@ -177,6 +208,9 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
     !artworkError &&
     !!peaksFile &&
     !peaksError &&
+    !!finePeaksFile &&
+    !finePeaksError &&
+    !finePeaksMismatch &&
     !durationMismatch;
 
   const handleOpenConfirm = () => {
@@ -197,18 +231,21 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
     setAudioFile(null);
     setArtworkFile(null);
     setPeaksFile(null);
+    setFinePeaksFile(null);
+    setFinePeaksSeconds(null);
     setDuration("");
     setDurationTouched(false);
     setDecodedDurationSeconds(null);
     setAudioError(null);
     setArtworkError(null);
     setPeaksError(null);
+    setFinePeaksError(null);
     setResult(null);
     setError(null);
   };
 
   const handleConfirmUpload = async () => {
-    if (!audioFile || !artworkFile || !peaksFile) return;
+    if (!audioFile || !artworkFile || !peaksFile || !finePeaksFile) return;
     setUploading(true);
     setError(null);
     setProgress(ZERO_PROGRESS);
@@ -237,6 +274,7 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
         audioUploadUrl: string;
         artworkUploadUrl: string;
         peaksUploadUrl: string;
+        finePeaksUploadUrl: string;
       };
 
       setCurrentFile("audio");
@@ -258,6 +296,15 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
         setProgress((p) => ({ ...p, peaks: loaded }));
       });
 
+      setCurrentFile("finePeaks");
+      await uploadWithProgress(
+        presign.finePeaksUploadUrl,
+        await finePeaksFile.arrayBuffer(),
+        (loaded) => {
+          setProgress((p) => ({ ...p, finePeaks: loaded }));
+        },
+      );
+
       const createResponse = await fetch("/api/sets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -273,7 +320,7 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
           sizeBytes: audioFile.size,
           audioExt,
           artworkExt,
-          // The folder the three files just went to; create rebuilds the
+          // The folder the four files just went to; create rebuilds the
           // public URLs from it rather than trusting URLs from the client.
           version: presign.version,
         }),
@@ -304,8 +351,13 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
     }
   };
 
-  const totalBytes = (audioFile?.size ?? 0) + (artworkFile?.size ?? 0) + (peaksFile?.size ?? 0);
-  const loadedBytes = progress.audio + progress.artwork + progress.peaks;
+  const totalBytes =
+    (audioFile?.size ?? 0) +
+    (artworkFile?.size ?? 0) +
+    (peaksFile?.size ?? 0) +
+    (finePeaksFile?.size ?? 0);
+  const loadedBytes = progress.audio + progress.artwork + progress.peaks + progress.finePeaks;
+  const uploadingLabel = currentFile === "finePeaks" ? "fine peaks" : currentFile;
   const overallPercent = totalBytes > 0 ? Math.floor((loadedBytes / totalBytes) * 100) : 0;
 
   if (result) {
@@ -505,6 +557,26 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
           />
           {peaksError && <p className="text-xs text-red-400 mt-1">{peaksError}</p>}
         </div>
+        <div>
+          <label htmlFor="set-fine-peaks" className="block text-xs text-grey mb-1">
+            fine peaks (peaks-fine.bin){finePeaksFile && ` · ${fmtBytes(finePeaksFile.size)}`}
+          </label>
+          <input
+            id="set-fine-peaks"
+            type="file"
+            accept=".bin,application/octet-stream"
+            onChange={handleFinePeaksChange}
+            className={inputClass}
+          />
+          {finePeaksError && <p className="text-xs text-red-400 mt-1">{finePeaksError}</p>}
+          {finePeaksMismatch && (
+            <p className="text-xs text-red-400 mt-1">
+              this covers {fmtSetDuration(finePeaksSeconds ?? 0)}, the audio runs{" "}
+              {fmtSetDuration(decodedDurationSeconds ?? 0)} — it was generated from a different
+              file. re-run the peaks script on this mp3.
+            </p>
+          )}
+        </div>
       </div>
 
       <Button
@@ -528,7 +600,7 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
           {uploading ? (
             <div className="space-y-2">
               <p className="text-sm text-grey">
-                uploading {currentFile} · {overallPercent}% overall
+                uploading {uploadingLabel} · {overallPercent}% overall
               </p>
               <div className="h-2 bg-grey/20">
                 <div
@@ -547,7 +619,8 @@ export function UploadSetForm({ onCreated }: UploadSetFormProps) {
               <p className="text-xs text-grey/70">
                 {audioFile && fmtBytes(audioFile.size)} audio +{" "}
                 {artworkFile && fmtBytes(artworkFile.size)} artwork +{" "}
-                {peaksFile && fmtBytes(peaksFile.size)} peaks
+                {peaksFile && fmtBytes(peaksFile.size)} peaks +{" "}
+                {finePeaksFile && fmtBytes(finePeaksFile.size)} fine peaks
               </p>
               {error && <p className="text-xs text-red-400">{error}</p>}
               <div className="flex gap-4">

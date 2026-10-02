@@ -35,6 +35,7 @@ type DeletedSetLogRow = {
   artwork: string | null;
   artwork_original_url: string | null;
   peaks: string | null;
+  fine_peaks: string | null;
   size_bytes: number | null;
   created_at: number;
 };
@@ -59,12 +60,15 @@ export async function restoreSetFromLog(db: D1Database, logId: number): Promise<
   const urlsToCheck = [row.src];
   if (row.artwork_original_url !== null) urlsToCheck.push(row.artwork_original_url);
   if (row.peaks !== null) urlsToCheck.push(row.peaks);
+  // Absent (not just null) on rows logged before the column existed.
+  const finePeaks = row.fine_peaks ?? null;
+  if (finePeaks !== null) urlsToCheck.push(finePeaks);
 
   if (!(await verifyUrlsExist(urlsToCheck))) return "r2_missing";
 
   const insertSet = db
     .prepare(
-      "INSERT INTO sets (id, title, artist, date, dj_id, event_id, venue, description, duration, src, artwork, artwork_original_url, peaks, size_bytes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO sets (id, title, artist, date, dj_id, event_id, venue, description, duration, src, artwork, artwork_original_url, peaks, fine_peaks, size_bytes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(
       row.set_id,
@@ -80,6 +84,7 @@ export async function restoreSetFromLog(db: D1Database, logId: number): Promise<
       row.artwork,
       row.artwork_original_url,
       row.peaks,
+      finePeaks,
       row.size_bytes,
       // The log's ORIGINAL created_at, not Date.now() — a restore undoes a
       // mistake, it isn't a new upload, so the set goes back to its

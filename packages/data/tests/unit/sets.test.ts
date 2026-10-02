@@ -55,6 +55,7 @@ const sampleRow = {
   artwork: "sets/set-003-new-artist",
   artwork_original_url: "https://cdn.formatglasgow.com/sets/set-003-new-artist/artwork.jpg",
   peaks: "https://cdn.formatglasgow.com/sets/set-003-new-artist/peaks.json",
+  fine_peaks: "https://cdn.formatglasgow.com/sets/set-003-new-artist/v1/peaks-fine.bin",
   size_bytes: 12345,
   created_at: 1785800000000,
 };
@@ -74,6 +75,7 @@ describe("mapD1RowToMusicSet", () => {
       artwork: "sets/set-003-new-artist",
       artworkOriginalUrl: "https://cdn.formatglasgow.com/sets/set-003-new-artist/artwork.jpg",
       peaks: "https://cdn.formatglasgow.com/sets/set-003-new-artist/peaks.json",
+      finePeaks: "https://cdn.formatglasgow.com/sets/set-003-new-artist/v1/peaks-fine.bin",
       sizeBytes: 12345,
     } satisfies MusicSet);
   });
@@ -85,6 +87,11 @@ describe("mapD1RowToMusicSet", () => {
   it("maps a null artwork_original_url to undefined (the legacy-sets case)", () => {
     const row = { ...sampleRow, artwork_original_url: null };
     expect(mapD1RowToMusicSet(row).artworkOriginalUrl).toBeUndefined();
+  });
+
+  // Every set from before fine peaks, until the backfill reaches it.
+  it("maps a null fine_peaks to undefined", () => {
+    expect(mapD1RowToMusicSet({ ...sampleRow, fine_peaks: null }).finePeaks).toBeUndefined();
   });
 });
 

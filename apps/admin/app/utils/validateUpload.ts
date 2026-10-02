@@ -1,3 +1,5 @@
+import { FINE_PEAKS_PER_SECOND, decodeFinePeaks, finePeaksSeconds } from "@form-at/data/finePeaks";
+
 // Pre-upload client-side sanity checks — a convenience, not a guarantee (same
 // trust model as send-push.ts's validate()). Access-gated and admin-only, so
 // the job is catching an honest mistake (a malformed peaks.json, a non-image
@@ -7,7 +9,7 @@
 
 // Shape verified against a real peaks file from R2 (PWA_PROGRESS.md's PR4 entry
 // has the trace): `{ "peaks": number[] }`, exactly 1000 elements
-// (scripts/generate-peaks.mjs's `const PEAKS = 1000`, not duration-dependent),
+// (apps/web/scripts/generate-peaks.ts's `COARSE_PEAKS`, not duration-dependent),
 // values NOT bounded to [0, 1] — real max observed is 1.882 (a louder master
 // than the 1.137 first seen; see TECH_DEBT.md item 23a and Waveform.tsx's
 // bar-height clamp, which real value broke). `[0, 2]` is deliberate headroom
@@ -29,6 +31,31 @@ export async function validatePeaksFile(file: File): Promise<boolean> {
   return peaks.every(
     (p) => typeof p === "number" && Number.isFinite(p) && p >= 0 && p <= MAX_PEAK_VALUE,
   );
+}
+
+/** How far the fine-peaks file's own length may sit from the audio's decoded
+ *  duration. The generator writes one value per started 0.1s, and an MP3's
+ *  reported duration varies by a frame or two between decoders. */
+export const FINE_PEAKS_DURATION_TOLERANCE_SECONDS = 1;
+
+// The `peaks-fine.bin` file (@form-at/data/finePeaks, written by
+// apps/web/scripts/generate-peaks.ts). A real decode — header, format
+// version, encoding, and a value count matching the body — so a JSON file or
+// a truncated download is caught here, not as a blank strip in the Story
+// picker. Returns the length the file covers; whether that matches the audio
+// is the form's to judge, once both are known.
+export async function readFinePeaksFile(
+  file: File,
+): Promise<{ ok: true; seconds: number } | { ok: false; reason: string }> {
+  try {
+    const peaks = decodeFinePeaks(await file.arrayBuffer());
+    if (peaks.valuesPerSecond !== FINE_PEAKS_PER_SECOND) {
+      return { ok: false, reason: `${peaks.valuesPerSecond} values per second, expected 10` };
+    }
+    return { ok: true, seconds: finePeaksSeconds(peaks) };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 // A real image decode, not just a MIME-type check — rejects a renamed

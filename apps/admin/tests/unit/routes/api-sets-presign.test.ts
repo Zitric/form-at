@@ -1,3 +1,4 @@
+import { isValidUploadVersion } from "@form-at/data/r2Keys";
 // @vitest-environment node
 //
 // aws4fetch's SigV4 signing uses Web Crypto (HMAC-SHA256) — forced to
@@ -8,7 +9,6 @@
 // path). This module has zero DOM surface anyway.
 import { describe, expect, it, vi } from "vitest";
 import { presignSetUpload, validate } from "~/routes/api/sets-presign";
-import { isValidUploadVersion } from "~/utils/r2Sets";
 
 type FakeRoute = { match: RegExp; first?: unknown; throws?: boolean };
 
@@ -71,7 +71,7 @@ describe("presignSetUpload", () => {
     expect(prepare).toHaveBeenCalledTimes(1);
   });
 
-  it("presigns 3 URLs and returns public URLs when the id is available", async () => {
+  it("presigns 4 URLs and returns public URLs when the id is available", async () => {
     const { db } = createFakeD1([{ match: /WHERE id = \?/, first: null }]);
 
     const result = await presignSetUpload(db, fakeCreds, validBody);
@@ -85,6 +85,10 @@ describe("presignSetUpload", () => {
     expect(result.response.publicAudioUrl).toBe(`${base}/audio.mp3`);
     expect(result.response.publicArtworkUrl).toBe(`${base}/artwork.jpg`);
     expect(result.response.publicPeaksUrl).toBe(`${base}/peaks.json`);
+    expect(result.response.publicFinePeaksUrl).toBe(`${base}/peaks-fine.bin`);
+    expect(result.response.finePeaksUploadUrl).toContain(
+      `/sets/set-003-new-artist/${version}/peaks-fine.bin`,
+    );
     expect(result.response.audioUploadUrl).toContain(
       `/sets/set-003-new-artist/${version}/audio.mp3`,
     );

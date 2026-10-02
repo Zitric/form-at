@@ -3,6 +3,7 @@
 // drags and nudges move it, and which slice of audio the zoomed strip needs
 // decoded. All times are seconds into the set.
 
+import type { FinePeaks } from "@form-at/data/finePeaks";
 import { EXCERPT_SECONDS } from "./layout";
 import type { SampleSource } from "./spectrum";
 
@@ -122,4 +123,41 @@ export function slicePeaks(
     peaks[i] = max;
   }
   return peaks;
+}
+
+/** What the zoomed strip draws from: peaks over `span` at ZOOM_PEAKS_PER_SECOND,
+ *  and the loudest of them, which the strip scales its bars to. */
+export interface StripPeaks {
+  span: Span;
+  peaks: Float32Array;
+  max: number;
+}
+
+/** The loudest peak, floored so a silent stretch doesn't divide by zero. */
+export function stripMax(peaks: Float32Array): number {
+  let max = 0.001;
+  for (const p of peaks) max = Math.max(max, p);
+  return max;
+}
+
+/**
+ * The zoomed strip's peaks for a window at `start`, from the set's fine-peaks
+ * file instead of a decoded slice: the same span sliceFor gives and the same
+ * scaling, so the strip looks the same either way, but dragging needs no
+ * download. Values past the end of the file read as silence.
+ */
+export function finePeaksStrip(fine: FinePeaks, start: number, setSeconds: number): StripPeaks {
+  const span = sliceFor(start, setSeconds);
+  const count = Math.max(0, Math.floor((span.end - span.start) * ZOOM_PEAKS_PER_SECOND));
+  const peaks = new Float32Array(count);
+  // Counted in whole strip steps, not seconds: near the end of a set with a
+  // fractional length the span can start at e.g. 8361.3s, and
+  // `(8361.3 + i / 10) * 10` lands just under an integer for 360 of the 900
+  // values, reading the one before.
+  const first = Math.round(span.start * ZOOM_PEAKS_PER_SECOND);
+  const ratio = fine.valuesPerSecond / ZOOM_PEAKS_PER_SECOND;
+  for (let i = 0; i < count; i++) {
+    peaks[i] = fine.values[Math.floor((first + i) * ratio)] ?? 0;
+  }
+  return { span, peaks, max: stripMax(peaks) };
 }

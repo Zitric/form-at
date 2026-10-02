@@ -2,17 +2,20 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UploadSetForm } from "~/components/UploadSetForm";
+import { readFinePeaksFile } from "~/utils/validateUpload";
 
 // Set-upload feature. File validity (peaks/artwork/audio decode) is
 // covered directly in validateUpload.test.ts — mocked here so this test
-// stays focused on the submit SEQUENCE: presign → 3 PUTs (in order) →
-// create. `fetch()` has no upload-progress API, so the 3 PUTs go through
+// stays focused on the submit SEQUENCE: presign → 4 PUTs (in order) →
+// create. `fetch()` has no upload-progress API, so the 4 PUTs go through
 // `XMLHttpRequest` (uploadWithProgress.ts) — this repo had no XHR mock
 // harness before this PR; the small fake class below is that harness.
 vi.mock("~/utils/validateUpload", () => ({
   validatePeaksFile: vi.fn().mockResolvedValue(true),
   validateArtworkFile: vi.fn().mockResolvedValue(true),
   readAudioDuration: vi.fn().mockResolvedValue(2718),
+  readFinePeaksFile: vi.fn().mockResolvedValue({ ok: true, seconds: 2718 }),
+  FINE_PEAKS_DURATION_TOLERANCE_SECONDS: 1,
 }));
 
 class FakeXHR {
@@ -62,6 +65,10 @@ async function fillAndSelectFiles() {
     screen.getByLabelText(/peaks \(json\)/i),
     new File(["c"], "peaks.json", { type: "application/json" }),
   );
+  await user.upload(
+    screen.getByLabelText(/fine peaks/i),
+    new File(["d"], "set.peaks-fine.bin", { type: "application/octet-stream" }),
+  );
 
   await waitFor(() => expect(screen.getByText("upload")).not.toBeDisabled());
   return user;
@@ -78,7 +85,7 @@ describe("UploadSetForm — submit sequence", () => {
     vi.restoreAllMocks();
   });
 
-  it("presigns, PUTs audio/artwork/peaks in that order, then creates — success screen shows the id", async () => {
+  it("presigns, PUTs audio/artwork/peaks/fine peaks in that order, then creates — success screen shows the id", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url === "/api/sets-presign") {
         return new Response(
@@ -87,6 +94,7 @@ describe("UploadSetForm — submit sequence", () => {
             audioUploadUrl: "https://r2.example.com/audio",
             artworkUploadUrl: "https://r2.example.com/artwork",
             peaksUploadUrl: "https://r2.example.com/peaks",
+            finePeaksUploadUrl: "https://r2.example.com/fine-peaks",
           }),
           { status: 200 },
         );
@@ -109,6 +117,7 @@ describe("UploadSetForm — submit sequence", () => {
       "https://r2.example.com/audio",
       "https://r2.example.com/artwork",
       "https://r2.example.com/peaks",
+      "https://r2.example.com/fine-peaks",
     ]);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/sets-presign",
@@ -140,7 +149,7 @@ describe("UploadSetForm — submit sequence", () => {
   // /api/sets — locks that the form shows a message distinct from the
   // generic "saving the set failed" one, so an admin isn't left guessing
   // whether to re-upload or just retry the save.
-  it("shows a files-not-found error when create returns 422 after all 3 PUTs succeeded", async () => {
+  it("shows a files-not-found error when create returns 422 after all 4 PUTs succeeded", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url === "/api/sets-presign") {
         return new Response(
@@ -148,6 +157,7 @@ describe("UploadSetForm — submit sequence", () => {
             audioUploadUrl: "https://r2.example.com/audio",
             artworkUploadUrl: "https://r2.example.com/artwork",
             peaksUploadUrl: "https://r2.example.com/peaks",
+            finePeaksUploadUrl: "https://r2.example.com/fine-peaks",
           }),
           { status: 200 },
         );
@@ -164,7 +174,7 @@ describe("UploadSetForm — submit sequence", () => {
     await user.click(screen.getByRole("button", { name: "confirm upload" }));
 
     await waitFor(() => expect(screen.getByText(/couldn't be found on R2/i)).toBeInTheDocument());
-    expect(FakeXHR.instances).toHaveLength(3);
+    expect(FakeXHR.instances).toHaveLength(4);
   });
 });
 
@@ -226,7 +236,41 @@ describe("UploadSetForm — dj is optional", () => {
       screen.getByLabelText(/peaks \(json\)/i),
       new File(["c"], "peaks.json", { type: "application/json" }),
     );
+    await user.upload(
+      screen.getByLabelText(/fine peaks/i),
+      new File(["d"], "set.peaks-fine.bin", { type: "application/octet-stream" }),
+    );
 
     await waitFor(() => expect(screen.getByText("upload")).not.toBeDisabled());
+  });
+});
+
+// A fine-peaks file from a different MP3 would draw another set's waveform
+// in the Story picker, so the form compares its length with the audio's.
+describe("UploadSetForm — fine peaks guard", () => {
+  it("disables upload when the fine-peaks file covers a different length than the audio", async () => {
+    const user = await fillAndSelectFiles();
+    vi.mocked(readFinePeaksFile).mockResolvedValueOnce({ ok: true, seconds: 3600 });
+
+    await user.upload(
+      screen.getByLabelText(/fine peaks/i),
+      new File(["e"], "other.peaks-fine.bin", { type: "application/octet-stream" }),
+    );
+
+    await waitFor(() => expect(screen.getByText("upload")).toBeDisabled());
+    expect(screen.getByText(/generated from a different/i)).toBeInTheDocument();
+  });
+
+  it("disables upload and says why when the file doesn't decode", async () => {
+    const user = await fillAndSelectFiles();
+    vi.mocked(readFinePeaksFile).mockResolvedValueOnce({ ok: false, reason: "not FPKS" });
+
+    await user.upload(
+      screen.getByLabelText(/fine peaks/i),
+      new File(["{}"], "broken.peaks-fine.bin", { type: "application/octet-stream" }),
+    );
+
+    await waitFor(() => expect(screen.getByText("upload")).toBeDisabled());
+    expect(screen.getByText(/not FPKS/)).toBeInTheDocument();
   });
 });

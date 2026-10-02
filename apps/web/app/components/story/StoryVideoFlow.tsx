@@ -1,4 +1,5 @@
 import { getDJ } from "@form-at/data/djs";
+import { type FinePeaks, decodeFinePeaks } from "@form-at/data/finePeaks";
 import type { MusicSet } from "@form-at/data/sets";
 import { Button, Modal, TerminalRow } from "@form-at/ui";
 import { colors } from "@form-at/ui/tokens";
@@ -33,8 +34,10 @@ import {
 import {
   NUDGE_SECONDS,
   type Span,
+  type StripPeaks,
   ZOOM_PEAKS_PER_SECOND,
   ZOOM_VISIBLE_SECONDS,
+  finePeaksStrip,
   initialStart,
   nudge,
   sliceCovers,
@@ -42,6 +45,7 @@ import {
   slicePeaks,
   startFromDrag,
   startFromStripTap,
+  stripMax,
   visibleSpan,
 } from "~/utils/storyVideo/excerptWindow";
 import { EXCERPT_SECONDS } from "~/utils/storyVideo/layout";
@@ -58,12 +62,9 @@ import { type StoryAssets, loadStoryAssets } from "~/utils/storyVideo/renderer";
 //
 // Lazy-loaded by StoryFlowHost; the default export is what lazy() needs.
 
-type Slice = {
-  span: Span;
+type Slice = StripPeaks & {
   audio: AudioBuffer;
   offsetSeconds: number;
-  peaks: Float32Array;
-  max: number;
 };
 
 // Waits this long after the last drag frame before fetching a new slice, so a
@@ -112,7 +113,7 @@ function drawFullStrip(
 function drawZoomStrip(
   canvas: HTMLCanvasElement,
   width: number,
-  slice: Slice | null,
+  slice: StripPeaks | null,
   start: number,
   setSeconds: number,
 ) {
@@ -188,12 +189,44 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
   const contextRef = useRef<AudioContext | null>(null);
   const needsSlice =
     setSeconds > 0 && !refused && (!slice || !sliceCovers(slice.span, start, setSeconds));
+  const [dragging, setDragging] = useState(false);
+
+  // The set's fine-peaks file, when it has one: the zoomed strip draws from
+  // it, so dragging needs no audio download. Fetched with the bare URL and
+  // never stored — the SW doesn't route `.bin`, so it isn't in the offline
+  // library and a tab can't read that library through it. Offline, or for a
+  // set without one, the strip draws from the decoded slice as before.
+  const [fine, setFine] = useState<FinePeaks | null>(null);
+  useEffect(() => {
+    const url = set.finePeaks;
+    if (!url) return;
+    const abort = new AbortController();
+    fetch(url, { signal: abort.signal })
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((buffer) => setFine(decodeFinePeaks(buffer)))
+      .catch(() => {
+        // Falls back to the decoded slice.
+      });
+    return () => abort.abort();
+  }, [set.finePeaks]);
+
+  // Re-cut only when the window leaves the current span, like a decoded
+  // slice, so the bars keep their scale while a short drag moves them.
+  const [fineStrip, setFineStrip] = useState<StripPeaks | null>(null);
+  useEffect(() => {
+    if (!fine || (fineStrip && sliceCovers(fineStrip.span, start, setSeconds))) return;
+    setFineStrip(finePeaksStrip(fine, start, setSeconds));
+  }, [fine, fineStrip, start, setSeconds]);
+
+  // With fine peaks drawing the strip, the slice is only needed for preview
+  // and recording, so it waits until the drag ends.
+  const deferSlice = dragging && fineStrip !== null;
 
   // Decode the ~90s around the window; again, debounced, once a drag leaves it.
   // `retries` is a dependency so [ retry ] re-runs this.
   // biome-ignore lint/correctness/useExhaustiveDependencies: retries only re-triggers the fetch
   useEffect(() => {
-    if (!needsSlice) return;
+    if (!needsSlice || deferSlice) return;
     // Aborted when the window moves on (or the picker closes) before this
     // slice arrives: the ~3.6MB request is cancelled, not just ignored.
     const abort = new AbortController();
@@ -225,7 +258,7 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
             audio: excerpt.audio,
             offsetSeconds: excerpt.offsetSeconds,
             peaks,
-            max: Math.max(0.001, ...peaks),
+            max: stripMax(peaks),
           });
           setLoadError(null);
         } catch (e) {
@@ -249,7 +282,7 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
       abort.abort();
       clearTimeout(timer);
     };
-  }, [needsSlice, start, setSeconds, set.src, slice, retries]);
+  }, [needsSlice, deferSlice, start, setSeconds, set.src, slice, retries]);
 
   // The full-set strip reuses the player's peaks; fetch them if the player
   // never has, the same way PlayerSeeker does.
@@ -514,8 +547,9 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
     if (!picking || !width) return;
     if (fullRef.current)
       drawFullStrip(fullRef.current, width, cachedPeaks ?? [], start, setSeconds);
-    if (zoomRef.current) drawZoomStrip(zoomRef.current, width, slice, start, setSeconds);
-  }, [picking, width, cachedPeaks, slice, start, setSeconds]);
+    if (zoomRef.current)
+      drawZoomStrip(zoomRef.current, width, fineStrip ?? slice, start, setSeconds);
+  }, [picking, width, cachedPeaks, fineStrip, slice, start, setSeconds]);
 
   const moveTo = (next: number) => {
     stopPreview();
@@ -527,6 +561,7 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
     stopPreview();
     e.currentTarget.setPointerCapture(e.pointerId);
     grab.current = { x: e.clientX, start };
+    setDragging(true);
   };
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     if (!grab.current) return;
@@ -534,6 +569,7 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
   };
   const onPointerEnd = () => {
     grab.current = null;
+    setDragging(false);
   };
   const onZoomKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const delta = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
@@ -550,11 +586,12 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
 
   const windowLabel = `${fmtTimestamp(start)} → ${fmtTimestamp(start + EXCERPT_SECONDS)}`;
   const previewLabel = previewing ? "stop" : "preview";
-  // needsSlice also covers a drag that has left the decoded slice: the strip
-  // shows undecoded audio as a dotted line until the new slice arrives.
+  // needsSlice also covers a drag that has left the decoded slice: without
+  // fine peaks the strip shows undecoded audio as a dotted line until the new
+  // slice arrives. With them the strip is whole and nothing loads mid-drag.
   const status = loadError
     ? loadError
-    : needsSlice
+    : needsSlice && !deferSlice
       ? "loading this part of the set…"
       : "drag the waveform, tap the full set, or nudge";
 

@@ -117,9 +117,9 @@
 //
 // A folder argument processes every .wav directly inside it (not
 // recursive; non-.wav files in the same folder, including a prior
-// .mastered.mp3, are ignored). process runs generate-peaks.mjs
-// (../../../scripts/generate-peaks.mjs) on each finished MP3 automatically
-// — a set uploaded with a peaks.json that doesn't match its actual audio is
+// .mastered.mp3, are ignored). process runs generate-peaks.ts on each
+// finished MP3 automatically, writing both peaks files next to it — a set
+// uploaded with a peaks.json that doesn't match its actual audio is
 // a real bug this repo has already made once (a mismatched waveform), not a
 // hypothetical.
 //
@@ -142,15 +142,12 @@
 
 import { spawn } from "node:child_process";
 import { readdir, rm, stat } from "node:fs/promises";
-import { basename, dirname, extname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { basename, dirname, extname, join } from "node:path";
+import { writePeaksFiles } from "./generate-peaks";
 
-const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-// apps/web/scripts -> repo root -> scripts/generate-peaks.mjs. Reused rather
-// than reimplemented: it's the exact tool the admin upload flow's own
-// documentation points to, and duplicating its peak-extraction logic here
-// would just be a second copy to keep in sync.
-const GENERATE_PEAKS = resolve(SCRIPT_DIR, "../../../scripts/generate-peaks.mjs");
+// Peaks come from generate-peaks.ts, the exact tool the admin upload flow's
+// own documentation points to, rather than a second copy of its extraction
+// logic to keep in sync.
 
 // ---- catalogue-derived targets (see the header comment for why) ----------
 const DEFAULT_TARGET_I = -17.5;
@@ -466,8 +463,8 @@ async function processOne(
       console.log(`       ! ${reasons.join(", ")} — check manually`);
     }
 
-    console.log("  running generate-peaks.mjs");
-    await run("node", [GENERATE_PEAKS, outMp3]);
+    console.log("  generating peaks");
+    await writePeaksFiles(outMp3);
 
     console.log(`  done: ${outMp3}`);
     return offTarget ? "processed-off-target" : "processed";

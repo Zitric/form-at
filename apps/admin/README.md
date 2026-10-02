@@ -66,7 +66,7 @@ every upload reports a valid mp3 as unreadable — found against a real upload,
 2026-08-18 (see `TECH_DEBT.md` item 23a).
 
 So is `connect-src`'s `https://*.r2.cloudflarestorage.com` allowance. Once the
-duration read gets past `media-src`, `UploadSetForm`'s three PUTs go straight
+duration read gets past `media-src`, `UploadSetForm`'s four PUTs go straight
 from the browser to R2 against a presigned URL (`sets-presign.ts` →
 `r2Sets.ts`) — without this, every PUT is silently blocked and the form shows
 a generic "check your connection" that has nothing to do with the actual

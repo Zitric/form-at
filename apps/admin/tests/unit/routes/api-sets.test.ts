@@ -1,3 +1,4 @@
+import { encodeFinePeaks } from "@form-at/data/finePeaks";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   deleteSetWithAudit,
@@ -5,6 +6,7 @@ import {
   updateSet,
   validate,
   validateEdit,
+  verifyFinePeaksFile,
   verifyR2ObjectsExist,
   verifyUrlsExist,
 } from "~/routes/api/sets";
@@ -130,6 +132,7 @@ const sampleRow = {
   artwork: "uploads/set-003-new-artist",
   artworkOriginalUrl: "https://cdn.formatglasgow.com/sets/set-003-new-artist/artwork.jpg",
   peaks: "https://cdn.formatglasgow.com/sets/set-003-new-artist/peaks.json",
+  finePeaks: "https://cdn.formatglasgow.com/sets/set-003-new-artist/peaks-fine.bin",
   sizeBytes: null,
   createdAt: 1785800000000,
 };
@@ -186,12 +189,14 @@ const sampleKeys = {
   audioKey: "sets/set-003-new-artist/audio.mp3",
   artworkKey: "sets/set-003-new-artist/artwork.jpg",
   peaksKey: "sets/set-003-new-artist/peaks.json",
+  finePeaksKey: "sets/set-003-new-artist/peaks-fine.bin",
   publicAudioUrl: "https://cdn.formatglasgow.com/sets/set-003-new-artist/audio.mp3",
   publicArtworkUrl: "https://cdn.formatglasgow.com/sets/set-003-new-artist/artwork.jpg",
   publicPeaksUrl: "https://cdn.formatglasgow.com/sets/set-003-new-artist/peaks.json",
+  publicFinePeaksUrl: "https://cdn.formatglasgow.com/sets/set-003-new-artist/peaks-fine.bin",
 };
 
-// Nothing else checks that the 3 R2 uploads the client reported as successful
+// Nothing else checks that the 4 R2 uploads the client reported as successful
 // actually landed, and a row pointing at a 404 would reach the public site.
 // These lock the "some object missing" and
 // "R2 request itself throws" paths, both of which must refuse to verify
@@ -201,7 +206,7 @@ describe("verifyR2ObjectsExist", () => {
     vi.unstubAllGlobals();
   });
 
-  it("returns true when all 3 objects respond ok", async () => {
+  it("returns true when all 4 objects respond ok", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 200 })));
 
     expect(await verifyR2ObjectsExist(sampleKeys)).toBe(true);
@@ -223,7 +228,7 @@ describe("verifyR2ObjectsExist", () => {
     expect(await verifyR2ObjectsExist(sampleKeys)).toBe(false);
   });
 
-  it("HEADs all 3 public URLs", async () => {
+  it("HEADs all 4 public URLs", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -233,13 +238,48 @@ describe("verifyR2ObjectsExist", () => {
     expect(calledUrls).toContain(sampleKeys.publicAudioUrl);
     expect(calledUrls).toContain(sampleKeys.publicArtworkUrl);
     expect(calledUrls).toContain(sampleKeys.publicPeaksUrl);
+    expect(calledUrls).toContain(sampleKeys.publicFinePeaksUrl);
     for (const call of fetchMock.mock.calls) {
       expect(call[1]).toMatchObject({ method: "HEAD" });
     }
   });
 });
 
-// verifyR2ObjectsExist's 3-URL HEAD loop is extracted into this lower-level
+// The browser's own check can't be trusted by the endpoint, so the file that
+// actually landed on R2 is decoded server-side before a row points at it.
+describe("verifyFinePeaksFile", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+  const url = sampleKeys.publicFinePeaksUrl;
+  const serve = (body: BodyInit | null, status = 200) =>
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body, { status })));
+
+  it("accepts a file that decodes at 10 values per second", async () => {
+    serve(encodeFinePeaks([0.1, 0.5, 0.9]));
+    expect(await verifyFinePeaksFile(url)).toBe(true);
+  });
+
+  it("rejects a 404, a JSON file, a truncated file, an empty one and another rate", async () => {
+    serve(null, 404);
+    expect(await verifyFinePeaksFile(url)).toBe(false);
+    serve('{"peaks":[0.1]}');
+    expect(await verifyFinePeaksFile(url)).toBe(false);
+    serve(encodeFinePeaks([0.1, 0.5, 0.9]).slice(0, -1));
+    expect(await verifyFinePeaksFile(url)).toBe(false);
+    serve(encodeFinePeaks([]));
+    expect(await verifyFinePeaksFile(url)).toBe(false);
+    serve(encodeFinePeaks([0.1, 0.5], 20));
+    expect(await verifyFinePeaksFile(url)).toBe(false);
+  });
+
+  it("rejects rather than assumes when the request itself throws", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network error")));
+    expect(await verifyFinePeaksFile(url)).toBe(false);
+  });
+});
+
+// verifyR2ObjectsExist's HEAD loop is extracted into this lower-level
 // primitive so restore can check
 // however many URLs a deleted-set log row actually recorded (a legacy set
 // never had an artwork_original_url) — see routes/api/sets/restore.ts.
@@ -445,6 +485,7 @@ const sampleDeletedRow = {
   artwork: "sets/002",
   artwork_original_url: null,
   peaks: "https://cdn.formatglasgow.com/002/peaks.json",
+  fine_peaks: "https://cdn.formatglasgow.com/sets/set-002-til/vmuqr1t1u-smtk/peaks-fine.bin",
   size_bytes: 108_761_280,
   created_at: 1785707552000,
 };
@@ -506,6 +547,19 @@ describe("deleteSetWithAudit", () => {
     // themselves (only ever a SELECT COUNT against plays, never a DELETE).
     expect(calls.some((sql) => /DELETE FROM plays/.test(sql))).toBe(false);
     expect(calls.some((sql) => /DELETE FROM events/.test(sql))).toBe(false);
+  });
+
+  it("carries fine_peaks into the audit row, so a restore can put it back", async () => {
+    const { db, statements } = createRoutedFakeD1([
+      { match: /SELECT \* FROM sets WHERE id/, first: sampleDeletedRow },
+      { match: /FROM plays WHERE set_id/, first: { n: 0 } },
+    ]);
+
+    await deleteSetWithAudit(db, "set-002-til", "julian@formatglasgow.com");
+
+    const insert = statements.find((s) => s.sql.startsWith("INSERT INTO admin_deleted_sets"));
+    expect(insert?.sql).toMatch(/\bfine_peaks\b/);
+    expect(insert?.boundArgs).toContain(sampleDeletedRow.fine_peaks);
   });
 
   it("returns 'not_found' and logs nothing when the id doesn't exist", async () => {
