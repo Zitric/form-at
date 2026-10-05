@@ -7,13 +7,25 @@ import { scaleBand, scaleLinear } from "@visx/scale";
 import { TooltipWithBounds, useTooltip } from "@visx/tooltip";
 import { useMemo } from "react";
 import { niceIntegerTicks } from "~/utils/chartTicks";
+import type { MarkerPosition, MilestoneKind } from "~/utils/milestones";
 import { bucketStartDates } from "~/utils/trendDates";
 
 interface TrendChartInnerProps {
   /** `null` = not observed, drawn as a shaded gap. See TrendChart.tsx's prop doc. */
   data: (number | null)[];
   bucketDays: number;
+  /** Milestone lines, already placed (markerPositions). */
+  markers?: MarkerPosition[];
 }
+
+// The launch and the event stand out; pushes and uploads are context. White,
+// not gold: a gold line vanishes against the gold bars it crosses.
+const MARKER_STYLE: Record<MilestoneKind, { stroke: string; dash?: string }> = {
+  launch: { stroke: "#ffffff" },
+  event: { stroke: "#ffffff", dash: "4 3" },
+  push: { stroke: colors.grey, dash: "2 3" },
+  upload: { stroke: colors.grey, dash: "1 2" },
+};
 
 // Exported so tests can assert the container's explicit height matches this
 // constant directly, rather than duplicating the magic number and risking
@@ -31,7 +43,7 @@ const shortDateFormat = new Intl.DateTimeFormat(undefined, { month: "short", day
 // convention apps/web's public set-detail page already uses for the same
 // shape of data (apps/web/app/utils/fmt.ts's asciiBar) — same idea, real
 // rendering, no shared code between the two apps.
-export function TrendChartInner({ data, bucketDays }: TrendChartInnerProps) {
+export function TrendChartInner({ data, bucketDays, markers = [] }: TrendChartInnerProps) {
   const dates = useMemo(() => bucketStartDates(data.length, bucketDays), [data.length, bucketDays]);
   // Unobserved buckets are excluded from every summary figure — a gap must not
   // drag the peak or the scale toward zero as though it were a low reading.
@@ -158,6 +170,26 @@ export function TrendChartInner({ data, bucketDays }: TrendChartInnerProps) {
                     />
                   );
                 })}
+                {markers.map(({ milestone, bucket, fraction }) => {
+                  const x = (xScale(bucket) ?? 0) + fraction * xScale.bandwidth();
+                  const style = MARKER_STYLE[milestone.kind];
+                  return (
+                    <line
+                      key={`${milestone.date}-${milestone.kind}-${milestone.label}`}
+                      data-testid="chart-marker"
+                      data-kind={milestone.kind}
+                      x1={x}
+                      x2={x}
+                      y1={0}
+                      y2={innerHeight}
+                      stroke={style.stroke}
+                      strokeWidth={1.5}
+                      strokeDasharray={style.dash}
+                    >
+                      <title>{`${milestone.date} · ${milestone.label}`}</title>
+                    </line>
+                  );
+                })}
                 <AxisBottom
                   top={innerHeight}
                   scale={xScale}
@@ -213,6 +245,9 @@ export function TrendChartInner({ data, bucketDays }: TrendChartInnerProps) {
       <p className="sr-only">
         {data.length} {bucketDays === 1 ? "days" : "weeks"}, latest {latest}, peak {peak}
         {gapCount > 0 ? `, ${gapCount} not captured` : ""}
+        {markers.length > 0
+          ? `; marked: ${markers.map((m) => `${m.milestone.date} ${m.milestone.label}`).join(", ")}`
+          : ""}
       </p>
       {isAllZero && <Muted className="text-xs -mt-1">no activity in this window</Muted>}
     </div>

@@ -69,8 +69,10 @@ export function SetsTab({
         {selectedSetStats && (
           <>
             <p className="mt-1 text-xs text-grey/70">
-              avg_engaged_listening is cumulative playback time, not furthest position reached — it
-              can exceed the track's own length for a listener who scrubs back and replays sections.
+              avg_engaged_listening is cumulative playback per play: everything listened to this set
+              ÷ its distinct plays. Not the furthest position reached, so it can exceed the set's
+              length for a listener who replays sections. Plays from before 2026-08-20 count each
+              pause-to-pause segment as a play, so older sets read low.
             </p>
             <div className="mt-3">
               <Label className="mb-1 block text-xs text-grey">trend_60d</Label>

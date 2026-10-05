@@ -9,6 +9,8 @@ import {
   fetchClickStats,
   fetchEventsTrackingStart,
   fetchInstallFunnel,
+  fetchListeningStats,
+  fetchMilestones,
   fetchNotifyFunnel,
   fetchPlayStats,
   fetchPushSubscriberStats,
@@ -673,8 +675,177 @@ describe("fetchStoryFunnel", () => {
         setArtist: "Unreal",
         created: 4,
         shared: 2,
+        linkOpens: 0,
       },
-      { setId: "set-002-til", setTitle: "Form:at 002", setArtist: "t.i.l.", created: 1, shared: 0 },
+      {
+        setId: "set-002-til",
+        setTitle: "Form:at 002",
+        setArtist: "t.i.l.",
+        created: 1,
+        shared: 0,
+        linkOpens: 0,
+      },
     ]);
+  });
+});
+
+describe("fetchStoryFunnel link opens", () => {
+  it("counts story_link_open outside the funnel's rates, with its own trend and per-set column", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const { db } = createFakeD1([
+      {
+        match: /SELECT event_type, COUNT\(\*\) as n/,
+        all: [
+          { event_type: "story_video_shared", n: 2 },
+          { event_type: "story_link_open", n: 5 },
+        ],
+      },
+      {
+        match: /GROUP BY day, event_type/,
+        all: [{ day: today, event_type: "story_link_open", count: 5 }],
+      },
+      {
+        match: /SELECT set_id, event_type/,
+        all: [{ set_id: "set-003-unreal", event_type: "story_link_open", n: 5 }],
+      },
+    ]);
+
+    const result = await fetchStoryFunnel(db);
+
+    expect(result.linkOpens).toBe(5);
+    expect(result.linkOpensTrend.at(-1)).toBe(5);
+    expect(result.perSet[0]).toMatchObject({ setId: "set-003-unreal", linkOpens: 5 });
+    expect(result.sharedRate).toBeNull(); // created is 0; link opens play no part
+  });
+});
+
+describe("fetchListeningStats", () => {
+  const totalsRoute = (first: Record<string, unknown> | null): FakeRoute => ({
+    match: /SELECT COALESCE\(SUM\(listened_seconds\), 0\) AS seconds/,
+    first,
+  });
+  const trendRoute = (all: Record<string, unknown>[] = []): FakeRoute => ({
+    match: /GROUP BY day/,
+    all,
+  });
+  const perSetRoute = (all: Record<string, unknown>[] = []): FakeRoute => ({
+    match: /GROUP BY set_id/,
+    all,
+  });
+
+  it("divides minutes by distinct plays, never by segment rows", async () => {
+    const { db, queries } = createFakeD1([
+      totalsRoute({ seconds: 3 * 60 * 60, plays: 4 }),
+      trendRoute(),
+      perSetRoute(),
+    ]);
+
+    const result = await fetchListeningStats(db);
+
+    expect(result).toMatchObject({ totalMinutes: 180, plays: 4, avgMinutesPerPlay: 45 });
+    expect(
+      queries.some((q) => q.includes("COUNT(DISTINCT COALESCE(session_id, 'legacy-' || id))")),
+    ).toBe(true);
+  });
+
+  it("returns avgMinutesPerPlay null with no plays", async () => {
+    const { db } = createFakeD1([
+      totalsRoute({ seconds: 0, plays: 0 }),
+      trendRoute(),
+      perSetRoute(),
+    ]);
+
+    const result = await fetchListeningStats(db);
+
+    expect(result.avgMinutesPerPlay).toBeNull();
+    expect(result.perSet).toEqual([]);
+  });
+
+  it("buckets listened seconds into weekly minutes", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const { db } = createFakeD1([
+      totalsRoute({ seconds: 0, plays: 0 }),
+      trendRoute([{ day: today, count: 1800 }]),
+      perSetRoute(),
+    ]);
+
+    const result = await fetchListeningStats(db);
+
+    expect(result.weeklyMinutes).toHaveLength(Math.ceil(TREND_WINDOW_DAYS / TREND_BUCKET_DAYS));
+    expect(result.weeklyMinutes.at(-1)).toBe(30);
+  });
+
+  it("ranks sets by minutes, titled from the catalogue, with their own per-play average", async () => {
+    const { db } = createFakeD1([
+      totalsRoute({ seconds: 0, plays: 0 }),
+      trendRoute(),
+      perSetRoute([
+        { set_id: "set-002-til", seconds: 600, plays: 2 },
+        { set_id: "set-003-unreal", seconds: 5400, plays: 3 },
+      ]),
+    ]);
+
+    const result = await fetchListeningStats(db);
+
+    expect(result.perSet).toEqual([
+      {
+        setId: "set-003-unreal",
+        setTitle: "Form:at 003",
+        setArtist: "Unreal",
+        minutes: 90,
+        plays: 3,
+        avgMinutesPerPlay: 30,
+      },
+      {
+        setId: "set-002-til",
+        setTitle: "Form:at 002",
+        setArtist: "t.i.l.",
+        minutes: 10,
+        plays: 2,
+        avgMinutesPerPlay: 5,
+      },
+    ]);
+  });
+});
+
+describe("fetchMilestones", () => {
+  const pushRoute = (all: Record<string, unknown>[] = []): FakeRoute => ({
+    match: /FROM admin_push_sends/,
+    all,
+  });
+  const uploadRoute = (all: Record<string, unknown>[] = []): FakeRoute => ({
+    match: /FROM sets/,
+    all,
+  });
+
+  it("adds push sends and uploads to the static milestones, oldest first, one per day and kind", async () => {
+    const { db } = createFakeD1([
+      pushRoute([
+        { day: "2026-09-19", title: "003 is up" },
+        { day: "2026-09-25", title: "a" },
+        { day: "2026-09-25", title: "b" },
+      ]),
+      uploadRoute([{ day: "2026-09-12", artist: "Unreal", title: "Form:at 003" }]),
+    ]);
+
+    const result = await fetchMilestones(db);
+
+    expect(result).toEqual([
+      { date: "2026-09-12", kind: "upload", label: "set added: Unreal @ Form:at 003" },
+      { date: "2026-09-19", kind: "push", label: "push: 003 is up" },
+      { date: "2026-09-25", kind: "push", label: "2 pushes: a, b" },
+      { date: "2026-10-02", kind: "launch", label: "instagram story launched on android" },
+      { date: "2026-12-05", kind: "event", label: "form:at night, 5 dec" },
+    ]);
+  });
+
+  // Legacy sets were migrated with a placeholder created_at; only uploads
+  // carry artwork_original_url.
+  it("only counts real uploads as set additions", async () => {
+    const { db, queries } = createFakeD1([pushRoute(), uploadRoute()]);
+
+    await fetchMilestones(db);
+
+    expect(queries.find((q) => /FROM sets/.test(q))).toMatch(/artwork_original_url IS NOT NULL/);
   });
 });

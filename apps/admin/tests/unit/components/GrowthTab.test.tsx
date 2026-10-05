@@ -17,7 +17,8 @@ describe("GrowthTab story_funnel", () => {
     expect(row("install_gate (tabs)")).toHaveTextContent("2 · 40%");
     expect(row("created")).toHaveTextContent("3 · 60%");
     expect(row("shared")).toHaveTextContent("2 · 67%");
-    expect(row("Unreal @ Form:at 003")).toHaveTextContent("2 / 1");
+    expect(row("Unreal @ Form:at 003")).toHaveTextContent("2 / 1 / 3");
+    expect(row("link_opens")).toHaveTextContent("4");
   });
 
   it("drops a rate whose base is 0, rather than showing 0%", () => {

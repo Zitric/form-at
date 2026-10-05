@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 export type SetStats = {
   playCount: number;
   totalSeconds: number;
+  /** Listening per play: totalSeconds ÷ playCount (avgSecondsPerPlay). */
   avgSeconds: number;
   countryCount: number;
   firstPlay: number | null;
@@ -16,6 +17,18 @@ export type SetStats = {
 };
 
 export const TREND_WINDOW_DAYS = 60;
+
+/**
+ * Seconds listened per play: everything listened ÷ distinct plays. Never an
+ * AVG over `plays` rows: a row is one listening SEGMENT (a pause starts a
+ * new one), so that average is "time until the next pause", well short of a
+ * play. Rows from before session_id existed still count as one play each,
+ * so older sets read low by however often their listeners paused. 0 with no
+ * plays.
+ */
+export function avgSecondsPerPlay(totalSeconds: number, plays: number): number {
+  return plays > 0 ? Math.round(totalSeconds / plays) : 0;
+}
 export const TREND_BUCKET_DAYS = 7;
 
 // Shared by apps/web's public set-detail page (SSR loader) and apps/admin's
@@ -65,7 +78,6 @@ export const fetchSetStats = createServerFn({ method: "GET" })
           .prepare(
             `SELECT COUNT(DISTINCT COALESCE(session_id, 'legacy-' || id)) as play_count,
               COALESCE(SUM(listened_seconds), 0) as total_seconds,
-              COALESCE(ROUND(AVG(listened_seconds)), 0) as avg_seconds,
               COUNT(DISTINCT country) as country_count,
               MIN(started_at) as first_play,
               MAX(started_at) as last_play
@@ -75,7 +87,6 @@ export const fetchSetStats = createServerFn({ method: "GET" })
           .first<{
             play_count: number;
             total_seconds: number;
-            avg_seconds: number;
             country_count: number;
             first_play: number | null;
             last_play: number | null;
@@ -113,7 +124,7 @@ export const fetchSetStats = createServerFn({ method: "GET" })
       return {
         playCount: row.play_count,
         totalSeconds: row.total_seconds,
-        avgSeconds: row.avg_seconds,
+        avgSeconds: avgSecondsPerPlay(row.total_seconds, row.play_count),
         countryCount: row.country_count,
         firstPlay: row.first_play,
         lastPlay: row.last_play,

@@ -7,6 +7,7 @@ import {
 import { getSet } from "@form-at/data/sets";
 import { WEB_ANALYTICS_SITE_TAG } from "@form-at/data/webAnalytics";
 import { createServerFn } from "@tanstack/react-start";
+import { type Milestone, STATIC_MILESTONES } from "~/utils/milestones";
 import { type EdgeTraffic, type RumVisits, fetchEdgeTraffic, fetchRumVisits } from "./cf-analytics";
 import {
   SAMPLE_ADMIN_DASHBOARD_STATS,
@@ -148,6 +149,10 @@ export type StoryFunnel = {
   /** story_video_shared: the system share sheet completed. NOT a posted
    *  story: nothing reports back from Instagram. */
   shared: number;
+  /** story_link_open: a set page opened from a story's link sticker
+   *  (`?ref=story`). Other people than the funnel above — the story's
+   *  viewers — so outside its rates. */
+  linkOpens: number;
   /** createTaps ÷ shareClicks. */
   tapRate: number | null;
   /** installGateShown ÷ createTaps: the share of taps made in a tab. */
@@ -162,8 +167,37 @@ export type StoryFunnel = {
   installGateShownTrend: number[];
   createdTrend: number[];
   sharedTrend: number[];
+  linkOpensTrend: number[];
   /** Videos made and shared per set, most made first. */
-  perSet: { setId: string; setTitle: string; setArtist: string; created: number; shared: number }[];
+  perSet: {
+    setId: string;
+    setTitle: string;
+    setArtist: string;
+    created: number;
+    shared: number;
+    linkOpens: number;
+  }[];
+};
+
+export type ListeningStats = {
+  /** Every second listened, as whole minutes. */
+  totalMinutes: number;
+  /** Distinct plays (session_id, with each pre-session_id row its own play). */
+  plays: number;
+  /** totalMinutes ÷ plays, one decimal; null with no plays. */
+  avgMinutesPerPlay: number | null;
+  /** Minutes listened per TREND_BUCKET_DAYS bucket over the last
+   *  TREND_WINDOW_DAYS, oldest first. */
+  weeklyMinutes: number[];
+  /** Most listened first. */
+  perSet: {
+    setId: string;
+    setTitle: string;
+    setArtist: string;
+    minutes: number;
+    plays: number;
+    avgMinutesPerPlay: number | null;
+  }[];
 };
 
 export type CalendarAddStats = {
@@ -252,6 +286,10 @@ export type AdminDashboardStats = {
   clicks: ClickStats;
   notifyFunnel: NotifyFunnel;
   storyFunnel: StoryFunnel;
+  listening: ListeningStats;
+  /** Marker lines for the trend charts: STATIC_MILESTONES plus push sends and
+   *  set uploads from D1. */
+  milestones: Milestone[];
   calendarAdds: CalendarAddStats;
   installToPushConversion: InstallToPushConversion;
   /** Non-null only when real tracking history is shorter than the 60-day
@@ -453,6 +491,7 @@ const STORY_EVENT_TYPES = [
   "story_install_gate_shown",
   "story_video_created",
   "story_video_shared",
+  "story_link_open",
 ] as const;
 const STORY_EVENTS_IN = STORY_EVENT_TYPES.map((t) => `'${t}'`).join(", ");
 
@@ -480,7 +519,8 @@ export async function fetchStoryFunnel(db: D1Database): Promise<StoryFunnel> {
     db
       .prepare(
         `SELECT set_id, event_type, COUNT(*) as n FROM events
-         WHERE event_type IN ('story_video_created', 'story_video_shared') AND set_id IS NOT NULL
+         WHERE event_type IN ('story_video_created', 'story_video_shared', 'story_link_open')
+           AND set_id IS NOT NULL
          GROUP BY set_id, event_type`,
       )
       .all<{ set_id: string; event_type: string; n: number }>(),
@@ -492,6 +532,7 @@ export async function fetchStoryFunnel(db: D1Database): Promise<StoryFunnel> {
   const installGateShown = counts.story_install_gate_shown ?? 0;
   const created = counts.story_video_created ?? 0;
   const shared = counts.story_video_shared ?? 0;
+  const linkOpens = counts.story_link_open ?? 0;
 
   const trendFor = (eventType: string) =>
     bucketByWeek(
@@ -503,11 +544,12 @@ export async function fetchStoryFunnel(db: D1Database): Promise<StoryFunnel> {
     );
 
   // Titles from the catalogue, as fetchClickStats does: events store only set_id.
-  const bySet = new Map<string, { created: number; shared: number }>();
+  const bySet = new Map<string, { created: number; shared: number; linkOpens: number }>();
   for (const row of perSetRows.results) {
-    const entry = bySet.get(row.set_id) ?? { created: 0, shared: 0 };
+    const entry = bySet.get(row.set_id) ?? { created: 0, shared: 0, linkOpens: 0 };
     if (row.event_type === "story_video_created") entry.created = row.n;
     if (row.event_type === "story_video_shared") entry.shared = row.n;
+    if (row.event_type === "story_link_open") entry.linkOpens = row.n;
     bySet.set(row.set_id, entry);
   }
   const perSet = [...bySet.entries()]
@@ -515,7 +557,7 @@ export async function fetchStoryFunnel(db: D1Database): Promise<StoryFunnel> {
       const set = getSet(setId);
       return { setId, setTitle: set?.title ?? setId, setArtist: set?.artist ?? "unknown", ...n };
     })
-    .sort((a, b) => b.created - a.created || b.shared - a.shared);
+    .sort((a, b) => b.created - a.created || b.shared - a.shared || b.linkOpens - a.linkOpens);
 
   return {
     shareClicks,
@@ -523,6 +565,7 @@ export async function fetchStoryFunnel(db: D1Database): Promise<StoryFunnel> {
     installGateShown,
     created,
     shared,
+    linkOpens,
     tapRate: rate(createTaps, shareClicks),
     gateRate: rate(installGateShown, createTaps),
     createdRate: rate(created, createTaps),
@@ -532,8 +575,126 @@ export async function fetchStoryFunnel(db: D1Database): Promise<StoryFunnel> {
     installGateShownTrend: trendFor("story_install_gate_shown"),
     createdTrend: trendFor("story_video_created"),
     sharedTrend: trendFor("story_video_shared"),
+    linkOpensTrend: trendFor("story_link_open"),
     perSet,
   };
+}
+
+const toMinutes = (seconds: number) => Math.round(seconds / 60);
+const minutesPerPlay = (seconds: number, plays: number) =>
+  plays > 0 ? Math.round((seconds / 60 / plays) * 10) / 10 : null;
+
+// Plays are distinct session_ids, never rows: a row is one listening segment
+// (see schema.sql's session_id comment). Minutes are SUM(listened_seconds),
+// which is right per row.
+const DISTINCT_PLAYS = "COUNT(DISTINCT COALESCE(session_id, 'legacy-' || id))";
+
+export async function fetchListeningStats(db: D1Database): Promise<ListeningStats> {
+  const [totals, trend, perSetRows] = await Promise.all([
+    db
+      .prepare(
+        `SELECT COALESCE(SUM(listened_seconds), 0) AS seconds, ${DISTINCT_PLAYS} AS plays FROM plays`,
+      )
+      .first<{ seconds: number; plays: number }>(),
+    db
+      .prepare(
+        `SELECT DATE(started_at/1000, 'unixepoch') AS day, SUM(listened_seconds) AS count
+         FROM plays
+         WHERE started_at >= (strftime('%s', 'now', '-${TREND_WINDOW_DAYS} days') * 1000)
+         GROUP BY day
+         ORDER BY day ASC`,
+      )
+      .all<{ day: string; count: number }>(),
+    db
+      .prepare(
+        `SELECT set_id, SUM(listened_seconds) AS seconds, ${DISTINCT_PLAYS} AS plays
+         FROM plays GROUP BY set_id`,
+      )
+      .all<{ set_id: string; seconds: number; plays: number }>(),
+  ]);
+
+  const seconds = totals?.seconds ?? 0;
+  const plays = totals?.plays ?? 0;
+  const weeklySeconds = bucketByWeek(
+    fillDailyWindow(trend.results, TREND_WINDOW_DAYS),
+    TREND_BUCKET_DAYS,
+  );
+  const perSet = perSetRows.results
+    .map((row) => {
+      const set = getSet(row.set_id);
+      return {
+        setId: row.set_id,
+        setTitle: set?.title ?? row.set_id,
+        setArtist: set?.artist ?? "unknown",
+        minutes: toMinutes(row.seconds),
+        plays: row.plays,
+        avgMinutesPerPlay: minutesPerPlay(row.seconds, row.plays),
+      };
+    })
+    .sort((a, b) => b.minutes - a.minutes);
+
+  return {
+    totalMinutes: toMinutes(seconds),
+    plays,
+    avgMinutesPerPlay: minutesPerPlay(seconds, plays),
+    weeklyMinutes: weeklySeconds.map(toMinutes),
+    perSet,
+  };
+}
+
+/**
+ * STATIC_MILESTONES plus push sends and set uploads over the trend window,
+ * one marker per day and kind. Uploads only: legacy sets were migrated in
+ * with a placeholder created_at and no artwork_original_url (upload-only), so
+ * that column keeps them out.
+ */
+export async function fetchMilestones(db: D1Database): Promise<Milestone[]> {
+  const since = `(strftime('%s', 'now', '-${TREND_WINDOW_DAYS} days') * 1000)`;
+  const [pushes, uploads] = await Promise.all([
+    db
+      .prepare(
+        `SELECT DATE(sent_at/1000, 'unixepoch') AS day, title FROM admin_push_sends
+         WHERE sent_at >= ${since} ORDER BY sent_at ASC`,
+      )
+      .all<{ day: string; title: string }>(),
+    db
+      .prepare(
+        `SELECT DATE(created_at/1000, 'unixepoch') AS day, artist, title FROM sets
+         WHERE created_at >= ${since} AND artwork_original_url IS NOT NULL ORDER BY created_at ASC`,
+      )
+      .all<{ day: string; artist: string; title: string }>(),
+  ]);
+
+  const byDay = (
+    rows: { day: string; label: string }[],
+    kind: "push" | "upload",
+    [one, many]: [string, string],
+  ) => {
+    const days = new Map<string, string[]>();
+    for (const row of rows) days.set(row.day, [...(days.get(row.day) ?? []), row.label]);
+    return [...days].map(([date, labels]) => ({
+      date,
+      kind,
+      label:
+        labels.length === 1
+          ? `${one}: ${labels[0]}`
+          : `${labels.length} ${many}: ${labels.join(", ")}`,
+    }));
+  };
+
+  return [
+    ...STATIC_MILESTONES,
+    ...byDay(
+      pushes.results.map((r) => ({ day: r.day, label: r.title })),
+      "push",
+      ["push", "pushes"],
+    ),
+    ...byDay(
+      uploads.results.map((r) => ({ day: r.day, label: `${r.artist} @ ${r.title}` })),
+      "upload",
+      ["set added", "sets added"],
+    ),
+  ].sort((a, b) => a.date.localeCompare(b.date));
 }
 
 export async function fetchCalendarAddStats(db: D1Database): Promise<CalendarAddStats> {
@@ -666,6 +827,8 @@ export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handle
         clicks,
         notifyFunnel,
         storyFunnel,
+        listening,
+        milestones,
         calendarAdds,
         eventsEarliest,
         pushEarliest,
@@ -677,6 +840,8 @@ export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handle
         fetchClickStats(db),
         fetchNotifyFunnel(db),
         fetchStoryFunnel(db),
+        fetchListeningStats(db),
+        fetchMilestones(db),
         fetchCalendarAddStats(db),
         fetchEventsTrackingStart(db),
         fetchPushSubscriptionsTrackingStart(db),
@@ -698,6 +863,8 @@ export const fetchAdminDashboardStats = createServerFn({ method: "GET" }).handle
         clicks,
         notifyFunnel,
         storyFunnel,
+        listening,
+        milestones,
         calendarAdds,
         installToPushConversion,
         eventsTrackingStartDay: computeTrackingStartDay(eventsEarliest),

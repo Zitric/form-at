@@ -122,7 +122,12 @@ export function VisitsHistoryCard({ history }: { history: RumHistory | null }) {
         <Label className="mb-1 block text-xs text-grey">daily_visits</Label>
         {/* bucketDays={1}: daily bars. Nulls reach the chart as shaded gaps —
             never mapped to 0, which would render an outage as flat traffic. */}
-        <TrendChart data={history.days.map((d) => d.visits)} bucketDays={1} />
+        <TrendChart
+          data={history.days.map((d) => d.visits)}
+          bucketDays={1}
+          startDay={history.days[0]?.day}
+          totalDays={history.days.length}
+        />
       </div>
 
       <p className="mt-3 text-xs text-grey/70">

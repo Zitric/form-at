@@ -18,6 +18,7 @@ import { createFileRoute, defer } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { type DashboardTabId, DashboardTabs } from "~/components/DashboardTabs";
 import { GrowthTab } from "~/components/GrowthTab";
+import { MilestonesContext } from "~/components/MilestonesContext";
 import { SetsTab } from "~/components/SetsTab";
 import { UsageTab } from "~/components/UsageTab";
 import {
@@ -142,7 +143,7 @@ function AdminDashboard() {
           No data available — the analytics database isn't reachable from this environment.
         </p>
       ) : (
-        <>
+        <MilestonesContext.Provider value={stats.milestones}>
           <DashboardTabs active={activeTab} onChange={setActiveTab} />
           {activeTab === "growth" && <GrowthTab stats={stats} />}
           {activeTab === "usage" && (
@@ -163,7 +164,7 @@ function AdminDashboard() {
               onSelectSet={setSelectedSetId}
             />
           )}
-        </>
+        </MilestonesContext.Provider>
       )}
     </div>
   );

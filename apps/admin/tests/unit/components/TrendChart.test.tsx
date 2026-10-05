@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { MilestonesContext } from "~/components/MilestonesContext";
 import { TrendChart } from "~/components/TrendChart";
 import { HEIGHT } from "~/components/TrendChartInner";
 
@@ -81,5 +82,29 @@ describe("TrendChart", () => {
     // empty set and one with data shouldn't reflow the page either.
     const container = await screen.findByTestId("trend-chart");
     expect(container.style.height).toBe(`${HEIGHT}px`);
+  });
+
+  // Milestones come from context; only the ones inside the chart's window draw.
+  it("draws a marker line for each milestone inside its window, and none outside", async () => {
+    render(
+      <MilestonesContext.Provider
+        value={[
+          { date: "2026-08-14", kind: "push", label: "push: a" },
+          { date: "2026-10-02", kind: "launch", label: "launch" },
+          { date: "2026-12-05", kind: "event", label: "later" },
+        ]}
+      >
+        <TrendChart data={[1, 2, 3, 4, 5, 6, 7, 8, 9]} startDay="2026-08-04" totalDays={60} />
+      </MilestonesContext.Provider>,
+    );
+    const markers = await screen.findAllByTestId("chart-marker");
+    expect(markers.map((el) => el.getAttribute("data-kind"))).toEqual(["push", "launch"]);
+    expect(markers[1]?.textContent).toBe("2026-10-02 · launch");
+  });
+
+  it("draws no markers without milestones", async () => {
+    render(<TrendChart data={[1, 2, 3]} />);
+    await screen.findAllByTestId("chart-bar");
+    expect(screen.queryAllByTestId("chart-marker")).toHaveLength(0);
   });
 });
