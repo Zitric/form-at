@@ -3894,6 +3894,68 @@ and prints the R2 puts and D1 UPDATEs, each into a new version folder, since
 versioned folders are immutable. All 10 sets: 26.6–82.6KB each, 2.8–7.1s
 each (both files) streaming from the CDN.
 
+## Story frame contrast on light artworks (2026-10)
+
+On Seafield's light, colourful artwork the frame's waveform and timeline
+nearly disappeared. The bars were fully opaque (pixels measured on a
+rendered frame, and still so after an H.264 4:2:0 encode at the recorder's
+6 Mb/s); it was contrast. Measured against the pixels next to each element,
+on Unreal (dark), t.i.l. 002 (busy) and Seafield (light):
+
+- **Excerpt bars: a dark shadow pass under them, plus a lighter story
+  purple** (`EXCERPT_BARS.shadowColor`/`shadowBlur`, `COLORS.unplayed`
+  `#6b6bae` in `layout.ts`). Purple 2.0 / 2.0 / 1.6 → 3.9 / 3.8 / 2.2; gold
+  4.2 / 4.1 / 1.5 → 4.4 / 4.4 / 3.3. The shadow alone darkened the purple
+  into a mass on Seafield (1.2); the lighter purple alone helped the dark
+  artworks but got worse on Seafield's mid-tone (1.2). Lighter still would
+  help Seafield, but around `#8c8cc0` the unplayed bars become as bright as
+  the gold played ones, so `#6b6bae` (brand hue and saturation, 55%
+  lightness) stays clearly darker than gold. Story only: the player keeps
+  the brand purple.
+- **Timeline at 60%, not 35%** (`TIMELINE.color`): 2.8 / 2.6 / 1.7 →
+  5.1 / 4.8 / 2.3. 75% only reached 2.8 on Seafield. A shadow under the
+  timeline too was offered for Seafield and not taken for now.
+
+## Measuring the Story launch (2026-10)
+
+What's recorded to tell whether the Android launch brings traffic and
+listening, and the two corrections found on the way.
+
+**Listening per play, not per segment.** `plays` holds one row per
+pause-to-pause segment, so `AVG(listened_seconds)` was "time until the next
+pause", well short of a play, while the Sets tab's caption described a
+play's cumulative time. It's now `SUM(listened_seconds)` ÷ distinct plays
+(`avgSecondsPerPlay`, `packages/data/src/set-stats.ts`). The new Usage-tab
+`listening` card uses the same rule: total minutes, minutes per week, and
+minutes and average per set. Plays from before `session_id` (2026-08-20)
+still count each segment as a play, so older sets read low; both captions
+say so.
+
+**Milestone markers on every trend chart.** The Android launch, the 5 Dec
+night (static, in `apps/admin/app/utils/milestones.ts` until the event is in
+`events.ts`), push sends and set uploads (from D1; uploads only, since
+migrated legacy sets carry a placeholder `created_at`). Each lands in the
+bar its day was counted in, at that day's position, which takes the
+series' own window: the 60-day default fits `admin-stats.ts`; the edge,
+live-visits and RUM-history charts pass theirs. Launch and event lines are
+white: a gold line vanished against the gold bars.
+
+**Attribution through the link sticker, not the referrer.** Instagram's link
+shim and in-app browser often strip the referrer (third-party reports, not
+verified on our traffic), so the link the picker copies now
+carries `ref=story` (`storyLinkUrl`). The set page sends `story_link_open`
+with the set's id and drops `ref` with a replace navigation, so a reload
+doesn't count twice and a copied link doesn't carry it on; `t` is kept.
+Shown beside the story funnel, not in it: it counts the story's viewers, not
+its makers. A short per-set address printed in the video (counting typed
+visits too) was considered and left for later: it needs a new route and a
+slug map, and is only worth it if link stickers turn out to be unused.
+
+**Devmode photo line.** The picker's devmode line says
+`photo: <url> loaded | failed | none`. A photo that fails falls back to the
+artwork silently; the "missing t.i.l. photo" was an installed app still on
+the build before the photo feature, which this line would have shown.
+
 ## Story video: launched on Android (2026-10)
 
 Android phones get `[ instagram_story ]` without `?story=on`; iOS and

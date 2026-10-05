@@ -1,6 +1,9 @@
+import { TREND_WINDOW_DAYS } from "@form-at/data/set-stats";
 import { Muted } from "@form-at/ui";
 import { ClientOnly } from "@tanstack/react-router";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useContext } from "react";
+import { markerPositions, trendWindowStartDay } from "~/utils/milestones";
+import { MilestonesContext } from "./MilestonesContext";
 
 // ClientOnly alone is a render guard, not a code-splitting mechanism — a
 // static top-level import of visx would still land in the SSR bundle even
@@ -28,13 +31,32 @@ interface TrendChartProps {
    *  reveal. */
   data: (number | null)[];
   bucketDays?: number;
+  /** The first day (UTC) of the first bucket, and how many days the series
+   *  covers — where milestone markers land. The defaults are the window every
+   *  admin-stats.ts trend uses (TREND_WINDOW_DAYS ending today); a chart over
+   *  any other window must pass its own, or its markers land in the wrong
+   *  bar. */
+  startDay?: string;
+  totalDays?: number;
 }
 
-export function TrendChart({ data, bucketDays = 7 }: TrendChartProps) {
+export function TrendChart({
+  data,
+  bucketDays = 7,
+  startDay = trendWindowStartDay(),
+  totalDays = TREND_WINDOW_DAYS,
+}: TrendChartProps) {
+  const milestones = useContext(MilestonesContext);
+  const markers = markerPositions(milestones, {
+    startDay,
+    bucketDays,
+    buckets: data.length,
+    totalDays,
+  });
   return (
     <ClientOnly fallback={<Muted>chart pending</Muted>}>
       <Suspense fallback={<Muted>chart pending</Muted>}>
-        <TrendChartInner data={data} bucketDays={bucketDays} />
+        <TrendChartInner data={data} bucketDays={bucketDays} markers={markers} />
       </Suspense>
     </ClientOnly>
   );

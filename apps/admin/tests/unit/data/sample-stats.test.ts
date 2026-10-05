@@ -42,6 +42,27 @@ describe("SAMPLE_ADMIN_DASHBOARD_STATS", () => {
     expect(trend.at(-1)).toBeGreaterThan(0);
   });
 
+  // listening and plays describe the same rows, so they must agree.
+  it("gives listening the same play count as plays, and per-set figures that add up", () => {
+    const { listening, plays } = SAMPLE_ADMIN_DASHBOARD_STATS;
+    expect(listening.plays).toBe(plays.total);
+    expect(listening.perSet.reduce((n, s) => n + s.minutes, 0)).toBe(listening.totalMinutes);
+    expect(listening.perSet.reduce((n, s) => n + s.plays, 0)).toBe(listening.plays);
+  });
+
+  // Cumulative listening can run past a set's length; the fixture shows it.
+  it("includes a set whose average listen per play exceeds a 90-minute set", () => {
+    const longest = Math.max(
+      ...SAMPLE_ADMIN_DASHBOARD_STATS.listening.perSet.map((s) => s.avgMinutesPerPlay ?? 0),
+    );
+    expect(longest).toBeGreaterThan(90);
+  });
+
+  it("has one milestone of each kind", () => {
+    const kinds = SAMPLE_ADMIN_DASHBOARD_STATS.milestones.map((m) => m.kind).sort();
+    expect(kinds).toEqual(["event", "launch", "push", "upload"]);
+  });
+
   it("installToPushConversion.ratio realistically exceeds 100% (no shared key between the two aggregates)", () => {
     expect(SAMPLE_ADMIN_DASHBOARD_STATS.installToPushConversion.ratio).toBeGreaterThan(1);
   });

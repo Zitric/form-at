@@ -5,6 +5,7 @@ import {
   ARTWORK_COLON,
   BACKGROUND,
   BRAND,
+  COLORS,
   EXCERPT,
   EXCERPT_BARS,
   FRAME,
@@ -156,5 +157,32 @@ describe("barRow", () => {
 
   it("has nothing to draw in a row narrower than one bar", () => {
     expect(barRow(5, 8, 3)).toEqual({ count: 0, inkWidth: 0 });
+  });
+});
+
+// Chosen by contrast against the artwork background (PWA_PROGRESS.md →
+// "Story frame contrast on light artworks"). Pinned so a tidy-up back to
+// the player's own values has to be deliberate.
+describe("story frame contrast", () => {
+  it("uses the lighter story purple, still darker than gold", () => {
+    expect(COLORS.unplayed).toBe("#6b6bae");
+    const luminance = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16) / 255);
+      const lin = (v: number) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * lin(r ?? 0) + 0.7152 * lin(g ?? 0) + 0.0722 * lin(b ?? 0);
+    };
+    expect(luminance(COLORS.unplayed)).toBeLessThan(luminance(COLORS.played));
+  });
+
+  it("draws the timeline at 60% and a dark shadow under the excerpt bars", () => {
+    expect(TIMELINE.color).toBe("rgba(203, 203, 203, 0.6)");
+    expect(EXCERPT_BARS.shadowColor).toBe("rgba(22, 22, 21, 0.85)");
+    expect(EXCERPT_BARS.shadowBlur).toBe(12);
+  });
+
+  // The pre-rendered bar canvases leave `pad` around the bars for the glow;
+  // the shadow must fit in it too, or it's cut off square.
+  it("keeps the shadow inside the bars' padding", () => {
+    expect(EXCERPT_BARS.shadowBlur).toBeLessThanOrEqual(Math.ceil(EXCERPT_BARS.glowBlur * 2));
   });
 });

@@ -6,6 +6,7 @@ import { MIN_PAGELOADS_FOR_BOT_SHARE } from "~/data/cf-analytics";
 import type { EdgeTraffic, RumVisits } from "~/data/cf-analytics";
 import type { RumHistory } from "~/data/rum-history";
 import { DashboardCard } from "./DashboardCard";
+import { MilestoneLegend } from "./MilestoneLegend";
 import { TrendChart } from "./TrendChart";
 import { VisitsHistoryCard } from "./VisitsHistoryCard";
 
@@ -89,7 +90,7 @@ function VisitsCard({ rum }: { rum: RumVisits | null }) {
       {chartIsHonest ? (
         <div className="mt-3">
           <Label className="mb-1 block text-xs text-grey">since {rum.startDay}</Label>
-          <TrendChart data={rum.weeklyVisits} />
+          <TrendChart data={rum.weeklyVisits} startDay={rum.startDay} totalDays={rum.windowDays} />
         </div>
       ) : (
         // Reached only when the figures are EXTRAPOLATED and the interval is
@@ -159,7 +160,11 @@ function EdgeTrafficCard({ edge }: { edge: EdgeTraffic | null }) {
         {/* WEEKLY buckets, like every other trend — TrendChart derives its axis
             from length × bucketDays, so a daily series here would draw a
             413-day span labelled "60 weeks". */}
-        <TrendChart data={edge.weeklyRequests} />
+        <TrendChart
+          data={edge.weeklyRequests}
+          startDay={edge.startDay}
+          totalDays={edge.windowDays}
+        />
       </div>
       <p className="mt-3 text-xs text-grey/70">
         HTTP requests counted at Cloudflare's edge, including bots, crawlers and asset requests —
@@ -194,152 +199,193 @@ function EdgeTrafficCard({ edge }: { edge: EdgeTraffic | null }) {
 // it's a bare total like app_launches rather than a per-entity breakdown
 // that would need its own tab.
 export function UsageTab({ stats, edgeTraffic, rumVisits, rumHistory }: UsageTabProps) {
+  const listening = stats.listening;
+  const avgPerPlayLabel =
+    listening.avgMinutesPerPlay == null ? "—" : `${listening.avgMinutesPerPlay} min`;
   return (
-    // Two columns above mobile, matching SetsTab. Three columns made each card
-    // too narrow for its TerminalRow label/value pairs.
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-      {/* Full-width deliberately — this is the "how's it doing" summary the
+    <>
+      <MilestoneLegend />
+      {/* Two columns above mobile, matching SetsTab. Three columns made each
+          card too narrow for its TerminalRow label/value pairs. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+        {/* Full-width deliberately — this is the "how's it doing" summary the
           dashboard opens on, and a two-column split would break its rows into
           two scan paths. It stays a single column of label/value rows at every
           width, so 375px costs nothing. */}
-      <DashboardCard className="md:col-span-2">
-        <Label className="mb-2 text-grey tracking-widest">{"// totals"}</Label>
-        <div className="space-y-1">
-          {/* Same deferred promise as the edge_traffic card below, read in a
+        <DashboardCard className="md:col-span-2">
+          <Label className="mb-2 text-grey tracking-widest">{"// totals"}</Label>
+          <div className="space-y-1">
+            {/* Same deferred promise as the edge_traffic card below, read in a
               second <Await>. The fallback is the same em-dash this row shows
               for a null result, so resolving causes no layout shift. */}
-          <Suspense fallback={<TerminalRow label="edge_requests" value="—" dimValue />}>
-            <Await promise={edgeTraffic}>
-              {(edge) => (
-                <TerminalRow
-                  label="edge_requests"
-                  value={edge ? String(edge.requests) : "—"}
-                  dimValue
-                />
-              )}
-            </Await>
+            <Suspense fallback={<TerminalRow label="edge_requests" value="—" dimValue />}>
+              <Await promise={edgeTraffic}>
+                {(edge) => (
+                  <TerminalRow
+                    label="edge_requests"
+                    value={edge ? String(edge.requests) : "—"}
+                    dimValue
+                  />
+                )}
+              </Await>
+            </Suspense>
+            <Suspense fallback={<TerminalRow label="visits" value="—" dimValue />}>
+              <Await promise={rumVisits}>
+                {(rum) => (
+                  <TerminalRow label="visits" value={rum ? String(rum.visits) : "—"} dimValue />
+                )}
+              </Await>
+            </Suspense>
+            <TerminalRow label="app_launches" value={String(stats.appLaunches.total)} dimValue />
+            <TerminalRow label="plays" value={String(stats.plays.total)} dimValue />
+            <TerminalRow
+              label="installs_accepted"
+              value={String(stats.installFunnel.accepted)}
+              dimValue
+            />
+            <TerminalRow
+              label="push_subscribers"
+              value={String(stats.pushSubscribers.total)}
+              dimValue
+            />
+            <TerminalRow label="calendar_adds" value={String(stats.calendarAdds.total)} dimValue />
+            <TerminalRow label="save_clicks" value={String(stats.clicks.saveClicks)} dimValue />
+            <TerminalRow label="share_clicks" value={String(stats.clicks.shareClicks)} dimValue />
+          </div>
+          <p className="mt-3 text-xs text-grey/70">
+            installs_accepted and push_subscribers also appear inside growth's funnels — same
+            numbers, same computation, shown here as bare totals and there in context.
+          </p>
+        </DashboardCard>
+        {/* Label is `edge_traffic`, never "visitors" — see cf-analytics.ts. */}
+        <DashboardCard>
+          <Label className="mb-2 text-grey tracking-widest">{"// edge_traffic"}</Label>
+          <Suspense fallback={<Muted className="block text-xs">reading…</Muted>}>
+            <Await promise={edgeTraffic}>{(edge) => <EdgeTrafficCard edge={edge} />}</Await>
           </Suspense>
-          <Suspense fallback={<TerminalRow label="visits" value="—" dimValue />}>
-            <Await promise={rumVisits}>
-              {(rum) => (
-                <TerminalRow label="visits" value={rum ? String(rum.visits) : "—"} dimValue />
-              )}
-            </Await>
+        </DashboardCard>
+
+        <DashboardCard>
+          <Label className="mb-2 text-grey tracking-widest">{"// visits"}</Label>
+          <Suspense fallback={<Muted className="block text-xs">reading…</Muted>}>
+            <Await promise={rumVisits}>{(rum) => <VisitsCard rum={rum} />}</Await>
           </Suspense>
-          <TerminalRow label="app_launches" value={String(stats.appLaunches.total)} dimValue />
-          <TerminalRow label="plays" value={String(stats.plays.total)} dimValue />
-          <TerminalRow
-            label="installs_accepted"
-            value={String(stats.installFunnel.accepted)}
-            dimValue
-          />
-          <TerminalRow
-            label="push_subscribers"
-            value={String(stats.pushSubscribers.total)}
-            dimValue
-          />
-          <TerminalRow label="calendar_adds" value={String(stats.calendarAdds.total)} dimValue />
-          <TerminalRow label="save_clicks" value={String(stats.clicks.saveClicks)} dimValue />
-          <TerminalRow label="share_clicks" value={String(stats.clicks.shareClicks)} dimValue />
-        </div>
-        <p className="mt-3 text-xs text-grey/70">
-          installs_accepted and push_subscribers also appear inside growth's funnels — same numbers,
-          same computation, shown here as bare totals and there in context.
-        </p>
-      </DashboardCard>
-      {/* Label is `edge_traffic`, never "visitors" — see cf-analytics.ts. */}
-      <DashboardCard>
-        <Label className="mb-2 text-grey tracking-widest">{"// edge_traffic"}</Label>
-        <Suspense fallback={<Muted className="block text-xs">reading…</Muted>}>
-          <Await promise={edgeTraffic}>{(edge) => <EdgeTrafficCard edge={edge} />}</Await>
-        </Suspense>
-      </DashboardCard>
+        </DashboardCard>
 
-      <DashboardCard>
-        <Label className="mb-2 text-grey tracking-widest">{"// visits"}</Label>
-        <Suspense fallback={<Muted className="block text-xs">reading…</Muted>}>
-          <Await promise={rumVisits}>{(rum) => <VisitsCard rum={rum} />}</Await>
-        </Suspense>
-      </DashboardCard>
-
-      {/* Sits beside `visits` rather than merging with it: same metric, but one
+        {/* Sits beside `visits` rather than merging with it: same metric, but one
           is a live read of the last 7 days and the other is the D1 archive.
           Two cards keep the provenance visible instead of hiding a seam. */}
-      <DashboardCard>
-        <Label className="mb-2 text-grey tracking-widest">{"// visits_history"}</Label>
-        <Suspense fallback={<Muted className="block text-xs">reading…</Muted>}>
-          <Await promise={rumHistory}>{(h) => <VisitsHistoryCard history={h} />}</Await>
-        </Suspense>
-      </DashboardCard>
+        <DashboardCard>
+          <Label className="mb-2 text-grey tracking-widest">{"// visits_history"}</Label>
+          <Suspense fallback={<Muted className="block text-xs">reading…</Muted>}>
+            <Await promise={rumHistory}>{(h) => <VisitsHistoryCard history={h} />}</Await>
+          </Suspense>
+        </DashboardCard>
 
-      <DashboardCard>
-        <Label className="mb-2 text-grey tracking-widest">{"// app_launches"}</Label>
-        <div className="space-y-1">
-          <TerminalRow label="total" value={String(stats.appLaunches.total)} dimValue />
-        </div>
-        <div className="mt-3">
-          <Label className="mb-1 block text-xs text-grey">last_60d</Label>
-          <TrendChart data={stats.appLaunches.weeklyTrend} />
-        </div>
-        {stats.eventsTrackingStartDay && (
-          <p className="mt-3 text-xs text-grey/70">
-            tracking since {stats.eventsTrackingStartDay} — the 60-day window shown is mostly
-            not-yet-tracked, not "nothing happened".
-          </p>
-        )}
-      </DashboardCard>
+        <DashboardCard>
+          <Label className="mb-2 text-grey tracking-widest">{"// app_launches"}</Label>
+          <div className="space-y-1">
+            <TerminalRow label="total" value={String(stats.appLaunches.total)} dimValue />
+          </div>
+          <div className="mt-3">
+            <Label className="mb-1 block text-xs text-grey">last_60d</Label>
+            <TrendChart data={stats.appLaunches.weeklyTrend} />
+          </div>
+          {stats.eventsTrackingStartDay && (
+            <p className="mt-3 text-xs text-grey/70">
+              tracking since {stats.eventsTrackingStartDay} — the 60-day window shown is mostly
+              not-yet-tracked, not "nothing happened".
+            </p>
+          )}
+        </DashboardCard>
 
-      <DashboardCard>
-        <Label className="mb-2 text-grey tracking-widest">{"// plays"}</Label>
-        <div className="space-y-1 mb-4">
-          <TerminalRow label="total" value={String(stats.plays.total)} dimValue />
-          <TerminalRow
-            label="offline / online"
-            value={`${stats.plays.offlineCount} / ${stats.plays.onlineCount}`}
-            dimValue
-          />
-        </div>
-        {stats.plays.excludedCount > 0 && (
-          <p className="mt-1 mb-4 text-xs text-grey/70">
-            {stats.plays.excludedCount} of {stats.plays.total} plays predate offline tracking (added
-            2026-07-08) and are excluded from this ratio.
-          </p>
-        )}
-        <div className="mb-4">
-          <Label className="mb-1 block text-xs text-grey">last_60d</Label>
-          {/* Total plays only — see PlayStats.weeklyTrend for why this isn't
+        <DashboardCard>
+          <Label className="mb-2 text-grey tracking-widest">{"// plays"}</Label>
+          <div className="space-y-1 mb-4">
+            <TerminalRow label="total" value={String(stats.plays.total)} dimValue />
+            <TerminalRow
+              label="offline / online"
+              value={`${stats.plays.offlineCount} / ${stats.plays.onlineCount}`}
+              dimValue
+            />
+          </div>
+          {stats.plays.excludedCount > 0 && (
+            <p className="mt-1 mb-4 text-xs text-grey/70">
+              {stats.plays.excludedCount} of {stats.plays.total} plays predate offline tracking
+              (added 2026-07-08) and are excluded from this ratio.
+            </p>
+          )}
+          <div className="mb-4">
+            <Label className="mb-1 block text-xs text-grey">last_60d</Label>
+            {/* Total plays only — see PlayStats.weeklyTrend for why this isn't
               split by offline/online. No "tracking since" caption: plays
               predate the 60-day window, unlike the events table. */}
-          <TrendChart data={stats.plays.weeklyTrend} />
-        </div>
-        {stats.plays.topSets.length > 0 && (
-          <div className="space-y-1">
-            {stats.plays.topSets.map((set) => (
-              <TerminalRow
-                key={set.setId}
-                label={`${set.setArtist} @ ${set.setTitle}`}
-                value={String(set.playCount)}
-              />
-            ))}
+            <TrendChart data={stats.plays.weeklyTrend} />
           </div>
-        )}
-      </DashboardCard>
+          {stats.plays.topSets.length > 0 && (
+            <div className="space-y-1">
+              {stats.plays.topSets.map((set) => (
+                <TerminalRow
+                  key={set.setId}
+                  label={`${set.setArtist} @ ${set.setTitle}`}
+                  value={String(set.playCount)}
+                />
+              ))}
+            </div>
+          )}
+        </DashboardCard>
 
-      <DashboardCard>
-        <Label className="mb-2 text-grey tracking-widest">{"// calendar_adds"}</Label>
-        <div className="space-y-1">
-          <TerminalRow label="total" value={String(stats.calendarAdds.total)} dimValue />
-        </div>
-        <p className="mt-1 text-xs text-grey/70">
-          counts AddToCalendarButton clicks merged across all three destinations (google, outlook,
-          .ics) — not split by which one was chosen.
-        </p>
-        {stats.calendarAdds.total === 0 && (
-          <Muted className="mt-1 block text-xs">
-            nothing recorded yet — this event type was only just added
-          </Muted>
-        )}
-      </DashboardCard>
-    </div>
+        <DashboardCard>
+          <Label className="mb-2 text-grey tracking-widest">{"// listening"}</Label>
+          <div className="space-y-1">
+            <TerminalRow label="total" value={`${listening.totalMinutes} min`} dimValue />
+            <TerminalRow label="avg_per_play" value={avgPerPlayLabel} dimValue />
+          </div>
+          <p className="mt-1 text-xs text-grey/70">
+            minutes actually played, summed over every pause-to-pause segment. avg_per_play divides
+            by distinct plays: cumulative, so a replayed section counts twice and it can run past a
+            set's length. plays from before 2026-08-20 each count every segment as a play, so older
+            sets read low.
+          </p>
+          <div className="mt-3 mb-4">
+            <Label className="mb-1 block text-xs text-grey">minutes_60d</Label>
+            <TrendChart data={listening.weeklyMinutes} />
+          </div>
+          {listening.perSet.length > 0 && (
+            <div className="space-y-1">
+              <Label className="mb-1 block text-xs text-grey">per_set (min · per play)</Label>
+              {listening.perSet.map((set) => (
+                <TerminalRow
+                  key={set.setId}
+                  label={`${set.setArtist} @ ${set.setTitle}`}
+                  value={
+                    set.avgMinutesPerPlay == null
+                      ? `${set.minutes}`
+                      : `${set.minutes} · ${set.avgMinutesPerPlay}`
+                  }
+                  dimValue
+                />
+              ))}
+            </div>
+          )}
+        </DashboardCard>
+
+        <DashboardCard>
+          <Label className="mb-2 text-grey tracking-widest">{"// calendar_adds"}</Label>
+          <div className="space-y-1">
+            <TerminalRow label="total" value={String(stats.calendarAdds.total)} dimValue />
+          </div>
+          <p className="mt-1 text-xs text-grey/70">
+            counts AddToCalendarButton clicks merged across all three destinations (google, outlook,
+            .ics) — not split by which one was chosen.
+          </p>
+          {stats.calendarAdds.total === 0 && (
+            <Muted className="mt-1 block text-xs">
+              nothing recorded yet — this event type was only just added
+            </Muted>
+          )}
+        </DashboardCard>
+      </div>
+    </>
   );
 }

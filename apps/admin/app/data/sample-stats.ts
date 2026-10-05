@@ -223,6 +223,7 @@ export const SAMPLE_ADMIN_DASHBOARD_STATS: AdminDashboardStats = {
     installGateShown: 2,
     created: 3,
     shared: 2,
+    linkOpens: 4,
     tapRate: 5 / 8,
     gateRate: 2 / 5,
     createdRate: 3 / 5,
@@ -232,6 +233,7 @@ export const SAMPLE_ADMIN_DASHBOARD_STATS: AdminDashboardStats = {
     installGateShownTrend: [0, 0, 0, 0, 0, 0, 0, 1, 1],
     createdTrend: [0, 0, 0, 0, 0, 0, 0, 1, 2],
     sharedTrend: [0, 0, 0, 0, 0, 0, 0, 1, 1],
+    linkOpensTrend: [0, 0, 0, 0, 0, 0, 0, 1, 3],
     perSet: [
       {
         setId: "set-003-unreal",
@@ -239,6 +241,7 @@ export const SAMPLE_ADMIN_DASHBOARD_STATS: AdminDashboardStats = {
         setArtist: "Unreal",
         created: 2,
         shared: 1,
+        linkOpens: 3,
       },
       {
         setId: "set-002-til",
@@ -246,9 +249,51 @@ export const SAMPLE_ADMIN_DASHBOARD_STATS: AdminDashboardStats = {
         setArtist: "t.i.l.",
         created: 1,
         shared: 1,
+        linkOpens: 1,
       },
     ],
   },
+  listening: {
+    // totalMinutes over plays matches plays.total (41) above. One set's average
+    // runs past a typical 90-minute set: cumulative time, replays included.
+    totalMinutes: 1968,
+    plays: 41,
+    avgMinutesPerPlay: 48,
+    weeklyMinutes: [80, 120, 95, 210, 160, 240, 300, 410, 352],
+    perSet: [
+      {
+        setId: "set-002-til",
+        setTitle: "Form:at 002",
+        setArtist: "t.i.l.",
+        minutes: 760,
+        plays: 8,
+        avgMinutesPerPlay: 95,
+      },
+      {
+        setId: "set-003-unreal",
+        setTitle: "Form:at 003",
+        setArtist: "Unreal",
+        minutes: 640,
+        plays: 14,
+        avgMinutesPerPlay: 45.7,
+      },
+      {
+        setId: "set-002-hubey",
+        setTitle: "Form:at 002",
+        setArtist: "hubey",
+        minutes: 568,
+        plays: 19,
+        avgMinutesPerPlay: 29.9,
+      },
+    ],
+  },
+  // One of each kind; the 5 Dec event lies past today, outside every chart.
+  milestones: [
+    { date: "2026-09-12", kind: "upload", label: "set added: Unreal @ Form:at 003" },
+    { date: "2026-09-19", kind: "push", label: "push: Form:at 003 sets are up" },
+    { date: "2026-10-02", kind: "launch", label: "instagram story launched on android" },
+    { date: "2026-12-05", kind: "event", label: "form:at night, 5 dec" },
+  ],
   calendarAdds: {
     // Deliberately 0: this is the fixture's one demonstration of the "nothing
     // recorded yet" empty state, which every other metric here skips past.

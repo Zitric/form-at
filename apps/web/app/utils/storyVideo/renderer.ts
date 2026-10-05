@@ -55,6 +55,8 @@ export interface StoryAssets {
   artworkUrl: string | null;
   /** The DJ's photo for the card; null when there's none or it failed to load. */
   photo: HTMLImageElement | null;
+  /** The photo URL that was tried, for diagnostics; null when there was none. */
+  photoUrl: string | null;
   /** false means text will render in a fallback face. */
   fontsLoaded: boolean;
 }
@@ -111,12 +113,18 @@ export async function loadStoryAssets(
 
   for (const url of artworkUrls) {
     try {
-      return { artwork: await loadImage(url), artworkUrl: url, photo: await photo, fontsLoaded };
+      return {
+        artwork: await loadImage(url),
+        artworkUrl: url,
+        photo: await photo,
+        photoUrl,
+        fontsLoaded,
+      };
     } catch {
       // try the next one
     }
   }
-  return { artwork: null, artworkUrl: null, photo: await photo, fontsLoaded };
+  return { artwork: null, artworkUrl: null, photo: await photo, photoUrl, fontsLoaded };
 }
 
 export interface StoryFrameInput {
@@ -416,6 +424,25 @@ export function prepareStoryFrame(input: StoryFrameInput): StoryFrame {
       b.shadowColor = EXCERPT_BARS.glowColor;
       b.shadowBlur = EXCERPT_BARS.glowBlur;
     }
+    // The shadow pass: a dark blurred copy first, the bars on top, so no
+    // bar's shadow lands on its neighbour. save/restore keeps the glow set
+    // above for the bars themselves.
+    b.save();
+    b.shadowColor = EXCERPT_BARS.shadowColor;
+    b.shadowBlur = EXCERPT_BARS.shadowBlur;
+    b.fillStyle = EXCERPT_BARS.shadowColor;
+    drawBarRow(
+      b,
+      peaks,
+      pad,
+      pad,
+      barsWidth,
+      EXCERPT.height,
+      EXCERPT_BARS.width,
+      EXCERPT_BARS.gap,
+      EXCERPT_BARS.minHeight,
+    );
+    b.restore();
     b.fillStyle = color;
     drawBarRow(
       b,

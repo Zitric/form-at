@@ -1,6 +1,6 @@
 import type { MusicSet } from "@form-at/data/sets";
 import { describe, expect, it } from "vitest";
-import { artworkUrls, djPhotoUrl } from "~/utils/storyVideo/storyImages";
+import { artworkUrls, djPhotoUrl, photoStatusLine } from "~/utils/storyVideo/storyImages";
 
 const set: MusicSet = {
   id: "set-003-unreal",
@@ -40,5 +40,23 @@ describe("artworkUrls", () => {
     expect(artworkUrls({ ...set, artworkOriginalUrl: undefined })).toEqual([
       "/images/uploads/set-003-unreal-1080.webp",
     ]);
+  });
+});
+
+describe("photoStatusLine", () => {
+  const url = "/images/djs/til-1080.webp";
+
+  it("says which photo loaded", () => {
+    expect(photoStatusLine({ photo: {}, photoUrl: url })).toBe(`photo: ${url} loaded`);
+  });
+
+  // The card silently falls back to the artwork; this is the only trace.
+  it("says which photo failed", () => {
+    expect(photoStatusLine({ photo: null, photoUrl: url })).toBe(`photo: ${url} failed`);
+  });
+
+  it("says none when there was no photo to try, and pending before the assets load", () => {
+    expect(photoStatusLine({ photo: null, photoUrl: null })).toBe("photo: none");
+    expect(photoStatusLine(null)).toBe("photo: pending");
   });
 });
