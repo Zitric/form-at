@@ -23,8 +23,12 @@ const scaled = (px: number) => Math.round(px * UI_SCALE);
 export const COLORS = {
   background: colors.black,
   played: colors.gold,
-  // Same pairing as the player: Waveform.tsx draws unplayed bars in purple.
-  unplayed: colors.purple,
+  // The player's purple, lightened for the story only (brand hue and
+  // saturation, 55% lightness instead of 37%). Over the artwork background
+  // the brand purple read at ~2:1 on dark artworks; this is ~3.8:1 there.
+  // Keep it clearly darker than gold (1.56:1 against it): an unplayed bar
+  // as bright as a played one would stop reading as "not yet".
+  unplayed: "#6b6bae",
   text: colors.grey,
   // tokens.ts has no white; the player's DJ name is Tailwind's text-white.
   title: "#ffffff",
@@ -99,6 +103,11 @@ export const EXCERPT_BARS = {
   minHeight: 2 * UI_SCALE,
   glowBlur: 4 * UI_SCALE,
   glowColor: "rgba(197, 133, 56, 0.35)",
+  // A dark, blurred copy of the bars drawn under them, so they stand off any
+  // artwork. On Seafield's light background it takes the gold from 1.5:1 to
+  // 3.3:1 and the lighter purple to 2.2:1; on dark artwork it barely shows.
+  shadowColor: "rgba(22, 22, 21, 0.85)",
+  shadowBlur: 12,
 } as const;
 
 // Position pill ("30:00"; the set's length is beside the timeline), centred on
@@ -116,7 +125,9 @@ export const TIMELINE = {
   height: 40,
   barWidth: 2,
   gap: 1,
-  color: "rgba(203, 203, 203, 0.35)",
+  // 60%, not the player's 35%: over the artwork background 35% fell to
+  // ~2.6:1 on dark artworks and 1.7:1 on Seafield; 60% is ~5:1 and 2.3:1.
+  color: "rgba(203, 203, 203, 0.6)",
   // The true width of the excerpt on a 2h set is ~2px; the marker never draws thinner.
   minMarkerWidth: 12,
   markerOverhang: 6,

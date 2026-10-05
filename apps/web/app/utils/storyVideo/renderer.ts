@@ -424,6 +424,25 @@ export function prepareStoryFrame(input: StoryFrameInput): StoryFrame {
       b.shadowColor = EXCERPT_BARS.glowColor;
       b.shadowBlur = EXCERPT_BARS.glowBlur;
     }
+    // The shadow pass: a dark blurred copy first, the bars on top, so no
+    // bar's shadow lands on its neighbour. save/restore keeps the glow set
+    // above for the bars themselves.
+    b.save();
+    b.shadowColor = EXCERPT_BARS.shadowColor;
+    b.shadowBlur = EXCERPT_BARS.shadowBlur;
+    b.fillStyle = EXCERPT_BARS.shadowColor;
+    drawBarRow(
+      b,
+      peaks,
+      pad,
+      pad,
+      barsWidth,
+      EXCERPT.height,
+      EXCERPT_BARS.width,
+      EXCERPT_BARS.gap,
+      EXCERPT_BARS.minHeight,
+    );
+    b.restore();
     b.fillStyle = color;
     drawBarRow(
       b,

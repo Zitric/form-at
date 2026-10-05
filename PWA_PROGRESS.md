@@ -3894,6 +3894,28 @@ and prints the R2 puts and D1 UPDATEs, each into a new version folder, since
 versioned folders are immutable. All 10 sets: 26.6–82.6KB each, 2.8–7.1s
 each (both files) streaming from the CDN.
 
+## Story frame contrast on light artworks (2026-10)
+
+On Seafield's light, colourful artwork the frame's waveform and timeline
+nearly disappeared. The bars were fully opaque (pixels measured on a
+rendered frame, and still so after an H.264 4:2:0 encode at the recorder's
+6 Mb/s); it was contrast. Measured against the pixels next to each element,
+on Unreal (dark), t.i.l. 002 (busy) and Seafield (light):
+
+- **Excerpt bars: a dark shadow pass under them, plus a lighter story
+  purple** (`EXCERPT_BARS.shadowColor`/`shadowBlur`, `COLORS.unplayed`
+  `#6b6bae` in `layout.ts`). Purple 2.0 / 2.0 / 1.6 → 3.9 / 3.8 / 2.2; gold
+  4.2 / 4.1 / 1.5 → 4.4 / 4.4 / 3.3. The shadow alone darkened the purple
+  into a mass on Seafield (1.2); the lighter purple alone helped the dark
+  artworks but got worse on Seafield's mid-tone (1.2). Lighter still would
+  help Seafield, but around `#8c8cc0` the unplayed bars become as bright as
+  the gold played ones, so `#6b6bae` (brand hue and saturation, 55%
+  lightness) stays clearly darker than gold. Story only: the player keeps
+  the brand purple.
+- **Timeline at 60%, not 35%** (`TIMELINE.color`): 2.8 / 2.6 / 1.7 →
+  5.1 / 4.8 / 2.3. 75% only reached 2.8 on Seafield. A shadow under the
+  timeline too was offered for Seafield and not taken for now.
+
 ## Measuring the Story launch (2026-10)
 
 What's recorded to tell whether the Android launch brings traffic and
