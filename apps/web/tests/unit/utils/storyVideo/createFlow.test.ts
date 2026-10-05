@@ -5,6 +5,7 @@ import {
   type CreateState,
   recordingFailureMessage,
   storyFileName,
+  storyLinkUrl,
   transition,
 } from "~/utils/storyVideo/createFlow";
 
@@ -146,6 +147,14 @@ describe("recordingFailureMessage", () => {
   it("explains a hidden-page abort and that nothing was saved", () => {
     expect(recordingFailureMessage("hidden")).toMatch(
       /screen locked or you left the app.*nothing was saved/,
+    );
+  });
+});
+
+describe("storyLinkUrl", () => {
+  it("links the set at the excerpt's whole-second start, marked ref=story", () => {
+    expect(storyLinkUrl("https://formatglasgow.com", "set-003-unreal", 1800.7)).toBe(
+      "https://formatglasgow.com/sets/set-003-unreal?t=1800&ref=story",
     );
   });
 });

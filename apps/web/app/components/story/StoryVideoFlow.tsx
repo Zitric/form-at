@@ -29,6 +29,7 @@ import {
   type CreateAction,
   type CreateState,
   storyFileName,
+  storyLinkUrl,
   transition,
 } from "~/utils/storyVideo/createFlow";
 import {
@@ -51,7 +52,7 @@ import {
 import { EXCERPT_SECONDS } from "~/utils/storyVideo/layout";
 import { Mp3ExcerptError, fetchExcerpt } from "~/utils/storyVideo/mp3Excerpt";
 import { type StoryAssets, loadStoryAssets } from "~/utils/storyVideo/renderer";
-import { artworkUrls, djPhotoUrl } from "~/utils/storyVideo/storyImages";
+import { artworkUrls, djPhotoUrl, photoStatusLine } from "~/utils/storyVideo/storyImages";
 
 // The Instagram Story flow. First the excerpt picker: a fixed-length window sits
 // in the middle of a zoomed strip and the waveform slides under it; a
@@ -447,7 +448,7 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
 
   const [linkCopied, setLinkCopied] = useState(false);
   // The link opens the set at the clip's start, like ShareModal's copy @.
-  const storyLink = `${window.location.origin}/sets/${set.id}?t=${Math.floor(start)}`;
+  const storyLink = storyLinkUrl(window.location.origin, set.id, start);
   const copyLink = () =>
     navigator.clipboard.writeText(storyLink).then(
       () => {
@@ -581,6 +582,7 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
   // needsSlice also covers a drag that has left the decoded slice: without
   // fine peaks the strip shows undecoded audio as a dotted line until the new
   // slice arrives. With them the strip is whole and nothing loads mid-drag.
+  const devmode = isDevModeActive();
   const status = loadError
     ? loadError
     : needsSlice && !deferSlice
@@ -737,6 +739,11 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
           </Button>
 
           <p className="text-xs text-grey/60 tracking-widest leading-relaxed mt-5">{status}</p>
+          {devmode && (
+            <p className="text-xs text-grey/40 tracking-widest break-all mt-1">
+              [devmode: {photoStatusLine(assets)}]
+            </p>
+          )}
           {loadError && !refused && (
             <Button
               variant="secondary"

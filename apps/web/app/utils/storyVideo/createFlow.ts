@@ -76,6 +76,16 @@ export function transition(state: CreateState, action: CreateAction): Transition
 }
 
 /** formatglasgow-<set-id>-<mm>-<ss>.mp4, minutes unbounded as in fmtTimestamp. */
+/**
+ * The link the visitor copies for Instagram's link sticker: the set at the
+ * excerpt's start, marked `ref=story` so the set page can count the visits
+ * stories bring (story_link_open) and then drop the marker from the address
+ * bar, so a link copied from there doesn't carry it on.
+ */
+export function storyLinkUrl(origin: string, setId: string, startSeconds: number): string {
+  return `${origin}/sets/${setId}?t=${Math.floor(startSeconds)}&ref=story`;
+}
+
 export function storyFileName(setId: string, startSeconds: number): string {
   const whole = Math.floor(startSeconds);
   return `formatglasgow-${setId}-${Math.floor(whole / 60)}-${String(whole % 60).padStart(2, "0")}.mp4`;

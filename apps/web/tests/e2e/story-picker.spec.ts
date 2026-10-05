@@ -470,6 +470,43 @@ test("creates a story in the installed app and hands a non-fragmented MP4 to the
   ]);
 });
 
+// The link the picker copies for Instagram's link sticker carries ref=story:
+// the set page counts the arrival once and drops ref, keeping the timestamp.
+test("a story link is counted once, and its ref dropped from the address", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "chromium project only");
+  // Beacons don't reliably show up as page requests, so record them as the
+  // page sends them; a reload starts a fresh list.
+  await page.addInitScript(() => {
+    const w = window as unknown as { __events: string[] };
+    w.__events = [];
+    const beacon = navigator.sendBeacon.bind(navigator);
+    navigator.sendBeacon = (url, data) => {
+      if (String(url).includes("/api/event") && data instanceof Blob) {
+        void data.text().then((t) => w.__events.push(t));
+      }
+      return beacon(url, data);
+    };
+  });
+  const linkOpens = () =>
+    page.evaluate(() =>
+      (window as unknown as { __events: string[] }).__events.filter((e) =>
+        e.includes("story_link_open"),
+      ),
+    );
+  await gotoAndHydrate(page, `${SET_PATH}?t=60&ref=story`);
+  await expect(page).toHaveURL(/\/sets\/set-003-unreal\?t=60$/);
+  await expect(page.getByRole("button", { name: /play @ 1:00/ })).toBeVisible();
+  await expect.poll(async () => (await linkOpens()).length).toBe(1);
+  expect((await linkOpens())[0]).toContain(`"set_id":"${SET_ID}"`);
+  // A reload of the cleaned address doesn't count again.
+  await page.reload();
+  await expect(page.getByRole("button", { name: /play @ 1:00/ })).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(await linkOpens()).toHaveLength(0);
+});
+
 // Instagram's in-app browser on Android can't install the app or share a
 // file, so the gate sends the visitor out to Chrome through its menu.
 test("in Instagram's Android browser, the gate says to open it in Chrome", async ({

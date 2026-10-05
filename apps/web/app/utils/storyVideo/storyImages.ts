@@ -16,6 +16,20 @@ export function artworkUrls(set: MusicSet): string[] {
 }
 
 /**
+ * The picker's devmode line for the card photo: `photo: <url> loaded`,
+ * `… failed` (the card fell back to the artwork), `photo: none` (no DJ, or no
+ * photo), or `photo: pending` while assets load. A failed photo is otherwise
+ * silent, so this is how a missing one gets explained on the phone.
+ */
+export function photoStatusLine(
+  assets: { photo: unknown; photoUrl: string | null } | null,
+): string {
+  if (!assets) return "photo: pending";
+  if (!assets.photoUrl) return "photo: none";
+  return `photo: ${assets.photoUrl} ${assets.photo ? "loaded" : "failed"}`;
+}
+
+/**
  * The DJ's photo for the card, the 1080 webp Image.tsx serves. Same-origin,
  * so it never taints the canvas. null when the set has no DJ or the DJ no
  * photo: the card then shows the artwork.

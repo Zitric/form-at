@@ -54,6 +54,7 @@ describe("validate (api/event)", () => {
   it("accepts the story video events with a real set_id", async () => {
     for (const eventType of [
       "story_create_tap",
+      "story_link_open",
       "story_video_created",
       "story_video_shared",
       "story_install_gate_shown",

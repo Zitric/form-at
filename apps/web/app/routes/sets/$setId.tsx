@@ -11,6 +11,7 @@ import { PageLayout } from "~/components/PageLayout";
 import { SaveForOfflineButton } from "~/components/SaveForOfflineButton";
 import { ShareSetButton } from "~/components/ShareSetButton";
 import { fetchSetForRoute } from "~/data/setsForRoute";
+import { useStoryLinkOpen } from "~/hooks/useStoryLinkOpen";
 import { useTypedOnce } from "~/hooks/useTypedOnce";
 import { useStore } from "~/store";
 import { asciiBar, countryFlag, fmtDate, fmtTimestamp } from "~/utils/fmt";
@@ -18,10 +19,15 @@ import { pageHead } from "~/utils/head";
 import { setLd } from "~/utils/jsonld";
 
 export const Route = createFileRoute("/sets/$setId")({
-  validateSearch: (search: Record<string, unknown>): { t?: number } => {
+  // `t`: a shared timestamp to start at. `ref=story`: arrived from a story's
+  // link sticker, counted once by useStoryLinkOpen and then dropped.
+  validateSearch: (search: Record<string, unknown>): { t?: number; ref?: "story" } => {
     const raw = search.t;
     const n = typeof raw === "string" || typeof raw === "number" ? Number(raw) : Number.NaN;
-    return Number.isFinite(n) && n > 0 ? { t: Math.floor(n) } : {};
+    return {
+      ...(Number.isFinite(n) && n > 0 ? { t: Math.floor(n) } : {}),
+      ...(search.ref === "story" ? { ref: "story" as const } : {}),
+    };
   },
   loader: async ({ params }) => {
     // fetchSetForRoute (~/data/setsForRoute) owns the client-side offline
@@ -90,7 +96,11 @@ function buildStatsRows(stats: SetStats): Array<[string, ReactNode]> {
 
 function SetDetail() {
   const { set, stats } = Route.useLoaderData();
-  const { t } = Route.useSearch();
+  const { t, ref } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  useStoryLinkOpen(set.id, ref, () =>
+    navigate({ search: ({ t: shared }) => ({ t: shared }), replace: true, resetScroll: false }),
+  );
   const nowPlaying = useStore((s) => s.nowPlaying);
   const isPlaying = useStore((s) => s.isPlaying);
   const playTrack = useStore((s) => s.playTrack);

@@ -59,6 +59,11 @@ export const TRACKABLE_EVENT_TYPES = [
   // installs; the two rows aren't linkable, so it's a rate, not a per-visitor
   // conversion.
   "story_install_gate_shown",
+  // A set page opened from a story's link sticker: the link the picker copies
+  // carries `ref=story` (storyLinkUrl). With the set's id, once per arrival —
+  // the page drops `ref` from the address bar afterwards. Counts the story's
+  // viewers, not its makers, so it sits beside the funnel, not in it.
+  "story_link_open",
   // The home page's [ install_app ] opened its instructions modal: a browser
   // tab with no native prompt to fire (iOS share-menu steps, the manual hint,
   // open-app, or where to install instead). A tap that fires Chrome's prompt
