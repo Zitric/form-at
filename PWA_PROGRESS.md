@@ -3894,6 +3894,32 @@ and prints the R2 puts and D1 UPDATEs, each into a new version folder, since
 versioned folders are immutable. All 10 sets: 26.6–82.6KB each, 2.8–7.1s
 each (both files) streaming from the CDN.
 
+## In-app browsers: per-platform copy, one helper (2026-10)
+
+On a Pixel, a set link opened in Instagram's browser showed "for full
+audio: tap ⋯ and open in safari": the banner's text was a single string,
+and its detection returned only the app's name, never the platform. The
+install gate added for the Android launch said "open in Chrome", but the
+in-app menu's "open in…" entry goes to the system default browser (labelled
+"Open in browser", "Open in Chrome" or "Open externally" by version, per
+third-party guides; Meta documents none of it), and that may be Opera or
+Brave. iOS in-app browsers had the opposite fault: read as Safari, they got
+share-menu install steps that don't exist inside the app.
+
+- **One helper**, `inAppContext` (`utils/inAppBrowser.ts`): app, OS, menu
+  glyph (⋮ Android, ⋯ iOS) and destination ("browser" Android, "safari"
+  iOS). The banner, the install gate and the story gate all read it.
+- **Copy:** banner "tap ⋮ and open in browser" / "tap ⋯ and open in
+  safari"; gate "open this page in your browser and install from there —
+  Chrome and Samsung Internet install apps; other browsers only add a
+  shortcut" on Android, "open this page in Safari" on iOS.
+- **Shortcut-only Android browsers:** Firefox, Opera (`OPR/`), Edge (`EdgA/`)
+  and Brave (Chrome's UA; `navigator.brave`) only add a home-screen
+  shortcut that opens a tab (web.dev; Brave's own issue tracker), never the
+  standalone app saving and stories need. They now get "use Chrome" instead
+  of Chrome's install steps, and the story entry skips their recording
+  check, as it does for Firefox. Unverified on devices: TECH_DEBT.md item 32.
+
 ## Story frame contrast on light artworks (2026-10)
 
 On Seafield's light, colourful artwork the frame's waveform and timeline
