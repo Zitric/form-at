@@ -1531,6 +1531,13 @@ is gone and `save_for_offline` works. If it does, give Firefox Android its own
 Sources: [MDN — Making PWAs installable](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable),
 [Mozilla Hacks — Firefox for Android, 2017](https://hacks.mozilla.org/2017/10/progressive-web-apps-firefox-android/).
 
+**Opera, Edge and Brave on Android are now classified the same way**
+(`isShortcutOnlyAndroidBrowser`, `installCapability.ts`), on
+[web.dev's "Installation"](https://web.dev/learn/pwa/installation) (they
+"create shortcuts") and, for Brave,
+[brave-browser#56133](https://github.com/brave/brave-browser/issues/56133).
+Not checked on a device either: the same five-minute test settles each.
+
 ---
 
 _Last updated: 2026-10-01_

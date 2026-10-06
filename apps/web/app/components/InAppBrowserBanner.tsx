@@ -4,16 +4,22 @@ import { useNavReady } from "~/hooks/useNavReady";
 import { useStore } from "~/store";
 import { ABOVE_CHROME_BOTTOM, ABOVE_NAV_BOTTOM } from "~/styles/layout";
 import { Z } from "~/styles/z";
-import { isInAppBrowser } from "~/utils/inAppBrowser";
+import { inAppContext } from "~/utils/inAppBrowser";
 import { safeSession } from "~/utils/safeStorage";
 
 const DISMISS_KEY = "iab-dismissed";
-const INSTRUCTION = "for full audio: tap ⋯ and open in safari";
+// Per platform, from inAppContext: on Android the app's "open in…" entry goes
+// to the default browser, which may be Opera or Brave, so it names no browser.
+// Both fit at 375px (iPhone SE); keep any rewording within that.
+function instruction(menu: string, destination: "browser" | "safari"): string {
+  return `for full audio: tap ${menu} and open in ${destination}`;
+}
 
 // Persistent informational banner shown when the page is rendered inside a
 // known in-app browser (Instagram, Facebook, TikTok, Line). Teaches the manual
-// escape — "tap ⋯ and open in safari" — deliberately rather than auto-launching
-// Safari via URL schemes, which fail silently on most current host-app builds.
+// escape — "tap ⋯ and open in safari" on iOS, "tap ⋮ and open in browser" on
+// Android — deliberately rather than auto-launching a browser via URL
+// schemes, which fail silently on most current host-app builds.
 //
 // Mobile-only (`sm:hidden`): in-app browsers ARE mobile.
 //
@@ -25,7 +31,7 @@ const INSTRUCTION = "for full audio: tap ⋯ and open in safari";
 export function InAppBrowserBanner() {
   // Defer detection to mount — UA + sessionStorage both need `window`, so SSR
   // renders nothing and the client decides on hydration.
-  const [show, setShow] = useState(false);
+  const [text, setText] = useState<string | null>(null);
 
   // Bottom anchor: sit above MobileMiniPlayer when a track is loaded, above
   // BottomNav alone when nothing is playing. Matches SwipeNavigator's dot
@@ -37,13 +43,14 @@ export function InAppBrowserBanner() {
   const bottom = nowPlaying && navReady ? ABOVE_CHROME_BOTTOM : ABOVE_NAV_BOTTOM;
 
   useEffect(() => {
-    const detected = isInAppBrowser();
-    if (!detected) return;
+    const context = inAppContext();
+    // Named apps only: an unnamed WebView has no menu we can describe.
+    if (!context || context.app === "webview") return;
     if (safeSession.get(DISMISS_KEY) === "1") return;
-    setShow(true);
+    setText(instruction(context.menu, context.destination));
   }, []);
 
-  if (!show) return null;
+  if (!text) return null;
 
   return (
     <div
@@ -54,12 +61,12 @@ export function InAppBrowserBanner() {
       // above-nav to above-player position the instant `nowPlaying` flips.
       style={{ bottom, transition: "bottom 300ms ease-in-out" }}
     >
-      <p className="flex-1 min-w-0 truncate text-white">{INSTRUCTION}</p>
+      <p className="flex-1 min-w-0 truncate text-white">{text}</p>
       <button
         type="button"
         onClick={() => {
           safeSession.set(DISMISS_KEY, "1");
-          setShow(false);
+          setText(null);
         }}
         aria-label="Dismiss in-app browser banner"
         className="shrink-0 text-grey hover:text-white px-1 -my-1 py-2 cursor-pointer transition-colors"

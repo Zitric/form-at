@@ -8,7 +8,7 @@
 // shape that the InstallPromptModal switches on. Keeping that composition
 // outside this file means the pure parts stay testable in isolation.
 
-import { isInAppBrowser } from "./inAppBrowser";
+import { inAppContext } from "./inAppBrowser";
 
 export type InstallPlatform = "chromium" | "ios-safari" | "ios-other" | "other";
 
@@ -23,30 +23,35 @@ export type InstallPlatform = "chromium" | "ios-safari" | "ios-other" | "other";
 //     prefix "Edg" but the literal slash in the regex separates them safely.
 //   - Order matters: iOS-browser block comes FIRST so iOS Chrome can't fall
 //     through to the "chromium" branch via its embedded `Chrome/` marker.
-//   - Firefox on Android stays "other": per MDN it adds a browser-badged
-//     shortcut that opens the site in the browser, and whether that runs in
-//     standalone display-mode (which saving offline needs) is unverified.
+//   - Firefox, Opera, Edge and Brave on Android stay "other" (see
+//     isShortcutOnlyAndroidBrowser). Firefox's case is the least certain:
 //     TECH_DEBT.md item 32.
 export function detectPlatform(
   ua: string = typeof navigator !== "undefined" ? navigator.userAgent : "",
+  brave: boolean = hasBraveApi(),
 ): InstallPlatform {
+  // An app's own browser (Instagram's, Facebook's…), on either OS: no
+  // install path of its own, whatever its UA says — on Android it carries
+  // `Chrome/`, on iOS it reads as Safari. Before every other branch, or it
+  // gets Chrome's menu steps or Safari's share-menu steps, neither of which
+  // exists inside the app.
+  if (inAppContext(ua)) return "other";
+
   if (iosThirdPartyBrowser(ua)) return isIosAtLeast(ua, 16, 4) ? "ios-other" : "other";
 
-  // An Android WebView (Instagram's, Facebook's…) carries `Chrome/` but isn't
-  // Chrome: MDN lists only Chrome and Samsung Internet as Android browsers
-  // that install a web app, and a WebView has neither browser's install menu.
-  // Before the chromium branch, or it gets Chrome's menu steps.
-  if (isAndroidWebView(ua)) return "other";
+  // Chromium-based, but they only add a home-screen shortcut: before the
+  // chromium branch, or they get Chrome's install steps.
+  if (isShortcutOnlyAndroidBrowser(ua, brave)) return "other";
 
   // Real iOS Safari (iOS device, none of the third-party browser markers
   // above). Returns ios-safari so the modal can render manual install
   // instructions (iOS has no programmatic install prompt).
   if (/iPad|iPhone|iPod/.test(ua)) return "ios-safari";
 
-  // Chromium family (Android Chrome, desktop Chrome, Edge, Samsung Internet,
-  // Opera, Brave, Arc, Vivaldi — they all carry `Chrome/` or `Chromium/`
-  // or `Edg/`). These fire `beforeinstallprompt`, so the modal will surface
-  // the native install button.
+  // Chromium family (Android Chrome, Samsung Internet, and desktop Chrome,
+  // Edge, Opera, Brave, Arc, Vivaldi — they all carry `Chrome/` or
+  // `Chromium/` or `Edg/`). These fire `beforeinstallprompt`, so the modal
+  // will surface the native install button.
   if (/Chrome\/|Chromium\/|Edg\//.test(ua)) return "chromium";
 
   // Firefox (any platform), macOS Safari, anything else — no install path
@@ -74,28 +79,46 @@ function isIosAtLeast(ua: string, major: number, minor: number): boolean {
   return maj > major || (maj === major && min >= minor);
 }
 
-/**
- * An app's built-in browser on Android: a known in-app browser, or any
- * WebView (`; wv)` in the UA, Android's own WebView marker). It can't install
- * the app, and has no Web Share at all (MDN's compat data: `navigator.share`
- * unsupported in WebView Android).
- */
-export function isAndroidWebView(ua: string): boolean {
-  return /Android/.test(ua) && (/; wv\)/.test(ua) || isInAppBrowser(ua) !== null);
+/** Brave hides itself from its UA (it sends Chrome's); `navigator.brave` gives it away. */
+function hasBraveApi(): boolean {
+  return typeof navigator !== "undefined" && "brave" in navigator;
 }
 
 /**
- * Where to send someone whose browser can't install: an Android in-app
- * browser out to Chrome through its own menu, Firefox on Android to Chrome,
- * an iOS browser older than 16.4 to Safari, anything else (desktop Safari /
- * Firefox) to either.
+ * An Android browser that "installs" only a home-screen shortcut opening an
+ * ordinary tab, never the standalone app that saving offline and stories
+ * need. web.dev ("Installation", learn/pwa): only Chrome and Samsung
+ * Internet on Samsung devices install a real app; Firefox, Edge, Opera and
+ * Brave "create shortcuts". Brave confirms it for itself
+ * (github.com/brave/brave-browser/issues/56133). Samsung Internet on a
+ * non-Samsung phone is the same, but its UA can't say which phone it's on.
  */
-export type NoInstallHint = "open-in-chrome" | "use-chrome" | "use-safari" | "use-chrome-or-safari";
+export function isShortcutOnlyAndroidBrowser(ua: string, brave = false): boolean {
+  return /Android/.test(ua) && (/Firefox\/|OPR\/|EdgA\//.test(ua) || brave);
+}
 
-export function noInstallHint(ua: string): NoInstallHint {
-  if (isAndroidWebView(ua)) return "open-in-chrome";
+/**
+ * Where to send someone whose browser can't install:
+ *   - open-in-browser: an Android app's browser, out through its own menu
+ *     (⋮) to the system default browser — which may be Opera or Brave, so
+ *     the copy also says which browsers install
+ *   - open-in-safari: an iOS app's browser, out through its menu (⋯) to Safari
+ *   - use-chrome: an Android browser that only adds shortcuts
+ *   - use-safari: an iOS browser older than 16.4
+ *   - use-chrome-or-safari: anything else (desktop Safari / Firefox)
+ */
+export type NoInstallHint =
+  | "open-in-browser"
+  | "open-in-safari"
+  | "use-chrome"
+  | "use-safari"
+  | "use-chrome-or-safari";
+
+export function noInstallHint(ua: string, brave: boolean = hasBraveApi()): NoInstallHint {
+  const inApp = inAppContext(ua);
+  if (inApp) return inApp.destination === "safari" ? "open-in-safari" : "open-in-browser";
   if (iosThirdPartyBrowser(ua)) return "use-safari";
-  if (/Android/.test(ua) && /Firefox\//.test(ua)) return "use-chrome";
+  if (isShortcutOnlyAndroidBrowser(ua, brave)) return "use-chrome";
   return "use-chrome-or-safari";
 }
 

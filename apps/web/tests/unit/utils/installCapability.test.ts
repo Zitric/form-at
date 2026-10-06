@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   detectPlatform,
   iosThirdPartyBrowser,
-  isAndroidWebView,
+  isShortcutOnlyAndroidBrowser,
   isStandalone,
   noInstallHint,
 } from "~/utils/installCapability";
@@ -60,6 +60,13 @@ const UA = {
   androidWebView:
     "Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/AP1A.240305.019; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/122.0.6261.105 Mobile Safari/537.36",
 
+  // Opera on Android: Chrome's UA plus `OPR/` (its documented marker).
+  androidOpera:
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.6533.103 Mobile Safari/537.36 OPR/84.0.4452.82342",
+  // Instagram's iOS in-app browser, as inAppBrowser.test.ts has it.
+  instagramIOS:
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 348.0.0.31.106 (iPhone15,3; iOS 17_5; en_GB; en-GB; scale=3.00; 1290x2796; 612234217)",
+
   // No install path
   androidFirefox: "Mozilla/5.0 (Android 14; Mobile; rv:120.0) Gecko/120.0 Firefox/120.0",
   macSafari:
@@ -79,8 +86,10 @@ describe("detectPlatform", () => {
     expect(detectPlatform(UA.desktopEdge)).toBe("chromium");
   });
 
-  it("detects Edge on Android as chromium (carries both Chrome/ and EdgA/)", () => {
-    expect(detectPlatform(UA.androidEdge)).toBe("chromium");
+  // Edge on Android only adds a shortcut (web.dev, "Installation"), though
+  // its UA carries Chrome/ too.
+  it("treats Edge on Android as unable to install (carries both Chrome/ and EdgA/)", () => {
+    expect(detectPlatform(UA.androidEdge)).toBe("other");
   });
 
   it("detects Samsung Internet as chromium", () => {
@@ -158,17 +167,51 @@ describe("Android WebViews", () => {
     expect(detectPlatform(UA.androidWebView)).toBe("other");
   });
 
-  it("are sent out through their own menu to Chrome", () => {
-    expect(noInstallHint(UA.instagramAndroid)).toBe("open-in-chrome");
-    expect(noInstallHint(UA.facebookAndroid)).toBe("open-in-chrome");
-    expect(noInstallHint(UA.androidWebView)).toBe("open-in-chrome");
+  // Their "open in…" entry goes to the default browser, which may be Opera
+  // or Brave: the copy names no single browser.
+  it("are sent out through their own menu to the default browser", () => {
+    expect(noInstallHint(UA.instagramAndroid)).toBe("open-in-browser");
+    expect(noInstallHint(UA.facebookAndroid)).toBe("open-in-browser");
+    expect(noInstallHint(UA.androidWebView)).toBe("open-in-browser");
   });
 
   it("leaves Chrome and Samsung Internet on Android installable", () => {
-    expect(detectPlatform(UA.androidChrome)).toBe("chromium");
-    expect(detectPlatform(UA.samsungInternet)).toBe("chromium");
-    expect(isAndroidWebView(UA.androidChrome)).toBe(false);
-    expect(isAndroidWebView(UA.samsungInternet)).toBe(false);
+    expect(detectPlatform(UA.androidChrome, false)).toBe("chromium");
+    expect(detectPlatform(UA.samsungInternet, false)).toBe("chromium");
+  });
+});
+
+describe("iOS in-app browsers", () => {
+  // Instagram's iOS UA has no CriOS/FxiOS marker, so it used to read as
+  // Safari and get share-menu steps that don't exist inside the app.
+  it("can't install, and are sent out through their menu to Safari", () => {
+    expect(detectPlatform(UA.instagramIOS)).toBe("other");
+    expect(noInstallHint(UA.instagramIOS)).toBe("open-in-safari");
+  });
+});
+
+describe("Android browsers that only add a shortcut", () => {
+  it("covers Firefox, Opera, Edge and Brave, not Chrome or Samsung Internet", () => {
+    expect(isShortcutOnlyAndroidBrowser(UA.androidFirefox)).toBe(true);
+    expect(isShortcutOnlyAndroidBrowser(UA.androidOpera)).toBe(true);
+    expect(isShortcutOnlyAndroidBrowser(UA.androidEdge)).toBe(true);
+    // Brave sends Chrome's UA; only navigator.brave tells them apart.
+    expect(isShortcutOnlyAndroidBrowser(UA.androidChrome, true)).toBe(true);
+    expect(isShortcutOnlyAndroidBrowser(UA.androidChrome, false)).toBe(false);
+    expect(isShortcutOnlyAndroidBrowser(UA.samsungInternet)).toBe(false);
+  });
+
+  it("sends them to Chrome", () => {
+    expect(detectPlatform(UA.androidOpera, false)).toBe("other");
+    expect(noInstallHint(UA.androidOpera, false)).toBe("use-chrome");
+    expect(detectPlatform(UA.androidChrome, true)).toBe("other");
+    expect(noInstallHint(UA.androidChrome, true)).toBe("use-chrome");
+    expect(noInstallHint(UA.androidEdge, false)).toBe("use-chrome");
+  });
+
+  // Brave on a desktop installs real apps; only Android's is shortcut-only.
+  it("leaves desktop Brave alone", () => {
+    expect(detectPlatform(UA.desktopChrome, true)).toBe("chromium");
   });
 });
 

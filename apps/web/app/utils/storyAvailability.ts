@@ -25,6 +25,8 @@ export interface StoryEnvironment {
   online: boolean;
   /** This browser can record H.264 + AAC MP4 (capability.ts). */
   canRecord: boolean;
+  /** Brave, which sends Chrome's UA (installCapability.ts). */
+  brave?: boolean;
 }
 
 /**
@@ -53,8 +55,9 @@ export function storyEntryState(
   // on this same engine (Chrome and Samsung Internet install WebAPKs of
   // themselves), so this tab's answer holds: no MP4 recording, no entry,
   // rather than an entry that fails at the end. A tab that can't install
-  // (an in-app browser, Firefox) is sent to Chrome by the gate, and its own
-  // engine says nothing about Chrome's, so the entry stays.
-  if (detectPlatform(env.ua) === "other") return "gate";
+  // (an in-app browser, or Firefox, Opera, Edge or Brave on Android) is sent
+  // elsewhere by the gate, and its own engine says nothing about that
+  // browser's, so the entry stays.
+  if (detectPlatform(env.ua, env.brave ?? false) === "other") return "gate";
   return env.canRecord ? "gate" : "hidden";
 }

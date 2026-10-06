@@ -10,9 +10,9 @@ import type { IosThirdPartyBrowser, NoInstallHint } from "~/utils/installCapabil
 
 // Manual-install guidance for the no-captured-prompt path. Reached by
 // Chromium-family browsers that never fire `beforeinstallprompt` at all
-// (Opera Android carries `Chrome/` in its UA but its menu had no install
-// entry) AND by Chrome before its install
-// heuristics pass. So we never promise a specific menu item: name the labels
+// AND by Chrome before its install heuristics pass. (Android browsers known
+// to only add shortcuts — Opera, Edge, Brave, Firefox — never get here:
+// installCapability.ts sends them to Chrome instead.) So we never promise a specific menu item: name the labels
 // it might carry, and say honestly that this browser may not offer one.
 // Form-factor split: mobile → browser menu, desktop → address-bar icon
 // (rendered with the actual Chrome install glyph). Renders as a sentence
@@ -73,11 +73,21 @@ export function IosInstallSteps({
 // go instead. The caller's sentence before it says what lives in the app.
 export function NoInstallPath({ hint }: { hint: NoInstallHint }) {
   const site = <span className="text-white">formatglasgow.com</span>;
-  if (hint === "open-in-chrome") {
+  if (hint === "open-in-browser") {
     return (
       <>
-        this app's browser can't install it — open its menu (⋮) and choose{" "}
-        <span className="text-white">open in Chrome</span>, then install from there.
+        this app's browser can't install it — tap its menu (⋮), open this page in your browser and
+        install from there. <span className="text-white">Chrome</span> and{" "}
+        <span className="text-white">Samsung Internet</span> install apps; other browsers only add a
+        shortcut.
+      </>
+    );
+  }
+  if (hint === "open-in-safari") {
+    return (
+      <>
+        this app's browser can't install it — tap its menu (⋯), open this page in{" "}
+        <span className="text-white">Safari</span> and add it to your home screen from there.
       </>
     );
   }

@@ -21,6 +21,7 @@ function currentStoryEntryState(online = true): StoryEntryState {
     standalone: isStandalone(),
     online,
     canRecord: canRecordStory(),
+    brave: "brave" in navigator,
   });
 }
 
