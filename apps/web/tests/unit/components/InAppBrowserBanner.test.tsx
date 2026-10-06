@@ -28,22 +28,15 @@ afterEach(() => {
 });
 
 describe("InAppBrowserBanner", () => {
-  // The bug: Android got the iPhone copy.
-  it("on Android, says to open it in the browser from the ⋮ menu — never Safari", async () => {
-    withUserAgent(UA.instagramAndroid);
-    render(<InAppBrowserBanner />);
-    expect(
-      await screen.findByText("for full audio: tap ⋮ and open in browser"),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/safari/i)).toBeNull();
-  });
-
-  it("does the same in Facebook's Android browser", async () => {
-    withUserAgent(UA.facebookAndroid);
-    render(<InAppBrowserBanner />);
-    expect(
-      await screen.findByText("for full audio: tap ⋮ and open in browser"),
-    ).toBeInTheDocument();
+  // Audio keeps playing in Instagram's Android browser (screen locked, other
+  // app), so the "for full audio" banner is false there: not shown at all.
+  it("shows nothing in Instagram's or Facebook's Android browser", () => {
+    for (const ua of [UA.instagramAndroid, UA.facebookAndroid]) {
+      withUserAgent(ua);
+      const { container, unmount } = render(<InAppBrowserBanner />);
+      expect(container).toBeEmptyDOMElement();
+      unmount();
+    }
   });
 
   it("on iOS, says to open it in Safari from the ⋯ menu", async () => {
