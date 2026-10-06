@@ -3909,8 +3909,8 @@ share-menu install steps that don't exist inside the app.
 - **One helper**, `inAppContext` (`utils/inAppBrowser.ts`): app, OS, menu
   glyph (⋮ Android, ⋯ iOS) and destination ("browser" Android, "safari"
   iOS). The banner, the install gate and the story gate all read it.
-- **Copy:** banner "tap ⋮ and open in browser" / "tap ⋯ and open in
-  safari"; gate "open this page in your browser and install from there —
+- **Copy:** banner "tap ⋯ and open in safari" on iOS only (Android: removed,
+  see below); gate "open this page in your browser and install from there —
   Chrome and Samsung Internet install apps; other browsers only add a
   shortcut" on Android, "open this page in Safari" on iOS.
 - **Shortcut-only Android browsers:** Firefox, Opera (`OPR/`), Edge (`EdgA/`)
@@ -3919,6 +3919,31 @@ share-menu install steps that don't exist inside the app.
   standalone app saving and stories need. They now get "use Chrome" instead
   of Chrome's install steps, and the story entry skips their recording
   check, as it does for Firefox. Unverified on devices: TECH_DEBT.md item 32.
+
+### No audio banner on Android
+
+The banner's "for full audio" premise turned out false on Android. Verified
+on a Pixel 10 Pro in Instagram's browser, opened from the profile bio link:
+
+- **Audio keeps playing** with the screen locked, after switching apps, and
+  for 5–10 minutes. So the banner is now iOS-only; iOS is still untested on
+  a device.
+- **No lock-screen or notification controls, and none possible from the
+  page:** MDN browser-compat-data 8.1.4 lists `navigator.mediaSession`,
+  `MediaSession`, `MediaMetadata` and `Notification` as unsupported in
+  WebView Android (crbug.com/40611412). `useAudioPlayer`'s media session
+  effect returns early on `!("mediaSession" in navigator)` and is the only
+  code touching it; `Notification` is only reached behind `isPushSupported`
+  (`PushManager`, also unsupported in the WebView).
+- **Closing the in-app browser leaves the audio playing** with no controls.
+  It stops when an Instagram feed video plays with sound (Android audio
+  focus) or when Instagram is killed. Accepted, not fixed: the only lever is
+  pausing when the page is hidden, which would also stop locked-screen
+  listening — the thing that works.
+- **localStorage persists** across visits inside Instagram's browser.
+
+`inAppContext` and the install, story and save gates are unchanged: they
+still send Android in-app visitors out to install.
 
 ## Story frame contrast on light artworks (2026-10)
 

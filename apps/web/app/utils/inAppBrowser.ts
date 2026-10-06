@@ -3,9 +3,10 @@
 // and how the visitor gets out of it. Pure: UA in, answer out.
 //
 // One helper for every surface that tells someone to leave — the full-audio
-// banner (InAppBrowserBanner), the install gate and the story gate (both via
-// installCapability.ts) — so they can't disagree about the platform again:
-// the banner used to say "open in safari" on Android too.
+// banner (InAppBrowserBanner, iOS only: on Android the audio keeps playing,
+// so its premise is false there; that file says why), the install gate and
+// the story gate (both via installCapability.ts) — so they can't disagree
+// about the platform again.
 //
 // Don't add automatic WebView escape: in-app browsers trap users by design,
 // and the URL-scheme tricks that appear to work (e.g. `x-safari-https://`)

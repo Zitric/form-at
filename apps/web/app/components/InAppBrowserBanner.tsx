@@ -8,18 +8,32 @@ import { inAppContext } from "~/utils/inAppBrowser";
 import { safeSession } from "~/utils/safeStorage";
 
 const DISMISS_KEY = "iab-dismissed";
-// Per platform, from inAppContext: on Android the app's "open in…" entry goes
-// to the default browser, which may be Opera or Brave, so it names no browser.
-// Both fit at 375px (iPhone SE); keep any rewording within that.
+// From inAppContext: "tap ⋯ and open in safari". Fits at 375px (iPhone SE);
+// keep any rewording within that.
 function instruction(menu: string, destination: "browser" | "safari"): string {
   return `for full audio: tap ${menu} and open in ${destination}`;
 }
 
 // Persistent informational banner shown when the page is rendered inside a
-// known in-app browser (Instagram, Facebook, TikTok, Line). Teaches the manual
-// escape — "tap ⋯ and open in safari" on iOS, "tap ⋮ and open in browser" on
-// Android — deliberately rather than auto-launching a browser via URL
-// schemes, which fail silently on most current host-app builds.
+// known in-app browser (Instagram, Facebook, TikTok, Line) ON iOS. Teaches the
+// manual escape deliberately rather than auto-launching Safari via URL
+// schemes, which fail silently on most current host-app builds. iOS's own
+// in-app behaviour is still untested on a device.
+//
+// NOT shown on Android, and don't add it back on the "full audio" premise:
+// it's false there. In Instagram's Android browser (Pixel 10 Pro, opened from
+// the profile bio link) audio keeps playing with the screen locked, after
+// switching apps, and for 5–10 minutes. What that WebView lacks is
+// lock-screen and notification controls, and no page can add them:
+// browser-compat-data marks navigator.mediaSession, MediaSession,
+// MediaMetadata and Notification unsupported in WebView Android
+// (crbug.com/40611412), so useAudioPlayer's media session effect skips
+// itself there. Closing the in-app browser leaves the audio playing with no
+// controls until an Instagram video with sound takes audio focus or
+// Instagram is killed. That is accepted: the only lever, pausing when the
+// page is hidden, would also stop locked-screen listening. Leaving the app's
+// browser still works through the install/story/save gates (inAppContext).
+// PWA_PROGRESS.md → "In-app browsers: per-platform copy, one helper".
 //
 // Mobile-only (`sm:hidden`): in-app browsers ARE mobile.
 //
@@ -44,8 +58,9 @@ export function InAppBrowserBanner() {
 
   useEffect(() => {
     const context = inAppContext();
-    // Named apps only: an unnamed WebView has no menu we can describe.
-    if (!context || context.app === "webview") return;
+    // iOS only (see above); named apps only: an unnamed WebView has no menu
+    // we can describe.
+    if (!context || context.os !== "ios" || context.app === "webview") return;
     if (safeSession.get(DISMISS_KEY) === "1") return;
     setText(instruction(context.menu, context.destination));
   }, []);
