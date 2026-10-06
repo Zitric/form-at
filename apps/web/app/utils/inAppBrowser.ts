@@ -1,12 +1,16 @@
-// Detects whether the page is rendered inside a known in-app browser (i.e. a
-// WebView embedded in a social app rather than a real browser). Pure function,
-// no side effects — UA in, brand name (or null) out.
+// Detects whether the page is rendered inside an app's built-in browser (a
+// WebView in Instagram, Facebook… rather than a real browser), on which OS,
+// and how the visitor gets out of it. Pure: UA in, answer out.
 //
-// Used by <InAppBrowserBanner> to surface a "tap ⋯ and open in safari"
-// instruction. Don't add automatic WebView escape: iOS in-app browsers trap
-// users by design, and the URL-scheme tricks that appear to work (e.g.
-// `x-safari-https://`) are version-dependent and fail silently on most current
-// host-app builds. Teaching the manual escape beats a button that fails opaquely.
+// One helper for every surface that tells someone to leave — the full-audio
+// banner (InAppBrowserBanner), the install gate and the story gate (both via
+// installCapability.ts) — so they can't disagree about the platform again:
+// the banner used to say "open in safari" on Android too.
+//
+// Don't add automatic WebView escape: in-app browsers trap users by design,
+// and the URL-scheme tricks that appear to work (e.g. `x-safari-https://`)
+// are version-dependent and fail silently on most current host-app builds.
+// Teaching the manual escape beats a button that fails opaquely.
 //
 // UA matchers chosen for narrow specificity:
 //   - Instagram: literal "Instagram"
@@ -16,6 +20,7 @@
 //                older app builds
 //   - Line:      "Line/" (the slash version separator avoids matching any
 //                website with "Line" in its name)
+//   - any other Android WebView: `; wv)`, Android's own WebView marker
 export type InAppBrowser = "instagram" | "facebook" | "tiktok" | "line";
 
 export function isInAppBrowser(
@@ -25,5 +30,35 @@ export function isInAppBrowser(
   if (/FBAN|FBAV/.test(ua)) return "facebook";
   if (/TikTok|musical_ly/.test(ua)) return "tiktok";
   if (/Line\//.test(ua)) return "line";
+  return null;
+}
+
+export interface InAppContext {
+  /** A known app, or "webview" for an unnamed Android WebView. */
+  app: InAppBrowser | "webview";
+  os: "android" | "ios";
+  /** The app browser's menu, as drawn: ⋮ on Android, ⋯ on iOS. */
+  menu: "⋮" | "⋯";
+  /**
+   * Where its "open in…" entry goes. Android: the system default browser —
+   * Opera, Brave, Samsung Internet or Chrome, whichever is set — under a
+   * label that varies by app version ("Open in browser", "Open in Chrome",
+   * "Open externally"). iOS: Safari, the only browser that installs the app
+   * on every iOS version, which is also what the entry usually names.
+   */
+  destination: "browser" | "safari";
+}
+
+/** The app browser this page is in, or null in a real browser. */
+export function inAppContext(
+  ua: string = typeof navigator !== "undefined" ? navigator.userAgent : "",
+): InAppContext | null {
+  const app = isInAppBrowser(ua);
+  if (/Android/.test(ua) && (app || /; wv\)/.test(ua))) {
+    return { app: app ?? "webview", os: "android", menu: "⋮", destination: "browser" };
+  }
+  if (/iPhone|iPad|iPod/.test(ua) && app) {
+    return { app, os: "ios", menu: "⋯", destination: "safari" };
+  }
   return null;
 }

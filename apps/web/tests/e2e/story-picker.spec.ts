@@ -508,8 +508,8 @@ test("a story link is counted once, and its ref dropped from the address", async
 });
 
 // Instagram's in-app browser on Android can't install the app or share a
-// file, so the gate sends the visitor out to Chrome through its menu.
-test("in Instagram's Android browser, the gate says to open it in Chrome", async ({
+// file, so the gate sends the visitor out through its menu to their browser.
+test("in Instagram's Android browser, the gate says to open it in their browser", async ({
   browser,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "chromium", "chromium project only");
@@ -524,7 +524,7 @@ test("in Instagram's Android browser, the gate says to open it in Chrome", async
   await openShare(page, SET_PATH);
   await page.getByRole("button", { name: /instagram_story/ }).click();
   const gate = page.getByRole("dialog", { name: "Form:at — make an Instagram story" });
-  await expect(gate).toContainText("open in Chrome");
+  await expect(gate).toContainText("open this page in your browser");
   await context.close();
 });
 
