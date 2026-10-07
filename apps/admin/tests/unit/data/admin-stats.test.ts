@@ -830,13 +830,15 @@ describe("fetchMilestones", () => {
 
     const result = await fetchMilestones(db);
 
-    expect(result).toEqual([
+    expect(result.filter((m) => m.date >= "2026-09-01")).toEqual([
       { date: "2026-09-12", kind: "upload", label: "set added: Unreal @ Form:at 003" },
       { date: "2026-09-19", kind: "push", label: "push: 003 is up" },
       { date: "2026-09-25", kind: "push", label: "2 pushes: a, b" },
       { date: "2026-10-02", kind: "launch", label: "instagram story launched on android" },
-      { date: "2026-12-05", kind: "event", label: "form:at night, 5 dec" },
+      { date: "2026-12-05", kind: "event", label: "form:at 004" },
     ]);
+    const dates = result.map((m) => m.date);
+    expect(dates).toEqual([...dates].sort());
   });
 
   // Legacy sets were migrated with a placeholder created_at; only uploads

@@ -3,6 +3,7 @@
 // here feeds a query. Push sends and set uploads come from D1
 // (fetchMilestones in admin-stats.ts); these are the ones D1 doesn't know.
 
+import { events } from "@form-at/data/events";
 import { TREND_WINDOW_DAYS } from "@form-at/data/set-stats";
 
 export type MilestoneKind = "launch" | "event" | "push" | "upload";
@@ -17,8 +18,15 @@ export interface Milestone {
 export const STATIC_MILESTONES: readonly Milestone[] = [
   // The day the Android launch deployed.
   { date: "2026-10-02", kind: "launch", label: "instagram story launched on android" },
-  // Not in packages/data/src/events.ts yet; move it there when it is.
-  { date: "2026-12-05", kind: "event", label: "form:at night, 5 dec" },
+  // Every event in the calendar, past and upcoming, so adding one there is
+  // enough to mark it here.
+  ...events.map(
+    (event): Milestone => ({
+      date: event.date,
+      kind: "event",
+      label: event.title.toLowerCase(),
+    }),
+  ),
 ];
 
 const DAY_MS = 86_400_000;
