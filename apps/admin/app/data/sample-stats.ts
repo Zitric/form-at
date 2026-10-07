@@ -292,7 +292,7 @@ export const SAMPLE_ADMIN_DASHBOARD_STATS: AdminDashboardStats = {
     { date: "2026-09-12", kind: "upload", label: "set added: Unreal @ Form:at 003" },
     { date: "2026-09-19", kind: "push", label: "push: Form:at 003 sets are up" },
     { date: "2026-10-02", kind: "launch", label: "instagram story launched on android" },
-    { date: "2026-12-05", kind: "event", label: "form:at night, 5 dec" },
+    { date: "2026-12-05", kind: "event", label: "form:at 004" },
   ],
   calendarAdds: {
     // Deliberately 0: this is the fixture's one demonstration of the "nothing

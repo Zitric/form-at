@@ -36,6 +36,20 @@ export type Event = {
 
 export const events: Event[] = [
   {
+    id: "format-004",
+    title: "Form:at 004",
+    date: "2026-12-05",
+    venue: "Stereo, Glasgow",
+    city: "Glasgow",
+    lineupIds: [],
+    audio: "techno / electro / dub",
+    // Start-only until the closing time is booked: an unparseable end puts no
+    // end time on calendars or in the JSON-LD (eventDateTimes in jsonld.ts),
+    // where a guessed one would land in people's calendars.
+    runtime: "23:00 — tbc",
+    status: "upcoming",
+  },
+  {
     id: "format-003",
     title: "Form:at 003",
     date: "2026-08-28",

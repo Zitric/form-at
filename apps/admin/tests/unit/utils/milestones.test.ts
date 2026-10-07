@@ -1,3 +1,4 @@
+import { events } from "@form-at/data/events";
 import { describe, expect, it } from "vitest";
 import {
   type Milestone,
@@ -51,10 +52,16 @@ describe("markerPositions", () => {
     });
   });
 
-  it("knows the launch and the 5 Dec event", () => {
-    expect(STATIC_MILESTONES.map((s) => [s.date, s.kind])).toEqual([
-      ["2026-10-02", "launch"],
-      ["2026-12-05", "event"],
-    ]);
+  it("knows the launch and marks every event in the calendar", () => {
+    expect(STATIC_MILESTONES).toContainEqual(
+      expect.objectContaining({ date: "2026-10-02", kind: "launch" }),
+    );
+    const eventMarkers = STATIC_MILESTONES.filter((s) => s.kind === "event");
+    expect(eventMarkers.map((s) => s.date).sort()).toEqual(events.map((e) => e.date).sort());
+    expect(eventMarkers).toContainEqual({
+      date: "2026-12-05",
+      kind: "event",
+      label: "form:at 004",
+    });
   });
 });
