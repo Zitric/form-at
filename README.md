@@ -2,7 +2,7 @@
 
 A progressive web app for [Form:at](https://formatglasgow.com), a techno collective in Glasgow. It publishes the collective's recorded sets, its events and its DJs.
 
-The part that drove most of the engineering: it lets you save a set to your phone and listen on the Glasgow Subway, where there is no signal. Sets are 90-minute mixes, typically 100–220MB each — which is what makes "just save it offline" a real problem rather than a checkbox.
+The part that drove most of the engineering: it lets you save a set to your phone and listen on the Glasgow Subway, where there is no signal. Sets are 90 or even 120-minute mixes, typically 100–220MB each — which is what makes "just save it offline" a real problem rather than a checkbox.
 
 Live at **[formatglasgow.com](https://formatglasgow.com)**.
 
