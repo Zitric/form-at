@@ -41,7 +41,7 @@ export const events: Event[] = [
     date: "2026-12-05",
     venue: "Stereo, Glasgow",
     city: "Glasgow",
-    lineupIds: [],
+    lineupIds: ["dzeko", "julz-lever", "hubey"],
     audio: "techno / electro / dub",
     // Start-only until the closing time is booked: an unparseable end puts no
     // end time on calendars or in the JSON-LD (eventDateTimes in jsonld.ts),

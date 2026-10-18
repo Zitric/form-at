@@ -70,6 +70,18 @@ export const djs: DJ[] = [
 
   // Guests
   {
+    id: "dzeko",
+    name: "Dzeko",
+    type: "guest",
+    bio: "Dzeko is a Barcelona-based DJ, originally from Extremadura, and a devoted vinyl collector who plays exclusively on wax. Music sits at the centre of his life, and it shows behind the decks: energetic, eclectic sets built with precision and elegance, always anchored in techno while he keeps digging through its many subgenres. A regular across Barcelona’s clubs, from Moog and Macarena to Nitsa, he closed Marcel Dettmann’s five-hour night at Razzmatazz b2b with Anika Kunst, and has shared lineups with Modeselektor, Colin Benders, Tasha, Sandrien and The Lady Machine. He is also one of the founders of Matriz, the Granada promoter that has brought artists such as The Lady Machine, Umwelt and Peverelist to Sala El Tren. Form:at 004 at Stereo marks his Scottish debut.",
+    photo: "djs/dzeko",
+    socials: {
+      instagram: "mario_dzk",
+      soundcloud: "mariodzeko",
+      residentadvisor: "dzeko",
+    },
+  },
+  {
     id: "unreal",
     name: "Unreal",
     type: "guest",
