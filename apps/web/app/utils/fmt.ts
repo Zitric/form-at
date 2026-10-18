@@ -45,12 +45,13 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 // zone: the date is a calendar day, and a local parse shifts it a day back
 // west of UTC (and makes the SSR and client renders disagree). Weekday names
 // are fixed rather than from toLocaleDateString, whose output varies by
-// engine and locale ("Sat" / "Sat.").
+// engine and locale ("Sat" / "Sat."). The space is non-breaking, so a narrow
+// screen never splits the weekday from the date.
 export function fmtEventDay(date: string): string {
   const [y, m, d] = date.split("-").map(Number);
   if (!y || !m || !d) return date;
   const weekday = WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
-  return `${weekday} ${String(d).padStart(2, "0")}.${String(m).padStart(2, "0")}`;
+  return `${weekday}\u00A0${String(d).padStart(2, "0")}.${String(m).padStart(2, "0")}`;
 }
 
 // MB-or-GB byte sizes for offline-library labels. Decimal units (MB = 10^6)

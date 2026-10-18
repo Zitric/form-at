@@ -3,8 +3,8 @@ import { fmtDate, fmtDuration, fmtEventDay, parseDuration } from "~/utils/fmt";
 
 describe("fmtEventDay", () => {
   it("formats a calendar date as short weekday + DD.MM", () => {
-    expect(fmtEventDay("2026-12-05")).toBe("Sat 05.12");
-    expect(fmtEventDay("2026-08-28")).toBe("Fri 28.08");
+    expect(fmtEventDay("2026-12-05")).toBe("Sat\u00A005.12");
+    expect(fmtEventDay("2026-08-28")).toBe("Fri\u00A028.08");
   });
 
   it("returns anything that isn't YYYY-MM-DD unchanged", () => {

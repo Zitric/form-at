@@ -65,7 +65,7 @@ describe("DJ page events", () => {
 
     // Non-breaking space before each "·", so a wrap never starts a line with it.
     const link = screen.getByRole("link", {
-      name: "Form:at 004 · Sat 05.12 · Stereo",
+      name: "Form:at 004\u00A0· Sat\u00A005.12\u00A0· Stereo",
     });
     expect(link).toHaveAttribute("href", "/events/004");
     expect(link.closest("p")).toHaveTextContent("next_transmission:");

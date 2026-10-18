@@ -174,5 +174,5 @@ function DJDetail() {
 // after the dot rather than starting a line with it.
 function upcomingLabel(event: Event): string {
   const venueName = event.venue.split(",")[0]?.trim() ?? event.venue;
-  return [event.title, fmtEventDay(event.date), venueName].join(" · ");
+  return [event.title, fmtEventDay(event.date), venueName].join("\u00A0· ");
 }
