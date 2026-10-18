@@ -26,11 +26,12 @@ export type Event = {
   runtime: string;
   status: "upcoming" | "past";
   flyer?: string;
-  // Optional free-text note, same shape/purpose as MusicSet's `description?`
-  // (sets.ts) — most events won't need one (the auto-built meta description
-  // in $eventId.tsx covers the generic case). Use it when there's context a
-  // visitor can't get from the structured fields alone — e.g. a co-organized
-  // event where some lineup names have no Form:at DJ profile.
+  // Optional free-text intro, same shape/purpose as MusicSet's `description?`
+  // (sets.ts). Shown as the event page's intro paragraph and used as its meta
+  // description; without one, $eventId.tsx builds the meta description from
+  // the structured fields. Use it for context a visitor can't get from those
+  // fields alone — what the night is, or a co-organized event where some
+  // lineup names have no Form:at DJ profile.
   description?: string;
 };
 
@@ -39,7 +40,7 @@ export const events: Event[] = [
     id: "format-004",
     title: "Form:at 004",
     date: "2026-12-05",
-    venue: "Stereo, Glasgow",
+    venue: "Stereo, Renfield Lane, City Centre, Glasgow",
     city: "Glasgow",
     lineupIds: ["dzeko", "julz-lever", "hubey"],
     audio: "techno / electro / dub",
@@ -48,6 +49,8 @@ export const events: Event[] = [
     // where a guessed one would land in people's calendars.
     runtime: "23:00 — tbc",
     status: "upcoming",
+    description:
+      "sequence 004 lands in the city centre: our first night at stereo, on renfield lane, and our first on a saturday. headlining, dzeko makes his scottish debut. barcelona-based and vinyl-only, he closed marcel dettmann's five-hour night at razzmatazz and co-founded matriz in granada. residents julz lever and hubey complete the transmission.",
   },
   {
     id: "format-003",

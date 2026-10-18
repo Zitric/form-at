@@ -65,6 +65,15 @@ function EventDetail() {
           ))}
         </div>
 
+        {/* The event's intro, at body size between the facts and the lineup:
+            what the night is, or why a lineup might look partial (a
+            co-organized event where some names have no Form:at DJ profile). */}
+        {event.description && (
+          <p className="text-sm sm:text-base text-grey leading-relaxed mb-10">
+            {event.description}
+          </p>
+        )}
+
         {lineup.length > 0 ? (
           <div className="mb-10">
             <PageTitle>lineup</PageTitle>
@@ -86,13 +95,6 @@ function EventDetail() {
                 );
               })}
             </p>
-            {/* Placed here, not at the top of the page: it exists to explain
-                a lineup that might look partial (e.g. a co-organized event
-                where some names have no Form:at DJ profile) — reads as a
-                footnote to the names right above it, not a general blurb. */}
-            {event.description && (
-              <p className="text-xs text-grey/70 leading-relaxed mt-2">{event.description}</p>
-            )}
           </div>
         ) : event.status === "upcoming" ? (
           <div className="mb-10">
