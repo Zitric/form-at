@@ -1,5 +1,5 @@
 import { getDJ } from "@form-at/data/djs";
-import { events } from "@form-at/data/events";
+import { events, type Event } from "@form-at/data/events";
 import { BracketLabel, Card, PageTitle, TerminalRow } from "@form-at/ui";
 import { Link, createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { BrandTitle } from "~/components/BrandTitle";
@@ -11,6 +11,7 @@ import { SetCard } from "~/components/SetCard";
 import { SocialLink } from "~/components/SocialLink";
 import { fetchAllSetsForRoute } from "~/data/setsForRoute";
 import { useTypedOnce } from "~/hooks/useTypedOnce";
+import { fmtEventDay } from "~/utils/fmt";
 import { pageHead } from "~/utils/head";
 import { djLd } from "~/utils/jsonld";
 import { SOCIALS, SOCIAL_ORDER, type SocialKey } from "~/utils/socials";
@@ -28,9 +29,11 @@ export const Route = createFileRoute("/djs/$djId")({
     const dj = getDJ(params.djId);
     if (!dj) throw notFound();
     const djEvents = events.filter((e) => e.lineupIds.includes(params.djId));
+    const upcomingEvents = djEvents.filter((e) => e.status === "upcoming");
+    const pastEvents = djEvents.filter((e) => e.status === "past");
     const allSets = await fetchAllSetsForRoute();
     const sets = allSets.filter((s) => s.djId === params.djId);
-    return { dj, djEvents, sets };
+    return { dj, upcomingEvents, pastEvents, sets };
   },
   head: ({ loaderData }) => {
     const dj = loaderData?.dj;
@@ -50,8 +53,10 @@ export const Route = createFileRoute("/djs/$djId")({
 });
 
 function DJDetail() {
-  const { dj, djEvents, sets } = Route.useLoaderData();
+  const { dj, upcomingEvents, pastEvents, sets } = Route.useLoaderData();
   const navigate = useNavigate();
+  const eventCount = upcomingEvents.length + pastEvents.length;
+  const eventCountLabel = `${eventCount} ${eventCount === 1 ? "transmission" : "transmissions"}`;
 
   const isFirstLoading = useTypedOnce("dj-detail");
 
@@ -99,9 +104,23 @@ function DJDetail() {
 
         <div className="space-y-1 mb-8">
           <TerminalRow label="type" value={dj.type} />
-          {djEvents.length > 0 && (
-            <TerminalRow label="events" value={`${djEvents.length} transmissions`} />
-          )}
+          {eventCount > 0 && <TerminalRow label="events" value={eventCountLabel} />}
+          {upcomingEvents.map((event) => (
+            <TerminalRow
+              key={event.id}
+              label="next_transmission"
+              value={
+                <Link
+                  to="/events/$eventId"
+                  params={{ eventId: event.id }}
+                  preload="intent"
+                  className="hover:text-gold transition-colors"
+                >
+                  {upcomingLabel(event)}
+                </Link>
+              }
+            />
+          ))}
         </div>
 
         <h1 className="font-display text-4xl sm:text-6xl tracking-tight mb-2">
@@ -123,15 +142,15 @@ function DJDetail() {
           </section>
         )}
 
-        {djEvents.length > 0 && (
+        {pastEvents.length > 0 && (
           <section>
             <PageTitle className="mb-4 text-grey tracking-widest">deployment_history</PageTitle>
             <ul className="space-y-px">
-              {djEvents.map((event, index) => (
+              {pastEvents.map((event, index) => (
                 <li key={event.id}>
                   <Card
                     animationDelay={index + sets.length}
-                    className={event.status === "past" ? "opacity-60" : ""}
+                    className="opacity-60"
                     onClick={() =>
                       navigate({ to: "/events/$eventId", params: { eventId: event.id } })
                     }
@@ -148,4 +167,12 @@ function DJDetail() {
       </div>
     </PageLayout>
   );
+}
+
+// "Form:at 004 · Sat 05.12 · Stereo": the venue's name without its city. The
+// space before each "·" is non-breaking, so a narrow screen (375px) wraps
+// after the dot rather than starting a line with it.
+function upcomingLabel(event: Event): string {
+  const venueName = event.venue.split(",")[0]?.trim() ?? event.venue;
+  return [event.title, fmtEventDay(event.date), venueName].join(" · ");
 }

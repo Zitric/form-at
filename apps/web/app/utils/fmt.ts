@@ -39,6 +39,20 @@ export function fmtDate(ms: number): string {
   return new Date(ms).toISOString().split("T")[0] ?? "";
 }
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+// An event's `YYYY-MM-DD` date as `Sat 05.12`. Read in UTC, never the local
+// zone: the date is a calendar day, and a local parse shifts it a day back
+// west of UTC (and makes the SSR and client renders disagree). Weekday names
+// are fixed rather than from toLocaleDateString, whose output varies by
+// engine and locale ("Sat" / "Sat.").
+export function fmtEventDay(date: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  if (!y || !m || !d) return date;
+  const weekday = WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return `${weekday} ${String(d).padStart(2, "0")}.${String(m).padStart(2, "0")}`;
+}
+
 // MB-or-GB byte sizes for offline-library labels. Decimal units (MB = 10^6)
 // to match what users see in iOS Settings / Chrome storage panel — binary
 // MiB would confuse the comparison. Rounds to whole numbers under 1 GB, one

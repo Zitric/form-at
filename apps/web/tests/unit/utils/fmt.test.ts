@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { fmtDate, fmtDuration, parseDuration } from "~/utils/fmt";
+import { fmtDate, fmtDuration, fmtEventDay, parseDuration } from "~/utils/fmt";
+
+describe("fmtEventDay", () => {
+  it("formats a calendar date as short weekday + DD.MM", () => {
+    expect(fmtEventDay("2026-12-05")).toBe("Sat 05.12");
+    expect(fmtEventDay("2026-08-28")).toBe("Fri 28.08");
+  });
+
+  it("returns anything that isn't YYYY-MM-DD unchanged", () => {
+    expect(fmtEventDay("tbc")).toBe("tbc");
+  });
+});
 
 describe("fmtDuration", () => {
   it("formats seconds under a minute", () => {
