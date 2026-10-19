@@ -70,9 +70,22 @@
    @form-at/ui/tokens.css reads --fit-text-size and --fit-text-leading.
 
    value = floor + ramp * k, where ramp = --fit-h - 504px (0 to 240px) and
-   k = (old size - floor) / 240. */
+   k = (old size - floor) / 240.
+
+   --fit-pb is home's bottom padding on phones (PageLayout's fitBottom): the
+   fixed chrome exactly — nav + mini player + safe-area inset, reserved
+   whether or not something plays, as above — plus 24px so the swipe dots
+   (16px above the chrome, 2px tall: SwipeNavigator) never sit on content.
+   Not a ramped value: the chrome doesn't shrink. Keep it exact: the
+   default pb-40 (160px) over-reserves ~50px on Android, where the inset is
+   0, which would make a page sized to the screen scroll when everything
+   fits. On iOS --fit-pb is 111 + ~34 + 24 ≈ 169px, slightly more than
+   pb-40. --chrome-bottom is set on <html> from ABOVE_CHROME_BOTTOM
+   (styles/layout.ts); the fallback below is only for that style ever
+   missing. */
 :root {
   --fit-h: calc(100svh - var(--mini-player-h, 56px));
+  --fit-pb: calc(var(--chrome-bottom, calc(111px + env(safe-area-inset-bottom))) + 24px);
   --fit-ramp: calc(var(--fit-h) - 504px);
   --fit-header-pt: clamp(24px, calc(24px + var(--fit-ramp) * 0.0667), 40px); /* pt-10 */
   --fit-header-mb: clamp(6px, calc(6px + var(--fit-ramp) * 0.1083), 32px); /* mb-8 */

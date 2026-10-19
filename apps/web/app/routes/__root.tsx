@@ -17,7 +17,7 @@ import { Toast } from "~/components/Toast";
 import { PlaybackErrorToast, Player } from "~/components/player";
 import { StoryFlowHost } from "~/components/story/StoryFlowHost";
 import { fontCSS } from "~/styles/fontCSS";
-import { LAYOUT } from "~/styles/layout";
+import { ABOVE_CHROME_BOTTOM, LAYOUT } from "~/styles/layout";
 import "~/styles/global.css";
 import { rootHead } from "~/utils/rootHead";
 
@@ -29,11 +29,17 @@ export const Route = createRootRoute({
 
 function Root() {
   return (
-    // --mini-player-h: the home page always reserves the mini player's height
-    // on phones ("Fitting the home page on a short phone", global.css).
+    // --mini-player-h and --chrome-bottom: the home page always reserves the
+    // mini player's height, and clears exactly the fixed bottom chrome, on
+    // phones ("Fitting the home page on a short phone", global.css).
     <html
       lang="en"
-      style={{ "--mini-player-h": `${LAYOUT.playerHeightMobile}px` } as CSSProperties}
+      style={
+        {
+          "--mini-player-h": `${LAYOUT.playerHeightMobile}px`,
+          "--chrome-bottom": ABOVE_CHROME_BOTTOM,
+        } as CSSProperties
+      }
     >
       <head>
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: critical font + reset CSS must be inlined */}
