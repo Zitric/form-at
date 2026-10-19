@@ -48,7 +48,7 @@ export const Route = createFileRoute("/djs/$djId")({
       path: `/djs/${dj.id}`,
       // Per-DJ banner generated at build by scripts/generate-og.ts. Falls back
       // to the root /og-image.png if a DJ has no photo (script skips them).
-      image: dj.photo ? `/og/djs/${dj.id}.png` : undefined,
+      image: dj.photo ? `/og/djs/${dj.id}.jpg` : undefined,
     });
   },
   component: DJDetail,

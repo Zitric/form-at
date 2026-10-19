@@ -134,7 +134,7 @@ export function djLd(dj: DJ) {
     "@type": "Person",
     name: dj.name,
     url: `${SITE}/djs/${dj.id}`,
-    image: imageUrl(dj.photo) ?? `${SITE}/og/djs/${dj.id}.png`,
+    image: imageUrl(dj.photo) ?? `${SITE}/og/djs/${dj.id}.jpg`,
     description: dj.bio,
     memberOf: {
       "@type": "MusicGroup",

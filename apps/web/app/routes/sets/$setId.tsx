@@ -55,7 +55,7 @@ export const Route = createFileRoute("/sets/$setId")({
       path: `/sets/${set.id}`,
       // Per-set banner generated at build by scripts/generate-og.ts (artwork
       // + artist + title composition). Falls back to /og-image.png if missing.
-      image: set.artwork ? `/og/sets/${set.id}.png` : undefined,
+      image: set.artwork ? `/og/sets/${set.id}.jpg` : undefined,
     });
   },
   component: SetDetail,
