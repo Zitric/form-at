@@ -65,6 +65,15 @@ describe("DjStorySheet", () => {
     expect(trackEvent).toHaveBeenCalledWith("dj_story_open");
   });
 
+  it("offers exactly form:at and raw", async () => {
+    await renderSheet();
+    const chips = screen
+      .getAllByRole("button")
+      .filter((b) => b.hasAttribute("aria-pressed"))
+      .map((b) => b.textContent?.replace(/[[\]\s]/g, ""));
+    expect(chips).toEqual(["form:at", "raw"]);
+  });
+
   it("starts on form:at and redraws when another treatment is picked", async () => {
     await renderSheet();
     expect(screen.getByRole("button", { name: /form:at/, pressed: true })).toBeInTheDocument();
@@ -73,14 +82,14 @@ describe("DjStorySheet", () => {
       expect.objectContaining({ treatment: "format", name: "Dzeko", line: "guest" }),
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "scan" }));
+    await userEvent.click(screen.getByRole("button", { name: "raw" }));
     await waitFor(() =>
       expect(drawDjStory).toHaveBeenLastCalledWith(
         expect.anything(),
-        expect.objectContaining({ treatment: "scan" }),
+        expect.objectContaining({ treatment: "raw" }),
       ),
     );
-    expect(screen.getByRole("button", { name: /scan/, pressed: true })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /raw/, pressed: true })).toBeInTheDocument();
   });
 
   it("shares the JPEG as a file where the browser can share files", async () => {

@@ -1,5 +1,4 @@
 import type { Event } from "@form-at/data/events";
-import { colors } from "@form-at/ui/tokens";
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_TREATMENT,
@@ -25,33 +24,22 @@ const nextEvent: Event = {
 };
 
 describe("treatments", () => {
-  it("default to form:at: a gold duotone card over a purple-tinted background", () => {
+  it("default to form:at: a gold duotone card over the purple background", () => {
     expect(DEFAULT_TREATMENT).toBe("format");
     expect(TREATMENTS.format).toEqual({
       label: "form:at",
       card: "duotone-gold",
-      tint: colors.purple,
+      background: "purple",
     });
   });
 
-  it("are offered in the order form:at, raw, gold, purple, scan", () => {
-    expect(TREATMENT_IDS.map((id) => TREATMENTS[id].label)).toEqual([
-      "form:at",
-      "raw",
-      "gold",
-      "purple",
-      "scan",
-    ]);
+  it("are exactly form:at and raw, in that order", () => {
+    expect(TREATMENT_IDS).toEqual(["format", "raw"]);
+    expect(TREATMENT_IDS.map((id) => TREATMENTS[id].label)).toEqual(["form:at", "raw"]);
   });
 
-  it("each pick a card tone; only form:at tints the background", () => {
-    expect(TREATMENTS.raw.card).toBe("raw");
-    expect(TREATMENTS.gold.card).toBe("duotone-gold");
-    expect(TREATMENTS.purple.card).toBe("duotone-purple");
-    expect(TREATMENTS.scan.card).toBe("scan");
-    for (const id of TREATMENT_IDS.filter((t) => t !== "format")) {
-      expect(TREATMENTS[id].tint).toBeNull();
-    }
+  it("raw is the photo as it is, over the neutral background", () => {
+    expect(TREATMENTS.raw).toEqual({ label: "raw", card: "raw", background: "neutral" });
   });
 });
 

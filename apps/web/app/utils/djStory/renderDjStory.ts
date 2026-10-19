@@ -38,26 +38,30 @@ import {
 // ── Treatments ────────────────────────────────────────────────────────────
 
 /** How the card's photo is drawn. */
-export type CardTone = "raw" | "duotone-gold" | "duotone-purple" | "scan";
+export type CardTone = "raw" | "duotone-gold";
 
 /**
- * A photo treatment: the card's tone, and how the background (the same photo,
- * always heavily blurred) is coloured. The text is never treated.
+ * The background, always the card's photo heavily blurred and darkened:
+ *   purple  — tinted brand purple (form:at's)
+ *   neutral — untinted
+ */
+export type BackgroundTone = "purple" | "neutral";
+
+/**
+ * A photo treatment: the card's tone and the background's. The text, the
+ * name, the event line and the wordmark are never treated.
  *
- *   format — the brand look and the default: a gold duotone card over a
- *            purple-tinted background
- *   raw    — the photo as it is, over a dark neutral background
- *   gold   — gold duotone, card and background
- *   purple — purple duotone, card and background
- *   scan   — the photo with grain and scanlines, over a dark neutral background
+ *   format — the brand look and the default: a gold duotone card over the
+ *            purple background
+ *   raw    — the photo as it is, over the neutral background
+ *
+ * Don't add treatments that distort the photo (a glitch, scanlines): they
+ * compete with the DJ for attention (IMPROVEMENTS.md #14).
  */
 export const TREATMENTS = {
-  format: { label: "form:at", card: "duotone-gold", tint: colors.purple },
-  raw: { label: "raw", card: "raw", tint: null },
-  gold: { label: "gold", card: "duotone-gold", tint: null },
-  purple: { label: "purple", card: "duotone-purple", tint: null },
-  scan: { label: "scan", card: "scan", tint: null },
-} as const satisfies Record<string, { label: string; card: CardTone; tint: string | null }>;
+  format: { label: "form:at", card: "duotone-gold", background: "purple" },
+  raw: { label: "raw", card: "raw", background: "neutral" },
+} as const satisfies Record<string, { label: string; card: CardTone; background: BackgroundTone }>;
 
 export type PhotoTreatment = keyof typeof TREATMENTS;
 export const DEFAULT_TREATMENT: PhotoTreatment = "format";
@@ -71,11 +75,6 @@ export const TREATMENT_IDS = Object.keys(TREATMENTS) as PhotoTreatment[];
 // missing blur would leave exactly that lettering readable. Then darkened, so
 // the text always sits on near-black.
 const BACKGROUND_BLUR = { scale: 1 / 48, darken: 0.68 } as const;
-
-const DUOTONE_HIGHLIGHT: Record<"duotone-gold" | "duotone-purple", string> = {
-  "duotone-gold": colors.gold,
-  "duotone-purple": COLORS.unplayed,
-};
 
 // ── Layout ────────────────────────────────────────────────────────────────
 
@@ -143,18 +142,6 @@ function hexToRgb(hex: string): [number, number, number] {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-// A small seeded PRNG (mulberry32), so the scan grain is the same every time
-// the same photo is drawn: the preview is exactly what gets shared.
-function seeded(seed: number): () => number {
-  let a = seed;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 /**
  * The luminance range a duotone maps onto its two tones: the 2nd and 98th
  * percentiles of `lums` (0–1), so a few blown highlights or crushed shadows
@@ -182,46 +169,33 @@ function tonePhoto(photo: HTMLImageElement, tone: CardTone): HTMLCanvasElement {
 
   const image = g.getImageData(0, 0, w, h);
   const px = image.data;
-  if (tone === "scan") {
-    const random = seeded(w * 31 + h);
-    for (let i = 0; i < px.length; i += 4) {
-      const row = Math.floor(i / 4 / w);
-      const grain = (random() - 0.5) * 46;
-      // Every third row dimmed, as a CRT's gaps between lines.
-      const line = row % 3 === 2 ? 0.62 : 1;
-      for (let c = 0; c < 3; c++) {
-        px[i + c] = Math.max(0, Math.min(255, ((px[i + c] ?? 0) + grain) * line));
-      }
-    }
-  } else {
-    const [r0, g0, b0] = hexToRgb(colors.black);
-    const [r1, g1, b1] = hexToRgb(DUOTONE_HIGHLIGHT[tone]);
-    const lums = new Float32Array(px.length / 4);
-    for (let i = 0; i < px.length; i += 4) {
-      lums[i / 4] =
-        (0.2126 * (px[i] ?? 0) + 0.7152 * (px[i + 1] ?? 0) + 0.0722 * (px[i + 2] ?? 0)) / 255;
-    }
-    // Stretched to the photo's own range first, so a dark photo still spans
-    // black to gold instead of sinking into the shadow tone.
-    const [lo, hi] = duotoneRange(lums);
-    for (let i = 0; i < px.length; i += 4) {
-      const lum = Math.min(1, Math.max(0, ((lums[i / 4] ?? 0) - lo) / (hi - lo)));
-      // A gentle S-curve, so the two tones separate instead of meeting in mud.
-      const t = lum * lum * (3 - 2 * lum);
-      px[i] = r0 + (r1 - r0) * t;
-      px[i + 1] = g0 + (g1 - g0) * t;
-      px[i + 2] = b0 + (b1 - b0) * t;
-    }
+  const [r0, g0, b0] = hexToRgb(colors.black);
+  const [r1, g1, b1] = hexToRgb(colors.gold);
+  const lums = new Float32Array(px.length / 4);
+  for (let i = 0; i < px.length; i += 4) {
+    lums[i / 4] =
+      (0.2126 * (px[i] ?? 0) + 0.7152 * (px[i + 1] ?? 0) + 0.0722 * (px[i + 2] ?? 0)) / 255;
+  }
+  // Stretched to the photo's own range first, so a dark photo still spans
+  // black to gold instead of sinking into the shadow tone.
+  const [lo, hi] = duotoneRange(lums);
+  for (let i = 0; i < px.length; i += 4) {
+    const lum = Math.min(1, Math.max(0, ((lums[i / 4] ?? 0) - lo) / (hi - lo)));
+    // A gentle S-curve, so the two tones separate instead of meeting in mud.
+    const t = lum * lum * (3 - 2 * lum);
+    px[i] = r0 + (r1 - r0) * t;
+    px[i + 1] = g0 + (g1 - g0) * t;
+    px[i + 2] = b0 + (b1 - b0) * t;
   }
   g.putImageData(image, 0, 0);
   return canvas;
 }
 
-/** The background: the toned photo covering the frame, blurred, tinted, darkened. */
+/** The background: `toned` covering the frame, blurred, tinted when purple, darkened. */
 function drawBackground(
   g: CanvasRenderingContext2D,
   toned: HTMLCanvasElement,
-  tint: string | null,
+  background: BackgroundTone,
 ) {
   // Cover the frame's 9:16 from the photo's centre.
   const aspect = FRAME.width / FRAME.height;
@@ -246,10 +220,10 @@ function drawBackground(
   g.save();
   g.imageSmoothingQuality = "high";
   g.drawImage(mid, 0, 0, FRAME.width, FRAME.height);
-  if (tint) {
-    // The tint's hue and saturation over the blur's own light and dark.
+  if (background === "purple") {
+    // The purple's hue and saturation over the blur's own light and dark.
     g.globalCompositeOperation = "color";
-    g.fillStyle = tint;
+    g.fillStyle = colors.purple;
     g.fillRect(0, 0, FRAME.width, FRAME.height);
     g.globalCompositeOperation = "source-over";
   }
@@ -277,12 +251,12 @@ function drawBracketLine(g: CanvasRenderingContext2D, text: string, y: number) {
 /** Draws the whole image onto a FRAME-sized canvas. */
 export function drawDjStory(canvas: HTMLCanvasElement, input: DjStoryInput) {
   const g = context2d(canvas);
-  const { card, tint } = TREATMENTS[input.treatment];
+  const { card, background } = TREATMENTS[input.treatment];
   const toned = input.assets.photo ? tonePhoto(input.assets.photo, card) : null;
 
   g.fillStyle = COLORS.background;
   g.fillRect(0, 0, FRAME.width, FRAME.height);
-  if (toned) drawBackground(g, toned, tint);
+  if (toned) drawBackground(g, toned, background);
 
   // The pixel wordmark, as the header shows it: screen-blended, so its black
   // ground drops out.
@@ -337,7 +311,7 @@ export function drawDjStory(canvas: HTMLCanvasElement, input: DjStoryInput) {
   fillTrackedCentred(g, BRAND.text, FRAME.width / 2, DJ_STORY.site.baselineY, BRAND.size);
 }
 
-/** JPEG at 0.9: a photo with grain runs to ~4MB as PNG. */
+/** JPEG at 0.9: as PNG the same frame runs to 1–2MB, ~4MB with a noisy photo. */
 const JPEG_QUALITY = 0.9;
 
 /** A drawn canvas as the JPEG that's shared. */
