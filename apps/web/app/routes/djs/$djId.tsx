@@ -1,5 +1,5 @@
 import { getDJ } from "@form-at/data/djs";
-import { events, type Event, getVenueName } from "@form-at/data/events";
+import { events } from "@form-at/data/events";
 import { BracketLabel, Card, PageTitle, TerminalRow } from "@form-at/ui";
 import { Link, createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { BrandTitle } from "~/components/BrandTitle";
@@ -10,11 +10,12 @@ import { PageLayout } from "~/components/PageLayout";
 import { SetCard } from "~/components/SetCard";
 import { ShareButton } from "~/components/ShareButton";
 import { SocialLink } from "~/components/SocialLink";
+import { DjStoryButton } from "~/components/djStory/DjStoryButton";
 import { fetchAllSetsForRoute } from "~/data/setsForRoute";
 import { useTypedOnce } from "~/hooks/useTypedOnce";
-import { fmtEventDay } from "~/utils/fmt";
 import { pageHead } from "~/utils/head";
 import { djLd } from "~/utils/jsonld";
+import { nextLabelLong, nextLabelShort } from "~/utils/nextEventLabel";
 import { djShareTarget } from "~/utils/shareTarget";
 import { SOCIALS, SOCIAL_ORDER, type SocialKey } from "~/utils/socials";
 
@@ -134,11 +135,14 @@ function DJDetail() {
           ))}
         </div>
 
-        <div className="flex items-baseline justify-between gap-4 mb-2">
-          <h1 className="font-display text-4xl sm:text-6xl tracking-tight">
-            <BrandTitle>{dj.name}</BrandTitle>
-          </h1>
+        <h1 className="font-display text-4xl sm:text-6xl tracking-tight mb-2">
+          <BrandTitle>{dj.name}</BrandTitle>
+        </h1>
+        {/* Under the name, not beside it: two bracketed actions beside even a
+            short name run past the right edge at 375px. */}
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 mb-2">
           <ShareButton target={() => djShareTarget(dj)} />
+          <DjStoryButton dj={dj} nextEvent={upcomingEvents[0] ?? null} />
         </div>
 
         {dj.bio && <ConsoleWriter isFirstLoading={isFirstLoading}>{dj.bio}</ConsoleWriter>}
@@ -181,17 +185,4 @@ function DJDetail() {
       </div>
     </PageLayout>
   );
-}
-
-// The next row's two lengths, lowercase like the rest of the terminal rows.
-// Short: "004 · sat 05.12" (the event number; a title without the "Form:at "
-// prefix is kept whole). Long: "form:at 004 · sat 05.12 · stereo", the venue's
-// name without its city.
-function nextLabelShort(event: Event): string {
-  const number = event.title.replace(/^Form:at\s+/i, "");
-  return `${number} · ${fmtEventDay(event.date)}`.toLowerCase();
-}
-
-function nextLabelLong(event: Event): string {
-  return `${event.title} · ${fmtEventDay(event.date)} · ${getVenueName(event)}`.toLowerCase();
 }

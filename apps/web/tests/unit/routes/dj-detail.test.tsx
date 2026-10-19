@@ -120,3 +120,20 @@ describe("DJ page events", () => {
     expect(screen.getByText("deployment_history")).toBeInTheDocument();
   });
 });
+
+describe("DJ page actions", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("offers [ share ] and [ share_story ] on their own row, after the name", () => {
+    renderWith([upcoming], []);
+
+    const share = screen.getByRole("button", { name: "[ share ]" });
+    const story = screen.getByRole("button", { name: "[ share_story ]" });
+    const name = screen.getByRole("heading", { level: 1 });
+    expect(share.parentElement).toBe(story.parentElement);
+    expect(name.contains(share)).toBe(false);
+    expect(name.compareDocumentPosition(share) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});

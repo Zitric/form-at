@@ -70,6 +70,15 @@ export const TRACKABLE_EVENT_TYPES = [
   // directly isn't this; that funnel is install_prompt_shown →
   // install_accepted / install_dismissed.
   "install_cta_instructions_shown",
+  // DJ Story image (DjStorySheet, from [ share_story ] on a DJ page).
+  // `dj_story_open` is the sheet opening; `dj_story_shared` means
+  // navigator.share resolved (a target was picked, not that a story was
+  // published, as story_video_shared); `dj_story_downloaded` is the fallback
+  // where file sharing isn't available. No id: `events` has no column for a
+  // DJ, and set_id is validated as a set (calendar_add_click's precedent).
+  "dj_story_open",
+  "dj_story_shared",
+  "dj_story_downloaded",
 ] as const;
 
 export type TrackableEventType = (typeof TRACKABLE_EVENT_TYPES)[number];
