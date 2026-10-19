@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { corsImageUrl, previewSpectrumLevels } from "~/utils/storyVideo/renderer";
+import { corsImageUrl } from "~/utils/storyVideo/canvas";
+import { previewSpectrumLevels } from "~/utils/storyVideo/renderer";
 
 describe("corsImageUrl", () => {
   const page = "https://formatglasgow.com";
