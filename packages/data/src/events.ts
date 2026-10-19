@@ -128,3 +128,9 @@ export function getPastEvents(): Event[] {
 export function getCityForSet(set: MusicSet): string | undefined {
   return set.eventId ? getEvent(set.eventId)?.city : undefined;
 }
+
+// The venue's own name, for compact labels: everything before the first
+// comma of `venue` ("Stereo, Renfield Lane, City Centre, Glasgow" → "Stereo").
+export function getVenueName(event: Event): string {
+  return event.venue.split(",")[0]?.trim() || event.venue;
+}

@@ -1,5 +1,6 @@
 import type { MusicSet } from "@form-at/data/sets";
 import type { StateCreator } from "zustand";
+import type { ShareTarget } from "~/utils/shareTarget";
 
 // Subset of the experimental BeforeInstallPromptEvent spec we actually touch.
 // Not in lib.dom.d.ts because the API is Chromium-only and not in the WHATWG
@@ -13,11 +14,10 @@ export type BeforeInstallPromptEvent = Event & {
 export type UiSlice = {
   toast: string | null;
   setToast: (msg: string | null) => void;
-  /** The set whose share modal is currently open. `null` means the modal is
-   * closed. Storing the set itself rather than just the id avoids a lookup
-   * from inside <ShareModal>. */
-  shareSet: MusicSet | null;
-  openShareModal: (set: MusicSet) => void;
+  /** What the open share modal shares (a set, a DJ, an event). `null` means
+   * the modal is closed. Never persisted. */
+  shareTarget: ShareTarget | null;
+  openShareModal: (target: ShareTarget) => void;
   closeShareModal: () => void;
   /** The open Instagram Story flow, `null` when closed: which set, and
    *  which step — the install gate (a browser tab) or the excerpt picker
@@ -96,12 +96,12 @@ export type UiSlice = {
 export const createUiSlice: StateCreator<UiSlice, [], [], UiSlice> = (set) => ({
   toast: null,
   setToast: (msg) => set({ toast: msg }),
-  shareSet: null,
-  openShareModal: (s) => set({ shareSet: s }),
-  closeShareModal: () => set({ shareSet: null }),
+  shareTarget: null,
+  openShareModal: (target) => set({ shareTarget: target }),
+  closeShareModal: () => set({ shareTarget: null }),
   storyFlow: null,
   // Replaces the share modal rather than stacking on it: one dialog at a time.
-  openStoryFlow: (s, step) => set({ storyFlow: { set: s, step }, shareSet: null }),
+  openStoryFlow: (s, step) => set({ storyFlow: { set: s, step }, shareTarget: null }),
   closeStoryFlow: () => set({ storyFlow: null }),
   fullPlayerOpen: false,
   openFullPlayer: () => set({ fullPlayerOpen: true }),
