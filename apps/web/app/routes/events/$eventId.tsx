@@ -7,8 +7,10 @@ import { AddToCalendarButton } from "~/components/AddToCalendarButton";
 import { Image } from "~/components/Image";
 import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
+import { ShareButton } from "~/components/ShareButton";
 import { pageHead } from "~/utils/head";
 import { eventLd } from "~/utils/jsonld";
+import { eventShareTarget } from "~/utils/shareTarget";
 
 export const Route = createFileRoute("/events/$eventId")({
   loader: async ({ params }) => {
@@ -55,9 +57,12 @@ function EventDetail() {
           ‹ events_archive
         </Link>
 
-        <PageTitle className="text-3xl sm:text-4xl font-display font-bold leading-tight tracking-tight mb-2">
-          {event.title}
-        </PageTitle>
+        <div className="flex items-baseline justify-between gap-4 mb-2">
+          <PageTitle className="text-3xl sm:text-4xl font-display font-bold leading-tight tracking-tight mb-0">
+            {event.title}
+          </PageTitle>
+          <ShareButton target={() => eventShareTarget(event)} />
+        </div>
 
         <div className="space-y-1 mb-6">
           {metaRows.map(([label, value]) => (

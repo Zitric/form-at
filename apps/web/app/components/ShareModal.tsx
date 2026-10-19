@@ -1,4 +1,3 @@
-import { getCityForSet } from "@form-at/data/events";
 import { BracketLabel, Modal, TerminalRow } from "@form-at/ui";
 import { useEffect } from "react";
 
@@ -7,6 +6,7 @@ import { useStore } from "~/store";
 import { getAudioCurrentTime } from "~/store/playerSlice";
 import { buildAndroidIntent, isAndroid } from "~/utils/deeplink";
 import { fmtTimestamp } from "~/utils/fmt";
+import type { ShareTarget } from "~/utils/shareTarget";
 import { applyStoryFlagFromUrl } from "~/utils/storyFlag";
 
 // Each platform's `wa.me` / `t.me` URL is already a Universal Link / App Link
@@ -27,8 +27,16 @@ const rowClass =
   "text-left text-sm text-grey hover:text-white transition-colors tracking-widest cursor-pointer py-1 whitespace-nowrap";
 const sectionLabelClass = "text-xs text-grey/60 tracking-widest mb-2";
 
+// The modal's subject row and accessible name, per kind of target.
+const SUBJECT_LABEL: Record<ShareTarget["kind"], string> = { set: "set", dj: "dj", event: "event" };
+const ARIA_LABEL: Record<ShareTarget["kind"], string> = {
+  set: "Share set",
+  dj: "Share DJ",
+  event: "Share event",
+};
+
 export function ShareModal() {
-  const shareSet = useStore((s) => s.shareSet);
+  const shareTarget = useStore((s) => s.shareTarget);
   const closeShareModal = useStore((s) => s.closeShareModal);
   const setToast = useStore((s) => s.setToast);
   const nowPlaying = useStore((s) => s.nowPlaying);
@@ -37,16 +45,15 @@ export function ShareModal() {
   // a later client-side navigation drops `?story=on` from it.
   useEffect(() => applyStoryFlagFromUrl(), []);
 
-  if (!shareSet) return null;
+  if (!shareTarget) return null;
 
-  const isCurrent = nowPlaying?.id === shareSet.id;
+  // copy @ <timestamp> and create_video exist only for a set.
+  const shareSet = shareTarget.kind === "set" ? shareTarget.set : null;
+  const isCurrent = shareSet !== null && nowPlaying?.id === shareSet.id;
   const currentTime = isCurrent ? Math.floor(getAudioCurrentTime()) : 0;
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const baseUrl = `${origin}/sets/${shareSet.id}`;
-  const city = getCityForSet(shareSet);
-  const text = `Listen to ${shareSet.artist} at ${shareSet.title}${city ? `, ${city}` : ""}.`;
-  const urlAt = (t?: number) => (t && t > 0 ? `${baseUrl}?t=${t}` : baseUrl);
-  const url = urlAt();
+  const { url, title, text } = shareTarget;
+  const urlAt = (t?: number) => (t && t > 0 ? `${url}?t=${t}` : url);
+  const subject = shareSet ? `${shareSet.artist} @ ${shareSet.title}` : title;
   // Native share is the only realistic way to reach Instagram (Story / DM) and
   // other apps installed on the device, since they don't expose web share URLs.
   const hasNativeShare = typeof navigator !== "undefined" && "share" in navigator;
@@ -67,11 +74,7 @@ export function ShareModal() {
 
   const shareViaApps = async () => {
     try {
-      await navigator.share({
-        title: `${shareSet.artist} — ${shareSet.title}`,
-        text,
-        url,
-      });
+      await navigator.share({ title, text, url });
     } catch {
       // user cancelled or share failed — fall through silently
     }
@@ -89,7 +92,7 @@ export function ShareModal() {
     <Modal
       open
       onClose={closeShareModal}
-      ariaLabel="Share set"
+      ariaLabel={ARIA_LABEL[shareTarget.kind]}
       title={
         <div className="text-xs text-grey tracking-widest truncate">
           › <span className="text-white">share_signal</span>
@@ -99,7 +102,7 @@ export function ShareModal() {
       {/* Subject row — names what's about to be shared, in the same
           terminal-row style as the rest of the app. Long artist names
           wrap inside the body instead of truncating in the title. */}
-      <TerminalRow label="set" value={`${shareSet.artist} @ ${shareSet.title}`} className="mb-6" />
+      <TerminalRow label={SUBJECT_LABEL[shareTarget.kind]} value={subject} className="mb-6" />
       {/* Flexbox + flex-shrink-0 lets each column auto-size to its widest
           button (e.g. `[ copy @ 49:00 ]`) instead of being forced into an
           equal half. When the two columns together can't fit the modal
@@ -146,7 +149,7 @@ export function ShareModal() {
             </a>
           </div>
         </div>
-        {showCreateVideo && (
+        {shareSet && showCreateVideo && (
           <div className="flex-shrink-0">
             <div className={sectionLabelClass}>create_video:</div>
             <div className="flex flex-col">

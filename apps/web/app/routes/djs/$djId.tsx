@@ -1,5 +1,5 @@
 import { getDJ } from "@form-at/data/djs";
-import { events, type Event } from "@form-at/data/events";
+import { events, type Event, getVenueName } from "@form-at/data/events";
 import { BracketLabel, Card, PageTitle, TerminalRow } from "@form-at/ui";
 import { Link, createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { BrandTitle } from "~/components/BrandTitle";
@@ -8,12 +8,14 @@ import { Image } from "~/components/Image";
 import { JsonLd } from "~/components/JsonLd";
 import { PageLayout } from "~/components/PageLayout";
 import { SetCard } from "~/components/SetCard";
+import { ShareButton } from "~/components/ShareButton";
 import { SocialLink } from "~/components/SocialLink";
 import { fetchAllSetsForRoute } from "~/data/setsForRoute";
 import { useTypedOnce } from "~/hooks/useTypedOnce";
 import { fmtEventDay } from "~/utils/fmt";
 import { pageHead } from "~/utils/head";
 import { djLd } from "~/utils/jsonld";
+import { djShareTarget } from "~/utils/shareTarget";
 import { SOCIALS, SOCIAL_ORDER, type SocialKey } from "~/utils/socials";
 
 export const Route = createFileRoute("/djs/$djId")({
@@ -123,9 +125,12 @@ function DJDetail() {
           ))}
         </div>
 
-        <h1 className="font-display text-4xl sm:text-6xl tracking-tight mb-2">
-          <BrandTitle>{dj.name}</BrandTitle>
-        </h1>
+        <div className="flex items-baseline justify-between gap-4 mb-2">
+          <h1 className="font-display text-4xl sm:text-6xl tracking-tight">
+            <BrandTitle>{dj.name}</BrandTitle>
+          </h1>
+          <ShareButton target={() => djShareTarget(dj)} />
+        </div>
 
         {dj.bio && <ConsoleWriter isFirstLoading={isFirstLoading}>{dj.bio}</ConsoleWriter>}
 
@@ -173,6 +178,6 @@ function DJDetail() {
 // space before each "·" is non-breaking, so a narrow screen (375px) wraps
 // after the dot rather than starting a line with it.
 function upcomingLabel(event: Event): string {
-  const venueName = event.venue.split(",")[0]?.trim() ?? event.venue;
+  const venueName = getVenueName(event);
   return [event.title, fmtEventDay(event.date), venueName].join("\u00A0· ");
 }

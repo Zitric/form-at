@@ -2,6 +2,7 @@ import type { MusicSet } from "@form-at/data/sets";
 import { Button } from "@form-at/ui";
 import { useTrackEvent } from "~/hooks/useTrackEvent";
 import { useStore } from "~/store";
+import { setShareTarget } from "~/utils/shareTarget";
 
 // Bare button — no layout wrapper. Callers compose it into rows/columns as
 // needed. Two consumers right now: the set detail page (paired with
@@ -13,7 +14,7 @@ export function ShareSetButton({ set, className }: { set: MusicSet; className?: 
 
   const handleClick = () => {
     trackEvent("share_click", set.id);
-    openShareModal(set);
+    openShareModal(setShareTarget(set));
   };
 
   return (

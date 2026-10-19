@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createJSONStorage } from "zustand/middleware";
 import { ShareModal } from "~/components/ShareModal";
 import { useStore } from "~/store";
+import { djShareTarget, eventShareTarget, setShareTarget } from "~/utils/shareTarget";
 
 const testSet: MusicSet = {
   id: "test-set",
@@ -45,7 +46,7 @@ function installInMemoryStorage() {
 beforeEach(() => {
   installInMemoryStorage();
   useStore.setState({
-    shareSet: null,
+    shareTarget: null,
     toast: null,
     nowPlaying: null,
     isPlaying: false,
@@ -74,17 +75,17 @@ afterEach(() => {
     // biome-ignore lint/performance/noDelete: same as above
     delete (navigator as unknown as { share?: unknown }).share;
   }
-  useStore.setState({ shareSet: null, toast: null });
+  useStore.setState({ shareTarget: null, toast: null });
 });
 
 describe("ShareModal", () => {
-  it("renders nothing when shareSet is null", () => {
+  it("renders nothing when shareTarget is null", () => {
     const { container } = render(<ShareModal />);
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("renders core share targets when shareSet is set", () => {
-    useStore.setState({ shareSet: testSet });
+  it("renders core share targets when shareTarget is set", () => {
+    useStore.setState({ shareTarget: setShareTarget(testSet) });
     render(<ShareModal />);
     expect(screen.getByRole("button", { name: /copy_link/ })).toBeInTheDocument();
     // WhatsApp and Telegram are now anchors (their href IS the share action),
@@ -95,7 +96,7 @@ describe("ShareModal", () => {
 
   it("shows [ apps ] only when navigator.share is supported", () => {
     // Without native share
-    useStore.setState({ shareSet: testSet });
+    useStore.setState({ shareTarget: setShareTarget(testSet) });
     const { rerender } = render(<ShareModal />);
     expect(screen.queryByRole("button", { name: /\[ apps \]/ })).toBeNull();
 
@@ -110,7 +111,7 @@ describe("ShareModal", () => {
   });
 
   it("triggers a toast and closes the modal on copy_link click", async () => {
-    useStore.setState({ shareSet: testSet });
+    useStore.setState({ shareTarget: setShareTarget(testSet) });
     const user = userEvent.setup();
     render(<ShareModal />);
     await user.click(screen.getByRole("button", { name: /copy_link/ }));
@@ -121,11 +122,11 @@ describe("ShareModal", () => {
     await waitFor(() => {
       expect(useStore.getState().toast).not.toBeNull();
     });
-    expect(useStore.getState().shareSet).toBeNull();
+    expect(useStore.getState().shareTarget).toBeNull();
   });
 
   it("WhatsApp link href points at wa.me with the set URL embedded", () => {
-    useStore.setState({ shareSet: testSet });
+    useStore.setState({ shareTarget: setShareTarget(testSet) });
     render(<ShareModal />);
     const href = screen.getByRole("link", { name: /whatsapp/ }).getAttribute("href") ?? "";
     expect(href).toContain("wa.me");
@@ -133,7 +134,7 @@ describe("ShareModal", () => {
   });
 
   it("Telegram link href points at t.me/share/url with the set URL embedded", () => {
-    useStore.setState({ shareSet: testSet });
+    useStore.setState({ shareTarget: setShareTarget(testSet) });
     render(<ShareModal />);
     const href = screen.getByRole("link", { name: /telegram/ }).getAttribute("href") ?? "";
     expect(href).toMatch(/t\.me\/share\/url/);
@@ -141,11 +142,11 @@ describe("ShareModal", () => {
   });
 
   it("closes the modal when the close button is clicked", async () => {
-    useStore.setState({ shareSet: testSet });
+    useStore.setState({ shareTarget: setShareTarget(testSet) });
     const user = userEvent.setup();
     render(<ShareModal />);
     await user.click(screen.getByRole("button", { name: /close/i }));
-    expect(useStore.getState().shareSet).toBeNull();
+    expect(useStore.getState().shareTarget).toBeNull();
   });
 });
 
@@ -155,7 +156,7 @@ describe("ShareModal create_video: section", () => {
   });
 
   it("isn't there when no video format would render (no flag, or not a phone)", () => {
-    useStore.setState({ shareSet: testSet });
+    useStore.setState({ shareTarget: setShareTarget(testSet) });
     render(<ShareModal />);
     expect(screen.queryByText("create_video:")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /instagram_story/ })).not.toBeInTheDocument();
@@ -163,7 +164,7 @@ describe("ShareModal create_video: section", () => {
 
   it("holds [ instagram_story ], after send:, which no longer does", () => {
     storyShown.current = true;
-    useStore.setState({ shareSet: testSet });
+    useStore.setState({ shareTarget: setShareTarget(testSet) });
     render(<ShareModal />);
     const create = screen.getByText("create_video:");
     const send = screen.getByText("send:");
@@ -171,5 +172,58 @@ describe("ShareModal create_video: section", () => {
     const story = screen.getByRole("button", { name: /instagram_story/ });
     expect(create.parentElement).toContainElement(story);
     expect(send.parentElement).not.toContainElement(story);
+  });
+});
+
+describe("ShareModal for a DJ or an event", () => {
+  const dj = { id: "test-dj", name: "Test DJ", type: "guest" as const };
+  const event = {
+    id: "format-004",
+    title: "Form:at 004",
+    date: "2026-12-05",
+    venue: "Stereo, Renfield Lane, City Centre, Glasgow",
+    city: "Glasgow",
+    lineupIds: [],
+    audio: "techno",
+    runtime: "23:00 — tbc",
+    status: "upcoming" as const,
+  };
+
+  afterEach(() => {
+    storyShown.current = false;
+  });
+
+  it.each([
+    ["DJ", djShareTarget(dj), "dj", "Test DJ", "/djs/test-dj", "Test DJ on Form:at."],
+    [
+      "event",
+      eventShareTarget(event),
+      "event",
+      "Form:at 004",
+      "/events/format-004",
+      "Form:at 004 · Sat 05.12 · Stereo",
+    ],
+  ])("shares the %s page's URL and text", (kind, target, label, subject, path, text) => {
+    useStore.setState({ shareTarget: target });
+    render(<ShareModal />);
+
+    expect(screen.getByRole("dialog", { name: `Share ${kind}` })).toBeInTheDocument();
+    expect(screen.getByText(`${label}: ${subject}`, { exact: false })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /copy_link/ })).toBeInTheDocument();
+    const wa = screen.getByRole("link", { name: /whatsapp/ }).getAttribute("href") ?? "";
+    expect(wa).toContain(encodeURIComponent(path));
+    expect(wa).toContain(encodeURIComponent(text));
+    const tg = screen.getByRole("link", { name: /telegram/ }).getAttribute("href") ?? "";
+    expect(tg).toContain(encodeURIComponent(path));
+  });
+
+  it("has no set-only rows: no copy @ and no create_video, even where the Story would show", () => {
+    storyShown.current = true;
+    useStore.setState({ shareTarget: djShareTarget(dj), nowPlaying: testSet });
+    render(<ShareModal />);
+
+    expect(screen.queryByRole("button", { name: /copy @/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("create_video:")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /instagram_story/ })).not.toBeInTheDocument();
   });
 });
