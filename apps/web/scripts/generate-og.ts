@@ -2,11 +2,15 @@
 /**
  * Generates social share banners:
  *  - `public/og-image.png` — global default (home, listings, fallback)
- *  - `public/og/djs/<id>.png` — one per DJ (photo + name composition)
- *  - `public/og/sets/<id>.png` — one per set (artwork + artist + title)
- *  - `public/og/events/<id>.png` — one per event (flyer + title + date)
+ *  - `public/og/djs/<id>.jpg` — one per DJ (photo + name composition)
+ *  - `public/og/sets/<id>.jpg` — one per set (artwork + artist + title)
+ *  - `public/og/events/<id>.jpg` — one per event (flyer + title + date)
  *
  * Format: 1200×630 (Twitter summary_large_image + Facebook OG standard).
+ * The photo banners are JPEG, never PNG: a colourful photo as PNG runs to
+ * 400–750KB, and WhatsApp drops the preview image above roughly 300KB (a
+ * widely reported limit, not a documented one). The default banner is flat
+ * colour and text, ~25KB as PNG, so it stays PNG.
  * Runs as part of `pnpm build` so the prod bundle always has fresh images.
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -132,7 +136,7 @@ async function composeMediaBanner(args: {
       { input: wm.buf, top: wmTop, left: wmLeft, blend: "screen" },
       { input: Buffer.from(textSvg), top: 0, left: 0 },
     ])
-    .png({ compressionLevel: 9 })
+    .jpeg({ quality: 82, mozjpeg: true })
     .toBuffer();
 
   mkdirSync(args.outDir, { recursive: true });
@@ -160,7 +164,7 @@ async function generateDJBanner(dj: DJ) {
       <text x="${PANEL_CENTER_X}" y="565" text-anchor="middle" class="site">${SITE}</text>
     `,
     outDir: join(PUBLIC, "og", "djs"),
-    outName: `${dj.id}.png`,
+    outName: `${dj.id}.jpg`,
   });
 }
 
@@ -183,7 +187,7 @@ async function generateSetBanner(set: MusicSet) {
       <text x="${PANEL_CENTER_X}" y="565" text-anchor="middle" class="site">${SITE}</text>
     `,
     outDir: join(PUBLIC, "og", "sets"),
-    outName: `${set.id}.png`,
+    outName: `${set.id}.jpg`,
   });
 }
 
@@ -206,7 +210,7 @@ async function generateEventBanner(event: Event) {
       <text x="${PANEL_CENTER_X}" y="565" text-anchor="middle" class="site">${SITE}</text>
     `,
     outDir: join(PUBLIC, "og", "events"),
-    outName: `${event.id}.png`,
+    outName: `${event.id}.jpg`,
   });
 }
 

@@ -27,7 +27,7 @@ export const Route = createFileRoute("/events/$eventId")({
       path: `/events/${event.id}`,
       // Per-event banner generated at build by scripts/generate-og.ts
       // (flyer + title + date composition). Falls back to /og-image.png if missing.
-      image: event.flyer ? `/og/events/${event.id}.png` : undefined,
+      image: event.flyer ? `/og/events/${event.id}.jpg` : undefined,
     });
   },
   component: EventDetail,
