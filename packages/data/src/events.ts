@@ -40,7 +40,7 @@ export const events: Event[] = [
     id: "format-004",
     title: "Form:at 004",
     date: "2026-12-05",
-    venue: "Stereo, Renfield Lane, City Centre, Glasgow",
+    venue: "Stereo, City Centre, Glasgow",
     city: "Glasgow",
     lineupIds: ["dzeko", "julz-lever", "hubey"],
     audio: "techno / electro / dub",

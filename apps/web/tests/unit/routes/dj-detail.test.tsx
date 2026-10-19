@@ -6,9 +6,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Route } from "~/routes/djs/$djId";
 
 // The DJ page splits the DJ's events by status: each upcoming one is a
-// next_transmission row in the top block, linking to the event; only past
-// ones are listed under deployment_history. Without the split an announced
-// lineup lists a future night as history.
+// "next" row in the top block, linking to the event; only past ones are
+// listed under deployment_history. Without the split an announced lineup
+// lists a future night as history.
 
 vi.mock("@tanstack/react-router", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-router")>();
@@ -37,7 +37,7 @@ function event(id: string, status: Event["status"], date: string): Event {
     id,
     title: `Form:at ${id}`,
     date,
-    venue: "Stereo, Glasgow",
+    venue: "Stereo, Renfield Lane, City Centre, Glasgow",
     city: "Glasgow",
     lineupIds: [dj.id],
     audio: "techno",
@@ -55,20 +55,25 @@ function renderWith(upcomingEvents: Event[], pastEvents: Event[]) {
   return render(<Page />);
 }
 
+// jsdom applies no media queries (and loads no Tailwind), so both lengths are
+// in its DOM at once: assert each one's text and the classes that hide it.
+function nextLink(container: HTMLElement): HTMLAnchorElement {
+  const link = container.querySelector<HTMLAnchorElement>('a[href="/events/004"]');
+  if (!link) throw new Error("no link to /events/004");
+  return link;
+}
+
 describe("DJ page events", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("shows an upcoming event as a next_transmission row and a past one under deployment_history", () => {
-    renderWith([upcoming], [past]);
+  it("shows an upcoming event as a 'next' row linking to it, and a past one under deployment_history", () => {
+    const { container } = renderWith([upcoming], [past]);
 
-    // Non-breaking space before each "·", so a wrap never starts a line with it.
-    const link = screen.getByRole("link", {
-      name: "Form:at 004\u00A0· Sat\u00A005.12\u00A0· Stereo",
-    });
-    expect(link).toHaveAttribute("href", "/events/004");
-    expect(link.closest("p")).toHaveTextContent("next_transmission:");
+    const link = nextLink(container);
+    expect(link.closest("p")).toHaveTextContent(/^›\s*next:/);
+    expect(screen.queryByText(/next_transmission/)).not.toBeInTheDocument();
 
     const history = screen.getByText("deployment_history").closest("section");
     if (!history) throw new Error("no deployment_history section");
@@ -76,10 +81,23 @@ describe("DJ page events", () => {
     expect(within(history).queryByText(/Form:at 004/)).not.toBeInTheDocument();
   });
 
-  it("has no deployment_history when every event is upcoming", () => {
-    renderWith([upcoming], []);
+  it("renders a short label below 400px and a long one from 400px, CSS only", () => {
+    const { container } = renderWith([upcoming], []);
 
-    expect(screen.getByRole("link", { name: /Form:at 004/ })).toBeInTheDocument();
+    const [short, long] = Array.from(nextLink(container).children);
+    // Short: shown by default, display:none from 400px.
+    expect(short).toHaveClass("min-[400px]:hidden");
+    expect(short).not.toHaveClass("hidden");
+    expect(short).toHaveTextContent(/^\[\s*004 · sat\s05\.12\s*\]$/);
+    // Long: display:none by default, shown from 400px.
+    expect(long).toHaveClass("hidden", "min-[400px]:inline");
+    expect(long).toHaveTextContent(/^\[\s*form:at 004 · sat\s05\.12 · stereo\s*\]$/);
+  });
+
+  it("has no deployment_history when every event is upcoming", () => {
+    const { container } = renderWith([upcoming], []);
+
+    expect(nextLink(container)).toBeInTheDocument();
     expect(screen.queryByText("deployment_history")).not.toBeInTheDocument();
   });
 
@@ -94,10 +112,11 @@ describe("DJ page events", () => {
     expect(screen.getByText("events: 2 transmissions", { exact: false })).toBeInTheDocument();
   });
 
-  it("has no next_transmission row when every event is past", () => {
-    renderWith([], [past]);
+  it("has no next row when every event is past", () => {
+    const { container } = renderWith([], [past]);
 
-    expect(screen.queryByText(/next_transmission/)).not.toBeInTheDocument();
+    expect(container.querySelector('a[href^="/events/"]')).toBeNull();
+    expect(screen.queryByText(/^›\s*next:/)).not.toBeInTheDocument();
     expect(screen.getByText("deployment_history")).toBeInTheDocument();
   });
 });
