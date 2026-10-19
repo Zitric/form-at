@@ -7,7 +7,7 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
-- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a cleared 2026-08-18 except the dropped-connection case, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project), 30 (Instagram Story device test — Android fully verified: the full 15s story shares directly, publishes whole, A/V sync and framing intact after Instagram's re-encode; iOS waits on the same device access as 12/23b), 31 (a re-upload at the same R2 URL never reaches a saved offline copy; fixed with versioned upload paths, CDN rules applied, Julz 003 moved; only the manual Android re-upload test remains), 32 (Firefox on Android treated as non-installable until a device shows its home-screen shortcut runs standalone)
+- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a cleared 2026-08-18 except the dropped-connection case, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project), 30 (Instagram Story device test — Android fully verified: the full 15s story shares directly, publishes whole, A/V sync and framing intact after Instagram's re-encode; iOS waits on the same device access as 12/23b), 31 (a re-upload at the same R2 URL never reaches a saved offline copy; fixed with versioned upload paths, CDN rules applied, Julz 003 moved; only the manual Android re-upload test remains), 32 (Firefox on Android treated as non-installable until a device shows its home-screen shortcut runs standalone), 33 (home must not scroll on an iPhone when it fits — checked in Chromium emulation only; waits on the same iPhone access as 12/23b/30)
 - **Deferred, recorded rather than done:** 24 (DJ/event data model still static while sets are in D1), 25 (no-cross-app-imports unenforced), 26 (`PWA_PROGRESS.md` too large to be readable)
 - **Invalid:** 1 (2026-07-22 — premise was wrong, not stale: both flagged functions are load-bearing behind a live multi-provider calendar picker; do not delete, see item for the full re-verification)
 - **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, real trigger is ~10-15 sets in the catalogue, not a calendar date; see item for why that arrives faster now)
@@ -1540,4 +1540,41 @@ Not checked on a device either: the same five-minute test settles each.
 
 ---
 
-_Last updated: 2026-10-01_
+## 33. [VERIFICATION DEBT] Home must not scroll on an iPhone when it fits
+
+**Status: open, not blocking.** Home's bottom padding on phones is
+`--fit-pb` (`apps/web/app/styles/global.css`, applied by `PageLayout`'s
+`fitBottom`): the fixed chrome exactly (nav 55 + mini player 56 +
+`env(safe-area-inset-bottom)`) plus 24px for the swipe dots, instead of the
+flat `pb-40` (160px) every other page keeps. On Android, where the inset is
+0, that is 135px, and it stops home scrolling by 50–60px when everything
+already fits. The empty install / notify slot also collapses
+(`empty:hidden`) instead of leaving its margins behind.
+
+**What was checked.** A production build in Chromium (Playwright, Pixel UA)
+at 412×915, 412×892, 390×844 and 375×667, mini player shown and hidden,
+slot filled and empty: no scroll at any of them, nor at any height from 600
+to 915px at 412, 390 and 375px wide; at 375×480, where the content
+genuinely doesn't fit, the page still scrolls and the slot clears the
+chrome by the 24px dots allowance. The Android scroll was reported on a
+Pixel 10 Pro; the fix has not been tried on it yet either.
+
+**What wasn't.** Any iPhone. There `env(safe-area-inset-bottom)` is about
+34px on Face ID iPhones, so `--fit-pb` is ≈ 169px, slightly more than
+`pb-40`: home should scroll no more than it did, but nothing has measured
+it. The iPhone SE (375×667, no home indicator, inset 0) is the case most
+likely to be tight: its `--fit-pb` is 135px, like Android's, on the
+shortest screen we support. Safari's svh, its toolbars and the
+black-translucent status bar (`viewport-fit=cover`) also differ from
+Chromium's emulation.
+
+**To settle it (a few minutes, on an iPhone, ideally an SE plus one Face ID
+model):** install the app, open home with a set loaded (mini player shown)
+and with the notify / install slot both showing and spent, and check that
+it doesn't scroll, that `install_app` / `notify_me` sit above the swipe
+dots, and that nothing hides behind the mini player. Waits on the same
+iPhone access as items 12, 23b and 30.
+
+---
+
+_Last updated: 2026-10-19_

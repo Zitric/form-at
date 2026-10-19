@@ -59,7 +59,7 @@ function Home() {
   const listenLabel = !nowPlaying ? "play_latest" : isPlaying ? "pause" : "resume_signal";
 
   return (
-    <PageLayout>
+    <PageLayout fitBottom>
       <JsonLd data={organizationLd()} />
       <div className="flex flex-col justify-start sm:justify-center sm:py-16">
         {/* On phones every gap from here to the install slot, and the
@@ -117,8 +117,12 @@ function Home() {
             the Push API is there and the ask is unspent. Below the socials
             so neither competes with the play button. */}
         {/* Pulled up by half the socials gap (16px of 32 at full size), so
-            the two rows can't overlap when the gap shrinks. */}
-        <div className="flex flex-col items-center gap-3 -mt-[calc(var(--fit-gap)/2)] sm:-mt-4 mb-8">
+            the two rows can't overlap when the gap shrinks. Gone when both
+            render nothing (the installed app with notify_me spent): empty, its
+            margins would still be space the page can scroll by. No bottom
+            margin on phones: PageLayout's fitBottom already clears the chrome
+            and the swipe dots. */}
+        <div className="flex flex-col items-center gap-3 -mt-[calc(var(--fit-gap)/2)] sm:-mt-4 sm:mb-8 empty:hidden">
           <InstallAppButton />
           <PushOptInCta />
         </div>
