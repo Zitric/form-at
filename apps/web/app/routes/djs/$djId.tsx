@@ -110,15 +110,24 @@ function DJDetail() {
           {upcomingEvents.map((event) => (
             <TerminalRow
               key={event.id}
-              label="next_transmission"
+              label="next"
               value={
                 <Link
                   to="/events/$eventId"
                   params={{ eventId: event.id }}
                   preload="intent"
-                  className="hover:text-gold transition-colors"
+                  className="hover:text-white transition-colors"
                 >
-                  {upcomingLabel(event)}
+                  {/* Two lengths, one shown per width, CSS only. The hidden one
+                      is display:none, so the link's accessible name is only
+                      ever the visible text. Neither may wrap (BracketLabel is
+                      nowrap), so the wide one waits for the width it fits in. */}
+                  <span className="min-[400px]:hidden">
+                    <BracketLabel>{nextLabelShort(event)}</BracketLabel>
+                  </span>
+                  <span className="hidden min-[400px]:inline">
+                    <BracketLabel>{nextLabelLong(event)}</BracketLabel>
+                  </span>
                 </Link>
               }
             />
@@ -174,10 +183,15 @@ function DJDetail() {
   );
 }
 
-// "Form:at 004 · Sat 05.12 · Stereo": the venue's name without its city. The
-// space before each "·" is non-breaking, so a narrow screen (375px) wraps
-// after the dot rather than starting a line with it.
-function upcomingLabel(event: Event): string {
-  const venueName = getVenueName(event);
-  return [event.title, fmtEventDay(event.date), venueName].join("\u00A0· ");
+// The next row's two lengths, lowercase like the rest of the terminal rows.
+// Short: "004 · sat 05.12" (the event number; a title without the "Form:at "
+// prefix is kept whole). Long: "form:at 004 · sat 05.12 · stereo", the venue's
+// name without its city.
+function nextLabelShort(event: Event): string {
+  const number = event.title.replace(/^Form:at\s+/i, "");
+  return `${number} · ${fmtEventDay(event.date)}`.toLowerCase();
+}
+
+function nextLabelLong(event: Event): string {
+  return `${event.title} · ${fmtEventDay(event.date)} · ${getVenueName(event)}`.toLowerCase();
 }
