@@ -145,7 +145,7 @@ test.describe("instagram story entry (Android phone)", () => {
   test("is there without the flag", async ({ page }) => {
     await stubNetworkAndCodecs(page);
     await openShare(page, SET_PATH);
-    await expect(page.getByRole("button", { name: /instagram_story/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /video_story/ })).toBeVisible();
   });
 
   // A phone that can't record H.264 + AAC MP4 gets no entry, rather than
@@ -157,14 +157,14 @@ test.describe("instagram story entry (Android phone)", () => {
       if ("MediaRecorder" in window) MediaRecorder.isTypeSupported = () => false;
     });
     await openShare(page, SET_PATH);
-    await expect(page.getByRole("button", { name: /instagram_story/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /video_story/ })).toHaveCount(0);
     await expect(page.getByText("instagram:")).toHaveCount(0);
   });
 
   test("in a browser tab, opens the install gate", async ({ page }) => {
     await stubNetworkAndCodecs(page);
     await openShare(page, SET_PATH);
-    await page.getByRole("button", { name: /instagram_story/ }).click();
+    await page.getByRole("button", { name: /video_story/ }).click();
     const gate = page.getByRole("dialog", { name: "Form:at — make an Instagram story" });
     await expect(gate).toBeVisible();
     await expect(gate).toContainText("instagram stories are made in the Form:at app");
@@ -176,7 +176,7 @@ test.describe("instagram story entry (Android phone)", () => {
     await stubNetworkAndCodecs(page);
     await emulateStandalone(page);
     await openShare(page, `${SET_PATH}?story=on`);
-    await page.getByRole("button", { name: /instagram_story/ }).click();
+    await page.getByRole("button", { name: /video_story/ }).click();
 
     const picker = page.getByRole("dialog", { name: "Pick 15 seconds for an Instagram story" });
     await expect(picker).toBeVisible();
@@ -254,7 +254,7 @@ async function openPickerAndDragBackWithMp3Blocked(page: Page) {
   });
   await emulateStandalone(page);
   await openShare(page, `${SET_PATH}?story=on`);
-  await page.getByRole("button", { name: /instagram_story/ }).click();
+  await page.getByRole("button", { name: /video_story/ }).click();
   const picker = page.getByRole("dialog", { name: "Pick 15 seconds for an Instagram story" });
   // The first slice decodes, so preview is available before the drag.
   await expect(picker.getByText("drag the waveform, tap the full set, or nudge")).toBeVisible();
@@ -406,7 +406,7 @@ test("creates a story in the installed app and hands a non-fragmented MP4 to the
   await stubShareAndRecorder(page);
   await emulateStandalone(page);
   await openShare(page, `${SET_PATH}?story=on`);
-  await page.getByRole("button", { name: /instagram_story/ }).click();
+  await page.getByRole("button", { name: /video_story/ }).click();
 
   const flow = page.getByRole("dialog", { name: "Pick 15 seconds for an Instagram story" });
   const create = flow.getByRole("button", { name: /create_story/ });
@@ -522,7 +522,7 @@ test("in Instagram's Android browser, the gate says to open it in their browser"
   const page = await context.newPage();
   await stubNetworkAndCodecs(page);
   await openShare(page, SET_PATH);
-  await page.getByRole("button", { name: /instagram_story/ }).click();
+  await page.getByRole("button", { name: /video_story/ }).click();
   const gate = page.getByRole("dialog", { name: "Form:at — make an Instagram story" });
   await expect(gate).toContainText("open this page in your browser");
   await context.close();
@@ -536,9 +536,9 @@ test("an iPhone needs the flag", async ({ browser }, testInfo) => {
   const page = await context.newPage();
   await stubNetworkAndCodecs(page);
   await openShare(page, SET_PATH);
-  await expect(page.getByRole("button", { name: /instagram_story/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /video_story/ })).toHaveCount(0);
   await openShare(page, `${SET_PATH}?story=on`);
-  await expect(page.getByRole("button", { name: /instagram_story/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /video_story/ })).toBeVisible();
   await context.close();
 });
 
@@ -548,6 +548,6 @@ test("desktop never shows the entry, even with the flag", async ({ browser }, te
   const page = await context.newPage();
   await stubNetworkAndCodecs(page);
   await openShare(page, `${SET_PATH}?story=on`);
-  await expect(page.getByRole("button", { name: /instagram_story/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /video_story/ })).toHaveCount(0);
   await context.close();
 });

@@ -65,6 +65,13 @@ describe("DjStorySheet", () => {
     expect(trackEvent).toHaveBeenCalledWith("dj_story_open");
   });
 
+  it("is titled image_story, the label of the share modal row that opens it", async () => {
+    await renderSheet();
+    const title = screen.getByText("image_story");
+    expect(title.parentElement).toHaveTextContent(/^›\s*image_story$/);
+    expect(screen.queryByText("share_story")).not.toBeInTheDocument();
+  });
+
   it("offers exactly form:at and raw", async () => {
     await renderSheet();
     const chips = screen

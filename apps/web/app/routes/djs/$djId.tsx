@@ -134,13 +134,17 @@ function DJDetail() {
           ))}
         </div>
 
-        <h1 className="font-display text-4xl sm:text-6xl tracking-tight mb-2">
-          <BrandTitle>{dj.name}</BrandTitle>
-        </h1>
-        {/* Under the name, so a long name keeps the full width. The Instagram
-            Story image is in the share modal's instagram: section. */}
-        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 mb-2">
-          <ShareButton target={() => djShareTarget(dj, upcomingEvents[0] ?? null)} />
+        {/* [ share ] beside the name, on its first line: the name may wrap
+            (min-w-0), the button never shrinks or leaves the row (shrink-0),
+            and BracketLabel keeps its brackets together. The Instagram Story
+            image is in the share modal's instagram: section. */}
+        <div className="flex items-baseline justify-between gap-4 mb-2">
+          <h1 className="min-w-0 font-display text-4xl sm:text-6xl tracking-tight">
+            <BrandTitle>{dj.name}</BrandTitle>
+          </h1>
+          <div className="shrink-0">
+            <ShareButton target={() => djShareTarget(dj, upcomingEvents[0] ?? null)} />
+          </div>
         </div>
 
         {dj.bio && <ConsoleWriter isFirstLoading={isFirstLoading}>{dj.bio}</ConsoleWriter>}

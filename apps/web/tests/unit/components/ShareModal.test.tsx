@@ -22,7 +22,7 @@ let clipboardSpy: ReturnType<typeof vi.fn>;
 const { storyShown } = vi.hoisted(() => ({ storyShown: { current: false } }));
 vi.mock("~/components/story/StoryEntry", () => ({
   isStoryEntryShown: () => storyShown.current,
-  StoryEntry: () => <button type="button">[ instagram_story ]</button>,
+  StoryEntry: () => <button type="button">[ video_story ]</button>,
 }));
 
 // jsdom's localStorage in this worker setup doesn't satisfy Zustand's persist
@@ -159,19 +159,27 @@ describe("ShareModal instagram: section, for a set", () => {
     useStore.setState({ shareTarget: setShareTarget(testSet) });
     render(<ShareModal />);
     expect(screen.queryByText("instagram:")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /instagram_story/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /video_story/ })).not.toBeInTheDocument();
+    // The rest of the modal is as before: link: and send:.
+    expect(screen.getByText("link:")).toBeInTheDocument();
+    expect(screen.getByText("send:")).toBeInTheDocument();
   });
 
-  it("holds [ instagram_story ], after send:, which no longer does", () => {
+  it("comes first, above link: and send:, holding [ video_story ]", () => {
     storyShown.current = true;
     useStore.setState({ shareTarget: setShareTarget(testSet) });
     render(<ShareModal />);
-    const create = screen.getByText("instagram:");
-    const send = screen.getByText("send:");
-    expect(send.compareDocumentPosition(create) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    const story = screen.getByRole("button", { name: /instagram_story/ });
-    expect(create.parentElement).toContainElement(story);
-    expect(send.parentElement).not.toContainElement(story);
+    const instagram = screen.getByText("instagram:");
+    for (const label of ["link:", "send:"]) {
+      const section = screen.getByText(label);
+      expect(
+        instagram.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING,
+        label,
+      ).toBeTruthy();
+    }
+    const story = screen.getByRole("button", { name: "[ video_story ]" });
+    expect(instagram.parentElement).toContainElement(story);
+    expect(screen.getByText("send:").parentElement).not.toContainElement(story);
   });
 });
 
@@ -230,8 +238,16 @@ describe("ShareModal for a DJ or an event", () => {
     render(<ShareModal />);
 
     const section = screen.getByText("instagram:");
-    const row = screen.getByRole("button", { name: "[ instagram_story ]" });
+    const row = screen.getByRole("button", { name: "[ image_story ]" });
     expect(section.parentElement).toContainElement(row);
+    // First, above link: and send:, as on a set.
+    for (const label of ["link:", "send:"]) {
+      expect(
+        section.compareDocumentPosition(screen.getByText(label)) & Node.DOCUMENT_POSITION_FOLLOWING,
+        label,
+      ).toBeTruthy();
+    }
+    expect(screen.queryByRole("button", { name: /video_story/ })).not.toBeInTheDocument();
   });
 
   it("copies the DJ page link in the row's tap, then opens the DJ Story sheet in place of the modal", async () => {
@@ -239,7 +255,7 @@ describe("ShareModal for a DJ or an event", () => {
     render(<ShareModal />);
 
     // fireEvent, not userEvent: userEvent.setup() swaps in its own clipboard.
-    fireEvent.click(screen.getByRole("button", { name: "[ instagram_story ]" }));
+    fireEvent.click(screen.getByRole("button", { name: "[ image_story ]" }));
 
     expect(clipboardSpy).toHaveBeenCalledWith(`${window.location.origin}/djs/test-dj`);
     await waitFor(() =>
@@ -253,7 +269,7 @@ describe("ShareModal for a DJ or an event", () => {
     useStore.setState({ shareTarget: djShareTarget(dj), djStory: null });
     render(<ShareModal />);
 
-    fireEvent.click(screen.getByRole("button", { name: "[ instagram_story ]" }));
+    fireEvent.click(screen.getByRole("button", { name: "[ image_story ]" }));
 
     await waitFor(() =>
       expect(useStore.getState().djStory).toEqual({ dj, nextEvent: null, linkCopied: false }),
@@ -266,6 +282,9 @@ describe("ShareModal for a DJ or an event", () => {
     render(<ShareModal />);
 
     expect(screen.queryByText("instagram:")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /instagram_story/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /_story/ })).not.toBeInTheDocument();
+    // The rest of the modal is as before: link: and send:.
+    expect(screen.getByText("link:")).toBeInTheDocument();
+    expect(screen.getByText("send:")).toBeInTheDocument();
   });
 });

@@ -26,7 +26,7 @@ function currentStoryEntryState(online = true): StoryEntryState {
 }
 
 /**
- * Whether the [ instagram_story ] row renders at all. Past this, StoryEntry
+ * Whether the [ video_story ] row renders at all. Past this, StoryEntry
  * always renders something (a button or a muted line), so the share modal
  * shows its instagram: section on this.
  */
@@ -34,7 +34,7 @@ export function isStoryEntryShown(): boolean {
   return currentStoryEntryState() !== "hidden";
 }
 
-// The [ instagram_story ] row in ShareModal's instagram: section. Who sees
+// The [ video_story ] row in ShareModal's instagram: section. Who sees
 // it and what a tap does: storyEntryState. Both steps replace the share modal
 // (StoryFlowHost renders them). Only ever rendered inside the open
 // ShareModal, i.e. on the client after a tap, so reading window state during
@@ -50,7 +50,7 @@ export function StoryEntry({ set, rowClass }: Props) {
   if (state === "offline") {
     return (
       <div className="text-left text-sm text-grey/40 tracking-widest py-1 cursor-default">
-        instagram_story: needs a connection
+        video_story: needs a connection
       </div>
     );
   }
@@ -73,7 +73,7 @@ export function StoryEntry({ set, rowClass }: Props) {
 
   return (
     <button type="button" onClick={onTap} className={rowClass}>
-      <BracketLabel>instagram_story</BracketLabel>
+      <BracketLabel>video_story</BracketLabel>
     </button>
   );
 }

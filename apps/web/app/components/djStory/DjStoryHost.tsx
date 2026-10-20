@@ -15,7 +15,7 @@ const DjStorySheet = lazy<ComponentType<DjStorySheetProps>>(() =>
 );
 
 // Mounted once at the root, next to StoryFlowHost. Renders nothing until the
-// share modal's [ instagram_story ] row on a DJ page opens the DJ Story sheet
+// share modal's [ image_story ] row on a DJ page opens the DJ Story sheet
 // (openDjStory), for everyone, browser tab or installed app: a still needs
 // no recording.
 export function DjStoryHost() {

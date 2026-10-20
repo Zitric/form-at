@@ -128,16 +128,22 @@ describe("DJ page actions", () => {
     vi.restoreAllMocks();
   });
 
-  it("offers [ share ] on its own row, after the name, and no standalone story button", () => {
+  it("puts [ share ] beside the name, to its right, and no story button on the page", () => {
     renderWith([upcoming], []);
 
     const share = screen.getByRole("button", { name: "[ share ]" });
     const name = screen.getByRole("heading", { level: 1 });
     expect(name.contains(share)).toBe(false);
+    // One row: the name, then the button, aligned on the name's first line.
+    const row = name.parentElement;
+    expect(row).toContainElement(share);
+    expect(row).toHaveClass("flex", "items-baseline", "justify-between");
     expect(name.compareDocumentPosition(share) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The name may wrap; the button never shrinks out of the row.
+    expect(name).toHaveClass("min-w-0");
+    expect(share.parentElement).toHaveClass("shrink-0");
     // The Story image is in the share modal's instagram: section instead.
-    expect(screen.queryByRole("button", { name: /share_story/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /instagram_story/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /_story/ })).not.toBeInTheDocument();
   });
 
   it("shares the DJ with their next night, for the Story image's event line", async () => {

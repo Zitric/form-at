@@ -137,7 +137,7 @@ export type StoryFunnel = {
   /** share_click: the share modal opened, on any device — including desktop
    *  and iPhone, where the story entry isn't shown — so it's a ceiling. */
   shareClicks: number;
-  /** story_create_tap: [ instagram_story ] tapped. Recorded from the Android
+  /** story_create_tap: [ video_story ] tapped. Recorded from the Android
    *  launch on; earlier story rows have no tap before them. */
   createTaps: number;
   /** story_install_gate_shown: a tab's tap, sent to install the app. A
