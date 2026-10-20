@@ -39,7 +39,7 @@ export const TRACKABLE_EVENT_TYPES = [
   // context of one event per page load — adding an id column is a separate,
   // not-yet-needed schema decision.
   "calendar_add_click",
-  // A tap on [ instagram_story ] in the share modal's instagram: section,
+  // A tap on [ video_story ] in the share modal's instagram: section,
   // with the set's id: the top of the Story funnel, before the install gate
   // (a tab) or the picker (the installed app). Not sent for a tap ignored
   // while the gate is still pending.
@@ -54,7 +54,7 @@ export const TRACKABLE_EVENT_TYPES = [
   "story_video_created",
   "story_video_shared",
   // The install gate shown to a mobile tab user who tapped
-  // [ instagram_story ]: stories need the installed app. Paired with
+  // [ video_story ]: stories need the installed app. Paired with
   // install_accepted over the same window, it says whether stories drive
   // installs; the two rows aren't linkable, so it's a rate, not a per-visitor
   // conversion.
@@ -70,7 +70,7 @@ export const TRACKABLE_EVENT_TYPES = [
   // directly isn't this; that funnel is install_prompt_shown →
   // install_accepted / install_dismissed.
   "install_cta_instructions_shown",
-  // DJ Story image (DjStorySheet, from the share modal's [ instagram_story ]
+  // DJ Story image (DjStorySheet, from the share modal's [ image_story ]
   // row on a DJ page). `dj_story_open` is the sheet opening, sent by the
   // sheet itself, not the row; `dj_story_shared` means
   // navigator.share resolved (a target was picked, not that a story was

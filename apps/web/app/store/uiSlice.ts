@@ -29,7 +29,7 @@ export type UiSlice = {
   openStoryFlow: (set: MusicSet, step: "install-gate" | "picker") => void;
   closeStoryFlow: () => void;
   /** The open DJ Story sheet (DjStoryHost), `null` when closed: the DJ, their
-   *  next night, and whether the share modal's [ instagram_story ] tap got
+   *  next night, and whether the share modal's [ image_story ] tap got
    *  the page link onto the clipboard. Never persisted. */
   djStory: { dj: DJ; nextEvent: FormatEvent | null; linkCopied: boolean } | null;
   openDjStory: (story: { dj: DJ; nextEvent: FormatEvent | null; linkCopied: boolean }) => void;

@@ -25,7 +25,7 @@ const StoryInstallGate = lazy(() =>
 
 const pickerTitle = (
   <div className="text-xs text-grey tracking-widest truncate">
-    › <span className="text-white">instagram_story</span>
+    › <span className="text-white">video_story</span>
   </div>
 );
 

@@ -120,6 +120,28 @@ export function ShareModal() {
           terminal-row style as the rest of the app. Long artist names
           wrap inside the body instead of truncating in the title. */}
       <TerminalRow label={SUBJECT_LABEL[shareTarget.kind]} value={subject} className="mb-6" />
+      {/* instagram: first, above link: and send:. A set's row is the
+          recorded video (StoryEntry, only where isStoryEntryShown); a DJ's
+          is the still image, for everyone. An event has none, and without
+          it the modal is just the row below. */}
+      {shareSet && showSetStory && (
+        <div className="mb-4">
+          <div className={sectionLabelClass}>instagram:</div>
+          <div className="flex flex-col">
+            <StoryEntry set={shareSet} rowClass={rowClass} />
+          </div>
+        </div>
+      )}
+      {shareDj && (
+        <div className="mb-4">
+          <div className={sectionLabelClass}>instagram:</div>
+          <div className="flex flex-col">
+            <button type="button" onClick={openDjStoryImage} className={rowClass}>
+              <BracketLabel>image_story</BracketLabel>
+            </button>
+          </div>
+        </div>
+      )}
       {/* Flexbox + flex-shrink-0 lets each column auto-size to its widest
           button (e.g. `[ copy @ 49:00 ]`) instead of being forced into an
           equal half. When the two columns together can't fit the modal
@@ -166,24 +188,6 @@ export function ShareModal() {
             </a>
           </div>
         </div>
-        {shareSet && showSetStory && (
-          <div className="flex-shrink-0">
-            <div className={sectionLabelClass}>instagram:</div>
-            <div className="flex flex-col">
-              <StoryEntry set={shareSet} rowClass={rowClass} />
-            </div>
-          </div>
-        )}
-        {shareDj && (
-          <div className="flex-shrink-0">
-            <div className={sectionLabelClass}>instagram:</div>
-            <div className="flex flex-col">
-              <button type="button" onClick={openDjStoryImage} className={rowClass}>
-                <BracketLabel>instagram_story</BracketLabel>
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </Modal>
   );

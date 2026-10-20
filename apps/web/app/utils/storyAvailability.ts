@@ -1,4 +1,4 @@
-// Who sees the [ instagram_story ] entry, and what a tap does. Pure: every
+// Who sees the [ video_story ] entry, and what a tap does. Pure: every
 // input is passed in, so the whole environment matrix is unit-testable.
 // Imported by ShareModal on every page, so keep it light: nothing from
 // utils/storyVideo/ beyond what StoryEntry already passes in.

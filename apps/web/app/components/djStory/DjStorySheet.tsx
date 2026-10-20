@@ -113,7 +113,7 @@ export function DjStorySheet({ dj, nextEvent, linkCopied, onClose }: DjStoryShee
       ariaLabel="Share a Story image"
       title={
         <div className="text-xs text-grey tracking-widest truncate">
-          › <span className="text-white">share_story</span>
+          › <span className="text-white">image_story</span>
         </div>
       }
     >

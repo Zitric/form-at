@@ -3,7 +3,7 @@ import { useSaveGate } from "~/hooks/useSaveGate";
 
 const STORY_GATE_COPY: InstallGateCopy = {
   ariaLabel: "Form:at — make an Instagram story",
-  label: "instagram_story",
+  label: "video_story",
   prompt:
     "instagram stories are made in the Form:at app. install it to your home screen, then open this set there to make one.",
   manual: "instagram stories are made in the Form:at app — ",
@@ -14,7 +14,7 @@ const STORY_GATE_COPY: InstallGateCopy = {
 };
 
 // Stories are made in the installed app. A browser-tab user who taps
-// [ instagram_story ] gets the same install guidance as save_for_offline —
+// [ video_story ] gets the same install guidance as save_for_offline —
 // the same gate (useSaveGate) and the same modal, with story copy — covering
 // Android's native prompt, the manual hint, iOS Safari's share-menu steps,
 // and browsers that can't install at all.

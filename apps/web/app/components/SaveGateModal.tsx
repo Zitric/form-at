@@ -47,7 +47,7 @@ type Props = { open: boolean; onClose: () => void; gate: SaveGate; copy?: Instal
 
 // Renders the guidance the user needs when tapping a feature that only the
 // installed app has — `save_for_offline` (the default copy) or
-// `instagram_story` (StoryInstallGate passes its own) — from a browser tab. Branches on the
+// `video_story` (StoryInstallGate passes its own) — from a browser tab. Branches on the
 // `gate.reason` discriminant from <useSaveGate>:
 //
 //   needs-install  — case (a): browser CAN install + we don't know the PWA is

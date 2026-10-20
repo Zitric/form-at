@@ -35,7 +35,7 @@ vi.mock("~/store", () => ({
 
 const set = { id: "set-003-unreal", title: "Form:at 003", artist: "Unreal" } as MusicSet;
 const renderEntry = () => render(<StoryEntry set={set} rowClass="" />);
-const entryButton = () => screen.queryByRole("button", { name: /instagram_story/ });
+const entryButton = () => screen.queryByRole("button", { name: /video_story/ });
 
 beforeEach(() => {
   env.state = "gate";
@@ -82,7 +82,7 @@ describe("StoryEntry", () => {
   it("in the installed app offline, says it needs a connection", () => {
     env.state = "offline";
     renderEntry();
-    expect(screen.getByText("instagram_story: needs a connection")).toBeInTheDocument();
+    expect(screen.getByText("video_story: needs a connection")).toBeInTheDocument();
     expect(entryButton()).toBeNull();
   });
 });
