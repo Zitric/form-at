@@ -158,7 +158,7 @@ test.describe("instagram story entry (Android phone)", () => {
     });
     await openShare(page, SET_PATH);
     await expect(page.getByRole("button", { name: /instagram_story/ })).toHaveCount(0);
-    await expect(page.getByText("create_video:")).toHaveCount(0);
+    await expect(page.getByText("instagram:")).toHaveCount(0);
   });
 
   test("in a browser tab, opens the install gate", async ({ page }) => {

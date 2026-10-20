@@ -4,16 +4,24 @@ import type { MusicSet } from "@form-at/data/sets";
 import { fmtEventDay } from "./fmt";
 
 // What ShareModal shares. Every kind gets copy_link, apps (navigator.share),
-// whatsapp and telegram from `url` / `title` / `text`. Only a set carries
-// the set itself, for the rows that need it: copy @ <timestamp> (the playing
-// position) and create_video (the Instagram Story).
+// whatsapp and telegram from `url` / `title` / `text`. A set and a DJ also
+// carry what their instagram: section needs: the set for copy @ <timestamp>
+// (the playing position) and the set Story video; the DJ and their next
+// night for the DJ Story image.
 //
 //   set   — a set page, /sets/<id>
 //   dj    — a DJ page, /djs/<id>
 //   event — an event page, /events/<id>
 export type ShareTarget =
   | { kind: "set"; set: MusicSet; url: string; title: string; text: string }
-  | { kind: "dj"; url: string; title: string; text: string }
+  | {
+      kind: "dj";
+      dj: DJ;
+      nextEvent: Event | null;
+      url: string;
+      title: string;
+      text: string;
+    }
   | { kind: "event"; url: string; title: string; text: string };
 
 // Built on a tap, so `window` is there; the default keeps callers short.
@@ -30,9 +38,15 @@ export function setShareTarget(set: MusicSet, origin = currentOrigin()): ShareTa
   };
 }
 
-export function djShareTarget(dj: DJ, origin = currentOrigin()): ShareTarget {
+export function djShareTarget(
+  dj: DJ,
+  nextEvent: Event | null = null,
+  origin = currentOrigin(),
+): ShareTarget {
   return {
     kind: "dj",
+    dj,
+    nextEvent,
     url: `${origin}/djs/${dj.id}`,
     title: dj.name,
     text: `${dj.name} on Form:at.`,

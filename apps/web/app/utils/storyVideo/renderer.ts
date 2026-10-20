@@ -9,9 +9,11 @@
 
 import { fmtTimestamp } from "~/utils/fmt";
 import {
+  WORDMARK_URL,
   context2d,
   createCanvas,
   drawCropped,
+  drawWordmark,
   fillTrackedCentred,
   fitFont,
   font,
@@ -23,7 +25,6 @@ import {
 import {
   ARTWORK,
   BACKGROUND,
-  BRAND,
   CARD,
   COLORS,
   EXCERPT,
@@ -32,6 +33,7 @@ import {
   MARGIN_X,
   META,
   PILL,
+  SITE,
   SPECTRUM_STRIP,
   TEXT_XS,
   TIMELINE,
@@ -50,22 +52,26 @@ export interface StoryAssets {
   photo: HTMLImageElement | null;
   /** The photo URL that was tried, for diagnostics; null when there was none. */
   photoUrl: string | null;
+  /** The pixel wordmark for the top; null when it failed: the top stays empty. */
+  wordmark: HTMLImageElement | null;
   /** false means text will render in a fallback face. */
   fontsLoaded: boolean;
 }
 
 /**
  * Waits for Space Mono in both weights the frame uses, loads the first
- * artwork URL that works (the optimised webp, then the original), and the
- * DJ's photo when there is one. A photo that fails to load leaves the card
- * to the artwork.
+ * artwork URL that works (the optimised webp, then the original), the DJ's
+ * photo when there is one, and the wordmark. A photo that fails to load
+ * leaves the card to the artwork.
  */
 export async function loadStoryAssets(
   artworkUrls: readonly string[],
   photoUrl: string | null = null,
 ): Promise<StoryAssets> {
   const photo = photoUrl ? loadImage(photoUrl).catch(() => null) : Promise.resolve(null);
+  const wordmarkLoad = loadImage(WORDMARK_URL).catch(() => null);
   const fontsLoaded = await loadSpaceMono(META.size, TITLE.size);
+  const wordmark = await wordmarkLoad;
 
   for (const url of artworkUrls) {
     try {
@@ -74,13 +80,21 @@ export async function loadStoryAssets(
         artworkUrl: url,
         photo: await photo,
         photoUrl,
+        wordmark,
         fontsLoaded,
       };
     } catch {
       // try the next one
     }
   }
-  return { artwork: null, artworkUrl: null, photo: await photo, photoUrl, fontsLoaded };
+  return {
+    artwork: null,
+    artworkUrl: null,
+    photo: await photo,
+    photoUrl,
+    wordmark,
+    fontsLoaded,
+  };
 }
 
 export interface StoryFrameInput {
@@ -99,6 +113,8 @@ export interface StoryFrameInput {
   artwork: CanvasImageSource | null;
   /** The DJ's photo for the card; null or absent puts the artwork there. */
   photo?: CanvasImageSource | null;
+  /** The pixel wordmark for the top (StoryAssets.wordmark); null or absent leaves it out. */
+  wordmark?: CanvasImageSource | null;
 }
 
 export interface StoryFrame {
@@ -182,10 +198,8 @@ export function prepareStoryFrame(input: StoryFrameInput): StoryFrame {
   g.fillRect(0, 0, FRAME.width, FRAME.height);
   if (input.artwork) drawBackground(g, input.artwork);
 
-  // Brand.
-  g.fillStyle = COLORS.text;
-  g.font = font(BRAND.weight, BRAND.size);
-  fillTrackedCentred(g, BRAND.text, FRAME.width / 2, BRAND.baselineY, BRAND.size);
+  // The wordmark, the same as the DJ Story image's.
+  if (input.wordmark) drawWordmark(g, input.wordmark);
 
   // Card: the DJ's photo, else the artwork; square, rounded, with the
   // player's hairline border.
@@ -292,6 +306,11 @@ export function prepareStoryFrame(input: StoryFrameInput): StoryFrame {
   g.textBaseline = "middle";
   g.fillText(label, pillX + PILL.paddingX, pillY + PILL.height / 2 + 1);
   g.textBaseline = "alphabetic";
+
+  // The site, small, under the timeline.
+  g.fillStyle = COLORS.text;
+  g.font = font(SITE.weight, SITE.size);
+  fillTrackedCentred(g, SITE.text, FRAME.width / 2, SITE.baselineY, SITE.size);
 
   // Excerpt bars, pre-rendered once in each colour; `pad` leaves room for the
   // glow to spread past the bars.

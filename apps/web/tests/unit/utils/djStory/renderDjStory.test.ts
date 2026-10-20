@@ -9,7 +9,15 @@ import {
   storyFileName,
   storyLine,
 } from "~/utils/djStory/renderDjStory";
-import { SAFE_ZONE } from "~/utils/storyVideo/layout";
+import {
+  FRAME,
+  MARGIN_X,
+  META_SIZE,
+  SAFE_ZONE,
+  SITE,
+  WORDMARK,
+  WORDMARK_HEIGHT,
+} from "~/utils/storyVideo/layout";
 
 const nextEvent: Event = {
   id: "format-004",
@@ -44,8 +52,8 @@ describe("treatments", () => {
 });
 
 describe("storyLine", () => {
-  it("is the next night's long label when the DJ has one", () => {
-    expect(storyLine("guest", nextEvent)).toBe("form:at 004 · sat\u00A005.12 · stereo");
+  it("is the next night as the page's short label with the venue, without form:at", () => {
+    expect(storyLine("guest", nextEvent)).toBe("004 · sat\u00A005.12 · stereo");
   });
 
   it("is the DJ's role otherwise", () => {
@@ -80,14 +88,28 @@ describe("duotoneRange", () => {
 });
 
 describe("DJ_STORY layout", () => {
-  it("keeps everything inside Instagram's safe zone, in order, with room for the link sticker", () => {
+  it("spans the photo card across the content width, square, under the shared wordmark", () => {
+    expect(DJ_STORY.card.size).toBe(FRAME.width - 2 * MARGIN_X);
+    expect(DJ_STORY.card.size).toBe(900);
+    expect(WORDMARK.y).toBeGreaterThanOrEqual(SAFE_ZONE.top);
+    expect(DJ_STORY.card.y).toBeGreaterThan(WORDMARK.y + WORDMARK_HEIGHT);
+  });
+
+  it("puts the name, the line and the site under the card, in order, as one block", () => {
     const cardBottom = DJ_STORY.card.y + DJ_STORY.card.size;
-    expect(DJ_STORY.wordmark.y).toBeGreaterThanOrEqual(SAFE_ZONE.top);
-    expect(DJ_STORY.card.y).toBeGreaterThan(DJ_STORY.wordmark.y);
     expect(DJ_STORY.name.baselineY).toBeGreaterThan(cardBottom);
     expect(DJ_STORY.line.baselineY).toBeGreaterThan(DJ_STORY.name.baselineY);
-    // The band between the line and the site stays empty for the sticker.
-    expect(DJ_STORY.site.baselineY - DJ_STORY.line.baselineY).toBeGreaterThanOrEqual(200);
-    expect(DJ_STORY.site.baselineY).toBeLessThanOrEqual(SAFE_ZONE.bottom);
+    expect(DJ_STORY.site.baselineY).toBeGreaterThan(DJ_STORY.line.baselineY);
+    // One unit under the photo, not text spread down the frame.
+    expect(DJ_STORY.site.baselineY - DJ_STORY.name.baselineY).toBeLessThanOrEqual(200);
+  });
+
+  it("keeps everything inside the safe zone: nothing goes below it, where the link sticker goes", () => {
+    // A quarter of the font size covers Space Mono's descenders (g, y).
+    expect(DJ_STORY.site.baselineY + SITE.size / 4).toBeLessThanOrEqual(SAFE_ZONE.bottom);
+  });
+
+  it("draws the line under the name at the set Story's meta size", () => {
+    expect(DJ_STORY.line.size).toBe(META_SIZE);
   });
 });

@@ -10,7 +10,6 @@ import { PageLayout } from "~/components/PageLayout";
 import { SetCard } from "~/components/SetCard";
 import { ShareButton } from "~/components/ShareButton";
 import { SocialLink } from "~/components/SocialLink";
-import { DjStoryButton } from "~/components/djStory/DjStoryButton";
 import { fetchAllSetsForRoute } from "~/data/setsForRoute";
 import { useTypedOnce } from "~/hooks/useTypedOnce";
 import { pageHead } from "~/utils/head";
@@ -138,11 +137,10 @@ function DJDetail() {
         <h1 className="font-display text-4xl sm:text-6xl tracking-tight mb-2">
           <BrandTitle>{dj.name}</BrandTitle>
         </h1>
-        {/* Under the name, not beside it: two bracketed actions beside even a
-            short name run past the right edge at 375px. */}
+        {/* Under the name, so a long name keeps the full width. The Instagram
+            Story image is in the share modal's instagram: section. */}
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 mb-2">
-          <ShareButton target={() => djShareTarget(dj)} />
-          <DjStoryButton dj={dj} nextEvent={upcomingEvents[0] ?? null} />
+          <ShareButton target={() => djShareTarget(dj, upcomingEvents[0] ?? null)} />
         </div>
 
         {dj.bio && <ConsoleWriter isFirstLoading={isFirstLoading}>{dj.bio}</ConsoleWriter>}

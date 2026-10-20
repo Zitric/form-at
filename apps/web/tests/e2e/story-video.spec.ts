@@ -97,6 +97,7 @@ test.describe("story video recording", () => {
           excerpt,
           setPeaks: Array.from({ length: 1000 }, (_, i) => 0.3 + 0.2 * Math.sin(i / 20)),
           artwork: assets.artwork,
+          wordmark: assets.wordmark,
         };
         const canvas = document.getElementById("out") as HTMLCanvasElement;
         const { file, diagnostics } = await recorder.recordStory({

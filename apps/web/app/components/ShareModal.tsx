@@ -40,6 +40,7 @@ export function ShareModal() {
   const closeShareModal = useStore((s) => s.closeShareModal);
   const setToast = useStore((s) => s.setToast);
   const nowPlaying = useStore((s) => s.nowPlaying);
+  const openDjStory = useStore((s) => s.openDjStory);
 
   // ShareModal is mounted once at the root, so this reads the landing URL:
   // a later client-side navigation drops `?story=on` from it.
@@ -47,8 +48,10 @@ export function ShareModal() {
 
   if (!shareTarget) return null;
 
-  // copy @ <timestamp> and create_video exist only for a set.
+  // copy @ <timestamp> exists only for a set; instagram: for a set (the
+  // Story video) and a DJ (the Story image).
   const shareSet = shareTarget.kind === "set" ? shareTarget.set : null;
+  const shareDj = shareTarget.kind === "dj" ? shareTarget : null;
   const isCurrent = shareSet !== null && nowPlaying?.id === shareSet.id;
   const currentTime = isCurrent ? Math.floor(getAudioCurrentTime()) : 0;
   const { url, title, text } = shareTarget;
@@ -81,12 +84,26 @@ export function ShareModal() {
     closeShareModal();
   };
 
-  // create_video: holds the video formats made from a set — the Instagram
-  // story today, reels or others alongside it later. Shown only when one of
-  // them renders, so the label never stands over an empty column. Only open
-  // after a tap, on the client, so reading window state here can't mismatch
-  // hydration.
-  const showCreateVideo = isStoryEntryShown();
+  // instagram: for a set holds the Story video, shown only when its entry
+  // renders (isStoryEntryShown: phone, flag or launch, recording support),
+  // so the label never stands over an empty column. Only open after a tap,
+  // on the client, so reading window state here can't mismatch hydration.
+  // For a DJ it always holds the Story image: a still, for every browser.
+  const showSetStory = shareSet !== null && isStoryEntryShown();
+
+  // Copies the DJ page link inside this tap, while the gesture is fresh, for
+  // Instagram's link sticker; then the DJ Story sheet replaces this modal.
+  const openDjStoryImage = async () => {
+    if (!shareDj) return;
+    let linkCopied = false;
+    try {
+      await navigator.clipboard.writeText(url);
+      linkCopied = true;
+    } catch {
+      // No clipboard: the sheet names the link to add instead.
+    }
+    openDjStory({ dj: shareDj.dj, nextEvent: shareDj.nextEvent, linkCopied });
+  };
 
   return (
     <Modal
@@ -149,11 +166,21 @@ export function ShareModal() {
             </a>
           </div>
         </div>
-        {shareSet && showCreateVideo && (
+        {shareSet && showSetStory && (
           <div className="flex-shrink-0">
-            <div className={sectionLabelClass}>create_video:</div>
+            <div className={sectionLabelClass}>instagram:</div>
             <div className="flex flex-col">
               <StoryEntry set={shareSet} rowClass={rowClass} />
+            </div>
+          </div>
+        )}
+        {shareDj && (
+          <div className="flex-shrink-0">
+            <div className={sectionLabelClass}>instagram:</div>
+            <div className="flex flex-col">
+              <button type="button" onClick={openDjStoryImage} className={rowClass}>
+                <BracketLabel>instagram_story</BracketLabel>
+              </button>
             </div>
           </div>
         )}
