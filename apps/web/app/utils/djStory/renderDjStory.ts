@@ -4,17 +4,19 @@
 // still, so no audio and no recording.
 //
 // Its own lazy chunk: only DjStorySheet imports it, and DjStorySheet is
-// lazy (DjStoryButton). Never import it from always-loaded code (CLAUDE.md
+// lazy (DjStoryHost). Never import it from always-loaded code (CLAUDE.md
 // §1's lazy rule). It shares storyVideo/layout.ts and storyVideo/canvas.ts
 // with the set Story's renderer, and nothing else.
 
 import type { DJ } from "@form-at/data/djs";
 import type { Event } from "@form-at/data/events";
 import { colors } from "@form-at/ui/tokens";
-import { nextLabelLong } from "~/utils/nextEventLabel";
+import { nextLabelShort } from "~/utils/nextEventLabel";
 import {
+  WORDMARK_URL,
   context2d,
   createCanvas,
+  drawWordmark,
   fillTrackedCentred,
   fitFont,
   font,
@@ -24,14 +26,15 @@ import {
 } from "~/utils/storyVideo/canvas";
 import {
   ARTWORK,
-  BRAND,
   CARD,
   COLORS,
   FRAME,
   MARGIN_X,
-  SAFE_ZONE,
-  TEXT_SM,
+  META_SIZE,
+  SITE,
   TITLE,
+  WORDMARK,
+  WORDMARK_HEIGHT,
   coverCrop,
 } from "~/utils/storyVideo/layout";
 
@@ -78,28 +81,27 @@ const BACKGROUND_BLUR = { scale: 1 / 48, darken: 0.68 } as const;
 
 // ── Layout ────────────────────────────────────────────────────────────────
 
-// Top to bottom, inside SAFE_ZONE (250–1580). Baselines are for text.
+// Top to bottom, inside SAFE_ZONE (250–1580), under the shared WORDMARK
+// (storyVideo/layout.ts). The card spans the content width; the name, the
+// line and the site sit under it as one block. Nothing goes below
+// SAFE_ZONE.bottom: Instagram's link sticker is placed there by hand.
+// Baselines are for text; y is a top edge.
+const CONTENT_WIDTH = FRAME.width - 2 * MARGIN_X;
 export const DJ_STORY = {
-  wordmark: { y: SAFE_ZONE.top, width: 560 },
-  card: { y: SAFE_ZONE.top + 150, size: 720 },
-  name: { baselineY: 1215 },
-  line: { baselineY: 1290, size: TEXT_SM },
-  // 1330–1500 stays empty: room for Instagram's link sticker.
-  site: { baselineY: SAFE_ZONE.bottom - 20 },
+  card: { y: WORDMARK.y + WORDMARK_HEIGHT + 50, size: CONTENT_WIDTH },
+  name: { baselineY: 1372 },
+  line: { baselineY: 1450, size: META_SIZE },
+  site: { baselineY: 1530 },
 } as const;
 
-// The wordmark's ink inside /wordmark.png (1500×1500): the same crop the
-// header shows (Header.tsx's -17.32% / -45.6% translate in a 280×40 box at
-// 430px wide).
-const WORDMARK_SRC = { x: 260, y: 684, width: 977, height: 140 } as const;
-
 /**
- * The bracketed line under the name: the DJ's next night
- * ("form:at 004 · sat 05.12 · stereo"), or, with none announced, their role
- * ("resident" / "guest").
+ * The bracketed line under the name: the DJ's next night, the page's short
+ * label with the venue ("004 · sat 05.12 · stereo": the wordmark above says
+ * Form:at, and the shorter line keeps its full 46px), or, with none
+ * announced, their role ("resident" / "guest").
  */
 export function storyLine(type: DJ["type"], nextEvent: Event | null): string {
-  return nextEvent ? nextLabelLong(nextEvent) : type;
+  return nextEvent ? nextLabelShort(nextEvent, { venue: true }) : type;
 }
 
 /** The shared file's name: formatglasgow-<dj id>.jpg. */
@@ -121,7 +123,7 @@ export interface DjStoryAssets {
 export async function loadDjStoryAssets(photo: string | undefined): Promise<DjStoryAssets> {
   const [photoImg, wordmark, fontsLoaded] = await Promise.all([
     photo ? loadImage(`/images/${photo}-1080.webp`).catch(() => null) : Promise.resolve(null),
-    loadImage("/wordmark.png").catch(() => null),
+    loadImage(WORDMARK_URL).catch(() => null),
     loadSpaceMono(DJ_STORY.line.size, TITLE.size),
   ]);
   return { photo: photoImg, wordmark, fontsLoaded };
@@ -233,10 +235,10 @@ function drawBackground(
   g.restore();
 }
 
-// "[ form:at 004 · sat 05.12 · stereo ]": gold brackets, grey text, as
+// "[ 004 · sat 05.12 · stereo ]": gold brackets, grey text, as
 // BracketLabel draws them on the page.
 function drawBracketLine(g: CanvasRenderingContext2D, text: string, y: number) {
-  fitFont(g, `[ ${text} ]`, 400, DJ_STORY.line.size, FRAME.width - 2 * MARGIN_X);
+  fitFont(g, `[ ${text} ]`, 400, DJ_STORY.line.size, CONTENT_WIDTH);
   const parts = ["[ ", text, " ]"];
   const widths = parts.map((s) => g.measureText(s).width);
   let x = FRAME.width / 2 - widths.reduce((a, b) => a + b, 0) / 2;
@@ -258,26 +260,7 @@ export function drawDjStory(canvas: HTMLCanvasElement, input: DjStoryInput) {
   g.fillRect(0, 0, FRAME.width, FRAME.height);
   if (toned) drawBackground(g, toned, background);
 
-  // The pixel wordmark, as the header shows it: screen-blended, so its black
-  // ground drops out.
-  if (input.assets.wordmark) {
-    const { width, y } = DJ_STORY.wordmark;
-    const height = (width * WORDMARK_SRC.height) / WORDMARK_SRC.width;
-    g.save();
-    g.globalCompositeOperation = "screen";
-    g.drawImage(
-      input.assets.wordmark,
-      WORDMARK_SRC.x,
-      WORDMARK_SRC.y,
-      WORDMARK_SRC.width,
-      WORDMARK_SRC.height,
-      (FRAME.width - width) / 2,
-      y,
-      width,
-      height,
-    );
-    g.restore();
-  }
+  if (input.assets.wordmark) drawWordmark(g, input.assets.wordmark);
 
   // The card: the photo cropped to the square at CARD.photoFocusY, rounded,
   // with the player's hairline border, like the set Story's card.
@@ -302,13 +285,13 @@ export function drawDjStory(canvas: HTMLCanvasElement, input: DjStoryInput) {
   // Name, then the next night or the DJ's role.
   g.textAlign = "center";
   g.fillStyle = COLORS.title;
-  fitFont(g, input.name, TITLE.weight, TITLE.size, FRAME.width - 2 * MARGIN_X);
+  fitFont(g, input.name, TITLE.weight, TITLE.size, CONTENT_WIDTH);
   g.fillText(input.name, FRAME.width / 2, DJ_STORY.name.baselineY);
   drawBracketLine(g, input.line, DJ_STORY.line.baselineY);
 
   g.fillStyle = COLORS.text;
-  g.font = font(BRAND.weight, BRAND.size);
-  fillTrackedCentred(g, BRAND.text, FRAME.width / 2, DJ_STORY.site.baselineY, BRAND.size);
+  g.font = font(SITE.weight, SITE.size);
+  fillTrackedCentred(g, SITE.text, FRAME.width / 2, DJ_STORY.site.baselineY, SITE.size);
 }
 
 /** JPEG at 0.9: as PNG the same frame runs to 1–2MB, ~4MB with a noisy photo. */

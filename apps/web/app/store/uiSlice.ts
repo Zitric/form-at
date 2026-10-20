@@ -1,3 +1,5 @@
+import type { DJ } from "@form-at/data/djs";
+import type { Event as FormatEvent } from "@form-at/data/events";
 import type { MusicSet } from "@form-at/data/sets";
 import type { StateCreator } from "zustand";
 import type { ShareTarget } from "~/utils/shareTarget";
@@ -26,6 +28,12 @@ export type UiSlice = {
   storyFlow: { set: MusicSet; step: "install-gate" | "picker" } | null;
   openStoryFlow: (set: MusicSet, step: "install-gate" | "picker") => void;
   closeStoryFlow: () => void;
+  /** The open DJ Story sheet (DjStoryHost), `null` when closed: the DJ, their
+   *  next night, and whether the share modal's [ instagram_story ] tap got
+   *  the page link onto the clipboard. Never persisted. */
+  djStory: { dj: DJ; nextEvent: FormatEvent | null; linkCopied: boolean } | null;
+  openDjStory: (story: { dj: DJ; nextEvent: FormatEvent | null; linkCopied: boolean }) => void;
+  closeDjStory: () => void;
   /** Mobile full-screen "now playing" overlay open/closed flag. Mini-player
    *  tap sets this true; close button + route changes set it false.
    *  <FullPlayer> renders null when this is true but `nowPlaying` is null,
@@ -103,6 +111,10 @@ export const createUiSlice: StateCreator<UiSlice, [], [], UiSlice> = (set) => ({
   // Replaces the share modal rather than stacking on it: one dialog at a time.
   openStoryFlow: (s, step) => set({ storyFlow: { set: s, step }, shareTarget: null }),
   closeStoryFlow: () => set({ storyFlow: null }),
+  djStory: null,
+  // Replaces the share modal too.
+  openDjStory: (story) => set({ djStory: story, shareTarget: null }),
+  closeDjStory: () => set({ djStory: null }),
   fullPlayerOpen: false,
   openFullPlayer: () => set({ fullPlayerOpen: true }),
   closeFullPlayer: () => set({ fullPlayerOpen: false }),

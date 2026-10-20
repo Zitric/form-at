@@ -127,15 +127,16 @@ export function DjStorySheet({ dj, nextEvent, linkCopied, onClose }: DjStoryShee
           className="h-[50vh] aspect-[9/16] border border-grey/20 bg-black"
         />
         {/* Each chip is one button and BracketLabel is nowrap, so the row
-            wraps between chips, never inside a bracket. */}
-        <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-grey tracking-widest">
+            wraps between chips, never inside a bracket. min-h-11: a 44px tap
+            target, the size a thumb hits reliably. */}
+        <div className="flex flex-wrap justify-center gap-x-4 text-sm text-grey tracking-widest">
           {TREATMENT_IDS.map((id) => (
             <button
               key={id}
               type="button"
               onClick={() => setTreatment(id)}
               aria-pressed={treatment === id}
-              className="cursor-pointer hover:text-white transition-colors"
+              className="inline-flex min-h-11 items-center px-2 cursor-pointer hover:text-white transition-colors"
             >
               {treatment === id ? (
                 <BracketLabel>{TREATMENTS[id].label}</BracketLabel>

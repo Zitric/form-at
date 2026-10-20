@@ -4,19 +4,22 @@ import {
   ARTWORK,
   ARTWORK_COLON,
   BACKGROUND,
-  BRAND,
   COLORS,
   EXCERPT,
   EXCERPT_BARS,
   FRAME,
   META,
+  META_SIZE,
   PILL,
   SAFE_ZONE,
+  SITE,
   SPECTRUM_STRIP,
   TEXT_SM,
   TEXT_XS,
   TIMELINE,
   TITLE,
+  WORDMARK,
+  WORDMARK_HEIGHT,
   backgroundColonRect,
   backgroundRect,
   barRow,
@@ -26,7 +29,16 @@ import {
 // Relationships the approved layout depends on. Each one can break from an
 // edit to a single constant that looks harmless on its own.
 
-const order = ["brand", "artwork", "title", "meta", "excerpt", "pill", "timeline"] as const;
+const order = [
+  "wordmark",
+  "artwork",
+  "title",
+  "meta",
+  "excerpt",
+  "pill",
+  "timeline",
+  "site",
+] as const;
 
 describe("story video layout", () => {
   it("keeps every meaningful element inside the safe zone", () => {
@@ -35,6 +47,28 @@ describe("story video layout", () => {
       expect(top, name).toBeGreaterThanOrEqual(SAFE_ZONE.top);
       expect(bottom, name).toBeLessThanOrEqual(SAFE_ZONE.bottom);
     }
+  });
+
+  it("stacks the elements top to bottom, none overlapping the next", () => {
+    for (let i = 1; i < order.length; i++) {
+      const above = order[i - 1] as (typeof order)[number];
+      const below = order[i] as (typeof order)[number];
+      expect(APPROVED_INK[below][0], `${above} → ${below}`).toBeGreaterThan(APPROVED_INK[above][1]);
+    }
+  });
+
+  it("closes with the site, small, under the timeline and above Instagram's bottom zone", () => {
+    expect(APPROVED_INK.site[0]).toBeGreaterThan(APPROVED_INK.timeline[1]);
+    expect(APPROVED_INK.site[1]).toBeLessThanOrEqual(SAFE_ZONE.bottom);
+    expect(SITE.size).toBeLessThan(META.size);
+  });
+
+  it("draws the line under the title about 15–20% bigger than text-sm", () => {
+    expect(META.size).toBe(META_SIZE);
+    expect(META.size / TEXT_SM).toBeGreaterThanOrEqual(1.15);
+    expect(META.size / TEXT_SM).toBeLessThanOrEqual(1.2);
+    expect(META.weight).toBe(400);
+    expect(TITLE.weight).toBe(700);
   });
 
   it("keeps DJ name → meta clearly tighter than artwork → DJ name, so they read as one block", () => {
@@ -53,6 +87,7 @@ describe("story video layout", () => {
   // move the artwork without updating the table and the invariants above
   // would be checking a layout nobody draws.
   it("keeps the measured boxes in step with the constants that draw them", () => {
+    expect(APPROVED_INK.wordmark).toEqual([WORDMARK.y, WORDMARK.y + WORDMARK_HEIGHT]);
     expect(APPROVED_INK.artwork).toEqual([ARTWORK.y, ARTWORK.y + ARTWORK.size]);
     expect(APPROVED_INK.excerpt).toEqual([EXCERPT.y, EXCERPT.y + EXCERPT.height]);
     expect(APPROVED_INK.pill).toEqual([PILL.bottomY - PILL.height, PILL.bottomY]);
@@ -64,9 +99,9 @@ describe("story video layout", () => {
 
   it("keeps each text baseline inside its measured ink box", () => {
     for (const [name, baseline] of [
-      ["brand", BRAND.baselineY],
       ["title", TITLE.baselineY],
       ["meta", META.baselineY],
+      ["site", SITE.baselineY],
     ] as const) {
       const [top, bottom] = APPROVED_INK[name];
       expect(baseline, name).toBeGreaterThan(top);

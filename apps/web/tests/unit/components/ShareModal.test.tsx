@@ -1,5 +1,5 @@
 import type { MusicSet } from "@form-at/data/sets";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createJSONStorage } from "zustand/middleware";
@@ -150,15 +150,15 @@ describe("ShareModal", () => {
   });
 });
 
-describe("ShareModal create_video: section", () => {
+describe("ShareModal instagram: section, for a set", () => {
   afterEach(() => {
     storyShown.current = false;
   });
 
-  it("isn't there when no video format would render (no flag, or not a phone)", () => {
+  it("isn't there when the Story video wouldn't render (no flag, or not a phone)", () => {
     useStore.setState({ shareTarget: setShareTarget(testSet) });
     render(<ShareModal />);
-    expect(screen.queryByText("create_video:")).not.toBeInTheDocument();
+    expect(screen.queryByText("instagram:")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /instagram_story/ })).not.toBeInTheDocument();
   });
 
@@ -166,7 +166,7 @@ describe("ShareModal create_video: section", () => {
     storyShown.current = true;
     useStore.setState({ shareTarget: setShareTarget(testSet) });
     render(<ShareModal />);
-    const create = screen.getByText("create_video:");
+    const create = screen.getByText("instagram:");
     const send = screen.getByText("send:");
     expect(send.compareDocumentPosition(create) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const story = screen.getByRole("button", { name: /instagram_story/ });
@@ -217,13 +217,55 @@ describe("ShareModal for a DJ or an event", () => {
     expect(tg).toContain(encodeURIComponent(path));
   });
 
-  it("has no set-only rows: no copy @ and no create_video, even where the Story would show", () => {
-    storyShown.current = true;
+  it("has no copy @ for a DJ, even with a set playing", () => {
     useStore.setState({ shareTarget: djShareTarget(dj), nowPlaying: testSet });
     render(<ShareModal />);
 
     expect(screen.queryByRole("button", { name: /copy @/ })).not.toBeInTheDocument();
-    expect(screen.queryByText("create_video:")).not.toBeInTheDocument();
+  });
+
+  it("gives a DJ an instagram: section with the Story image row, whatever the set Story's rules say", () => {
+    // storyShown stays false: the set Story's gating doesn't apply to a DJ.
+    useStore.setState({ shareTarget: djShareTarget(dj, event) });
+    render(<ShareModal />);
+
+    const section = screen.getByText("instagram:");
+    const row = screen.getByRole("button", { name: "[ instagram_story ]" });
+    expect(section.parentElement).toContainElement(row);
+  });
+
+  it("copies the DJ page link in the row's tap, then opens the DJ Story sheet in place of the modal", async () => {
+    useStore.setState({ shareTarget: djShareTarget(dj, event), djStory: null });
+    render(<ShareModal />);
+
+    // fireEvent, not userEvent: userEvent.setup() swaps in its own clipboard.
+    fireEvent.click(screen.getByRole("button", { name: "[ instagram_story ]" }));
+
+    expect(clipboardSpy).toHaveBeenCalledWith(`${window.location.origin}/djs/test-dj`);
+    await waitFor(() =>
+      expect(useStore.getState().djStory).toEqual({ dj, nextEvent: event, linkCopied: true }),
+    );
+    expect(useStore.getState().shareTarget).toBeNull();
+  });
+
+  it("still opens the sheet when the clipboard refuses, saying the link isn't copied", async () => {
+    clipboardSpy.mockRejectedValueOnce(new Error("denied"));
+    useStore.setState({ shareTarget: djShareTarget(dj), djStory: null });
+    render(<ShareModal />);
+
+    fireEvent.click(screen.getByRole("button", { name: "[ instagram_story ]" }));
+
+    await waitFor(() =>
+      expect(useStore.getState().djStory).toEqual({ dj, nextEvent: null, linkCopied: false }),
+    );
+  });
+
+  it("gives an event no instagram: section", () => {
+    storyShown.current = true;
+    useStore.setState({ shareTarget: eventShareTarget(event) });
+    render(<ShareModal />);
+
+    expect(screen.queryByText("instagram:")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /instagram_story/ })).not.toBeInTheDocument();
   });
 });

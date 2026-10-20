@@ -4,7 +4,15 @@
 // is its own lazy chunk, and this is all they share besides layout.ts, so
 // nothing here may import a renderer, the recorder or the spectrum.
 
-import { FONT_FAMILY, type Rect, TRACKING_WIDEST, coverCrop } from "./layout";
+import {
+  FONT_FAMILY,
+  FRAME,
+  type Rect,
+  TRACKING_WIDEST,
+  WORDMARK,
+  WORDMARK_HEIGHT,
+  coverCrop,
+} from "./layout";
 
 export const font = (weight: number, size: number) => `${weight} ${size}px ${FONT_FAMILY}`;
 
@@ -68,6 +76,31 @@ export async function loadSpaceMono(regularSize: number, boldSize: number): Prom
   );
   const loadedWeights = new Set(faces.filter((f) => f.status === "loaded").map((f) => f.weight));
   return loadedWeights.has("400") && loadedWeights.has("700");
+}
+
+/** /wordmark.png, the image drawWordmark takes; same-origin. */
+export const WORDMARK_URL = "/wordmark.png";
+
+/**
+ * The pixel wordmark at the top of a Story frame (WORDMARK), as the header
+ * shows it: screen-blended, so the image's black ground drops out.
+ */
+export function drawWordmark(g: CanvasRenderingContext2D, wordmark: CanvasImageSource) {
+  const { src } = WORDMARK;
+  g.save();
+  g.globalCompositeOperation = "screen";
+  g.drawImage(
+    wordmark,
+    src.x,
+    src.y,
+    src.width,
+    src.height,
+    (FRAME.width - WORDMARK.width) / 2,
+    WORDMARK.y,
+    WORDMARK.width,
+    WORDMARK_HEIGHT,
+  );
+  g.restore();
 }
 
 export function sourceSize(img: CanvasImageSource): { width: number; height: number } {

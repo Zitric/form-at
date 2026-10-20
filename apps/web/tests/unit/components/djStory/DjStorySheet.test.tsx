@@ -74,6 +74,18 @@ describe("DjStorySheet", () => {
     expect(chips).toEqual(["form:at", "raw"]);
   });
 
+  it("makes each chip a 44px tap target at text-sm, its brackets in one nowrap span", async () => {
+    await renderSheet();
+    const chips = screen.getAllByRole("button").filter((b) => b.hasAttribute("aria-pressed"));
+    for (const chip of chips) {
+      expect(chip).toHaveClass("min-h-11");
+      expect(chip.parentElement).toHaveClass("text-sm");
+      expect(chip.parentElement).not.toHaveClass("text-xs");
+    }
+    const selected = screen.getByRole("button", { name: /form:at/, pressed: true });
+    expect(selected.querySelector(".whitespace-nowrap")).toHaveTextContent(/^\[\s*form:at\s*\]$/);
+  });
+
   it("starts on form:at and redraws when another treatment is picked", async () => {
     await renderSheet();
     expect(screen.getByRole("button", { name: /form:at/, pressed: true })).toBeInTheDocument();

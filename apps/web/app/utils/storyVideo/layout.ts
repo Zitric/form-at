@@ -48,17 +48,36 @@ export const TRACKING_WIDEST = 0.1; // em, Tailwind's tracking-widest
 export const EXCERPT_SECONDS = 15;
 
 // Top to bottom. Baselines are for text; y is a top edge.
-export const BRAND = {
+
+// The pixel wordmark at the top of both Stories (this video and the DJ Story
+// image): /wordmark.png's ink, the same crop the header shows (Header.tsx's
+// -17.32% / -45.6% translate in a 280×40 box at 430px wide), drawn `width`
+// wide from the safe zone's top. canvas.ts's drawWordmark draws it.
+export const WORDMARK = {
+  y: SAFE_ZONE.top,
+  width: 560,
+  src: { x: 260, y: 684, width: 977, height: 140 },
+} as const;
+export const WORDMARK_HEIGHT = Math.round(
+  (WORDMARK.width * WORDMARK.src.height) / WORDMARK.src.width,
+);
+
+// formatglasgow.com, small and tracked, closing both Stories' content: here
+// under the timeline, in the DJ Story under the event line (its own
+// baseline). Inside the safe zone: Instagram's link sticker is placed by
+// hand below it.
+export const SITE = {
   text: "formatglasgow.com",
-  baselineY: SAFE_ZONE.top + 52,
-  size: 42,
+  baselineY: 1568,
+  size: 34,
   weight: 400,
 } as const;
+
 // The card: the DJ's photo, or the set's artwork when the set has no DJ or
 // the DJ no photo. Both are cropped to the square, never stretched.
 export const ARTWORK = {
-  y: SAFE_ZONE.top + 116,
-  size: 560,
+  y: SAFE_ZONE.top + 136,
+  size: 520,
   radius: scaled(4),
   borderWidth: 2,
 } as const;
@@ -85,14 +104,17 @@ export const BACKGROUND = {
 // or the colon shows beside the card.
 export const ARTWORK_COLON = { x: [0.466, 0.544], y: [0.603, 0.753] } as const;
 
-export const TITLE = { baselineY: 1041, size: 84, weight: 700 } as const;
-export const META = { baselineY: 1108, size: TEXT_SM, weight: 400 } as const;
+export const TITLE = { baselineY: 1021, size: 84, weight: 700 } as const;
+// The line under the title: 46px, not text-sm's 39, which reads too small
+// on a phone. fitFont may shrink a long line back to fit the content width.
+export const META_SIZE = 46;
+export const META = { baselineY: 1093, size: META_SIZE, weight: 400 } as const;
 
 // The excerpt row mirrors PlayerSeeker: start and end times either side of
 // the bars (text-xs, gap-3), bars in the width left over. The timeline below
 // has 0:00 and the set's length in the same two columns, and spans exactly
 // the excerpt bars' ink: the two rows start and end on the same pixel.
-export const EXCERPT = { y: 1192, height: 150, timeGap: scaled(12) } as const;
+export const EXCERPT = { y: 1167, height: 150, timeGap: scaled(12) } as const;
 
 // Bar style mirrors Waveform.tsx (3px bars, 1px gaps, centred at 0.9 of the
 // height with a 2px floor, gold glow), scaled.
@@ -113,7 +135,7 @@ export const EXCERPT_BARS = {
 // Position pill ("30:00"; the set's length is beside the timeline), centred on
 // the timeline marker, clamped to the timeline.
 export const PILL = {
-  bottomY: 1456,
+  bottomY: 1431,
   height: 40,
   fontSize: 26,
   paddingX: 14,
@@ -121,7 +143,7 @@ export const PILL = {
 } as const;
 
 export const TIMELINE = {
-  y: 1472,
+  y: 1447,
   height: 40,
   barWidth: 2,
   gap: 1,
@@ -146,19 +168,22 @@ export const SPECTRUM_STRIP = {
 } as const;
 
 /**
- * Ink extents [top, bottom] of each element in the approved render, measured
- * in the spike with measureText. Text ink depends on the font, so these are
+ * Ink extents [top, bottom] of each element in the approved render, top to
+ * bottom: boxes from their constants, text from measureText's actual ascent
+ * and descent at its baseline, for set 003 (Unreal, "@ Form:at 003 ·
+ * 2026-08-28"). Text ink depends on the font and the words, so these are
  * recorded rather than derived; the tests hold the rest of the layout to
  * them.
  */
 export const APPROVED_INK = {
-  brand: [273, 310],
-  artwork: [366, 926],
-  title: [982, 1042],
-  meta: [1080, 1109],
-  excerpt: [1192, 1342],
-  pill: [1416, 1456],
-  timeline: [1466, 1518],
+  wordmark: [250, 330],
+  artwork: [386, 906],
+  title: [962, 1022],
+  meta: [1060, 1094],
+  excerpt: [1167, 1317],
+  pill: [1391, 1431],
+  timeline: [1441, 1493],
+  site: [1544, 1575],
 } as const satisfies Record<string, readonly [number, number]>;
 
 // ── Geometry derived from the constants above ─────────────────────────────

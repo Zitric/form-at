@@ -30,7 +30,7 @@ export interface StoryEnvironment {
 }
 
 /**
- * - hidden: no entry, and no create_video: section.
+ * - hidden: no entry, and no instagram: section.
  * - picker: the installed app, online — the excerpt picker.
  * - offline: the installed app, offline — a muted "needs a connection" line.
  * - gate: a browser tab — the install gate (install, open the app, or where

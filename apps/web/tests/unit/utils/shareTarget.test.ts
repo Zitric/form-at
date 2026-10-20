@@ -24,14 +24,35 @@ describe("share targets", () => {
     });
   });
 
-  it("a DJ: their page and '<name> on Form:at.'", () => {
+  it("a DJ: their page and '<name> on Form:at.', carrying the DJ for the Story image", () => {
     const dj: DJ = { id: "dzeko", name: "Dzeko", type: "guest" };
-    expect(djShareTarget(dj, ORIGIN)).toEqual({
+    expect(djShareTarget(dj, null, ORIGIN)).toEqual({
       kind: "dj",
+      dj,
+      nextEvent: null,
       url: `${ORIGIN}/djs/dzeko`,
       title: "Dzeko",
       text: "Dzeko on Form:at.",
     });
+  });
+
+  it("a DJ with a night announced carries it, for the Story image's event line", () => {
+    const dj: DJ = { id: "dzeko", name: "Dzeko", type: "guest" };
+    const next = {
+      id: "format-004",
+      title: "Form:at 004",
+      date: "2026-12-05",
+      venue: "Stereo, Glasgow",
+      city: "Glasgow",
+      lineupIds: ["dzeko"],
+      audio: "techno",
+      runtime: "23:00 — tbc",
+      status: "upcoming" as const,
+    };
+    const target = djShareTarget(dj, next, ORIGIN);
+    expect(target.kind === "dj" && target.nextEvent).toBe(next);
+    // The shared text stays the DJ's own: the event is for the image only.
+    expect(target.text).toBe("Dzeko on Form:at.");
   });
 
   it("an event: its page and '<title> · <day> · <venue name>', with plain spaces", () => {

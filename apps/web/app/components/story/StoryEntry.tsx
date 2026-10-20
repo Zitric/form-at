@@ -28,13 +28,13 @@ function currentStoryEntryState(online = true): StoryEntryState {
 /**
  * Whether the [ instagram_story ] row renders at all. Past this, StoryEntry
  * always renders something (a button or a muted line), so the share modal
- * shows its create_video: section on this.
+ * shows its instagram: section on this.
  */
 export function isStoryEntryShown(): boolean {
   return currentStoryEntryState() !== "hidden";
 }
 
-// The [ instagram_story ] row in ShareModal's create_video: section. Who sees
+// The [ instagram_story ] row in ShareModal's instagram: section. Who sees
 // it and what a tap does: storyEntryState. Both steps replace the share modal
 // (StoryFlowHost renders them). Only ever rendered inside the open
 // ShareModal, i.e. on the client after a tap, so reading window state during

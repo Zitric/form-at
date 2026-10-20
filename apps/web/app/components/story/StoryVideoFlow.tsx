@@ -611,6 +611,7 @@ export default function StoryVideoFlow({ set, onClose }: Props) {
           setPeaks: cachedPeaks ?? [],
           artwork: assets.artwork,
           photo: assets.photo,
+          wordmark: assets.wordmark,
         }}
         fileName={storyFileName(set.id, start)}
         progress={flow.progress}

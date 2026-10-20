@@ -1,9 +1,11 @@
 import type { DJ } from "@form-at/data/djs";
 import type { Event } from "@form-at/data/events";
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ComponentType, ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Route } from "~/routes/djs/$djId";
+import { useStore } from "~/store";
 
 // The DJ page splits the DJ's events by status: each upcoming one is a
 // "next" row in the top block, linking to the event; only past ones are
@@ -126,14 +128,26 @@ describe("DJ page actions", () => {
     vi.restoreAllMocks();
   });
 
-  it("offers [ share ] and [ share_story ] on their own row, after the name", () => {
+  it("offers [ share ] on its own row, after the name, and no standalone story button", () => {
     renderWith([upcoming], []);
 
     const share = screen.getByRole("button", { name: "[ share ]" });
-    const story = screen.getByRole("button", { name: "[ share_story ]" });
     const name = screen.getByRole("heading", { level: 1 });
-    expect(share.parentElement).toBe(story.parentElement);
     expect(name.contains(share)).toBe(false);
     expect(name.compareDocumentPosition(share) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The Story image is in the share modal's instagram: section instead.
+    expect(screen.queryByRole("button", { name: /share_story/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /instagram_story/ })).not.toBeInTheDocument();
+  });
+
+  it("shares the DJ with their next night, for the Story image's event line", async () => {
+    renderWith([upcoming], []);
+
+    await userEvent.click(screen.getByRole("button", { name: "[ share ]" }));
+
+    const target = useStore.getState().shareTarget;
+    expect(target?.kind).toBe("dj");
+    expect(target?.kind === "dj" && target.nextEvent?.id).toBe("004");
+    useStore.setState({ shareTarget: null });
   });
 });
