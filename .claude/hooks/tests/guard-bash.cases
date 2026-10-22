@@ -1,0 +1,94 @@
+# Expected verdicts for guard-bash.sh, one case per line: <verdict> | <command>
+# Verdicts: block (exit 2), ask (permissionDecision "ask"), pass (no output).
+# `@repo <name>` switches the scratch repo the following cases run against:
+#   feature-dirty  on branch feat/x with an uncommitted change to a tracked file
+#   main-clean     on branch main, clean
+# Run with: bash .claude/hooks/tests/run.sh
+
+@repo feature-dirty
+pass  | git status
+pass  | git diff --stat
+pass  | git log --oneline -5
+pass  | git add apps/web/x.ts
+pass  | git add apps/web/x.ts apps/web/y.ts
+pass  | git add ./apps/web/x.ts
+pass  | git commit -m "fix the player bar"
+pass  | git commit -m "add .claude config for claude code"
+pass  | git push -u origin feat/x
+pass  | git push
+pass  | git worktree add ../form-at-other feat/other
+pass  | git switch -c feat/new-thing
+pass  | git checkout -b fix/thing
+pass  | git config user.email
+pass  | git config user.name
+pass  | git restore --staged apps/web/x.ts
+pass  | gh pr create --title "x" --body-file /dev/null
+pass  | gh pr view 91
+pass  | gh pr checks --watch
+pass  | npx wrangler d1 execute form-at-analytics --local --command "SELECT 1"
+pass  | npx wrangler d1 list
+pass  | npx wrangler r2 object get form-at-audio/x --file /dev/null
+pass  | pnpm check
+pass  | pnpm test
+pass  | pnpm dump-diff
+pass  | pnpm build-storybook
+pass  | cat apps/web/app/server.ts
+pass  | echo "git stash is forbidden" > /dev/null
+
+block | git stash
+block | git stash list
+block | git stash pop
+block | git -C apps/web stash
+block | git add -A
+block | git add --all
+block | git add .
+block | cd apps && git add .
+block | git add apps/web/x.ts && git add -A
+block | git commit --amend --no-edit
+block | git commit -m "x" --author "Someone <a@b.c>"
+block | git -c user.email=other@example.com commit -m "x"
+block | git config user.email other@example.com
+block | git config --global user.name "Other"
+block | git push --force
+block | git push -f origin feat/x
+block | git push --force-with-lease origin feat/x
+block | git push origin +feat/x
+block | git push origin main
+block | git push origin HEAD:main
+block | git reset --hard origin/main
+block | git clean -fd
+block | git checkout main
+block | git switch main
+block | rm apps/web/app/server.ts
+block | rm -f apps/admin/app/server.ts
+block | git rm apps/admin/app/server.ts
+block | npx wrangler d1 execute form-at-analytics --remote --file apps/web/schema.sql
+block | gh pr merge 92 --squash
+block | git commit -m "fix x" -m "Co-Authored-By: Claude <noreply@anthropic.com>"
+block | git commit -m "add x 🤖 Generated with Claude Code"
+block | gh pr create --title "x" --body "Generated with [Claude Code](https://claude.com/claude-code)"
+
+ask   | git checkout -- apps/web/x.ts
+ask   | git checkout HEAD -- apps/web/x.ts
+ask   | git checkout .
+ask   | git restore apps/web/x.ts
+ask   | pnpm build
+ask   | pnpm build:web
+ask   | pnpm -C apps/web build
+ask   | pnpm --filter @form-at/web build
+ask   | pnpm test:e2e
+ask   | pnpm test:e2e:web
+ask   | pnpm -C apps/rum-archiver deploy
+ask   | npx wrangler deploy
+ask   | npx wrangler pages deploy dist
+ask   | npx wrangler r2 object put form-at-audio/x --file y
+ask   | npx wrangler r2 object delete form-at-audio/x
+ask   | npx wrangler d1 execute form-at-analytics --remote --command "ALTER TABLE plays ADD COLUMN x INTEGER"
+ask   | npx wrangler secret put CF_ANALYTICS_TOKEN
+
+@repo main-clean
+pass  | git status
+pass  | git checkout feat/x
+pass  | git switch -c chore/claude-config
+block | git push
+block | git push -u origin main
