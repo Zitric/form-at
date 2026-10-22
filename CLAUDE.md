@@ -68,8 +68,7 @@ at least once.
 - **Never hand-roll a `[ label ]` bracket button** — `<Button variant="secondary">`
   or `BracketLabel` → `design-system-and-styling.md`.
 
-Hooks in `.claude/hooks/` back up several of these; they warn, they don't replace
-reading the rule.
+Hooks in `.claude/hooks/` back several of these up; they don't replace the rule.
 
 ---
 
@@ -179,9 +178,8 @@ add a `--filter`. A workspace's own scripts: `pnpm -C apps/web <script>`.
 doesn't. Others: `pnpm -C apps/admin diagnose-visits`, `apps/rum-archiver`'s
 `deploy`/`capture`.
 
-**Service-worker behaviour is testable only against a production build**
-(`pnpm build:web && pnpm start:web`, :4173); the dev server registers no SW.
-`pnpm dev` generates the gitignored `apps/web/app/routeTree.gen.ts`.
+**SW behaviour is testable only against a production build** (`pnpm build:web &&
+pnpm start:web`, :4173). `pnpm dev` generates the gitignored `routeTree.gen.ts`.
 
 ---
 

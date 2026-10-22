@@ -33,6 +33,7 @@
       "Bash(pnpm og *)",
       "Bash(pnpm optimize-images *)",
       "Bash(pnpm build-storybook *)",
+      "Bash(pnpm -C apps/web screenshots *)",
       "Bash(pnpm add *)",
       "Bash(pnpm install *)",
       "Bash(npx wrangler *)",
