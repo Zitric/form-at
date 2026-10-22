@@ -7,7 +7,7 @@ Each item is written to be picked up cold — no conversation context required.
 ## Status at a glance
 
 - **Launch blockers:** none open (19 resolved 2026-07-06 — audio on cdn.formatglasgow.com)
-- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a cleared 2026-08-18 except the dropped-connection case, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project), 30 (Instagram Story device test — Android fully verified: the full 15s story shares directly, publishes whole, A/V sync and framing intact after Instagram's re-encode; iOS waits on the same device access as 12/23b), 31 (a re-upload at the same R2 URL never reaches a saved offline copy; fixed with versioned upload paths, CDN rules applied, Julz 003 moved; only the manual Android re-upload test remains), 32 (Firefox on Android treated as non-installable until a device shows its home-screen shortcut runs standalone), 33 (home must not scroll on an iPhone when it fits — checked in Chromium emulation only; waits on the same iPhone access as 12/23b/30)
+- **Open:** 8, 12, 13, 15, 22, 23 (verification debt — a cleared 2026-08-18 except the dropped-connection case, b and c still fully unexercised), 27 (offline click-through has no e2e coverage; needs a production-build Playwright project), 30 (Instagram Story device test — Android fully verified: the full 15s story shares directly, publishes whole, A/V sync and framing intact after Instagram's re-encode; iOS waits on the same device access as 12/23b), 31 (a re-upload at the same R2 URL never reaches a saved offline copy; fixed with versioned upload paths, CDN rules applied, Julz 003 moved; only the manual Android re-upload test remains), 32 (Firefox on Android treated as non-installable until a device shows its home-screen shortcut runs standalone), 33 (home must not scroll on an iPhone when it fits — checked in Chromium emulation only; waits on the same iPhone access as 12/23b/30), 34 (the two `.inputValidator()`s are identity casts), 35 (three mutating admin routes have no auth-rejection test), 36 (admin's CSP has no test), 37 (four silent-failure invariants guarded only by an agent hook, not CI)
 - **Deferred, recorded rather than done:** 24 (DJ/event data model still static while sets are in D1), 25 (no-cross-app-imports unenforced), 26 (`PWA_PROGRESS.md` too large to be readable)
 - **Invalid:** 1 (2026-07-22 — premise was wrong, not stale: both flagged functions are load-bearing behind a live multi-provider calendar picker; do not delete, see item for the full re-verification)
 - **Deferred:** 14 (Brandon Lee Vear `.mp3.mp3` — R2 has no rename op, cosmetic, no re-visit condition); 16 (orphan artwork prune, coupled — waits for the deferred manage-offline-sets view, real trigger is ~10-15 sets in the catalogue, not a calendar date; see item for why that arrives faster now)
@@ -1575,6 +1575,65 @@ it doesn't scroll, that `install_app` / `notify_me` sit above the swipe
 dots, and that nothing hides behind the mini player. Waits on the same
 iPhone access as items 12, 23b and 30.
 
+## 34. The two `.inputValidator()`s are identity casts, not validation
+
+**Status: open, not blocking.** `fetchSetForDetailPage`
+(`apps/web/app/data/sets.ts:93`) and `fetchSetStats`
+(`packages/data/src/set-stats.ts:62`) chain an identity function as their
+validator — `.inputValidator((id: string) => id)`.
+That annotates the input type for callers but checks nothing at runtime: a
+server function is a network endpoint, so anything can arrive as `id`. Both only
+use the id as a bound D1 parameter, so the practical risk today is a confusing
+error rather than an injection.
+
+**Fix:** take `unknown`, narrow to a non-empty string of the set-id shape, throw
+otherwise; add a unit test per function for a non-string input.
+`.claude/rules/react-and-typescript.md` already requires that of new validators.
+
+## 35. Three mutating admin routes have no test that they reject a missing Access identity
+
+**Status: open, not blocking.** `verifyAccessJwt` itself is tested
+(`apps/admin/tests/unit/utils/verifyAccessJwt.test.ts`), and
+`api-sets-presign.test.ts` exercises it at the route. `api-sets.test.ts`,
+`api-sets-restore.test.ts` and `api-send-push.test.ts` contain no request without
+a valid `Cf-Access-Jwt-Assertion` and no 401/403 assertion. The four routes all
+call it today (read, not run); a refactor that drops the call from one of them
+would pass the suite.
+
+**Fix:** one test per route — a request with no assertion header gets the
+rejection status and the handler's D1/R2 work never runs.
+
+## 36. Admin's CSP has no test
+
+**Status: open, not blocking.** `media-src 'self' blob:` and
+`connect-src … https://*.r2.cloudflarestorage.com` in `apps/admin/app/server.ts`
+each fixed a real upload failure (item 23a), and nothing fails if either is
+removed: `apps/web/tests/e2e/csp-violations.spec.ts` runs against apps/web only,
+and `server.test.ts` can only reach the host-guard rejection path (the allowed
+path needs the TanStack Start Vite plugin's virtual module).
+
+**Fix:** move the CSP string to an exported constant beside the guard and
+assert both directives on it, plus that `static.cloudflareinsights.com` stays
+absent (`apps/admin/README.md`'s CSP section).
+
+## 37. Four silent-failure invariants are guarded only by an agent hook
+
+**Status: open, not blocking.** `.claude/hooks/check-invariants.sh` greps a
+protected file after an agent edits it. It never runs for a human edit or in CI.
+Each of these is cheap as a vitest that reads the source file:
+
+- `apps/web/app/sw.ts` contains no `skipWaiting(`.
+- `apps/web/app/styles/global.css` keeps `@source "../../../../packages/ui/src"`.
+- The four lazy imports stay lazy: `StoryVideoFlow` and `StoryInstallGate` in
+  `StoryFlowHost.tsx`, `DjStorySheet` in `DjStoryHost.tsx`, `TrendChartInner` in
+  `TrendChart.tsx` (a source match on `lazy(() => import(`; a chunk-graph check on
+  the build would be stronger and slower).
+- Every mutating admin route imports and calls `verifyAccessJwt` (item 35 is the
+  behavioural version).
+
+Admin's CSP is item 36. **When these exist,** drop the matching cases from the
+hook.
+
 ---
 
-_Last updated: 2026-10-19_
+_Last updated: 2026-10-22_

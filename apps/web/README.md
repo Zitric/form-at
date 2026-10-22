@@ -40,8 +40,9 @@ script, [`tests/`](tests/README.md) for test conventions,
 
 ## Things that break quietly
 
-These have each cost a debugging session; the full list and reasoning is in
-[`CLAUDE.md`](../../CLAUDE.md) §1.
+These have each cost a debugging session; the full list is in
+[`CLAUDE.md`](../../CLAUDE.md) §1, and the reasoning for each in the
+[`.claude/rules/`](../../.claude/rules/) file it names.
 
 - **Never add `self.skipWaiting()` to `app/sw.ts`.** It prunes the previous
   build's chunks while old clients are still running them, so the next lazy
