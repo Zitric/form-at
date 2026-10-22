@@ -66,3 +66,10 @@ packages/*/storybook-static/
 # Review diffs written by `pnpm dump-diff` — regenerated on every run and
 # wiped first, so they only ever describe the current branch
 .diff-dump/
+
+# Claude Code: personal per-project settings and subagent memory stay local;
+# the rest of .claude/ is committed. Hook-test scratch files are removed by
+# the runner, ignored in case a run is interrupted.
+.claude/settings.local.json
+.claude/agent-memory-local/
+.claude/hooks/tests/.tmp/

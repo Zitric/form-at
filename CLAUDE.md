@@ -1,10 +1,9 @@
 # CLAUDE.md — working agreement for agents in this repo
 
-Form:at is a PWA for a Glasgow techno collective. Live at
+Form:at is a PWA for a Glasgow techno collective, live at
 [formatglasgow.com](https://formatglasgow.com). The defining constraint: sets
 are 90-minute mixes (100–220MB) that must be saveable and playable with no
-signal, which is what most of the architecture exists to serve. Read `README.md`
-for the engineering narrative; this file is the operating rules.
+signal. `README.md` has the engineering narrative; this file is the rules.
 
 | Workspace | Path | Purpose |
 |---|---|---|
@@ -18,509 +17,141 @@ for the engineering narrative; this file is the operating rules.
 **Apps never import each other** — only `packages/*` are shared. New apps go in
 `apps/`; each picks its own framework, default TanStack Start.
 
+Detail lives in `.claude/rules/*.md`, each scoped by `paths:` so it loads when
+you read a file it covers. Procedures live in `.claude/skills/`. `.claude/README.md`
+explains the whole setup.
+
 ---
 
 ## 1. Hard constraints
 
-Ordered by blast radius. The first five are the ones to absorb if you read
-nothing else.
+One line each. The rule file named after the arrow has the full reasoning; read
+it before changing the file a line protects. Every one of these broke silently
+at least once.
 
-### Never claim something is verified without having run it
-This repo's recurring failure mode, and the reason the rest of this list exists.
-Docs here get trusted by sessions that can't re-check them, so a confident wrong
-claim propagates. Every item below was originally documented wrong by someone who
-hadn't checked — including the `schema.sql` line directly beneath this one, which
-would have failed against production. If you didn't run the command, read the
-file, or see the test pass, say which one you didn't do.
+- **Never claim something is verified without having run it.** If you didn't run
+  the command, read the file or see the test pass, say which. Docs here get
+  trusted by sessions that can't re-check them.
+- **Pass `-a` when grepping fetched HTML**, and grep a known-present string as a
+  control: grep suppresses all output on files it classes as binary, and the SSR'd
+  HTML qualifies.
+- **Purge saved sets on `catalogueConfirmed`, never `catalogueReady`**
+  (`apps/web/app/store/offlineSlice.ts`). The only thing here that can silently
+  delete user data → `offline-and-service-worker.md`.
+- **Never remove or weaken admin's host guard** (`apps/admin/app/utils/hostGuard.ts`,
+  enforced in `apps/admin/app/server.ts`). It is the only thing keeping the
+  dashboard off `*.pages.dev` → `admin-security-and-metrics.md`.
+- **Never apply `apps/web/schema.sql` with `--file` to an existing database.**
+  Its `ALTER TABLE`s aren't idempotent; migrate one statement at a time → `data-r2-d1.md`, `/d1-migration`.
+- **Never delete `apps/web/app/server.ts` or `apps/admin/app/server.ts`.** Without
+  them D1 is unreachable from all server code → `web-app.md`.
+- **Never add `self.skipWaiting()` to `apps/web/app/sw.ts`** → `offline-and-service-worker.md`.
+- **Never rebuild the `Request` in `sw.ts`'s audio route** — forward the original,
+  or seeks lose `Range` → `offline-and-service-worker.md`.
+- **Never overwrite an object under `sets/{id}/{version}/` in R2**; build keys with
+  `versionedSetKey` (`packages/data/src/r2Keys.ts`) → `data-r2-d1.md`.
+- **Every mutating admin endpoint calls `verifyAccessJwt`**
+  (`apps/admin/app/utils/verifyAccessJwt.ts`) → `admin-security-and-metrics.md`.
+- **Never drop `media-src 'self' blob:` or the R2 `connect-src` from admin's CSP**
+  (`apps/admin/app/server.ts`) → `admin-security-and-metrics.md`.
+- **Never substitute `0` for a metric that failed to load** — `null` means "couldn't
+  read it" → `admin-security-and-metrics.md`.
+- **Never remove `@source` from `apps/web/app/styles/global.css`**, or Tailwind
+  strips every `packages/ui` class → `design-system-and-styling.md`.
+- **Never flatten a `lazy(() => import(...))` into a static import** (`TrendChart`,
+  `StoryVideoFlow`, `StoryInstallGate`, `DjStorySheet`) → `stories.md`, `admin-security-and-metrics.md`.
+- **Keep every workspace on one `vitest` major** (`^4.1.5`) → `tests.md`.
+- **Keep pairs in step:** `WIDTHS` in `optimize-images.ts` ↔ `Image.tsx`;
+  `tokens.css` ↔ `tokens.ts` → `design-system-and-styling.md`.
+- **Never make `apps/web/vitest.config.ts` extend `vite.config.ts`** → `tests.md`.
+- **Never let `ci.yml` and `deploy.yml` share a Playwright cache key** → `ci.md`.
+- **Never hand-roll a `[ label ]` bracket button** — `<Button variant="secondary">`
+  or `BracketLabel` → `design-system-and-styling.md`.
 
-**A specific trap that fakes a passing check:** `grep` silently suppresses ALL
-output on a file it classifies as binary, and the SSR'd HTML this app serves
-qualifies (`file` reports it as `data`). So `curl … | grep -c something` returns
-`0` for content that is definitely present — a confident wrong answer from a
-command that looks like it worked. It nearly inverted a diagnosis here: a check
-for the analytics beacon reported zero, and so did a control check for
-`<script`, which is what exposed it. **Pass `-a` when grepping fetched HTML**,
-and always grep for something you know is present as a control.
-
-### Never gate the offline-set purge on `catalogueReady` — it must be `catalogueConfirmed`
-**The only thing in this repo that can silently destroy user data.**
-`reconcileFromIdb` (`apps/web/app/store/offlineSlice.ts`) purges a downloaded set
-— 100–220MB the user chose to save — when its id isn't in the catalogue. The two
-flags are not interchangeable (`apps/web/app/store/catalogueSlice.ts`):
-
-- `catalogueReady` — the boot fetch **settled**: succeeded, failed, *or* timed out.
-- `catalogueConfirmed` — the boot fetch **succeeded**.
-
-Gate the membership purge on `catalogueReady` and a single failed fetch reads as
-"the catalogue no longer lists any of your sets", and every saved set is deleted.
-`catalogueReady` gates only `reconcileFromIdb`'s cheap first pass; the
-membership purge in its second pass checks `catalogueConfirmed`
-separately. **Never collapse the two flags into
-one**, and never let a "simplification" route the purge through the wrong one. It
-took two review rounds to get right and there is no test that fails loudly if you
-merge them — the damage happens on a user's device, offline.
-
-### Never remove or weaken `apps/admin`'s host guard
-Cloudflare Access can only gate hostnames in a zone we own — it **cannot** gate
-Cloudflare's own `*.pages.dev`. So the same admin deployment is reachable at
-`form-at-admin.pages.dev` and at every per-deployment preview URL
-(`cd9a05fe.form-at-admin.pages.dev`). `apps/admin/app/utils/hostGuard.ts`'s `isAllowedHost`, plus
-its enforcement in `apps/admin/app/server.ts` — a plain 404 for any host that
-isn't `admin.formatglasgow.com` (localhost exempted for dev and e2e) — **is the
-only thing keeping the dashboard off the public internet on those hosts.** It
-runs before routing and before any D1 access, and returns 404 rather than a
-redirect so it doesn't advertise the real hostname. It is not redundant with
-Access; deleting it makes the dashboard public.
-
-### Never apply `schema.sql` with `--file` against a database that already exists
-It holds **9 `ALTER TABLE`s that are not idempotent** — re-running them fails
-with a duplicate-column error. `ADD COLUMN IF NOT EXISTS` is not an option: D1
-rejects it (`near "EXISTS": syntax error … SQLITE_ERROR`), unlike vanilla SQLite
-≥3.35. `schema.sql` is the reference definition and what a *fresh* database needs
-once. Migrate an existing database one statement at a time and verify:
-
-```bash
-npx wrangler d1 execute form-at-analytics --remote --command "ALTER TABLE plays ADD COLUMN <col> <type>"
-npx wrangler d1 execute form-at-analytics --remote --command "PRAGMA table_info(plays)"
-```
-
-`schema.sql`'s own comments record which statements are already applied to
-production. Read them before running anything.
-
-### Never delete `apps/web/app/server.ts` or `apps/admin/app/server.ts`
-These custom entries handle Cloudflare's `fetch(request, env, ctx)` convention
-and forward `env.DB` as `context.cloudflare.env`. **Without them D1 is
-unreachable from every piece of server-side code** — both `server.handlers`
-routes and `createServerFn` handlers. They look like boilerplate a framework
-should own. It doesn't.
-
-### Never add `self.skipWaiting()` to `apps/web/app/sw.ts`
-An immediately-activating service worker prunes the previous build's hashed
-chunks from the precache **while old clients are still running them**, so the
-next lazy route-load in an open session 404s — Cloudflare Pages only serves the
-latest deployment. A broken route, not a stale cache. New builds are meant to sit
-in `waiting` and take over on the next cold start.
-
-### Never rebuild the `Request` in `sw.ts`'s audio route — always forward the original
-Two independent breakages. `new Request(url, {...})` defaults `mode` to `cors`,
-which makes the browser block R2's response to `<audio>`'s natively no-cors
-request. And even a rebuild that copies `mode` explicitly **silently drops the
-`Range` header**, because a `Headers` object under the Fetch spec's
-request-no-cors guard discards anything not no-CORS-safelisted — so seeks return
-200 full-body instead of 206 and re-download 100MB+ from byte 0. Node's undici
-doesn't implement that guard, so **no unit test can catch this**; it only appears
-in a real browser.
-
-### Never overwrite an object under `sets/{id}/{version}/` in R2
-Every upload writes to its own version folder (`packages/data/src/r2Keys.ts`),
-and the CDN caches those paths for a year (README → *"CDN rules for
-cdn.formatglasgow.com"*). Overwrite one and the old bytes keep being served
-from the edge and browsers for a year, and a saved offline copy never notices,
-because its URL didn't change: TECH_DEBT.md item 31. To replace a set's files,
-upload a new version and point the row at it. Any script that writes to R2
-builds its keys with `versionedSetKey`, never by hand.
-
-### Every mutating admin endpoint must call `verifyAccessJwt`
-Cloudflare Access gates page loads at the edge, not individual endpoint calls, so
-each writer verifies the Access identity server-side via
-`apps/admin/app/utils/verifyAccessJwt.ts`. All four current ones do —
-`routes/api/sets.ts` (upload), `routes/api/sets-presign.ts` (R2 presigned URLs),
-`routes/api/sets/restore.ts`, `routes/api/send-push.ts`. Add nothing that skips
-it; only the read-only aggregate queries may. There is deliberately no dev-mode
-bypass. Paired with the host-guard rule above — Access covers neither the
-`*.pages.dev` hostname nor individual endpoint calls.
-
-### Never drop `media-src blob:` or the R2 `connect-src` allowance from `apps/admin`'s CSP
-Two separate directives, two separate real bugs found back to back against the
-same real upload attempt (`TECH_DEBT.md` item 23a) — no unit test could have
-caught either, since jsdom enforces no CSP and the header only exists on the
-real `server.ts` response.
-
-`media-src 'self' blob:` — `UploadSetForm`'s duration read (`readAudioDuration`,
-`apps/admin/app/utils/validateUpload.ts`) loads the selected file into an
-`<audio>` element via a `blob:` object URL to read its metadata. Without it,
-`default-src`'s implicit `'self'` silently blocks the load, `loadedmetadata`
-never fires, and every upload reports a valid mp3 as unreadable.
-
-`connect-src 'self' https://*.r2.cloudflarestorage.com` — once the file passes
-the check above, `UploadSetForm`'s four PUTs (`uploadWithProgress.ts`'s XHR)
-go straight from the browser to R2 against a presigned URL from
-`sets-presign.ts` (see `r2Sets.ts`). Without the R2 host, every PUT is
-silently blocked and the form shows "check your connection", which has
-nothing to do with the actual cause. Wildcarded, not the literal
-`<accountId>.r2.cloudflarestorage.com` host, because the account id is only
-known at runtime via env.
-
-The same block deliberately does **not** allowlist `static.cloudflareinsights.com`
-— see `apps/admin/README.md`'s CSP section for why that absence is also
-intentional (Cloudflare's zone-level automatic Web Analytics setup would
-otherwise mix this dashboard's own visits into the public site's traffic
-numbers), not a gap to close alongside `apps/web`'s.
-
-### Never substitute `0` for a metric that failed to load
-`AdminDashboardStats.edgeTraffic` is `null` on every failure path — missing
-credentials, 403, a GraphQL `errors` array inside a 200 body, timeout, empty
-window. `0` states "no traffic"; `null` states "we couldn't read it". Rendering
-the first for the second is a wrong fact, not a missing one, and it's
-indistinguishable to whoever reads the dashboard. Same reasoning as
-`conversionRate`/`acceptedRate` being nullable rather than 0. The
-`// edge_traffic` card's empty state is the reference example.
-
-### Never remove the `@source` directive from `apps/web/app/styles/global.css`
-Tailwind v4's automatic source scanning excludes `node_modules`, and
-`packages/ui` reaches `apps/web` only through a pnpm workspace symlink. Without
-`@source "../../../../packages/ui/src";` Tailwind never sees class names used
-inside the design system and **silently strips them from the bundle** — the
-components render unstyled, with no build error.
-
-### Never flatten a `lazy(() => import(...))` into a static import
-Four exist: `apps/admin`'s `TrendChart`, and `apps/web`'s `StoryVideoFlow` and
-`StoryInstallGate` (both in `components/story/StoryFlowHost.tsx`) and
-`DjStorySheet` (in `components/djStory/DjStoryHost.tsx`). `ClientOnly`
-is a render guard, not a code-splitting mechanism. A static top-level import
-still renders correctly while pulling all of `visx` into admin's `_worker.js`,
-the Story video's MP3 reader, spectrum, renderer and recorder into every
-visitor's main bundle, or the DJ Story image's renderer into every DJ page. The gate is lazy for a less obvious reason: it reuses
-`SaveGateModal` and `InstallInstructions`, which otherwise live in the set
-page's chunks, and a static import from the root host moved them into the
-main bundle (+~7KB, found by comparing builds).
-Silent bundle regression, no test failure. The same goes for importing
-anything under `utils/storyVideo/` from always-loaded code: the entry's
-capability check lives in `capability.ts` precisely so ShareModal doesn't
-import `recorder.ts`.
-
-### Never let two workspaces resolve different `vitest` majors
-`@testing-library/jest-dom` does **not** depend on `vitest`, so the
-`import 'vitest'` carrying its matcher augmentation resolves to whichever single
-copy pnpm hoists to `node_modules/.pnpm/node_modules/vitest`. With one version in
-the tree that's unambiguous. Add a workspace on a different major and pnpm hoists
-one of them — if it picks the other one, jest-dom augments a `vitest` module
-nobody type-checks against, and **every** `toBeInTheDocument` / `toHaveClass` /
-`toHaveAttribute` in `packages/ui` fails with `TS2339: Property does not exist on
-type 'Assertion<HTMLElement>'`.
-
-The failure looks nothing like its cause: the errors land in `packages/ui` test
-files that nobody touched, and the hoist can resolve differently on two machines,
-so it reproduces in CI while `pnpm -C packages/ui tsc` passes locally. It cost a
-full diagnostic pass — versions, lockfile, incremental state, filename casing and
-`node_modules` drift all had to be eliminated first. Every workspace is on
-`vitest` `^4.1.5`; keep it that way, and if a new workspace genuinely needs
-another major, expect this and pin the hoist rather than discovering it in CI.
-
-### Keep these pairs in step
-- `WIDTHS` in `apps/web/scripts/optimize-images.ts` ↔ `apps/web/app/components/Image.tsx`.
-  They're `[640, 1080]`. Add a width to one only and the srcset requests variants
-  that were never generated.
-- `packages/ui/src/tokens.css` ↔ `packages/ui/src/tokens.ts` (the JS colour
-  mirror for canvas use). `tokens.test.ts` parses both and asserts they match, so
-  this one fails loudly — but fix both, don't weaken the test.
-
-### Never make `apps/web/vitest.config.ts` extend `vite.config.ts`
-It is standalone deliberately: the `tanstackStart` plugin sets up SSR routing
-that conflicts with isolated test rendering.
-
-### Never let `ci.yml` and `deploy.yml` share a Playwright browser cache key
-Caches live at `~/.cache/ms-playwright`, keyed on **browser set + `pnpm-lock.yaml`
-hash**. The workflows install different sets (ci: chromium+webkit, deploy:
-chromium only). Sharing a key means first-writer-wins poisoning — the second
-workflow finds a cache hit for browsers it doesn't have.
-
-### Never hand-roll a `[ label ]` bracket button
-Use `<Button variant="secondary">label</Button>`, or `BracketLabel` on non-button
-surfaces (`Link`, `<a>`, Toast, NavLinks). The design system owns the bracket
-colouring, and `BracketLabel` owns its own `whitespace-nowrap`.
+Hooks in `.claude/hooks/` back several of these up; they don't replace the rule.
 
 ---
 
 ## 2. Workflow
 
-**Commits belong to the repo owner.** They review the staged diff before each
-commit; an auto-commit removes that checkpoint.
+### Git
+You commit, push and open the PR; the repo owner reviews and squash-merges.
 
-- **Read-only git, freely** — `git status`, `git diff`, `git log`, `git show`.
-- **Staging:** `git add <named paths>` when explicitly asked. Otherwise say which
-  files to stage. **Never `git add -A` or `git add .`** — it sweeps up unrelated
-  work in progress.
-- **Never** `git commit` (any variant, including `--amend`) or `git push`.
-- **Commit messages** (proposed, or made when the owner asks): a short,
-  lowercase, imperative subject — "add …", "fix …", "draw …". **No
-  `Co-Authored-By` trailer and no AI attribution line of any kind.** Commits
-  already on `main` stay as they are; history isn't rewritten for this.
-- **Never `git stash`** (or `git checkout` / `git reset` across branches). Stash
-  mutates the working tree, and a bad `pop` on a branch carrying uncommitted work
-  loses it — the same blast radius as commit and push, so it belongs to the repo
-  owner too. If a task genuinely needs a clean tree to verify something, say so
-  and hand off rather than clearing it yourself.
-- **When a unit of work is done:** stop, say what changed and in which files,
-  hand off.
+- **Branch** from an up-to-date `origin/main`, named `feat/…`, `fix/…` or `chore/…`.
+  Never commit on `main`; a push to `main` deploys.
+- **Authorship is the repo owner's git config.** Never pass `--author`, `-c user.*`
+  or change `git config`. No `Co-Authored-By`, no "Generated with", no Claude or
+  AI attribution anywhere: commit, PR body, code comments.
+- **Stage by name** (`git add <path>`). Never `git add -A`, `--all` or `.`. Never
+  touch, stage or delete files that aren't part of the task, untracked ones
+  included; report strays instead.
+- **Never** `git stash`, `commit --amend`, force-push, `reset --hard`, or rewrite
+  history. Two branches at once → `git worktree`, not stash.
+- **Never merge** (`gh pr merge`). Before building on something said to be merged,
+  check `gh pr view`.
+- Commit messages: short, lowercase, imperative ("add …", "fix …").
+- `/handoff` runs the checks and writes the summary; `/ship-pr` pushes and opens
+  the PR. Visual work waits for approved renders (`/visual-review`) first.
 
-**Cloudflare resources — Pages projects, D1 databases, R2 buckets, Access
-applications — are provisioned manually by the repo owner.** Don't create or
-modify them from a session, and don't assume a resource exists because the config
-references it.
+**Cloudflare resources** (Pages, D1, R2, Access, secrets) are provisioned by the
+repo owner. Read-only wrangler is fine; anything that writes is theirs to run.
 
-**Before handing off, run these two by default** — they're fast and they catch
-most of what CI would:
-
+### Before handing off
 ```bash
 pnpm check      # Biome lint + format, then turbo tsc across all workspaces
 pnpm test       # unit tests, all workspaces
 ```
+Add `pnpm knip` when exports or dependencies changed. `pnpm test:e2e` and
+`pnpm build` take minutes: run them when the change touches routes, the player,
+the service worker or CI, and ask first. Report failures with output, and say
+plainly which checks you didn't run.
 
-Add `pnpm knip` when you changed exports or dependencies.
-
-**`pnpm dump-diff`** writes the branch's changes to `.diff-dump/`, split by area
-(packages, each app, config, docs) with a `summary.txt`. It diffs the working
-tree against the merge-base with `origin/main`, so committed, staged and
-unstaged changes all appear without having to choose between them. Generated
-files (lockfile, `routeTree.gen.ts`, `sets.generated.ts`, build output, binaries)
-are excluded but **named in the summary**, so an exclusion can't hide a real
-change. Output is wiped before each run — a leftover file from a previous branch
-is worse than no file. Gitignored.
-
-### Make changes with the edit tools, not shell commands
-
-Edits made through the file-editing tools render as a reviewable diff in the
-console; the same edit applied with `sed`, `python` or a heredoc shows only that
-some command ran, and the change has to be reconstructed from the file
-afterwards. Reach for a shell one-liner only when it genuinely fits — a
-mechanical rename across many files, say — and say so when you do.
-
-**`pnpm test:e2e` and production builds (`pnpm build`) are slow — minutes, not
-seconds.** Run them when the change actually touches what they cover: routes,
-navigation, the player, service-worker behaviour, or CI config. A docs-only or
-comment-only change doesn't need either. **Ask before running them** if local
-instructions impose a time or cost constraint (see `CLAUDE.local.md`, which loads
-on top of this file) — offer the cheaper check instead of running the expensive
-one silently.
-
-Report failures with their output, and say plainly which checks you didn't run.
-Never describe a change as verified on the strength of a check you skipped.
+### Edit with the edit tools
+Edits through the file tools render as a reviewable diff; `sed`/heredoc edits
+don't. Use a shell one-liner only for a genuinely mechanical change across many
+files, and say so.
 
 ### Leave the docs true
-
-Before handing off, re-read the docs the change could have **invalidated**, and
-fix what's now wrong. The test is *"does an existing doc now say something false
-or incomplete?"* — not *"did I add a feature?"*. Padding a doc because something
-shipped is churn; leaving a stale claim standing is the failure this guards
-against, and it has happened repeatedly here.
-
-Per §1, read what each doc currently says rather than assuming — the point is to
-catch the sentence that quietly became untrue, which you can't do from memory.
-
-The table below names each doc's most common trigger — a memory aid for the
-test above, not a substitute for it. A change can fail that test without
-matching any row's wording: a new CSP directive is a security-relevant change
-to `apps/admin` even on a day nothing there says "CSP". When a change doesn't
-obviously fit a row, that's a cue to apply the test above directly, not a
-signal that no doc could be affected — the table will always lag behind the
-next kind of change no one has enumerated yet.
-
-| Doc | Re-read it when |
-|---|---|
-| `README.md` | the stack, the architecture, or any claim about how something works changed. The doc an outside reader trusts first, so a stale line here misleads furthest. |
-| `CLAUDE.md` | there's a new constraint, convention, or architecture area — §1 for something that breaks silently, §3 for a convention, §4's map for a new area to edit. |
-| `PWA_PROGRESS.md` | a decision was made whose reasoning is worth preserving, **including what was tried and rejected**. |
-| `TECH_DEBT.md` | a known gap was accepted rather than fixed, or an existing item's premise changed. |
-| `IMPROVEMENTS.md` | something shipped, or was deliberately dropped and shouldn't be re-proposed. |
-| `apps/web/README.md` | that app's layout, its build/dev commands, or one of its silent-failure rules changed. |
-| `apps/admin/README.md` | the dashboard's layout, its security controls, or the `null`-not-`0` rule changed. |
-| `apps/web/scripts/README.md` | a script, flag or setup step changed. |
-| `apps/web/tests/README.md` | test layout or conventions changed. |
-| `apps/web/images-source/README.md` | the image pipeline changed. |
-| `apps/rum-archiver/README.md` | the capture, its schedule, its token scope or its secrets changed. |
-
-**A change that fails the test above needs no doc edit — say so**, regardless
-of whether it matched one of the table's rows on the way there. Most bug fixes
-and refactors qualify. "No doc changes needed, nothing above became untrue" is
-a complete and correct answer — but it has to follow from checking the test,
-not from the table finding no obvious row.
-
-### A new workspace needs a README, and the root README needs to know it exists
-
-The rule above only catches text that *became* false. It cannot catch a doc that
-was never written, because nothing existing contradicts an absence — which is how
-`apps/rum-archiver` shipped, ran on a cron in production and was deployed by CI
-while the root README's structure block still listed five workspaces. Nothing was
-stale; the doc was simply incomplete, and no re-read of it would have flagged
-that.
-
-So when a workspace is **added** — not changed — three things are part of that
-work, not follow-up:
-
-1. **A README in the workspace**, if it has any setup, secret, schedule or
-   deploy target a reader can't infer from its source. A package that is purely
-   library code consumed through an import doesn't need one; anything with an
-   operational surface does.
-2. **The root `README.md`'s structure block and its documentation table**, which
-   are the two places an outside reader learns the workspace exists at all.
-3. **The table in §1's workspace map at the top of this file**, plus §4's
-   architecture map if there's a new area to edit.
-
-Same test for a new **script**: `apps/web/scripts/README.md` claims to document
-every script in that folder, so adding one and not listing it makes the README's
-own framing false. Read the folder against the doc, not just the doc.
+Before handing off, re-read every doc the change could have made false or
+incomplete, and fix it. The test is "does an existing doc now say something
+untrue?", not "did I add a feature?". "No doc changes needed" is a fine answer
+when it follows from that check. The doc-by-doc triggers are in
+`.claude/skills/handoff/docs-table.md`. Adding a workspace or script has extra
+steps: `/new-workspace`.
 
 ---
 
-## 3. Code standards
+## 3. Code standards (everywhere)
 
-### Comment register
-
-A comment states a **present-tense fact about the code**, not an event that
-happened to it. History lives in git and `PWA_PROGRESS.md`, which carry it better
-and don't rot. This is the convention most likely to be reintroduced by accident.
-
-**Never write into a comment:**
-- PR or review references — `(PR4)`, `PR6 review item 5`, `Post-review fix:`, `caught one review pass later`.
-- Dates and dated verification — `(2026-08-02)`, `verified against MDN, 2026-07-21`, `CDP-reproduced`.
-- Internal shorthand indices — `M1`, `H2`, `chunk 3b`, `Phase 1/2/3/4`, `Step 5`. Pure pointers with no content: a reader can't even guess what `(M1)` meant.
-- Feature-provenance tags — `Set-upload feature (PR4) — …`. These age in one direction: code gets reused, the tag doesn't, so a util serving three features still claims to belong to one. Eventually not noise but **wrong**. Apply uniformly — per-file judgement leaves a repo where nobody can infer the convention.
-- Arguing with a past reviewer or a deleted comment.
-- Speculative future phases — "Phase 2 will shrink the player".
-
-**The rewrite rule.** "PR4 review found X was wrong, so we now do Y" becomes "Y,
-because X would otherwise happen." Same information, no dependency on knowing
-what PR4 was. Prefer imperatives for traps: *never gitignore this*, *don't
-tighten this match*, *keep these two in step*.
-
-**Always keep:**
-- Anything that stops a plausible wrong edit — every "don't remove this", "deliberately NOT", and named failure-mode-if-you-change-this. `apps/admin/app/utils/hostGuard.ts` and `dashboard.tsx`'s no-in-app-auth block are the reference examples; both exist solely to stop someone "fixing" a security control.
-- Concrete specifics — `2 ÷ 2`, `~300 rows`, `220MB`, `iPhone SE 375px`. Specificity is the point; don't homogenise into blandness.
-- Value-by-value references for a discriminated union, and file headers orienting a reader to a module's purpose. That's API documentation, not volume.
-- Pointers **into** `PWA_PROGRESS.md` / `TECH_DEBT.md` by section. Verify the section exists first — a pointer to nothing is worse than no pointer.
-
-**Proportionality.** Comment length scales with how easy it is to break the thing
-by editing that line. A subtle guard with a silent failure mode earns its
-paragraph; a bytes formatter does not. Never restate what the code plainly says,
-and never quote another file's source inline — that copy will rot.
-
-**When deleting a label,** grep for it first: other files may cross-reference it
-by name.
-
-### Where code lives
-- Extract a component when the same UI or behaviour appears twice, or when a file gets hard to scan.
-- **Generic, presentational, framework-agnostic → `packages/ui/src/`.** Anything Zustand-coupled, TanStack-Router-coupled, or tied to an app convention (e.g. the R2 image URL scheme) stays in `apps/web/app/components/`.
-- Name components for what they *are*, not where they're used (`TrackRow`, not `SetsPageTrackRow`).
-- Keep props minimal and typed. Explicit prop interfaces over spreading unknown objects.
-- Route files own their loader, server functions and component. Extract past ~150 lines or on second use.
-- Custom hooks in `apps/web/app/hooks/`.
-- File names: `kebab-case` for routes and utilities, `PascalCase` for components.
-
-### Naming a metric for what it measures
-Where two sources count different things, the label says which. `edge_traffic`
-(`requests`/`page_views`) is Cloudflare edge requests **including bots** — never
-"visitors" or "people", because `visits` counts beacon page loads with
-bot-flagged rows removed **by us**, not by Cloudflare (RUM records bots too —
-confirmed in our own data, see PWA_PROGRESS). The two therefore disagree
-substantially, and a shared label makes the smaller number look like a bug. Same reasoning behind `install_to_push`
-being captioned an approximation and `avg_engaged_listening` saying it's
-cumulative. Reasoning per metric lives with the code — `data/cf-analytics.ts`'s
-header for this one.
-
-### Patterns
-- **TypeScript strict.** No `any` without a documented reason (CF env casting is the standing one). Use `unknown` + narrowing.
-- **`const` over `let`**, arrow callbacks, destructuring over repeated property access.
-- **`createServerFn` for data fetching** — no raw `fetch` to internal API routes from client code.
-- **`useCallback`/`useMemo` only** for a measurable win or a required stable reference. Not pre-emptively.
-- Prefer native Web APIs (`fetch`, `URL`, `Request`, `Response`) over wrappers for simple cases.
+- **Comments state present-tense facts** about the code — no PR numbers, dates,
+  internal labels or history; English only. Full register → `comments.md`.
+- **No literal non-breaking or invisible characters in source**; write the escape
+  (` `).
+- TypeScript strict; no `any` except the documented Cloudflare env cast →
+  `react-and-typescript.md`.
 - **Biome only** — no Prettier, no ESLint.
-- **Simplest implementation that does the job well.** Don't abstract before there's a second caller. Three similar lines beat a premature helper — but two coexisting half-built abstractions is debt, not simplicity. When the choice is a quick inline fix versus a properly placed one in a shared package, take the latter and expect it to be tested and documented (Storybook story + interaction coverage for anything in `packages/ui`, not just "it renders").
-
-### Readable JSX
-JSX describes **what** the UI is, not **how** it's computed. Hoist anything that
-needs a mental parser:
-- **Nested ternaries → named consts** above the `return`. Name for the value produced (`playButtonLabel`), not the condition (`isPlayingAndLoaded`).
-- **Inline math / string-building → named const or util.** A one-off `Math.floor(t/60)` is fine; a repeated `M:SS` formatter belongs in `~/utils/fmt.ts`. Reach for the util the second time.
-- **Conditional fragments and conditional callback args → named consts**, so the handler reads as the verb it is.
-- **Threshold:** no value in the markup should take more than ~5 seconds to understand.
-
-### Styling
-- Tailwind utilities only — no inline `style` except genuinely dynamic values (animation offsets).
-- Tokens: `packages/ui/src/tokens.css` (Tailwind `@theme`, keyframes, `t-*` typography) and `packages/ui/src/tokens.ts` (JS mirror for canvas, e.g. `Waveform.tsx`).
-- Brand colours: `bg-black` `#161615`, `text-gold` `#c58538`, `text-purple` `#43437a`, `text-grey` `#cbcbcb`, `font-mono` Space Mono.
-- **Edges — sharp by default.** Terminal rows, player bar, headers, status pills, CTA buttons and structural borders stay square. `rounded-card` (the single `--radius-card: 4px` token in `packages/ui/src/tokens.css`) is only for content surfaces the user taps into: list cards, artwork, flyers. `rounded-full` only for genuinely circular elements. **Never** the freeform scale (`rounded-md`/`lg`/`xl`).
-- **Bracket labels never wrap mid-bracket.** An orphaned `]` on the next line reads as a layout bug. `BracketLabel` owns `whitespace-nowrap` so this is structural rather than a per-caller convention — that's deliberate, because it bit three times before the fix moved into the component (a banner `[ × ]`, a `[ share_set ]` / `[ save_for_offline ]` row, and a missed case in `AddToCalendarButton`). If nowrap forces overflow at 375px (iPhone SE is the test case), **shorten the label** — never let the bracket split.
+- **Simplest implementation that does the job well.** No abstraction before a
+  second caller; but two half-built abstractions side by side is debt.
+- Tailwind utilities only; tokens in `packages/ui/src/tokens.css` →
+  `design-system-and-styling.md`.
 
 ---
 
-## 4. Architecture context
+## 4. Where things live
 
-**The narrative lives in `README.md` — it isn't repeated here.** This section is
-a map: where to edit, and where the reasoning is written down. Below it, only the
-things you need *at the moment of editing* that no section heading can give you.
-
-| Area | Edit here | Why it's built this way |
+| Area | Edit here | Rule |
 |---|---|---|
-| Audio player | `apps/web/app/hooks/useAudioPlayer.ts` (all playback logic; `Player.tsx` is layout only) | Sets must play on locked screens — Media Session API. Persistent bar in `__root.tsx` survives route changes. |
-| Offline audio | `apps/web/app/data/offline-audio.ts`, `store/offlineSlice.ts`, the audio route in `app/sw.ts` | README → *"220MB of audio has to survive with no signal"* (IDB over Cache Storage, quota pre-flight, Range) |
-| Web/app divide | `apps/web/app/utils/appContext.ts` — the `?ctx=app` marker | README → *"Browser tabs never read the offline library"*. A product invariant, not an accident: don't make tabs read IDB. |
-| Catalogue | `packages/data/src/sets.ts` (+ `sets.generated.ts`, `apps/web/app/data/sets.ts` for the app's fallback wrapping) | README → *"The catalogue is in a database, but the app is offline-first"* (live-wins `mergeSets`, committed snapshot) |
-| Set upload | `apps/admin/app/routes/api/sets-presign.ts`, `utils/uploadWithProgress.ts`; R2 keys in `utils/r2Sets.ts`, built from `packages/data/src/r2Keys.ts` (upload versions, `versionedSetKey`). Four files per upload; the fine-peaks file is decoded server-side on create, not just HEADed | README → *"A 220MB upload can't go through a Worker"* and *"CDN rules for cdn.formatglasgow.com"* (versioned keys, the immutable cache rule) |
-| Waveform peaks | `apps/web/scripts/generate-peaks.ts` (`pnpm -C apps/web peaks`, needs `ffmpeg` on PATH) writes both files: `peaks.json` (player) and `peaks-fine.bin` (Story picker; format in `packages/data/src/finePeaks.ts`). Existing sets: `backfill-fine-peaks` | README → *"Waveform peaks are computed with ffmpeg, not in the browser"*. Keep the coarse file at 8kHz (higher, it no longer matches the published ones) and the fine one at 48000 Hz, the sets' own rate and the usual phone `AudioContext` rate (any other rate resamples and drifts from the picker's own decode). The backfill only prints its R2/D1 commands (§2: Cloudflare writes are the owner's). |
-| Push sending | `packages/data/src/webPush.ts` | README → *"The standard Web Push library doesn't run on Workers"* |
-| Admin + auth | `apps/admin/app/routes/`, `utils/verifyAccessJwt.ts` | README → *"Admin auth: no auth code, then auth code anyway"*. The enforcement rule is §1. |
-| RUM archive | `apps/rum-archiver/src/index.ts`, query + upsert in `packages/data/src/rumArchive.ts` | Cloudflare degrades beacon data after 7 days, so a cron captures it first. Pages cannot run cron — hence a standalone Worker. Never remove the upsert's `sample_interval` guard: it stops a late run overwriting exact rows. |
-| RUM history card | `apps/admin/app/data/rum-history.ts` (`coveredDays`/`buildHistory`), `components/VisitsHistoryCard.tsx` | PWA_PROGRESS → *Archiving Cloudflare RUM into D1* → "Real zeros vs days nobody looked at" and "Coverage has to be recorded, not inferred". **Never map an uncovered day to `0`** — `TrendChart` takes `(number \| null)[]` precisely so a gap can render as a gap; a zero there draws an outage as flat traffic. Same `null`-not-`0` rule as §1's metric constraint. **Coverage comes from `rum_capture_runs`, never from `rum_daily.captured_at`** — a run over a quiet window writes no rows, so that derivation turns a healthy week into gaps. **Keep `lastRunAt` and `lastSuccessAt` separate**: merged, a cron that fires daily and fails every read reads as healthy. |
-| Admin trend markers | `apps/admin/app/utils/milestones.ts` (static milestones, one per event in `packages/data/src/events.ts`, + `markerPositions`), push sends and uploads from D1 in `fetchMilestones`, drawn by `TrendChart` via `MilestonesContext` | A marker lands in the bar its day was counted in, so it must use the series' own window: `TrendChart`'s defaults are the 60-day window every `admin-stats.ts` trend uses. **A chart over any other window must pass its own `startDay`/`totalDays`**, or its markers silently land in the wrong bars (edge traffic, live visits and the RUM history card do). |
-| Cloudflare analytics | `apps/admin/app/data/cf-analytics.ts` — the app's only network calls (zone edge traffic + account RUM visits), both deferred in `routes/dashboard.tsx`'s loader. Diagnose an empty card with `pnpm -C apps/admin diagnose-visits` | That file's headers: what each measures, why edge traffic is never "visitors", why RUM rows are bot-filtered client-side, sampling and retention handling, and why every failure is `null`. Naming rule in §3. |
-| Service worker build | `buildServiceWorker` in `apps/web/vite.config.ts` (owns the precache allowlist and revision derivation) | README → *"Technology choices"*, Workbox entry. `vite-plugin-pwa` is **not** a dependency. |
-| Design system | `packages/ui/src/` — one folder per component, `icons/` flat | README → *"Monorepo structure"* (late extraction, no build step) |
-| Navigation | `apps/web/app/components/SwipeNavigator.tsx` — wraps `<Outlet />`, swipes across `ROUTES = ["/", "/sets", "/events", "/djs"]` | Outgoing page animates via a `cloneNode` snapshot + direct DOM writes; the gold dot indicator likewise. Deliberately not React re-renders. |
-| Analytics | `apps/web/app/routes/api/signal.ts`, `hooks/useTrackEvent.ts` | `navigator.sendBeacon` on pause, track change and tab close; plays under 3s ignored. Lands in D1 `plays`. |
-| Web Analytics beacon | `apps/web/app/utils/rootHead.ts`, tag in `packages/data/src/webAnalytics.ts` | **We inject it ourselves** — Cloudflare's automatic edge injection worked, then silently stopped. That file's header has the evidence and why manual is also the more precise option. Its host must stay allowlisted in the CSP in BOTH `apps/web/app/server.ts` and `public/_headers`. |
-| Server entry | `apps/web/app/server.ts`, `apps/admin/app/server.ts` | Forwards `env.DB` as `context.cloudflare.env`. See §1 — deleting either breaks all D1 access. |
-| Instagram Story video | Entry and gate: `apps/web/app/components/story/StoryEntry.tsx`, `StoryInstallGate.tsx`. Flow: `StoryFlowHost.tsx` (lazy), `StoryVideoFlow.tsx` (picker + create), `StoryCreateScreens.tsx`. Logic: `app/utils/storyVideo/` — `mp3Excerpt` (byte-range excerpt, CBR only), `excerptWindow` (picker arithmetic, incl. `finePeaksStrip`: the zoomed strip draws from the set's `peaks-fine.bin` when it has one and from the decoded slice otherwise; fetched bare and never saved offline), `renderer`/`spectrum`/`layout` (the frame; `layout` also places the background artwork so its colon sits behind the card), `canvas` (canvas, image and font helpers shared with the DJ Story image, including `drawWordmark`; it may import only `layout`, which holds the shared `WORDMARK` and `SITE`), `storyImages` (artwork and DJ photo URLs; no DJ or no photo → the artwork in the card), `recorder`, `remux` (rewrites MediaRecorder's fragmented MP4 as a non-fragmented one with mediabunny, in its own lazy chunk; a fragmented file made Instagram keep only its first seconds), `createFlow` (phases + events), `capability` | Live on Android phones, behind `?story=on` (`utils/storyFlag.ts`) everywhere else; who sees the entry and the Android rollback switch (`STORY_LAUNCHED_ON_ANDROID`) are in `utils/storyAvailability.ts`. Phones only, made in the installed app only. Design reference and device results: TECH_DEBT.md item 30 and `layout.ts` (the approved layout; `spikes/instagram-story/`'s header records the first version). Keep it out of the main bundle (§1's lazy rule). Never touches the player's `<audio>`: the excerpt is decoded separately, which is also why it works without `HTMLMediaElement.captureStream()`. The recorder test needs real encoders, hence ci.yml's macOS job. The picker and remux chunks are excluded from the SW precache by filename in `vite.config.ts`'s `shouldPrecache`: renaming either module silently precaches it again. Deferred follow-ups: IMPROVEMENTS.md #13. |
-| DJ Story image | Entry: the share modal's `instagram:` section on a DJ page (`components/ShareModal.tsx`, `[ image_story ]`, first in the modal; the DJ share target carries the DJ and their next night), which copies the page link in the tap and calls the store's `openDjStory`. `apps/web/app/components/djStory/DjStoryHost.tsx` (mounted at the root, lazy-loads the sheet), `DjStorySheet.tsx` (canvas preview, treatment chips, share / download), `app/utils/djStory/renderDjStory.ts` (layout `DJ_STORY`: the shared wordmark, a card across the content width, then name, line and site as one block, all inside `SAFE_ZONE`; `TREATMENTS` — form:at and raw only — drawing, JPEG export); the next-event text comes from `utils/nextEventLabel.ts`, shared with the page's next row | For everyone, tab or installed app: a still needs no recording. The sheet renders before the share tap so `navigator.share` runs inside the tap's user activation; the preview is the canvas itself because the CSP's `img-src` refuses `blob:`. Backgrounds are blurred by downscaling, not `ctx.filter` (Safari only got canvas filters in 18), so no lettering in a photo stays legible behind the text. Keep the sheet lazy (§1) and its renderer importing only `storyVideo/layout` and `storyVideo/canvas`. Events: `dj_story_open` / `_shared` / `_downloaded`, no id. Follow-ups: IMPROVEMENTS.md #14. |
+| Audio player | `apps/web/app/hooks/useAudioPlayer.ts` (`Player.tsx` is layout only) | `web-app.md` |
+| Offline audio + SW | `apps/web/app/data/offline-audio.ts`, `store/offlineSlice.ts`, `app/sw.ts`, `vite.config.ts` | `offline-and-service-worker.md` |
+| Web/app divide, nav, analytics, beacon, store | `apps/web/app/utils/appContext.ts`, `components/SwipeNavigator.tsx`, `routes/api/signal.ts`, `utils/rootHead.ts`, `store/` | `web-app.md` |
+| Catalogue, upload keys, peaks, push, RUM archive | `packages/data/src/`, `apps/web/scripts/`, `apps/rum-archiver/` | `data-r2-d1.md` |
+| Admin dashboard, auth, metrics | `apps/admin/app/` | `admin-security-and-metrics.md` |
+| Design system | `packages/ui/src/` — one folder per component | `design-system-and-styling.md` |
+| Instagram Story video, DJ Story image | `apps/web/app/utils/{storyVideo,djStory}/`, `components/{story,djStory}/` | `stories.md` |
+| Tests | `apps/*/tests/`, `packages/ui/src/**/*.test.tsx` | `tests.md` |
+| CI/CD | `.github/workflows/` | `ci.md` |
 
-### Store slice map — `apps/web/app/store/`
-
-Zustand, composed in `index.ts`:
-
-| Slice | Owns |
-|---|---|
-| `playerSlice` | playback state, per-track resume `positions`, `peaksCache`, `durations`, `hasError`/`playbackBlockedReason`, and the offline playback gate (`canFetchPlaybackBytes`, `wasServedFromIdb`) |
-| `offlineSlice` | downloads, `activeDownloadId`, IDB-backed saved-set state, failure classification |
-| `catalogueSlice` | live catalogue fetched over the static snapshot |
-| `uiSlice` | transient UI state |
-
-`index.ts` persists a `partialize`d subset to localStorage: `nowPlayingId`,
-`positions`, `peaksCache`, `durations`, PWA install booleans. **Never persist
-`MusicSet` objects** — only IDs, rehydrated via
-`getCatalogueSet(catalogueSets, id) ?? getSet(id)`. A persisted object is a
-migration hazard the moment the shape changes; an ID isn't. `deferredPrompt` is
-excluded deliberately — non-serializable event object.
-
-`isPlaying` is the control surface for external components; `useAudioPlayer`
-bridges it to `audio.play()`/`audio.pause()`.
-
-### API route shape
-
-TanStack Start has no `createAPIFileRoute` as of the version pinned in
-`pnpm-lock.yaml` (1.167 at the time of writing — check there, not here, if the
-API looks different). Use `createFileRoute` with a
-`server: { handlers }` option:
-
-```ts
-export const Route = createFileRoute("/api/example")({
-  server: {
-    handlers: {
-      POST: async ({ request, context }) => {
-        // context.cloudflare?.env?.DB is available here
-        return new Response(null, { status: 204 });
-      },
-    },
-  },
-});
-```
-
-A route with only `server.handlers` and no `component` is a pure endpoint — the
-router never tries to render it.
-
-### Two editing traps in `packages/ui`
-
-- **Don't mix `vi.fn()` with Storybook's `fn()`.** `storybook/test`'s `fn()` bundles its own `@vitest/spy` — a structurally different `Mock` type from the workspace's `vitest` — so passing a local `vi.fn()` as a prop override on a composed story fails `tsc` confusingly. Assert against the mock the story already made: `composeStories(stories).Secondary.args.onClick`.
-- Interaction tests run stories through plain Vitest + jsdom via `composeStories`, **not** the Storybook test-runner or `addon-vitest` — both need a real browser, and a second browser-install surface is an avoidable failure mode in this repo (see the Playwright cache rule in §1).
+---
 
 ## 5. Commands
 
@@ -536,57 +167,33 @@ pnpm test:e2e / test:e2e:web / test:e2e:admin
 pnpm check                        # Biome (whole repo) then turbo tsc
 pnpm lint / pnpm tsc / pnpm knip
 pnpm storybook                    # packages/ui Storybook, :6006
-pnpm dump-diff                    # branch diff → .diff-dump/, split by area, for review
+pnpm dump-diff                    # branch diff → .diff-dump/, split by area (misses untracked files)
 ```
 
 Everything except `check`/`format`/`knip` is a thin Turbo wrapper; `:web`/`:admin`
-variants add a `--filter`. For a workspace's own scripts: `pnpm -C apps/web <script>`.
+add a `--filter`. A workspace's own scripts: `pnpm -C apps/web <script>`.
+`apps/web/scripts/README.md` documents every script and flag there;
+`generate-sets-snapshot`, `optimize-images`, `og` and `sitemap` run inside
+`pnpm build`, which is why a root build needs Cloudflare credentials and `pnpm dev`
+doesn't. Others: `pnpm -C apps/admin diagnose-visits`, `apps/rum-archiver`'s
+`deploy`/`capture`.
 
-`apps/web` scripts — `send-push`, `optimize-images`, `og`, `sitemap`,
-`generate-sets-snapshot`, `screenshots`, `stats`, `deploy` — are documented with
-every flag in `apps/web/scripts/README.md`; that doc claims to cover all of them,
-so adding one without listing it makes its own framing false.
-`generate-sets-snapshot`, `optimize-images`, `og` and `sitemap` run automatically
-inside `pnpm build`, in that order — which is why a root `pnpm build` needs
-Cloudflare credentials and `pnpm dev` doesn't.
-
-Other workspaces' scripts: `pnpm -C apps/admin diagnose-visits`, and
-`apps/rum-archiver`'s `deploy`/`capture` (see its README).
-
-**Service-worker behaviour is testable only against a production build.** The dev
-server never registers a SW (Vite's dev transform emits no `sw.js`):
-
-```bash
-pnpm build:web && pnpm start:web   # :4173, real service worker
-```
-
-### Tests
-- `apps/web/tests/unit/` — Vitest + jsdom, one folder per concern: `store/`, `hooks/`, `components/`, `utils/`, `data/`, `routes/`, `scripts/`.
-- `apps/web/tests/e2e/` — Playwright, four projects (chromium, webkit, mobile-chrome, mobile-safari). Mocks `*.mp3` with a silent fixture.
-- `apps/web/tests/setup.ts` — jest-dom matchers + `HTMLMediaElement` stubs (jsdom doesn't decode audio).
-- `playwright.config.ts` uses `workers: 1` — Vite's dev server races on parallel route loads.
-- Click handlers calling `playTrack` rely on the module-level `audioEl` ref in `playerSlice.ts`; register a fake element with `registerAudioElement()` in `beforeEach`.
-- Conventions and how to add one: `apps/web/tests/README.md`.
-- `packages/ui/vitest.setup.ts` wires jest-dom and calls `installDialogPolyfill()` — the polyfill itself is `packages/ui/src/domPolyfills.ts` (jsdom implements no `HTMLDialogElement.showModal()`).
-
-### CI/CD
-- **`ci.yml`** on push (non-main) + PR. Jobs: `static` (per-workspace Biome lint for `apps/web`, `apps/admin`, `packages/ui`, `packages/data`, `apps/rum-archiver`, plus `turbo tsc` across all of them, plus a Vite build of both apps), `knip`, `unit` (all five workspaces), `sets-snapshot` (regenerates `sets.generated.ts` from live D1 and fails on drift from the committed copy), `chromatic` (visual regression for `packages/ui`), `e2e` (Playwright on chromium + webkit for both apps), `e2e-story-video` (the Story video tests that record H.264 + AAC MP4 for real, on `macos-latest`: Linux Chromium has no such encoders, so on Linux `story-video.spec.ts` skips by name and `story-picker.spec.ts`'s create flow fakes MediaRecorder).
-- **`deploy.yml`** on push to `main`, plus manual `workflow_dispatch`. Re-runs `static`/`unit`/`e2e`, then `deploy` and `deploy-admin` only if all pass — a direct push to `main` can't skip the suite. Deliberately **not** `chromatic`, which stays PR-only to avoid roughly doubling snapshot quota.
-- Secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CHROMATIC_PROJECT_TOKEN`.
-
-### First run
-`pnpm dev` generates `apps/web/app/routeTree.gen.ts` (TanStack Router code-gen).
-Gitignored; regenerates on every dev start.
+**SW behaviour is testable only against a production build** (`pnpm build:web &&
+pnpm start:web`, :4173). `pnpm dev` generates the gitignored `routeTree.gen.ts`.
 
 ---
 
 ## 6. Other docs
 
-- **`README.md`** — project overview and the engineering narrative. What an outside reader sees first.
-- **`PWA_PROGRESS.md`** — decision log for phased work. Records what was tried and **rejected**, with on-device verification steps. Check when resuming multi-session work. Dated entries describe the state at that time and are correct as history — don't "fix" them to match the present.
-- **`TECH_DEBT.md`** — debt tracker with open / **❌ invalid** / deferred / resolved status. `❌ invalid` means the premise turned out wrong on investigation. Check before working in an area that may already have a logged caveat.
-- **`IMPROVEMENTS.md`** — product backlog, shipped vs. open, including features deliberately removed and not to be re-proposed.
-- **`apps/web/scripts/README.md`** — every build/ops script and flag.
-- **`apps/web/tests/README.md`** — test conventions.
-- **`apps/web/images-source/README.md`** — the image pipeline; what to drop where and what gets committed.
-- **`AGENTS.md`** — a pointer here for agents that don't read `CLAUDE.md`.
+| Doc | What it holds |
+|---|---|
+| `README.md` | Project overview and engineering narrative — what an outside reader trusts first |
+| `PWA_PROGRESS.md` | Decision log, including what was tried and **rejected**. Dated entries are history; don't "fix" them |
+| `TECH_DEBT.md` | Debt tracker: open / ❌ invalid / deferred / resolved. Check before working in an area |
+| `IMPROVEMENTS.md` | Product backlog, shipped vs open, including features dropped and not to re-propose |
+| `apps/web/README.md`, `apps/admin/README.md`, `apps/rum-archiver/README.md` | Per-workspace layout, commands, silent-failure rules |
+| `apps/web/scripts/README.md` | Every build/ops script and flag |
+| `apps/web/tests/README.md` | Test conventions |
+| `apps/web/images-source/README.md` | The image pipeline |
+| `.claude/README.md` | How the Claude Code setup in `.claude/` works |
+| `AGENTS.md` | Pointer here for agents that don't read `CLAUDE.md` |

@@ -294,7 +294,8 @@ The docs in this repo are working engineering artifacts, not decoration. Two are
 | | |
 |---|---|
 | [`IMPROVEMENTS.md`](IMPROVEMENTS.md) | product backlog — a checklist of what's shipped vs. still open, with each claim re-verified against the code rather than trusted |
-| [`CLAUDE.md`](CLAUDE.md) | conventions and architecture rules — coding standards, the comment register, git workflow |
+| [`CLAUDE.md`](CLAUDE.md) | the working agreement for coding agents — every silent-failure rule in one line, the git workflow, commands |
+| [`.claude/`](.claude/README.md) | the agent setup behind it — path-scoped rules with each rule's full reasoning, skills, review subagents, hooks; its README is a guide |
 | [`apps/web/README.md`](apps/web/README.md) | the public site — layout, the production-build-only service worker, and what breaks quietly |
 | [`apps/admin/README.md`](apps/admin/README.md) | the dashboard — layout, the two security controls that look redundant, the `null`-not-`0` rule |
 | [`apps/web/scripts/README.md`](apps/web/scripts/README.md) | every build/ops script, its flags and setup — push sending, image optimisation, OG banners, sitemap, D1 stats |
